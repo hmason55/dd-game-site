@@ -1,0 +1,46 @@
+﻿.loading-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    flex-direction: column;
+    text-align: center;
+    font-family: Fondamento, sans-serif;
+    background-color: #2B2B2B;
+    color: #C2B49A;
+}
+
+.loading-progress {
+    position: relative;
+    width: 80%;
+    max-width: 400px;
+    height: 4px;
+    margin: 8px 8px;
+    background-color: #1A1A1A;
+    overflow: hidden;
+    border-radius: 4px;
+}
+
+.loading-bar {
+    position: absolute;
+    height: 100%;
+    width: 30%;
+    background-color: #6FB9B4;
+    animation: loading-animation 1.5s infinite ease-in-out;
+}
+
+@keyframes loading-animation {
+    0% {
+        left: -30%;
+    }
+
+    50% {
+        left: 100%;
+        width: 50%;
+    }
+
+    100% {
+        left: 100%;
+        width: 30%;
+    }
+}
