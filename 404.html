@@ -5,7 +5,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DDGame</title>
-    <base href="/" />
+    <base href="/" id="dynamic-base">
+    <script>
+        (function () {
+            const base = document.getElementById('dynamic-base');
+            const isGitHubPages = location.hostname === 'hmason55.github.io';
+            if (isGitHubPages) {
+                base.setAttribute('href', '/dd-game-site/');
+            }
+        })();
+    </script>
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
