@@ -26,7 +26,7 @@ body::after {
 }
 
 /* Glowy text/elements */
-h1, h2, h3, h4, h5, h6, span, p, svg, canvas [class*="glow"] {
+h1, h2, h3, h4, h5, h6, span:not(.mud-badge, .mud-badge-root, .mud-badge-wrapper), p, svg, canvas [class*="glow"] {
     filter: drop-shadow(0 0 2px currentColor) drop-shadow(0 0 12px currentColor);
 }
 
