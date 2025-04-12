@@ -23,7 +23,7 @@ html, body {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    column-gap: 0.75rem;
+    column-gap: 0.25rem;
 }
 
 .hand .card,
@@ -66,8 +66,8 @@ html, body {
 .inventory .mud-drop-item:hover,
 .inventory .mud-drop-item:focus {
     z-index: 100;
-    margin-right: 16px !important;
-    margin-left: 16px !important;
+/*    margin-right: 16px !important;
+    margin-left: 16px !important;*/
 }
 
 .card .mud-card-content {
