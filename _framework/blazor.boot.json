@@ -1,11 +1,11 @@
 {
   "mainAssemblyName": "DDGame",
   "resources": {
-    "hash": "sha256-6nslwFqqs6xTSLAqamMuPZfliLeXohG5u1HJN9gj2Ow=",
+    "hash": "sha256-EjqCXH1NYbwO4OkqXWxyB3kCSTX4WvawdR3Sw2m9+Vk=",
     "fingerprinting": {
       "Blazored.LocalStorage.12n6dz54qr.wasm": "Blazored.LocalStorage.wasm",
       "Bromix.MudBlazor.MaterialDesignIcons.19vuk56vs0.wasm": "Bromix.MudBlazor.MaterialDesignIcons.wasm",
-      "DDGame.r3trx8hw6o.wasm": "DDGame.wasm",
+      "DDGame.tv1mdtoub5.wasm": "DDGame.wasm",
       "Humanizer.oqup3v7t3k.wasm": "Humanizer.wasm",
       "Microsoft.AspNetCore.Components.b9gzfpwfvd.wasm": "Microsoft.AspNetCore.Components.wasm",
       "Microsoft.AspNetCore.Components.Web.zr1vtg2nxq.wasm": "Microsoft.AspNetCore.Components.Web.wasm",
@@ -146,7 +146,7 @@
     "assembly": {
       "Blazored.LocalStorage.12n6dz54qr.wasm": "sha256-OaMAAd5n7ORfyur5e3QIyEVKJ76MKIvwbg7/icnnYcU=",
       "Bromix.MudBlazor.MaterialDesignIcons.19vuk56vs0.wasm": "sha256-teFbbqaXJoVzIYGotTTs1OskElnXxM9ERgjIVtc/wxg=",
-      "DDGame.r3trx8hw6o.wasm": "sha256-6UK7wbRTHpLy6RK0gA8NB/NeGbcttDpYJMvpsfm5+Ak=",
+      "DDGame.tv1mdtoub5.wasm": "sha256-CXT1Dr3LcaI6qJPX6GMTWHHTBcpmBIJnjs1uhgCpXFY=",
       "Humanizer.oqup3v7t3k.wasm": "sha256-4NbSboZzzP9nikRtXapUZNzOyITt7ht9TNqCIQHr5OE=",
       "Microsoft.AspNetCore.Components.b9gzfpwfvd.wasm": "sha256-8Y8h6JNRFVO24290NQi/pH1VR/TQl+PVQrZwT/AcfBI=",
       "Microsoft.AspNetCore.Components.Web.zr1vtg2nxq.wasm": "sha256-v3d2sr/MRw4do78KL/+GceMHMCImVH6xWXtK3bc3ZUs=",
