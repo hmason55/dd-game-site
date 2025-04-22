@@ -1,11 +1,11 @@
 {
   "mainAssemblyName": "DDGame",
   "resources": {
-    "hash": "sha256-dXoqWW3ExBXLXhftftsEF28vuAtlc6D0l35QDIPdBrU=",
+    "hash": "sha256-oSs0IlbqVXAInYlVWapqbWsKyDOlLAA+CHPSDq+y3BY=",
     "fingerprinting": {
       "Blazored.LocalStorage.12n6dz54qr.wasm": "Blazored.LocalStorage.wasm",
       "Bromix.MudBlazor.MaterialDesignIcons.19vuk56vs0.wasm": "Bromix.MudBlazor.MaterialDesignIcons.wasm",
-      "DDGame.w8y3i0a1jw.wasm": "DDGame.wasm",
+      "DDGame.cm383wqwd6.wasm": "DDGame.wasm",
       "Humanizer.oqup3v7t3k.wasm": "Humanizer.wasm",
       "Microsoft.AspNetCore.Components.b9gzfpwfvd.wasm": "Microsoft.AspNetCore.Components.wasm",
       "Microsoft.AspNetCore.Components.Web.zr1vtg2nxq.wasm": "Microsoft.AspNetCore.Components.Web.wasm",
@@ -24,7 +24,7 @@
       "Microsoft.Extensions.Primitives.9kx4ehp8td.wasm": "Microsoft.Extensions.Primitives.wasm",
       "Microsoft.JSInterop.yy1i9lbmf8.wasm": "Microsoft.JSInterop.wasm",
       "Microsoft.JSInterop.WebAssembly.s0bw0921jm.wasm": "Microsoft.JSInterop.WebAssembly.wasm",
-      "MudBlazor.8r0webe1lt.wasm": "MudBlazor.wasm",
+      "MudBlazor.wwr0z735oz.wasm": "MudBlazor.wasm",
       "Newtonsoft.Json.qkbufwhni2.wasm": "Newtonsoft.Json.wasm",
       "Serilog.Extensions.Logging.sq1iwxadv9.wasm": "Serilog.Extensions.Logging.wasm",
       "Serilog.s0dglz66cc.wasm": "Serilog.wasm",
@@ -148,7 +148,7 @@
     "assembly": {
       "Blazored.LocalStorage.12n6dz54qr.wasm": "sha256-OaMAAd5n7ORfyur5e3QIyEVKJ76MKIvwbg7/icnnYcU=",
       "Bromix.MudBlazor.MaterialDesignIcons.19vuk56vs0.wasm": "sha256-teFbbqaXJoVzIYGotTTs1OskElnXxM9ERgjIVtc/wxg=",
-      "DDGame.w8y3i0a1jw.wasm": "sha256-4P0HXCjvrbvs6Vr7frAojqV4k2Tfv1rQRl7vSoi7QB0=",
+      "DDGame.cm383wqwd6.wasm": "sha256-VMf73ZKqePVYQO7TviZ9R4BTwkEEU0Ze3THLZOgijIE=",
       "Humanizer.oqup3v7t3k.wasm": "sha256-4NbSboZzzP9nikRtXapUZNzOyITt7ht9TNqCIQHr5OE=",
       "Microsoft.AspNetCore.Components.b9gzfpwfvd.wasm": "sha256-8Y8h6JNRFVO24290NQi/pH1VR/TQl+PVQrZwT/AcfBI=",
       "Microsoft.AspNetCore.Components.Web.zr1vtg2nxq.wasm": "sha256-v3d2sr/MRw4do78KL/+GceMHMCImVH6xWXtK3bc3ZUs=",
@@ -167,7 +167,7 @@
       "Microsoft.Extensions.Primitives.9kx4ehp8td.wasm": "sha256-6cQKFBXogCgICQbWptUlzgW+xOHIWbUMRjFxztqytdA=",
       "Microsoft.JSInterop.yy1i9lbmf8.wasm": "sha256-hthehae7zCj6ycNSGjegpS5z5TQzGX6sXRkHBDo0/Ao=",
       "Microsoft.JSInterop.WebAssembly.s0bw0921jm.wasm": "sha256-NNwR0xu2wKvvEIZnSUwKht+/0RJ9ziHW01M66VViIkI=",
-      "MudBlazor.8r0webe1lt.wasm": "sha256-1MU8MYXRGM9dZYvwJF54dNlKlnRtdRq0r0Cdz2ZLq7A=",
+      "MudBlazor.wwr0z735oz.wasm": "sha256-sIM7FEMC6Li1epojqGzhvlq/U5NITwtoodDfEOiAvio=",
       "Newtonsoft.Json.qkbufwhni2.wasm": "sha256-GlXMWKvDs45M2pACoR3Y4Qh8mcrOZGljqmvJY+6JZ5s=",
       "Serilog.Extensions.Logging.sq1iwxadv9.wasm": "sha256-VP3ipQ0Mgb9NgEMkH08GEup2of20grWfwfDR87CUSAo=",
       "Serilog.s0dglz66cc.wasm": "sha256-FNmpDcr4RqPjcyZwFdmpMZEjy3tSnSBTv2MENgz6OdA=",

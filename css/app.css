@@ -159,11 +159,14 @@ html, body {
     left: 0;
 }
 
+.mud-progress-linear-content > .mud-typography {
+    text-shadow: 0 0 2px black, 0 0 2px black, 0 0 2px black, 0 0 2px black;
+}
+
 :root {
     /* Card names */
     --mud-typography-body2-size: .75rem !important;
     --mud-typography-body2-lineheight: 1.33 !important;
-
     /* Card descriptions */
     --mud-typography-caption-size: .4rem !important;
     --mud-typography-caption-lineheight: 1.16 !important;
