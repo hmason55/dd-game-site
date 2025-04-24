@@ -159,6 +159,10 @@ html, body {
     left: 0;
 }
 
+.card-wrapper .mud-typography {
+    text-shadow: 0 0 1px black, 0 0 1px black, 0 0 2px black, 0 0 2px black;
+}
+
 .mud-progress-linear-content > .mud-typography {
     text-shadow: 0 0 2px black, 0 0 2px black, 0 0 2px black, 0 0 2px black;
 }
