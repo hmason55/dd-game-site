@@ -17,3 +17,19 @@ window.observeResize = (element, dotnetHelper) => {
     });
     resizeObserver.observe(element);
 };
+
+window.observeZoomChange = (dotnetHelper) => {
+    let query = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+
+    const handleChange = () => {
+        // Re-register the listener with the new devicePixelRatio
+        query.removeEventListener('change', handleChange);
+        dotnetHelper.invokeMethodAsync('OnZoomChanged');
+
+        // Listen again with updated DPI
+        query = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+        query.addEventListener('change', handleChange);
+    };
+
+    query.addEventListener('change', handleChange);
+};
