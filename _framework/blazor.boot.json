@@ -1,14 +1,14 @@
 {
   "mainAssemblyName": "DDGame",
   "resources": {
-    "hash": "sha256-9I20qU1g+lGXLgvdaSZ0gRPu4UVWH8tRNzga3me+RTc=",
+    "hash": "sha256-LMVq1lKe9/nj1gsCfm6HbplJcFHsWdR7xsbxMWKm4Aw=",
     "fingerprinting": {
       "Blazored.LocalStorage.12n6dz54qr.wasm": "Blazored.LocalStorage.wasm",
       "Bromix.MudBlazor.MaterialDesignIcons.19vuk56vs0.wasm": "Bromix.MudBlazor.MaterialDesignIcons.wasm",
       "ConcurrentCollections.ei9dj7ai1k.wasm": "ConcurrentCollections.wasm",
-      "DDGame.56315px3it.wasm": "DDGame.wasm",
+      "DDGame.3kmpd8bcin.wasm": "DDGame.wasm",
       "Humanizer.oqup3v7t3k.wasm": "Humanizer.wasm",
-      "Microsoft.AspNetCore.Components.0kchbefxal.wasm": "Microsoft.AspNetCore.Components.wasm",
+      "Microsoft.AspNetCore.Components.3a5jmxc5sf.wasm": "Microsoft.AspNetCore.Components.wasm",
       "Microsoft.AspNetCore.Components.Web.qqvmyb7bjg.wasm": "Microsoft.AspNetCore.Components.Web.wasm",
       "Microsoft.AspNetCore.Components.WebAssembly.di87cb8hf5.wasm": "Microsoft.AspNetCore.Components.WebAssembly.wasm",
       "Microsoft.CSharp.h1x4qrydda.wasm": "Microsoft.CSharp.wasm",
@@ -52,7 +52,7 @@
       "System.Net.Primitives.3qbvoenl1w.wasm": "System.Net.Primitives.wasm",
       "System.Numerics.Vectors.17l126x1rl.wasm": "System.Numerics.Vectors.wasm",
       "System.ObjectModel.tepfj3cgmq.wasm": "System.ObjectModel.wasm",
-      "System.Private.CoreLib.usd721h4lb.wasm": "System.Private.CoreLib.wasm",
+      "System.Private.CoreLib.ugdrgmnzrv.wasm": "System.Private.CoreLib.wasm",
       "System.Private.Uri.0tqsls5qc5.wasm": "System.Private.Uri.wasm",
       "System.Private.Xml.Linq.bmit8onwvz.wasm": "System.Private.Xml.Linq.wasm",
       "System.Private.Xml.v816rx2usu.wasm": "System.Private.Xml.wasm",
@@ -143,16 +143,16 @@
       "icudt.oh1zvcfom8.dat": "sha256-tO5O5YzMTVSaKBboxAqezOQL9ewmupzV2JrB5Rkc8a4="
     },
     "coreAssembly": {
-      "System.Private.CoreLib.usd721h4lb.wasm": "sha256-YshiSbbtWNf3uFVt12Fo9oyK14pwqydVS/hrmh6AidA=",
+      "System.Private.CoreLib.ugdrgmnzrv.wasm": "sha256-7tTbx2XBZGkHHvRON1R836UMX46Xan7NXkJUJkLcdss=",
       "System.Runtime.InteropServices.JavaScript.era55l3sbb.wasm": "sha256-uo4WQ39eiOB+w/weMzCVCfXQey09VlzpTm+e6aR83IA="
     },
     "assembly": {
       "Blazored.LocalStorage.12n6dz54qr.wasm": "sha256-OaMAAd5n7ORfyur5e3QIyEVKJ76MKIvwbg7/icnnYcU=",
       "Bromix.MudBlazor.MaterialDesignIcons.19vuk56vs0.wasm": "sha256-teFbbqaXJoVzIYGotTTs1OskElnXxM9ERgjIVtc/wxg=",
       "ConcurrentCollections.ei9dj7ai1k.wasm": "sha256-mv/sswbh3OumDTtTG39LeOMhEw4XAfN32aSyg6q8tHA=",
-      "DDGame.56315px3it.wasm": "sha256-Tb+MHpTs26UpkP33UoFtCc8Q7epPGxYK+U0CYUXpIw4=",
+      "DDGame.3kmpd8bcin.wasm": "sha256-jcTsBklvA53CQZ24mISyOjN2eWkYZrJLLYueFPCh15s=",
       "Humanizer.oqup3v7t3k.wasm": "sha256-4NbSboZzzP9nikRtXapUZNzOyITt7ht9TNqCIQHr5OE=",
-      "Microsoft.AspNetCore.Components.0kchbefxal.wasm": "sha256-0GxxStqYoc5i2D3MJDuhNAc6xjeAaWvPGzXk6tTze1o=",
+      "Microsoft.AspNetCore.Components.3a5jmxc5sf.wasm": "sha256-e5s07x82k/FTs3a2SvsczuDzJKejESW8MlU/0xy4DHA=",
       "Microsoft.AspNetCore.Components.Web.qqvmyb7bjg.wasm": "sha256-Mui1yiZvGCY10AzYu5TPkgJbFwssLc//Ixh89PD1JFY=",
       "Microsoft.AspNetCore.Components.WebAssembly.di87cb8hf5.wasm": "sha256-K4H030gkTHmaCEJlY5dOMaLEJ7KcGQRM+DuB3mH4L1A=",
       "Microsoft.CSharp.h1x4qrydda.wasm": "sha256-u3mEORvukAz7fkytxltbXkCDyFUfZ881XzzN8vcXrj4=",

@@ -1,3 +1,15 @@
+/* dd-game-site/Components/Rooms/Map.razor.rz.scp.css */
+.map-connections[b-cd25cvbki9] {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+}
+
+.map-room[b-cd25cvbki9] {
+    z-index: 1;
+}
 /* dd-game-site/Layout/MainLayout.razor.rz.scp.css */
 .page[b-f125ol7vjg] {
     position: relative;
