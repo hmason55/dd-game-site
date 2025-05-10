@@ -9,24 +9,36 @@
     };
 };
 
-window.observeResize = (element, dotnetHelper) => {
-    if (!element) return;
+window.getRelativeBoundingClientRect = (element, parent) => {
+    if (!element || !parent) return null;
 
+    const rect = element.getBoundingClientRect();
+    const parentRect = parent.getBoundingClientRect();
+
+    return {
+        left: rect.left - parentRect.left,
+        top: rect.top - parentRect.top,
+        width: rect.width,
+        height: rect.height
+    };
+};
+
+window.observeResize = (element, dotNetRef) => {
     const resizeObserver = new ResizeObserver(() => {
-        dotnetHelper.invokeMethodAsync('OnResize');
+        dotNetRef.invokeMethodAsync('OnResize');
     });
     resizeObserver.observe(element);
 };
 
-window.observeZoomChange = (dotnetHelper) => {
+
+window.observeZoomChange = (dotNetRef) => {
     let query = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
 
     const handleChange = () => {
-        // Re-register the listener with the new devicePixelRatio
-        query.removeEventListener('change', handleChange);
-        dotnetHelper.invokeMethodAsync('OnZoomChanged');
+        dotNetRef.invokeMethodAsync('OnZoomChanged');
 
-        // Listen again with updated DPI
+        // Re-register at the new resolution
+        query.removeEventListener('change', handleChange);
         query = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
         query.addEventListener('change', handleChange);
     };

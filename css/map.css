@@ -4,12 +4,22 @@
     height: 100%;
     top: 0;
     left: 0;
+
 }
 
-.map-room {
-    z-index: 1;
+.map-location {
+    z-index: 0;
 }
 
-.map-room .mud-icon-root.visited {
+.map-location .mud-drop-zone {
+    transition: transform 150ms ease;
+}
+
+.map-location .mud-drop-zone.can-drop,
+.map-location .mud-drop-zone:hover {
+    transform: scale(120%);
+}
+
+.map-location .mud-icon-root.visited {
     color: var(--mud-palette-lines-default);
 }

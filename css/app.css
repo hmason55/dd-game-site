@@ -177,6 +177,17 @@ html, body {
     filter: drop-shadow(0 0 1px black) drop-shadow(0 0 1px black)
 }
 
+.center-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 :root {
     /* Card names */
     --mud-typography-body2-size: .75rem !important;
