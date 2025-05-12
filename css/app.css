@@ -161,6 +161,20 @@ html, body {
     left: 0;
 }
 
+.card img {
+    position: absolute;
+    height: 120px;
+    z-index: -1;
+    margin: -8px -2px;
+    transform: translateX(-25%);
+    clip-path: inset(0% 24px 0% 24px round 5px);
+    transition: filter 250ms ease;
+}
+
+.card:hover img {
+    filter: blur(1px);
+}
+
 .card-wrapper .mud-typography {
     text-shadow: 0 0 1px black, 0 0 1px black, 0 0 2px black, 0 0 2px black;
 }
