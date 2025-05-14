@@ -55,6 +55,24 @@
             };
         }
 
+        function tintImage(baseImage, r, g, b, a, size) {
+            const off = document.createElement("canvas");
+            off.width = size;
+            off.height = size;
+            const octx = off.getContext("2d");
+
+            // Draw the image
+            octx.drawImage(baseImage, 0, 0, size, size);
+
+            // Apply tint
+            octx.fillStyle = `rgba(${r}, ${g}, ${b}, ${a})`;
+            octx.globalCompositeOperation = "source-atop";
+            octx.fillRect(0, 0, size, size);
+            octx.globalCompositeOperation = "source-over";
+
+            return off;
+        }
+
         function createParticle() {
             let color = randomColor(options.particleColor);
             let arcCenterRad = options.arcDirection * (Math.PI / 180);
@@ -63,6 +81,13 @@
 
             let externalVelocity = randomRange(options.externalVelocity);
             let externalAcceleration = randomRange(options.externalAcceleration);
+
+            const radius = randomRange(options.size);
+            let tintedImage = null;
+            if (options.renderMode?.toLowerCase() === "image" && options._loadedImage) {
+                const size = radius * 2;
+                tintedImage = tintImage(options._loadedImage, color.r, color.g, color.b, color.a, size);
+            }
 
             return {
                 x: canvas.width / 2,
@@ -79,7 +104,8 @@
                 externalVelocityX: externalVelocity.x,
                 externalVelocityY: externalVelocity.y,
                 externalAccelerationX: externalAcceleration.x,
-                externalAccelerationY: externalAcceleration.y
+                externalAccelerationY: externalAcceleration.y,
+                tintedImage
             };
         }
 
@@ -115,11 +141,36 @@
                 p.speed *= p.friction;
 
                 let alpha = Math.max(0.1, Math.pow(1 - (now - p.startTime) / p.lifespan, 2.5));
+                ctx.globalAlpha = alpha * p.a;
 
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(${p.r}, ${p.g}, ${p.b}, ${alpha * p.a})`;
-                ctx.fill();
+                switch (options.renderMode) {
+                    case "Text":
+                        ctx.font = options.font || "20px sans-serif";
+                        ctx.fillStyle = `rgba(${p.r}, ${p.g}, ${p.b}, ${alpha * p.a})`;
+                        ctx.fillText(options.text || "*", p.x, p.y);
+                        break;
+
+                    case "Image":
+                        if (p.tintedImage) {
+                            ctx.globalAlpha = alpha * p.a;
+                            ctx.drawImage(p.tintedImage, p.x - p.radius, p.y - p.radius);
+                            ctx.globalAlpha = 1;
+                        }
+                        break;
+
+                    case "Svg":
+                        // Optional: requires SVG parsing or using <img> fallback with data URI
+                        break;
+
+                    default:
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(${p.r}, ${p.g}, ${p.b}, ${alpha * p.a})`;
+                        ctx.fill();
+                        break;
+                }
+
+                ctx.globalAlpha = 1;
             });
 
             if (particles.length > 0 || options.loop) {
@@ -135,8 +186,23 @@
             DotNet.invokeMethodAsync("DDGame", "UntrackParticleEmitter", id);
         }
 
-        emitParticles();
-        updateParticles();
+        if (options.renderMode === "Image" && options.imageSrc) {
+            const img = new Image();
+            img.onload = () => {
+                options._loadedImage = img;
+                emitParticles();
+                updateParticles();
+            };
+            img.onerror = (e) => {
+                console.error("Failed to load image for particle:", options.imageSrc, e);
+                emitParticles();
+                updateParticles(); // fallback to still emit even if image fails
+            };
+            img.src = options.imageSrc;
+        } else {
+            emitParticles();
+            updateParticles();
+        }
     },
     destroyParticleEmitter: function(id) {
         const canvas = document.getElementById(id);
