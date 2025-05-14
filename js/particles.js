@@ -75,24 +75,78 @@
 
         function createParticle() {
             let color = randomColor(options.particleColor);
-            let arcCenterRad = options.arcDirection * (Math.PI / 180);
-            let arcHalfRad = (options.arcAngle / 2) * (Math.PI / 180);
-            let randomAngle = arcCenterRad + (Math.random() * arcHalfRad * 2 - arcHalfRad);
 
             let externalVelocity = randomRange(options.externalVelocity);
             let externalAcceleration = randomRange(options.externalAcceleration);
 
             const radius = randomRange(options.size);
             let tintedImage = null;
+
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            let spawnX = centerX;
+            let spawnY = centerY;
+
+            const shape = (options.shape || "point").toLowerCase();
+            const rotationDeg = options.emitterRotation || 0;
+            const rotationRad = rotationDeg * (Math.PI / 180);
+
+            switch (shape) {
+                case "box": {
+                    const width = options.areaSize?.x || 100;
+                    const height = options.areaSize?.y || 100;
+
+                    const localX = Math.random() * width - width / 2;
+                    const localY = Math.random() * height - height / 2;
+
+                    const cos = Math.cos(rotationRad);
+                    const sin = Math.sin(rotationRad);
+
+                    spawnX = centerX + (localX * cos - localY * sin);
+                    spawnY = centerY + (localX * sin + localY * cos);
+                    break;
+                }
+
+                case "arc": {
+                    const arcRadius = (options.areaSize?.x || 100) / 2;
+                    const arcCenterRad = options.arcDirection * (Math.PI / 180);
+                    const arcHalfRad = (options.arcAngle / 2) * (Math.PI / 180);
+                    const randomAngle = arcCenterRad + (Math.random() * arcHalfRad * 2 - arcHalfRad);
+                    const distance = Math.random() * arcRadius;
+
+                    // Step 1: Calculate position in arc-local space
+                    let localX = Math.cos(randomAngle) * distance;
+                    let localY = Math.sin(randomAngle) * distance;
+
+                    // Step 2: Apply emitter rotation to the arc shape
+                    const emitterRad = (options.emitterRotation || 0) * (Math.PI / 180);
+                    const cos = Math.cos(emitterRad);
+                    const sin = Math.sin(emitterRad);
+
+                    spawnX = centerX + (localX * cos - localY * sin);
+                    spawnY = centerY + (localX * sin + localY * cos);
+                    break;
+                }
+
+                case "point":
+                default:
+                    break;
+            }
+
+            const arcCenterRad = options.arcDirection * (Math.PI / 180);
+            const arcHalfRad = (options.arcAngle / 2) * (Math.PI / 180);
+            const randomAngle = arcCenterRad + (Math.random() * arcHalfRad * 2 - arcHalfRad);
+
             if (options.renderMode?.toLowerCase() === "image" && options._loadedImage) {
                 const size = radius * 2;
                 tintedImage = tintImage(options._loadedImage, color.r, color.g, color.b, color.a, size);
             }
 
             return {
-                x: canvas.width / 2,
-                y: canvas.height / 2,
-                radius: randomRange(options.size),
+                x: spawnX,
+                y: spawnY,
+                radius,
                 r: color.r, g: color.g, b: color.b, a: color.a,
                 speed: randomRange(options.speed),
                 directionX: Math.cos(randomAngle),
@@ -100,14 +154,16 @@
                 friction: randomRange(options.friction),
                 lifespan: randomRange(options.lifespan),
                 startTime: performance.now(),
-
                 externalVelocityX: externalVelocity.x,
                 externalVelocityY: externalVelocity.y,
                 externalAccelerationX: externalAcceleration.x,
                 externalAccelerationY: externalAcceleration.y,
-                tintedImage
+                tintedImage,
+                rotation: randomRange(options.rotation || { min: 0, max: 0 }),
+                rotationSpeed: randomRange(options.rotationSpeed || { min: 0, max: 0 }),
             };
         }
+
 
         function emitParticles() {
             if (!emitting) return;
@@ -132,6 +188,7 @@
                     return;
                 }
 
+                p.rotation += p.rotationSpeed;
                 p.externalVelocityX += p.externalAccelerationX;
                 p.externalVelocityY += p.externalAccelerationY;
 
@@ -143,22 +200,29 @@
                 let alpha = Math.max(0.1, Math.pow(1 - (now - p.startTime) / p.lifespan, 2.5));
                 ctx.globalAlpha = alpha * p.a;
 
-                switch (options.renderMode) {
-                    case "Text":
+                switch (options.renderMode?.toLowerCase()) {
+                    case "text":
+                        ctx.save();
+                        ctx.translate(p.x, p.y);
+                        ctx.rotate(p.rotation);
                         ctx.font = options.font || "20px sans-serif";
                         ctx.fillStyle = `rgba(${p.r}, ${p.g}, ${p.b}, ${alpha * p.a})`;
-                        ctx.fillText(options.text || "*", p.x, p.y);
+                        ctx.fillText(options.text || "*", 0, 0);
+                        ctx.restore();
                         break;
 
-                    case "Image":
+                    case "image":
                         if (p.tintedImage) {
+                            ctx.save();
+                            ctx.translate(p.x, p.y);
+                            ctx.rotate(p.rotation);
                             ctx.globalAlpha = alpha * p.a;
-                            ctx.drawImage(p.tintedImage, p.x - p.radius, p.y - p.radius);
-                            ctx.globalAlpha = 1;
+                            ctx.drawImage(p.tintedImage, -p.radius, -p.radius, p.radius * 2, p.radius * 2);
+                            ctx.restore();
                         }
                         break;
 
-                    case "Svg":
+                    case "svg":
                         // Optional: requires SVG parsing or using <img> fallback with data URI
                         break;
 
@@ -186,7 +250,7 @@
             DotNet.invokeMethodAsync("DDGame", "UntrackParticleEmitter", id);
         }
 
-        if (options.renderMode === "Image" && options.imageSrc) {
+        if (options.renderMode?.toLowerCase() === "image" && options.imageSrc) {
             const img = new Image();
             img.onload = () => {
                 options._loadedImage = img;
