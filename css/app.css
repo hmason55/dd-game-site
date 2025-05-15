@@ -36,7 +36,7 @@ html, body {
     z-index: 1;
     width: min(19vw, 80px);
     height: calc(min(19vw, 80px) * 1.6);
-    transition: transform 150ms ease, box-shadow 150ms ease;
+    transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
     transform-origin: bottom center;
 }
 
@@ -51,7 +51,8 @@ html, body {
 .hand .card:hover,
 .hand .card:focus,
 .inventory .card:hover,
-.inventory .card:focus {
+.inventory .card:focus,
+button[role="checkbox"] .card {
     transform: scale(1.5);
     z-index: 10;
 }
@@ -75,6 +76,13 @@ html, body {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+}
+
+.highlight,
+button[role="checkbox"][aria-checked="true"] .card,
+button[role="checkbox"][aria-checked="true"] .mud-image {
+    box-shadow: none !important;
+    filter: drop-shadow(0px 0px 2px var(--mud-palette-secondary)) drop-shadow(0px 0px 2px var(--mud-palette-secondary));
 }
 
 /* --- Enemy Layout --- */
@@ -171,7 +179,8 @@ html, body {
     transition: filter 250ms ease;
 }
 
-.card:hover img {
+.card:hover img,
+button[role="checkbox"] .card img {
     filter: blur(1px);
 }
 
@@ -200,6 +209,11 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+.no-ripple.mud-ripple::after {
+    display: none !important;
+    animation: none !important;
 }
 
 :root {

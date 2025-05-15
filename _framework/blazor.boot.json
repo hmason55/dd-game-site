@@ -1,13 +1,13 @@
 {
   "mainAssemblyName": "DDGame",
   "resources": {
-    "hash": "sha256-FpGQJufvxdTBS1Nn/w6JcplF+0OGoZE3C+QHXzZgMNc=",
+    "hash": "sha256-tL9OyEI/dbFfkgqHKLc2b2poqKFz7swZJ/K21Bxtlww=",
     "fingerprinting": {
       "Blazored.LocalStorage.12n6dz54qr.wasm": "Blazored.LocalStorage.wasm",
       "Bromix.MudBlazor.MaterialDesignIcons.19vuk56vs0.wasm": "Bromix.MudBlazor.MaterialDesignIcons.wasm",
       "ConcurrentCollections.ei9dj7ai1k.wasm": "ConcurrentCollections.wasm",
       "Humanizer.oqup3v7t3k.wasm": "Humanizer.wasm",
-      "Microsoft.AspNetCore.Components.0kchbefxal.wasm": "Microsoft.AspNetCore.Components.wasm",
+      "Microsoft.AspNetCore.Components.w5dkd4j46q.wasm": "Microsoft.AspNetCore.Components.wasm",
       "Microsoft.AspNetCore.Components.Web.qqvmyb7bjg.wasm": "Microsoft.AspNetCore.Components.Web.wasm",
       "Microsoft.AspNetCore.Components.WebAssembly.di87cb8hf5.wasm": "Microsoft.AspNetCore.Components.WebAssembly.wasm",
       "Microsoft.Extensions.Configuration.icatoxhjsq.wasm": "Microsoft.Extensions.Configuration.wasm",
@@ -18,12 +18,12 @@
       "Microsoft.Extensions.Localization.bvn14pws96.wasm": "Microsoft.Extensions.Localization.wasm",
       "Microsoft.Extensions.Localization.Abstractions.ixsppbtym0.wasm": "Microsoft.Extensions.Localization.Abstractions.wasm",
       "Microsoft.Extensions.Logging.x8w2nz10m7.wasm": "Microsoft.Extensions.Logging.wasm",
-      "Microsoft.Extensions.Logging.Abstractions.3uti4a84xq.wasm": "Microsoft.Extensions.Logging.Abstractions.wasm",
+      "Microsoft.Extensions.Logging.Abstractions.4pmbqob8fe.wasm": "Microsoft.Extensions.Logging.Abstractions.wasm",
       "Microsoft.Extensions.Options.2tpvz1izx7.wasm": "Microsoft.Extensions.Options.wasm",
       "Microsoft.Extensions.Primitives.9kx4ehp8td.wasm": "Microsoft.Extensions.Primitives.wasm",
       "Microsoft.JSInterop.yy1i9lbmf8.wasm": "Microsoft.JSInterop.wasm",
       "Microsoft.JSInterop.WebAssembly.s0bw0921jm.wasm": "Microsoft.JSInterop.WebAssembly.wasm",
-      "MudBlazor.powjmsqksw.wasm": "MudBlazor.wasm",
+      "MudBlazor.w8m6dq6qxp.wasm": "MudBlazor.wasm",
       "Newtonsoft.Json.qkbufwhni2.wasm": "Newtonsoft.Json.wasm",
       "Serilog.acgdbih6ec.wasm": "Serilog.wasm",
       "Serilog.Extensions.Logging.sq1iwxadv9.wasm": "Serilog.Extensions.Logging.wasm",
@@ -74,8 +74,8 @@
       "System.Xml.XDocument.2zthwj8j9g.wasm": "System.Xml.XDocument.wasm",
       "System.ezrw3d5kw2.wasm": "System.wasm",
       "netstandard.cxdxw0j41v.wasm": "netstandard.wasm",
-      "System.Private.CoreLib.1a4wx00mp1.wasm": "System.Private.CoreLib.wasm",
-      "DDGame.xuow050v19.wasm": "DDGame.wasm",
+      "System.Private.CoreLib.b0pk5ia7hl.wasm": "System.Private.CoreLib.wasm",
+      "DDGame.dc680ugn66.wasm": "DDGame.wasm",
       "Humanizer.resources.ywrwvesg23.wasm": "Humanizer.resources.wasm",
       "Humanizer.resources.08lwhm08x4.wasm": "Humanizer.resources.wasm",
       "Humanizer.resources.5zb07tir5k.wasm": "Humanizer.resources.wasm",
@@ -144,14 +144,14 @@
     },
     "coreAssembly": {
       "System.Runtime.InteropServices.JavaScript.5pcrya9j00.wasm": "sha256-92zUoi9qwW2rZalWHIYTUNdUv+uUJLg6ZLS4Aj0eqHk=",
-      "System.Private.CoreLib.1a4wx00mp1.wasm": "sha256-V+E0edhd4M/FgCKLhCWe2hkPwzmPQNCyWL29DuwDkiU="
+      "System.Private.CoreLib.b0pk5ia7hl.wasm": "sha256-ZTdCAS4ciRHZC323U3zW2zqWox/cKFyHN1+2q17bSBI="
     },
     "assembly": {
       "Blazored.LocalStorage.12n6dz54qr.wasm": "sha256-OaMAAd5n7ORfyur5e3QIyEVKJ76MKIvwbg7/icnnYcU=",
       "Bromix.MudBlazor.MaterialDesignIcons.19vuk56vs0.wasm": "sha256-teFbbqaXJoVzIYGotTTs1OskElnXxM9ERgjIVtc/wxg=",
       "ConcurrentCollections.ei9dj7ai1k.wasm": "sha256-mv/sswbh3OumDTtTG39LeOMhEw4XAfN32aSyg6q8tHA=",
       "Humanizer.oqup3v7t3k.wasm": "sha256-4NbSboZzzP9nikRtXapUZNzOyITt7ht9TNqCIQHr5OE=",
-      "Microsoft.AspNetCore.Components.0kchbefxal.wasm": "sha256-0GxxStqYoc5i2D3MJDuhNAc6xjeAaWvPGzXk6tTze1o=",
+      "Microsoft.AspNetCore.Components.w5dkd4j46q.wasm": "sha256-pGw7YSvgVmQVwm3CIuhO2poGz+nlPy4iTWKKI6AEwVs=",
       "Microsoft.AspNetCore.Components.Web.qqvmyb7bjg.wasm": "sha256-Mui1yiZvGCY10AzYu5TPkgJbFwssLc//Ixh89PD1JFY=",
       "Microsoft.AspNetCore.Components.WebAssembly.di87cb8hf5.wasm": "sha256-K4H030gkTHmaCEJlY5dOMaLEJ7KcGQRM+DuB3mH4L1A=",
       "Microsoft.Extensions.Configuration.icatoxhjsq.wasm": "sha256-XhpSYR8F8A+kKAi/mojMfR/OreGPs3bc2GIu2PE9098=",
@@ -162,12 +162,12 @@
       "Microsoft.Extensions.Localization.bvn14pws96.wasm": "sha256-6UgMJoVZBfDdfzYR0aKVK6BWArxpXC1qiQDDjiXw/L4=",
       "Microsoft.Extensions.Localization.Abstractions.ixsppbtym0.wasm": "sha256-tnMHqb6BpI1Jj9M9WNSAAJzzxHrQgov/aSXbFqc+xzk=",
       "Microsoft.Extensions.Logging.x8w2nz10m7.wasm": "sha256-P/1K2K+QTCqSD26SbLVn7iGeqlyjdJcY0Ewi2R8225Y=",
-      "Microsoft.Extensions.Logging.Abstractions.3uti4a84xq.wasm": "sha256-i9N4fM0hTp1/CuR0D5voeqmz7DScfKRCDbm2PNG3RmA=",
+      "Microsoft.Extensions.Logging.Abstractions.4pmbqob8fe.wasm": "sha256-WE7/ClLcC6PaJGhoBjhHgoEBVf8Wpn2AkAf4+5PGEIE=",
       "Microsoft.Extensions.Options.2tpvz1izx7.wasm": "sha256-muT+1idbPdv4l3tZ03AMNKOMBk1naU8HsjiH1fugp08=",
       "Microsoft.Extensions.Primitives.9kx4ehp8td.wasm": "sha256-6cQKFBXogCgICQbWptUlzgW+xOHIWbUMRjFxztqytdA=",
       "Microsoft.JSInterop.yy1i9lbmf8.wasm": "sha256-hthehae7zCj6ycNSGjegpS5z5TQzGX6sXRkHBDo0/Ao=",
       "Microsoft.JSInterop.WebAssembly.s0bw0921jm.wasm": "sha256-NNwR0xu2wKvvEIZnSUwKht+/0RJ9ziHW01M66VViIkI=",
-      "MudBlazor.powjmsqksw.wasm": "sha256-OZJMoIvaQjcU3PCejGBcoFwMtllyVpVXTfktqlw2was=",
+      "MudBlazor.w8m6dq6qxp.wasm": "sha256-IGsodSTUg/cEp5sLD9/PoB3qM59tClgTj4C2efMAhNU=",
       "Newtonsoft.Json.qkbufwhni2.wasm": "sha256-GlXMWKvDs45M2pACoR3Y4Qh8mcrOZGljqmvJY+6JZ5s=",
       "Serilog.acgdbih6ec.wasm": "sha256-Bmlplz1njfT4CJ2ZLWmPgtfJ5RJyXvVUjhFntDcRlkU=",
       "Serilog.Extensions.Logging.sq1iwxadv9.wasm": "sha256-VP3ipQ0Mgb9NgEMkH08GEup2of20grWfwfDR87CUSAo=",
@@ -217,7 +217,7 @@
       "System.Xml.XDocument.2zthwj8j9g.wasm": "sha256-/j2bxCGujwFZoav+qfLhqiKV/cxU2OzPXOehq/vdoB4=",
       "System.ezrw3d5kw2.wasm": "sha256-ViNRvhyxlTugIlqJHamw/HwbXlg/YWcrANmxuTM0tfg=",
       "netstandard.cxdxw0j41v.wasm": "sha256-wBSQsPAg9WgdAOU6GlIGoDBU25pIjxoT+pIe4g9lhG8=",
-      "DDGame.xuow050v19.wasm": "sha256-J8aUlmi1rlHPDSHlpcQMWKYjhzpNmk35YklKNd6G0e0="
+      "DDGame.dc680ugn66.wasm": "sha256-HcpbIuzDI/IFXKrC2Lvox+2toucAkdbbDtw+NBgyiMQ="
     },
     "satelliteResources": {
       "af": {
