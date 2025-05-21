@@ -23,7 +23,7 @@
         } else {
             clearInterval(intervalId);
         }
-    }, 2000);
+    }, 1500);
 
     window.stopLoadingMessages = function () {
         clearInterval(intervalId);
