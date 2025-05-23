@@ -1,7 +1,7 @@
 {
   "mainAssemblyName": "DDGame",
   "resources": {
-    "hash": "sha256-SlLU7UDhYb/Zkqk8nZ8QS6Pqoms/mDiTkV4IFE5uEoY=",
+    "hash": "sha256-GTzx3JRNqNqNA8TFi+UNIHHxOjG+S3PiGVF1fPkNvzo=",
     "fingerprinting": {
       "Blazored.LocalStorage.12n6dz54qr.wasm": "Blazored.LocalStorage.wasm",
       "Bromix.MudBlazor.MaterialDesignIcons.19vuk56vs0.wasm": "Bromix.MudBlazor.MaterialDesignIcons.wasm",
@@ -43,12 +43,13 @@
       "System.ComponentModel.Primitives.0droz1avdc.wasm": "System.ComponentModel.Primitives.wasm",
       "System.ComponentModel.TypeConverter.8d8ywubuce.wasm": "System.ComponentModel.TypeConverter.wasm",
       "System.ComponentModel.vnfim00jfn.wasm": "System.ComponentModel.wasm",
-      "System.Console.9g8d5jq9vv.wasm": "System.Console.wasm",
+      "System.Console.wmae30mhnp.wasm": "System.Console.wasm",
       "System.Data.Common.al9mncyo8a.wasm": "System.Data.Common.wasm",
       "System.Diagnostics.DiagnosticSource.ru4icg24tw.wasm": "System.Diagnostics.DiagnosticSource.wasm",
       "System.Diagnostics.TraceSource.2vjw1sujn5.wasm": "System.Diagnostics.TraceSource.wasm",
       "System.Drawing.Primitives.vcnhff6rpo.wasm": "System.Drawing.Primitives.wasm",
       "System.Drawing.e1q21ukgul.wasm": "System.Drawing.wasm",
+      "System.IO.Compression.ii6d9riv3z.wasm": "System.IO.Compression.wasm",
       "System.IO.Pipelines.3p3f5vckx6.wasm": "System.IO.Pipelines.wasm",
       "System.Linq.Expressions.veqbh22c05.wasm": "System.Linq.Expressions.wasm",
       "System.Linq.8ivktfwb54.wasm": "System.Linq.wasm",
@@ -69,7 +70,7 @@
       "System.Runtime.Numerics.f7dgwo54q8.wasm": "System.Runtime.Numerics.wasm",
       "System.Runtime.Serialization.Formatters.g2xoz2l2qq.wasm": "System.Runtime.Serialization.Formatters.wasm",
       "System.Runtime.Serialization.Primitives.4bjsxjkd3k.wasm": "System.Runtime.Serialization.Primitives.wasm",
-      "System.Runtime.uhckbwb1p2.wasm": "System.Runtime.wasm",
+      "System.Runtime.2xpm69q9zy.wasm": "System.Runtime.wasm",
       "System.Security.Cryptography.bceerb04k0.wasm": "System.Security.Cryptography.wasm",
       "System.Text.Encoding.Extensions.pdxtt9y857.wasm": "System.Text.Encoding.Extensions.wasm",
       "System.Text.Encodings.Web.n7nth9auq4.wasm": "System.Text.Encodings.Web.wasm",
@@ -81,8 +82,8 @@
       "System.Xml.XDocument.2zthwj8j9g.wasm": "System.Xml.XDocument.wasm",
       "System.ezrw3d5kw2.wasm": "System.wasm",
       "netstandard.sn5o6fr0pi.wasm": "netstandard.wasm",
-      "System.Private.CoreLib.n0wi53a7xf.wasm": "System.Private.CoreLib.wasm",
-      "DDGame.mqpasol2zu.wasm": "DDGame.wasm",
+      "System.Private.CoreLib.j23gkyflq9.wasm": "System.Private.CoreLib.wasm",
+      "DDGame.6awohq65uy.wasm": "DDGame.wasm",
       "Humanizer.resources.ywrwvesg23.wasm": "Humanizer.resources.wasm",
       "Humanizer.resources.08lwhm08x4.wasm": "Humanizer.resources.wasm",
       "Humanizer.resources.5zb07tir5k.wasm": "Humanizer.resources.wasm",
@@ -151,7 +152,7 @@
     },
     "coreAssembly": {
       "System.Runtime.InteropServices.JavaScript.5pcrya9j00.wasm": "sha256-92zUoi9qwW2rZalWHIYTUNdUv+uUJLg6ZLS4Aj0eqHk=",
-      "System.Private.CoreLib.n0wi53a7xf.wasm": "sha256-l+PEpxrvO1htuZU+dl8ottA1z0yHF4ml999A69Z69fw="
+      "System.Private.CoreLib.j23gkyflq9.wasm": "sha256-i/8wDNznDn4PqmAYgwiAzl919IzUi6Iyyr9EMYtuDL4="
     },
     "assembly": {
       "Blazored.LocalStorage.12n6dz54qr.wasm": "sha256-OaMAAd5n7ORfyur5e3QIyEVKJ76MKIvwbg7/icnnYcU=",
@@ -194,12 +195,13 @@
       "System.ComponentModel.Primitives.0droz1avdc.wasm": "sha256-fFhVdogL++OqUS21j1wr9wv2VBDam+GTVvRQGUwEOq4=",
       "System.ComponentModel.TypeConverter.8d8ywubuce.wasm": "sha256-3OYg9NTQJggZE/y0dMbEEE+ToxDtq1o+kWuvMb3S9fo=",
       "System.ComponentModel.vnfim00jfn.wasm": "sha256-y7Uqcg7+R+c3wLwPT6xsZPEQgM3h2npB2twrQNngYQE=",
-      "System.Console.9g8d5jq9vv.wasm": "sha256-92Ip1ChJ2ZPDPah0pU8FZNtaKyo7Hv+zzigIvLWqPFU=",
+      "System.Console.wmae30mhnp.wasm": "sha256-qE8gu3PAQKqH65xq5f+7ZZgnC33u+9l12IP6FBbc8MI=",
       "System.Data.Common.al9mncyo8a.wasm": "sha256-8t6sH8G6KJHC9HGybItbq1ZqsimlMmYV6eCIr00/caw=",
       "System.Diagnostics.DiagnosticSource.ru4icg24tw.wasm": "sha256-E9VOJKFkQA5x84mKR8AJ4ljHS0R5MKAzHfSwHiKWxfE=",
       "System.Diagnostics.TraceSource.2vjw1sujn5.wasm": "sha256-jl1oRggnU2gN8hc+5PvzJeaiO7Q9RJNycXuZdQ3PfjE=",
       "System.Drawing.Primitives.vcnhff6rpo.wasm": "sha256-gUSvjX+6UNejKoLelZmQYm2kTq9GIIpjAKp7jIG4MYU=",
       "System.Drawing.e1q21ukgul.wasm": "sha256-UgmupMAr6ZNEzs9lDBX+BpCRqNkmfFv1kxoruuR2UWs=",
+      "System.IO.Compression.ii6d9riv3z.wasm": "sha256-xsgoS/5hBxbmEuPlQ17tZpQFNWWaPgb3qmvD2sKG0xQ=",
       "System.IO.Pipelines.3p3f5vckx6.wasm": "sha256-d4Fv2UP7j+pqOrhljw06Xjdf1UB0VVgcWQAZYM+e2Ak=",
       "System.Linq.Expressions.veqbh22c05.wasm": "sha256-iYyRYjTk6QvAKHhgywZPJk3r/FERD1CGJs6tqe7P234=",
       "System.Linq.8ivktfwb54.wasm": "sha256-gIoGYCybE3CKCEY2LKHceoAGOTFRad27oMdqaIKJ1zU=",
@@ -219,7 +221,7 @@
       "System.Runtime.Numerics.f7dgwo54q8.wasm": "sha256-23bNSromPL9GAG1VW3K0k2To2PxaYvWjcu/EuDQDFco=",
       "System.Runtime.Serialization.Formatters.g2xoz2l2qq.wasm": "sha256-aNjixtWJqXd37FOW0pqAyciK2tcIsZ6ogO19uSSiGVg=",
       "System.Runtime.Serialization.Primitives.4bjsxjkd3k.wasm": "sha256-wL0VtCmxuZJzPdRMVOdvtaPmCoIuLUKXBh1Snq1G8Iw=",
-      "System.Runtime.uhckbwb1p2.wasm": "sha256-QtdByGj6FI4PW7pxQQE/wRHAaAqbIjBuquQUA0mMZoQ=",
+      "System.Runtime.2xpm69q9zy.wasm": "sha256-SmmD3fP88vaKCm5iUWCkMctfBHj2ZTiypjMW7ip7hHY=",
       "System.Security.Cryptography.bceerb04k0.wasm": "sha256-G0cgs8xhZJgoM5OWNIA0Vqb8LvP7MgFqDUeiXNDqW3k=",
       "System.Text.Encoding.Extensions.pdxtt9y857.wasm": "sha256-w5BwYak22XKVBVhcVTdvJwLUzGTrnRdR7HuXyamu40Q=",
       "System.Text.Encodings.Web.n7nth9auq4.wasm": "sha256-PVCrhDn4h1OgqMGUhEs25nlp1YW7mMfPoEgZxltnMoo=",
@@ -231,7 +233,7 @@
       "System.Xml.XDocument.2zthwj8j9g.wasm": "sha256-/j2bxCGujwFZoav+qfLhqiKV/cxU2OzPXOehq/vdoB4=",
       "System.ezrw3d5kw2.wasm": "sha256-ViNRvhyxlTugIlqJHamw/HwbXlg/YWcrANmxuTM0tfg=",
       "netstandard.sn5o6fr0pi.wasm": "sha256-qETylRoky2NURY4dM0z/C4hak1kVIUkBe93py7KRvAo=",
-      "DDGame.mqpasol2zu.wasm": "sha256-MpPHTYKdJ9felptoQkglFjD/N2TvDlTUpwSLKvA+IRE="
+      "DDGame.6awohq65uy.wasm": "sha256-brIhPBPuzoVhB6/kCWoj6zzA52EEmWpdsm0PgpYAdjA="
     },
     "satelliteResources": {
       "af": {
