@@ -1,7 +1,7 @@
 {
   "mainAssemblyName": "DDGame",
   "resources": {
-    "hash": "sha256-qwstWcXtjqpd/oMae9Dh07OwnN9n07989cXT6j9vgkU=",
+    "hash": "sha256-Xf/B6ub7+YvJHFqww14Lqg0pCnBbFniokd9oJc9xLk0=",
     "fingerprinting": {
       "Blazored.LocalStorage.12n6dz54qr.wasm": "Blazored.LocalStorage.wasm",
       "Bromix.MudBlazor.MaterialDesignIcons.19vuk56vs0.wasm": "Bromix.MudBlazor.MaterialDesignIcons.wasm",
@@ -82,8 +82,8 @@
       "System.Xml.XDocument.2zthwj8j9g.wasm": "System.Xml.XDocument.wasm",
       "System.ezrw3d5kw2.wasm": "System.wasm",
       "netstandard.sn5o6fr0pi.wasm": "netstandard.wasm",
-      "System.Private.CoreLib.n58vqqxuqe.wasm": "System.Private.CoreLib.wasm",
-      "DDGame.f7s1r9wv0u.wasm": "DDGame.wasm",
+      "System.Private.CoreLib.5tw051jhtt.wasm": "System.Private.CoreLib.wasm",
+      "DDGame.fh7h6eut7h.wasm": "DDGame.wasm",
       "Humanizer.resources.ywrwvesg23.wasm": "Humanizer.resources.wasm",
       "Humanizer.resources.08lwhm08x4.wasm": "Humanizer.resources.wasm",
       "Humanizer.resources.5zb07tir5k.wasm": "Humanizer.resources.wasm",
@@ -152,7 +152,7 @@
     },
     "coreAssembly": {
       "System.Runtime.InteropServices.JavaScript.5pcrya9j00.wasm": "sha256-92zUoi9qwW2rZalWHIYTUNdUv+uUJLg6ZLS4Aj0eqHk=",
-      "System.Private.CoreLib.n58vqqxuqe.wasm": "sha256-C83DWPHN/O1fPPhfxPO5E1YwO26cOE/XqlkBT1Pw9dk="
+      "System.Private.CoreLib.5tw051jhtt.wasm": "sha256-5yDT/Dvad6CO0u3j43AImnCzQnzWi+SWOAg/KUwOYhQ="
     },
     "assembly": {
       "Blazored.LocalStorage.12n6dz54qr.wasm": "sha256-OaMAAd5n7ORfyur5e3QIyEVKJ76MKIvwbg7/icnnYcU=",
@@ -233,7 +233,7 @@
       "System.Xml.XDocument.2zthwj8j9g.wasm": "sha256-/j2bxCGujwFZoav+qfLhqiKV/cxU2OzPXOehq/vdoB4=",
       "System.ezrw3d5kw2.wasm": "sha256-ViNRvhyxlTugIlqJHamw/HwbXlg/YWcrANmxuTM0tfg=",
       "netstandard.sn5o6fr0pi.wasm": "sha256-qETylRoky2NURY4dM0z/C4hak1kVIUkBe93py7KRvAo=",
-      "DDGame.f7s1r9wv0u.wasm": "sha256-9TunGLKHZ5uiyh7HSrn6CKQGxF3iU1zCHpdYZOPpWqw="
+      "DDGame.fh7h6eut7h.wasm": "sha256-3eGY2+6WPVW3fsclC8CCoTMYhJTxcs7we+u+ixKdqqk="
     },
     "satelliteResources": {
       "af": {
