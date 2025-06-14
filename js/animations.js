@@ -64,7 +64,7 @@ window.cloneElementHidden = (element) => {
 };
 
 // Reveal and animate clone from given mouse position
-window.revealAndAnimateCloneAtPos = (wrapper, mouseX, mouseY, scale = 0.3) => {
+window.revealAndAnimateCloneAtPos = (wrapper, mouseX, mouseY, scale = 0.3, speed = 1.0) => {
     if (!wrapper || typeof mouseX !== 'number' || typeof mouseY !== 'number') return;
 
     const offsetX = parseFloat(wrapper.dataset.offsetX || '0');
@@ -75,6 +75,9 @@ window.revealAndAnimateCloneAtPos = (wrapper, mouseX, mouseY, scale = 0.3) => {
 
     wrapper.style.left = `${left}px`;
     wrapper.style.top = `${top}px`;
+
+    const appearMs = 400 / speed;
+    const removeMs = 500 / speed;
 
     requestAnimationFrame(() => {
         wrapper.style.opacity = '1';
@@ -89,8 +92,8 @@ window.revealAndAnimateCloneAtPos = (wrapper, mouseX, mouseY, scale = 0.3) => {
 
             setTimeout(() => {
                 wrapper.remove();
-            }, 500);
-        }, 400);
+            }, removeMs);
+        }, appearMs);
     });
 };
 
