@@ -114,3 +114,18 @@ window.shakeElement = (id, intensity) => {
     el.animate(keyframes, { duration: 200, easing: 'ease' });
 };
 
+// Flash an element white and black when hit
+window.flashElement = (id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const keyframes = [
+        { filter: 'brightness(2)' },
+        { filter: 'brightness(0)' },
+        { filter: 'brightness(2)' },
+        { filter: 'none' }
+    ];
+
+    el.animate(keyframes, { duration: 200, easing: 'steps(1, end)' });
+};
+
