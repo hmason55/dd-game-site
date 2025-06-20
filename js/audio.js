@@ -1,6 +1,7 @@
-﻿window.audioPlayer = {
+window.audioPlayer = {
     sounds: {},
     volume: 0.75, // Default full volume
+    pitchVariance: 0.15, // Random pitch variation factor
 
     loadSound: function (name, src) {
         let audio = new Audio(src);
@@ -22,6 +23,8 @@
             let audio = this.sounds[name];
             audio.currentTime = 0; // Restart sound from beginning
             audio.volume = this.volume; // Apply volume when playing
+            const variance = (Math.random() * 2 - 1) * this.pitchVariance;
+            audio.playbackRate = 1 + variance;
 
             // Attempt to play the sound
             audio.play().catch(error => {
