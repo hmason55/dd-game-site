@@ -97,3 +97,20 @@ window.revealAndAnimateCloneAtPos = (wrapper, mouseX, mouseY, scale = 0.3, speed
     });
 };
 
+// Shake an element to indicate damage taken
+window.shakeElement = (id, intensity) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const dist = 2 + 8 * Math.min(Math.max(intensity, 0), 1);
+    const keyframes = [
+        { transform: 'translate(0,0)' },
+        { transform: `translate(${dist}px, 0)` },
+        { transform: `translate(${-dist}px, 0)` },
+        { transform: `translate(${dist}px, 0)` },
+        { transform: 'translate(0,0)' }
+    ];
+
+    el.animate(keyframes, { duration: 200, easing: 'ease' });
+};
+
