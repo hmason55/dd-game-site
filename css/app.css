@@ -178,3 +178,14 @@ button[role="checkbox"] .card img {
     z-index: 9999;
     pointer-events: none;
 }
+
+@keyframes value-change-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+.value-change-pop {
+  display: inline-block;
+  animation: value-change-pop 0.3s ease-out;
+}
