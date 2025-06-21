@@ -23,7 +23,7 @@ html, body {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    column-gap: 0.25rem;
+    column-gap: 1vw;
     min-height: 144px;
     padding-top: 64px;
 }
@@ -35,8 +35,8 @@ html, body {
     scroll-snap-align: start;
     scroll-snap-stop: always;
     z-index: 1;
-    width: min(19vw, 80px);
-    height: calc(min(19vw, 80px) * 1.6);
+    width: min(80px);
+    height: calc(min(80px) * 1.6);
     transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
     transform-origin: bottom center;
 }
@@ -44,8 +44,8 @@ html, body {
 @media (max-width: 400px) {
     .hand .card,
     .inventory .card {
-        width: 19vw;
-        height: calc(19vw * 1.6);
+        width: 80px;
+        height: calc(80px * 1.6);
     }
 }
 
