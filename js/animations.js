@@ -129,3 +129,38 @@ window.flashElement = (id) => {
     el.animate(keyframes, { duration: 200, easing: 'steps(1, end)' });
 };
 
+// GSAP animations
+window.gsapTextEffects = window.gsapTextEffects || {};
+
+window.gsapTextEffects.richEffect = function (id, effect, speed, repeat) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    speed = speed || 1.0;
+    repeat = (typeof repeat === "undefined" || repeat < 0) ? -1 : repeat;
+
+    if (effect === "shake") {
+        const maxDist = 3 * (speed || 1);
+        const maxRot = 5 * (speed || 1);
+
+        gsap.to(el, {
+            x: () => (Math.random() - 0.5) * 2 * maxDist,
+            y: () => (Math.random() - 0.5) * 2 * maxDist,
+            rotate: () => (Math.random() - 0.5) * 2 * maxRot,
+            duration: 0.16 / (speed || 1),
+            repeat: repeat,
+            yoyo: true,
+            ease: "sine.inOut"
+        });
+    } else if (effect === "wiggle") {
+        gsap.to(el, {
+            y: -6 * speed,
+            duration: 0.8 / speed,
+            repeat: repeat,
+            yoyo: true,
+            ease: "sine.inOut"
+        });
+    }
+    // ... color can be handled by inline style in C#
+};
+
+
