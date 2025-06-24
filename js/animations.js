@@ -159,7 +159,7 @@ window.gsapTextEffects.richEffect = function (id, effect, speed, repeat) {
             });
         }
         doShake();
-    } else if (effect === "wiggle") {
+    } else if (effect === "wave") {
         gsap.to(el, {
             y: -6 * speed,
             duration: 0.8 / speed,
