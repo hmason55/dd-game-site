@@ -139,18 +139,26 @@ window.gsapTextEffects.richEffect = function (id, effect, speed, repeat) {
     repeat = (typeof repeat === "undefined" || repeat < 0) ? -1 : repeat;
 
     if (effect === "shake") {
-        const maxDist = 3 * (speed || 1);
-        const maxRot = 5 * (speed || 1);
-
-        gsap.to(el, {
-            x: () => (Math.random() - 0.5) * 2 * maxDist,
-            y: () => (Math.random() - 0.5) * 2 * maxDist,
-            rotate: () => (Math.random() - 0.5) * 2 * maxRot,
-            duration: 0.16 / (speed || 1),
-            repeat: repeat,
-            yoyo: true,
-            ease: "sine.inOut"
-        });
+        const maxDist = 0.5 * speed;
+        const maxRot = 1 * speed;
+        let cycles = 0;
+        let maxCycles = repeat === -1 ? 99999 : repeat * 2; // *2 for yoyo
+        function doShake() {
+            if (cycles++ > maxCycles) {
+                gsap.to(el, { x: 0, y: 0, rotate: 0, duration: 0.08 });
+                return;
+            }
+            gsap.to(el, {
+                x: (Math.random() - 0.5) * 2 * maxDist,
+                y: (Math.random() - 0.5) * 2 * maxDist,
+                rotate: (Math.random() - 0.5) * 2 * maxRot,
+                duration: 0.09 / speed,
+                ease: "sine.inOut",
+                yoyo: true,
+                onComplete: doShake
+            });
+        }
+        doShake();
     } else if (effect === "wiggle") {
         gsap.to(el, {
             y: -6 * speed,
