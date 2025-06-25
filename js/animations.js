@@ -171,4 +171,35 @@ window.gsapTextEffects.richEffect = function (id, effect, speed, repeat) {
     // ... color can be handled by inline style in C#
 };
 
+// Simple appear animations for the typewriter component
+window.animateTypewriterAppear = function (id, animation) {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    switch (animation) {
+        case 'FadeIn':
+            el.style.transition = 'opacity 0.3s ease-in';
+            requestAnimationFrame(() => { el.style.opacity = '1'; });
+            break;
+        case 'Pop':
+            el.style.transition = 'opacity 0.3s ease-in, transform 0.3s ease-out';
+            requestAnimationFrame(() => {
+                el.style.opacity = '1';
+                el.style.transform = 'scale(1)';
+            });
+            break;
+        case 'Scale':
+            el.style.transition = 'transform 0.3s ease-out';
+            requestAnimationFrame(() => { el.style.transform = 'scale(1)'; });
+            break;
+        case 'SlideUp':
+            el.style.transition = 'opacity 0.3s ease-in, transform 0.3s ease-out';
+            requestAnimationFrame(() => {
+                el.style.opacity = '1';
+                el.style.transform = 'translateY(0)';
+            });
+            break;
+    }
+};
+
 
