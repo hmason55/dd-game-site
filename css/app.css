@@ -190,3 +190,13 @@ button[role="checkbox"] .card img {
   display: inline-block;
   animation: value-change-pop 0.4s ease-out;
 }
+
+.fade {
+    opacity: 0;
+    transition: none;
+}
+
+.fade:not(.hide) {
+    opacity: 1;
+    transition: opacity 0.4s ease-in;
+}
