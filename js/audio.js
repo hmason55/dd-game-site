@@ -1,7 +1,7 @@
 window.audioPlayer = {
     sounds: {},
     volume: 0.75, // Default full volume
-    pitchVariance: 0.15, // Random pitch variation factor
+    pitchVariance: 0.05, // Random pitch variation factor
 
     loadSound: function (name, src) {
         let audio = new Audio(src);
