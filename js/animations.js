@@ -111,7 +111,11 @@ window.shakeElement = (id, intensity) => {
         { transform: 'translate(0,0)' }
     ];
 
-    el.animate(keyframes, { duration: 200, easing: 'ease' });
+    el.animate(keyframes, {
+        duration: 200,
+        easing: 'ease',
+        composite: 'add'
+    });
 };
 
 // Flash an element white and black when hit
@@ -127,6 +131,65 @@ window.flashElement = (id) => {
     ];
 
     el.animate(keyframes, { duration: 200, easing: 'steps(1, end)' });
+};
+
+// Slightly push the target away from the attacker
+// Speed controls how quickly the animation completes
+window.nudgeFrom = (attackerId, targetId, speed = 1.0, distance = 20, duration = 150) => {
+    const attacker = document.getElementById(attackerId);
+    const target = document.getElementById(targetId);
+    if (!attacker || !target) return;
+
+    const ar = attacker.getBoundingClientRect();
+    const tr = target.getBoundingClientRect();
+    const dx = tr.left + tr.width / 2 - (ar.left + ar.width / 2);
+    const dy = tr.top + tr.height / 2 - (ar.top + ar.height / 2);
+    const mag = Math.hypot(dx, dy) || 1;
+    const ux = dx / mag;
+    const uy = dy / mag;
+
+    const tx = ux * distance;
+    const ty = uy * distance;
+
+    target.animate([
+        { transform: 'translate(0,0)' },
+        { transform: `translate(${tx}px, ${ty}px)` },
+        { transform: 'translate(0,0)' }
+    ], {
+        duration: duration / speed,
+        easing: 'ease-out',
+        composite: 'add'
+    });
+};
+
+// Briefly move the attacker towards the target
+// Returns a promise that resolves when the animation completes
+window.lungeTowards = (attackerId, targetId, speed = 1.0, distance = 15, duration = 150) => {
+    const attacker = document.getElementById(attackerId);
+    const target = document.getElementById(targetId);
+    if (!attacker || !target) return Promise.resolve();
+
+    const ar = attacker.getBoundingClientRect();
+    const tr = target.getBoundingClientRect();
+    const dx = tr.left + tr.width / 2 - (ar.left + ar.width / 2);
+    const dy = tr.top + tr.height / 2 - (ar.top + ar.height / 2);
+    const mag = Math.hypot(dx, dy) || 1;
+    const ux = dx / mag;
+    const uy = dy / mag;
+
+    const tx = ux * distance;
+    const ty = uy * distance;
+
+    const anim = attacker.animate([
+        { transform: 'translate(0,0)' },
+        { transform: `translate(${tx}px, ${ty}px)` },
+        { transform: 'translate(0,0)' }
+    ], {
+        duration: duration / speed,
+        easing: 'ease-in-out',
+        composite: 'add'
+    });
+    return anim.finished;
 };
 
 // GSAP animations
