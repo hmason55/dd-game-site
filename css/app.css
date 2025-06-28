@@ -5,6 +5,7 @@ html, body {
     height: 100%;
     background-color: black;
     overflow: hidden;
+    user-select: none;
 }
 .inventory-swap {
     position: absolute;
@@ -198,4 +199,10 @@ button[role="checkbox"] .card img {
 .fade:not(.hide) {
     opacity: 1;
     transition: opacity 0.4s ease-in;
+}
+
+.mud-button {
+    --notch: calc(var(--mud-typography-button-lineheight) * 0.5em);
+    height: var(--mud-typography-button-lineheight);
+    clip-path: polygon( var(--notch) 0, calc(100% - var(--notch)) 0, 100% 50%, calc(100% - var(--notch)) 100%, var(--notch) 100%, 0 50% );
 }
