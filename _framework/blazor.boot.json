@@ -1,7 +1,7 @@
 {
   "mainAssemblyName": "DDGame",
   "resources": {
-    "hash": "sha256-c1IFtygWzLvRIELIVLJ6nzHlewrOCkhL+3FmfhAV3U0=",
+    "hash": "sha256-/fZBZnrPvKLp/oyWz2U5O+32hxYPXW7slT5hHHERZ1I=",
     "fingerprinting": {
       "Blazored.LocalStorage.12n6dz54qr.wasm": "Blazored.LocalStorage.wasm",
       "Bromix.MudBlazor.MaterialDesignIcons.19vuk56vs0.wasm": "Bromix.MudBlazor.MaterialDesignIcons.wasm",
@@ -213,7 +213,7 @@
       "mscorlib.brg9pkj3je.wasm": "mscorlib.wasm",
       "netstandard.wuzd3f1y6v.wasm": "netstandard.wasm",
       "System.Private.CoreLib.05ksnw82w3.wasm": "System.Private.CoreLib.wasm",
-      "DDGame.w9d9vi1qlz.wasm": "DDGame.wasm",
+      "DDGame.9qsnoky2d1.wasm": "DDGame.wasm",
       "Humanizer.resources.ywrwvesg23.wasm": "Humanizer.resources.wasm",
       "Humanizer.resources.08lwhm08x4.wasm": "Humanizer.resources.wasm",
       "Humanizer.resources.5zb07tir5k.wasm": "Humanizer.resources.wasm",
@@ -493,7 +493,7 @@
       "WindowsBase.u25hol0de4.wasm": "sha256-CgB28KCiYKHd4yK6IM0PJ526P7IbRCpNkGTqn+cLwxs=",
       "mscorlib.brg9pkj3je.wasm": "sha256-FzZwzxUYYyg3qxc7Km8r50UKAmRWrIeckSFG1NTHKNU=",
       "netstandard.wuzd3f1y6v.wasm": "sha256-yAXc0deBIRkWTVXqADZfhgZtrxGgJCIbZYVtA0NjvdM=",
-      "DDGame.w9d9vi1qlz.wasm": "sha256-dEKzO0pE3Mh8QIRi//0PnipehaEf36K4Hn/E46TPx8o="
+      "DDGame.9qsnoky2d1.wasm": "sha256-z4Z1ohMKIIXn2dtFL+e0jdeb4lfJf9XnqoCht3Zl88U="
     },
     "satelliteResources": {
       "af": {

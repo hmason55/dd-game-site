@@ -207,3 +207,8 @@ button[role="checkbox"] .card img {
     height: var(--mud-typography-button-lineheight);
     clip-path: polygon( var(--notch) 0, calc(100% - var(--notch)) 0, 100% 50%, calc(100% - var(--notch)) 100%, var(--notch) 100%, 0 50% );
 }
+
+.mud-button-label {
+    padding-right: 8px;
+    padding-left: 8px;
+}
