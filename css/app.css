@@ -212,3 +212,45 @@ button[role="checkbox"] .card img {
     padding-right: 8px;
     padding-left: 8px;
 }
+
+.saving-spinner {
+    position: fixed;
+    bottom: 64px;
+    right: 16px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: inline-block;
+    border-top: 3px solid #FFF;
+    border-right: 3px solid transparent;
+    box-sizing: border-box;
+    z-index: 2000;
+    pointer-events: none;
+    color: white;
+    animation: saving-spinner-animation 2s linear infinite;
+}
+
+@keyframes saving-spinner-animation {
+    0% {
+        opacity: 0;
+        transform: rotate(0deg);
+    }
+
+    25% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 1;
+        transform: rotate(360deg);
+    }
+
+    75% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+        transform: rotate(720deg);
+    }
+}
