@@ -29,13 +29,14 @@ window.cloneElementHidden = (element) => {
 
     const clone = element.cloneNode(true);
 
-    // Copy the original scale transform only
-    clone.style.transform = 'scale(1.5)';
     const computedStyle = getComputedStyle(element);
     const originalTransform = computedStyle.transform;
+    const originalOrigin = computedStyle.transformOrigin;
 
     if (originalTransform && originalTransform !== 'none') {
         clone.style.transform = originalTransform;
+    }
+    if (originalOrigin && originalOrigin !== 'none') {
         clone.style.transformOrigin = originalOrigin;
     }
 
@@ -88,6 +89,116 @@ window.revealAndAnimateCloneAtPos = (wrapper, mouseX, mouseY, scale = 0.3, speed
             const targetY = window.innerHeight - finalRect.top - finalRect.height - 20;
 
             wrapper.style.transform = `translate(${targetX}px, ${targetY}px) scale(${scale})`;
+            wrapper.style.opacity = '0.7';
+
+            setTimeout(() => {
+                wrapper.remove();
+            }, removeMs);
+        }, appearMs);
+    });
+};
+
+// Return the top-left coordinates of an element
+window.getElementPosition = (element) => {
+    if (!element) return { x: 0, y: 0 };
+    const rect = element.getBoundingClientRect();
+    return { x: rect.left, y: rect.top };
+};
+
+// Wait until an element exists and has layout
+window.waitForElement = (id) => {
+    return new Promise(resolve => {
+        const check = () => {
+            const el = document.getElementById(id);
+            if (el && el.offsetWidth > 0 && el.offsetHeight > 0) {
+                resolve();
+            } else {
+                requestAnimationFrame(check);
+            }
+        };
+        check();
+    });
+};
+
+// Show or hide an element by id
+window.setVisibility = (id, visible) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.visibility = visible ? 'visible' : 'hidden';
+};
+
+// Clone an element and animate it to the bottom right corner
+window.cloneAndAnimateToCorner = (element, scale = 0.3, speed = 1.0) => {
+    const wrapper = window.cloneElementHidden(element);
+    const pos = window.getCurrentMousePos();
+    window.revealAndAnimateCloneAtPos(wrapper, pos.x, pos.y, scale, speed);
+};
+
+// Clone an element and animate it towards a target element
+window.cloneAndAnimateToElement = (source, target, scale = 0.3, speed = 1.0) => {
+    if (!source || !target) return;
+    const wrapper = window.cloneElementHidden(source);
+    if (!wrapper) return;
+
+    const appearMs = 400 / speed;
+    const removeMs = 500 / speed;
+
+    requestAnimationFrame(() => {
+        wrapper.style.opacity = '1';
+
+        setTimeout(() => {
+            const startRect = wrapper.getBoundingClientRect();
+            const targetRect = target.getBoundingClientRect();
+
+            const tx = targetRect.left + targetRect.width / 2 - (startRect.left + startRect.width / 2);
+            const ty = targetRect.top + targetRect.height / 2 - (startRect.top + startRect.height / 2);
+
+            wrapper.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+            wrapper.style.opacity = '0.7';
+
+            setTimeout(() => {
+                wrapper.remove();
+            }, removeMs);
+        }, appearMs);
+    });
+};
+
+// Clone an element specified by id and animate it towards another element id
+window.cloneAndAnimateIdToId = (sourceId, targetId, scale = 0.3, speed = 1.0) => {
+    const source = document.getElementById(sourceId);
+    const target = document.getElementById(targetId);
+    if (!source || !target) return;
+    window.cloneAndAnimateToElement(source, target, scale, speed);
+};
+
+// Clone an element by id, start the clone at the position of another element, then animate to the target element
+window.cloneAndAnimateIdFromIdToId = (sourceId, startId, targetId, scale = 0.3, speed = 1.0) => {
+    const source = document.getElementById(sourceId);
+    const start = document.getElementById(startId);
+    const target = document.getElementById(targetId);
+    if (!source || !start || !target) return;
+
+    const wrapper = window.cloneElementHidden(source);
+    if (!wrapper) return;
+
+    const startRect = start.getBoundingClientRect();
+    wrapper.style.top = `${startRect.top}px`;
+    wrapper.style.left = `${startRect.left}px`;
+
+    const appearMs = 400 / speed;
+    const removeMs = 500 / speed;
+
+    requestAnimationFrame(() => {
+        wrapper.style.opacity = '1';
+
+        setTimeout(() => {
+            const wRect = wrapper.getBoundingClientRect();
+            const tRect = target.getBoundingClientRect();
+
+            const tx = tRect.left + tRect.width / 2 - (wRect.left + wRect.width / 2);
+            const ty = tRect.top + tRect.height / 2 - (wRect.top + wRect.height / 2);
+
+            wrapper.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
             wrapper.style.opacity = '0.7';
 
             setTimeout(() => {
