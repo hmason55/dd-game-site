@@ -51,6 +51,9 @@ window.cloneElementHidden = (element) => {
     wrapper.style.transition = 'transform 0.5s ease';
     wrapper.style.opacity = '0';
     wrapper.style.transform = 'none';
+    if (originalOrigin && originalOrigin !== 'none') {
+        wrapper.style.transformOrigin = originalOrigin;
+    }
 
     wrapper.classList.add("hand");
 
@@ -120,11 +123,40 @@ window.waitForElement = (id) => {
     });
 };
 
+function _parseOriginPart(part, size) {
+    part = part.trim();
+    if (part.endsWith('%')) return parseFloat(part) / 100 * size;
+    if (part === 'left' || part === 'top') return 0;
+    if (part === 'center') return size / 2;
+    if (part === 'right' || part === 'bottom') return size;
+    const val = parseFloat(part);
+    return isNaN(val) ? size / 2 : val;
+}
+
+function _getOrigin(el, rect, override) {
+    let originStr = override;
+    if (!originStr && el) {
+        originStr = getComputedStyle(el).transformOrigin;
+    }
+    originStr = originStr || '50% 50%';
+    const parts = originStr.split(' ');
+    const ox = _parseOriginPart(parts[0], rect.width);
+    const oy = _parseOriginPart(parts[1] || '50%', rect.height);
+    return { x: ox, y: oy };
+}
+
 // Show or hide an element by id
 window.setVisibility = (id, visible) => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.style.visibility = visible ? 'visible' : 'hidden';
+    const visibility = visible ? 'visible' : 'hidden';
+    const opacity = visible ? '1' : '0';
+    el.style.visibility = visibility;
+    el.style.opacity = opacity;
+    el.querySelectorAll('.mud-badge, .mud-badge-root, .mud-badge-wrapper').forEach(b => {
+        b.style.visibility = visibility;
+        b.style.opacity = opacity;
+    });
 };
 
 // Clone an element and animate it to the bottom right corner
@@ -135,10 +167,11 @@ window.cloneAndAnimateToCorner = (element, scale = 0.3, speed = 1.0) => {
 };
 
 // Clone an element and animate it towards a target element
-window.cloneAndAnimateToElement = (source, target, scale = 0.3, speed = 1.0) => {
+window.cloneAndAnimateToElement = (source, target, scale = 0.3, speed = 1.0, targetAnchor) => {
     if (!source || !target) return;
     const wrapper = window.cloneElementHidden(source);
     if (!wrapper) return;
+
 
     const appearMs = 400 / speed;
     const removeMs = 500 / speed;
@@ -147,11 +180,15 @@ window.cloneAndAnimateToElement = (source, target, scale = 0.3, speed = 1.0) => 
         wrapper.style.opacity = '1';
 
         setTimeout(() => {
+
             const startRect = wrapper.getBoundingClientRect();
             const targetRect = target.getBoundingClientRect();
 
-            const tx = targetRect.left + targetRect.width / 2 - (startRect.left + startRect.width / 2);
-            const ty = targetRect.top + targetRect.height / 2 - (startRect.top + startRect.height / 2);
+            const startOrigin = _getOrigin(wrapper, startRect);
+            const targetOrigin = _getOrigin(target, targetRect, targetAnchor);
+
+            const tx = (targetRect.left + targetOrigin.x) - (startRect.left + startOrigin.x);
+            const ty = (targetRect.top + targetOrigin.y) - (startRect.top + startOrigin.y);
 
             wrapper.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
             wrapper.style.opacity = '0.7';
@@ -164,15 +201,15 @@ window.cloneAndAnimateToElement = (source, target, scale = 0.3, speed = 1.0) => 
 };
 
 // Clone an element specified by id and animate it towards another element id
-window.cloneAndAnimateIdToId = (sourceId, targetId, scale = 0.3, speed = 1.0) => {
+window.cloneAndAnimateIdToId = (sourceId, targetId, scale = 0.3, speed = 1.0, targetAnchor) => {
     const source = document.getElementById(sourceId);
     const target = document.getElementById(targetId);
     if (!source || !target) return;
-    window.cloneAndAnimateToElement(source, target, scale, speed);
+    window.cloneAndAnimateToElement(source, target, scale, speed, targetAnchor);
 };
 
 // Clone an element by id, start the clone at the position of another element, then animate to the target element
-window.cloneAndAnimateIdFromIdToId = (sourceId, startId, targetId, scale = 0.3, speed = 1.0) => {
+window.cloneAndAnimateIdFromIdToId = (sourceId, startId, targetId, scale = 0.3, speed = 1.0, startAnchor, targetAnchor) => {
     const source = document.getElementById(sourceId);
     const start = document.getElementById(startId);
     const target = document.getElementById(targetId);
@@ -182,11 +219,15 @@ window.cloneAndAnimateIdFromIdToId = (sourceId, startId, targetId, scale = 0.3, 
     if (!wrapper) return;
 
     const startRect = start.getBoundingClientRect();
-    wrapper.style.top = `${startRect.top}px`;
-    wrapper.style.left = `${startRect.left}px`;
+    const wRectInit = wrapper.getBoundingClientRect();
+    const originInit = _getOrigin(wrapper, wRectInit);
+    const startAnchorPt = startAnchor ? _getOrigin(null, startRect, startAnchor) : { x: startRect.width / 2, y: startRect.height / 2 };
+    wrapper.style.top = `${startRect.top + startAnchorPt.y - originInit.y}px`;
+    wrapper.style.left = `${startRect.left + startAnchorPt.x - originInit.x}px`;
 
     const appearMs = 400 / speed;
     const removeMs = 500 / speed;
+
 
     requestAnimationFrame(() => {
         wrapper.style.opacity = '1';
@@ -195,8 +236,11 @@ window.cloneAndAnimateIdFromIdToId = (sourceId, startId, targetId, scale = 0.3, 
             const wRect = wrapper.getBoundingClientRect();
             const tRect = target.getBoundingClientRect();
 
-            const tx = tRect.left + tRect.width / 2 - (wRect.left + wRect.width / 2);
-            const ty = tRect.top + tRect.height / 2 - (wRect.top + wRect.height / 2);
+            const startOrigin = _getOrigin(wrapper, wRect);
+            const targetOrigin = _getOrigin(target, tRect, targetAnchor);
+
+            const tx = (tRect.left + targetOrigin.x) - (wRect.left + startOrigin.x);
+            const ty = (tRect.top + targetOrigin.y) - (wRect.top + startOrigin.y);
 
             wrapper.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
             wrapper.style.opacity = '0.7';
