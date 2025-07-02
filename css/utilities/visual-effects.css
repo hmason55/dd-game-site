@@ -1,4 +1,4 @@
-﻿/* === POST-PROCESSING VISUAL EFFECTS === */
+/* Utility styles for optional post-processing visual effects */
 
 html, body {
     image-rendering: pixelated;
@@ -120,3 +120,4 @@ svg *[stroke]:not([stroke="none"]) {
         transform: none;
     }
 }
+

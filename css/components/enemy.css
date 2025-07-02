@@ -1,4 +1,4 @@
-﻿/* --- Enemy Layout --- */
+/* Styles related to enemy layout and positioning */
 .enemy-container {
     display: flex;
     flex-wrap: nowrap; /* enemies DO NOT wrap on mobile */

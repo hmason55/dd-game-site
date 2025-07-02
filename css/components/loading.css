@@ -1,4 +1,5 @@
-﻿.loading-container {
+/* Loading screen styles */
+.loading-container {
     display: flex;
     justify-content: center;
     align-items: center;
@@ -44,3 +45,4 @@
         width: 30%;
     }
 }
+
