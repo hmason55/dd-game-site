@@ -1,4 +1,4 @@
-﻿window.particleSystem = {
+export const particleSystem = {
     createParticleEmitter: function (options) {
         const canvas = setupCanvas(options);
         const ctx = canvas.getContext("2d");

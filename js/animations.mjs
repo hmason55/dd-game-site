@@ -1,26 +1,26 @@
 ﻿// Track the mouse globally
-window._latestMousePos = { x: 0, y: 0 };
+let latestMousePos = { x: 0, y: 0 };
 
 window.addEventListener('mousemove', e => {
-    window._latestMousePos = {
+    latestMousePos = {
         x: e.clientX,
         y: e.clientY
     };
 }, { passive: true });
 
 // Safe fallback access
-window.getCurrentMousePos = () => {
+export function getCurrentMousePos() {
     return {
-        x: typeof window._latestMousePos?.x === 'number' ? window._latestMousePos.x : 0,
-        y: typeof window._latestMousePos?.y === 'number' ? window._latestMousePos.y : 0
-    };
-};
+        x: typeof latestMousePos?.x === 'number' ? latestMousePos.x : 0,
+        y: typeof latestMousePos?.y === 'number' ? latestMousePos.y : 0
+    }
+}
 
 // Clone an element but keep it hidden
-window.cloneElementHidden = (element) => {
+export function cloneElementHidden(element) {
     if (!element) return null;
 
-    const mouse = window._latestMousePos || { x: 0, y: 0 };
+    const mouse = latestMousePos || { x: 0, y: 0 };
     const rect = element.getBoundingClientRect();
 
     // Compute offset from mouse to top-left of scaled rect
@@ -65,10 +65,10 @@ window.cloneElementHidden = (element) => {
     wrapper.dataset.offsetY = offsetY.toString();
 
     return wrapper;
-};
+}
 
 // Reveal and animate clone from given mouse position
-window.revealAndAnimateCloneAtPos = (wrapper, mouseX, mouseY, scale = 0.3, speed = 1.0) => {
+export function revealAndAnimateCloneAtPos(wrapper, mouseX, mouseY, scale = 0.3, speed = 1.0)  {
     if (!wrapper || typeof mouseX !== 'number' || typeof mouseY !== 'number') return;
 
     const offsetX = parseFloat(wrapper.dataset.offsetX || '0');
@@ -99,17 +99,17 @@ window.revealAndAnimateCloneAtPos = (wrapper, mouseX, mouseY, scale = 0.3, speed
             }, removeMs);
         }, appearMs);
     });
-};
+}
 
 // Return the top-left coordinates of an element
-window.getElementPosition = (element) => {
+export function getElementPosition(element) {
     if (!element) return { x: 0, y: 0 };
     const rect = element.getBoundingClientRect();
     return { x: rect.left, y: rect.top };
-};
+}
 
 // Wait until an element exists and has layout
-window.waitForElement = (id) => {
+export function waitForElement(id)  {
     return new Promise(resolve => {
         const check = () => {
             const el = document.getElementById(id);
@@ -121,7 +121,7 @@ window.waitForElement = (id) => {
         };
         check();
     });
-};
+}
 
 function _parseOriginPart(part, size) {
     part = part.trim();
@@ -146,7 +146,7 @@ function _getOrigin(el, rect, override) {
 }
 
 // Show or hide an element by id
-window.setVisibility = (id, visible) => {
+export function setVisibility(id, visible)  {
     const el = document.getElementById(id);
     if (!el) return;
     const visibility = visible ? 'visible' : 'hidden';
@@ -157,19 +157,19 @@ window.setVisibility = (id, visible) => {
         b.style.visibility = visibility;
         b.style.opacity = opacity;
     });
-};
+}
 
 // Clone an element and animate it to the bottom right corner
-window.cloneAndAnimateToCorner = (element, scale = 0.3, speed = 1.0) => {
-    const wrapper = window.cloneElementHidden(element);
-    const pos = window.getCurrentMousePos();
-    window.revealAndAnimateCloneAtPos(wrapper, pos.x, pos.y, scale, speed);
-};
+export function cloneAndAnimateToCorner(element, scale = 0.3, speed = 1.0)  {
+    const wrapper = cloneElementHidden(element);
+    const pos = getCurrentMousePos();
+    revealAndAnimateCloneAtPos(wrapper, pos.x, pos.y, scale, speed);
+}
 
 // Clone an element and animate it towards a target element
-window.cloneAndAnimateToElement = (source, target, scale = 0.3, speed = 1.0, targetAnchor) => {
+export function cloneAndAnimateToElement(source, target, scale = 0.3, speed = 1.0, targetAnchor)  {
     if (!source || !target) return;
-    const wrapper = window.cloneElementHidden(source);
+    const wrapper = cloneElementHidden(source);
     if (!wrapper) return;
 
 
@@ -198,24 +198,24 @@ window.cloneAndAnimateToElement = (source, target, scale = 0.3, speed = 1.0, tar
             }, removeMs);
         }, appearMs);
     });
-};
+}
 
 // Clone an element specified by id and animate it towards another element id
-window.cloneAndAnimateIdToId = (sourceId, targetId, scale = 0.3, speed = 1.0, targetAnchor) => {
+export function cloneAndAnimateIdToId(sourceId, targetId, scale = 0.3, speed = 1.0, targetAnchor)  {
     const source = document.getElementById(sourceId);
     const target = document.getElementById(targetId);
     if (!source || !target) return;
-    window.cloneAndAnimateToElement(source, target, scale, speed, targetAnchor);
-};
+    cloneAndAnimateToElement(source, target, scale, speed, targetAnchor);
+}
 
 // Clone an element by id, start the clone at the position of another element, then animate to the target element
-window.cloneAndAnimateIdFromIdToId = (sourceId, startId, targetId, scale = 0.3, speed = 1.0, startAnchor, targetAnchor) => {
+export function cloneAndAnimateIdFromIdToId(sourceId, startId, targetId, scale = 0.3, speed = 1.0, startAnchor, targetAnchor)  {
     const source = document.getElementById(sourceId);
     const start = document.getElementById(startId);
     const target = document.getElementById(targetId);
     if (!source || !start || !target) return;
 
-    const wrapper = window.cloneElementHidden(source);
+    const wrapper = cloneElementHidden(source);
     if (!wrapper) return;
 
     const startRect = start.getBoundingClientRect();
@@ -250,10 +250,10 @@ window.cloneAndAnimateIdFromIdToId = (sourceId, startId, targetId, scale = 0.3, 
             }, removeMs);
         }, appearMs);
     });
-};
+}
 
 // Shake an element to indicate damage taken
-window.shakeElement = (id, intensity) => {
+export function shakeElement(id, intensity)  {
     const el = document.getElementById(id);
     if (!el) return;
 
@@ -271,10 +271,10 @@ window.shakeElement = (id, intensity) => {
         easing: 'ease',
         composite: 'add'
     });
-};
+}
 
 // Flash an element white and black when hit
-window.flashElement = (id) => {
+export function flashElement(id)  {
     const el = document.getElementById(id);
     if (!el) return;
 
@@ -286,11 +286,11 @@ window.flashElement = (id) => {
     ];
 
     el.animate(keyframes, { duration: 200, easing: 'steps(1, end)' });
-};
+}
 
 // Slightly push the target away from the attacker
 // Speed controls how quickly the animation completes
-window.nudgeFrom = (attackerId, targetId, speed = 1.0, distance = 20, duration = 150) => {
+export function nudgeFrom(attackerId, targetId, speed = 1.0, distance = 20, duration = 150)  {
     const attacker = document.getElementById(attackerId);
     const target = document.getElementById(targetId);
     if (!attacker || !target) return;
@@ -315,11 +315,11 @@ window.nudgeFrom = (attackerId, targetId, speed = 1.0, distance = 20, duration =
         easing: 'ease-out',
         composite: 'add'
     });
-};
+}
 
 // Briefly move the attacker towards the target
 // Returns a promise that resolves when the animation completes
-window.lungeTowards = (attackerId, targetId, speed = 1.0, distance = 15, duration = 150) => {
+export function lungeTowards(attackerId, targetId, speed = 1.0, distance = 15, duration = 150)  {
     const attacker = document.getElementById(attackerId);
     const target = document.getElementById(targetId);
     if (!attacker || !target) return Promise.resolve();
@@ -345,12 +345,12 @@ window.lungeTowards = (attackerId, targetId, speed = 1.0, distance = 15, duratio
         composite: 'add'
     });
     return anim.finished;
-};
+}
 
 // GSAP animations
-window.gsapTextEffects = window.gsapTextEffects || {};
+export const gsapTextEffects = {};
 
-window.gsapTextEffects.richEffect = function (id, effect, speed, repeat) {
+gsapTextEffects.richEffect = function (id, effect, speed, repeat) {
     const el = document.getElementById(id);
     if (!el) return;
     speed = speed || 1.0;
@@ -387,10 +387,10 @@ window.gsapTextEffects.richEffect = function (id, effect, speed, repeat) {
         });
     }
     // ... color can be handled by inline style in C#
-};
+}
 
 // Simple appear animations for the typewriter component
-window.animateTypewriterAppear = function (id, animation) {
+export function animateTypewriterAppear(id, animation) {
     const el = document.getElementById(id);
     if (!el) return;
 
@@ -418,6 +418,6 @@ window.animateTypewriterAppear = function (id, animation) {
             });
             break;
     }
-};
+}
 
 
