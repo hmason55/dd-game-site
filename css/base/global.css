@@ -38,7 +38,9 @@ html, body {
     z-index: 1;
     width: min(80px);
     height: calc(min(80px) * 1.6);
-    transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
+    transition: transform var(--card-transition-duration, 150ms) ease,
+                box-shadow var(--card-transition-duration, 150ms) ease,
+                filter var(--card-transition-duration, 150ms) ease;
     transform-origin: bottom center;
 }
 
@@ -62,7 +64,8 @@ button[role="checkbox"] .card {
 .hand .mud-drop-item,
 .inventory .mud-drop-item {
     z-index: 20;
-    transition: box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1), margin 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    transition: box-shadow var(--card-transition-duration, 150ms) cubic-bezier(0.4, 0, 0.2, 1),
+                margin var(--card-transition-duration, 150ms) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .hand .mud-drop-item:hover,
@@ -173,11 +176,17 @@ button[role="checkbox"] .card img {
     /* Card descriptions */
     --mud-typography-caption-size: .4rem !important;
     --mud-typography-caption-lineheight: 1.16 !important;
+
+    /* Duration for card transitions and clone animations */
+    --card-transition-duration: 150ms;
+    --clone-animation-duration: 0.5s;
 }
 
 .animated-clone {
     z-index: 9999;
     pointer-events: none;
+    transition: transform var(--clone-animation-duration, 0.5s) ease,
+                opacity var(--clone-animation-duration, 0.5s) ease;
 }
 
 @keyframes value-change-pop {

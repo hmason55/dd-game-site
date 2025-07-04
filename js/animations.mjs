@@ -1,6 +1,14 @@
 ﻿// Track the mouse globally
 let latestMousePos = { x: 0, y: 0 };
 
+function _getTransitionDurationMs(el) {
+    if (!el) return 0;
+    const style = getComputedStyle(el);
+    const raw = (style.transitionDuration || '0s').split(',')[0].trim();
+    const ms = raw.endsWith('ms') ? parseFloat(raw) : parseFloat(raw) * 1000;
+    return isNaN(ms) ? 0 : ms;
+}
+
 window.addEventListener('mousemove', e => {
     latestMousePos = {
         x: e.clientX,
@@ -48,14 +56,14 @@ export function cloneElementHidden(element) {
     wrapper.style.height = `${rect.height}px`;
     wrapper.style.zIndex = 9999;
     wrapper.style.pointerEvents = 'none';
-    wrapper.style.transition = 'transform 0.5s ease';
+    wrapper.style.transition = 'transform var(--clone-animation-duration, 0.5s) ease';
     wrapper.style.opacity = '0';
     wrapper.style.transform = 'none';
     if (originalOrigin && originalOrigin !== 'none') {
         wrapper.style.transformOrigin = originalOrigin;
     }
 
-    wrapper.classList.add("hand");
+    wrapper.classList.add("hand", "animated-clone");
 
     wrapper.appendChild(clone);
     document.body.appendChild(wrapper);
@@ -80,16 +88,18 @@ export function revealAndAnimateCloneAtPos(wrapper, mouseX, mouseY, scale = 0.3,
     wrapper.style.left = `${left}px`;
     wrapper.style.top = `${top}px`;
 
-    const appearMs = 400 / speed;
-    const removeMs = 500 / speed;
+    const startRect = wrapper.getBoundingClientRect();
+
+    const baseMs = _getTransitionDurationMs(wrapper);
+    const appearMs = (baseMs * 0.8) / speed;
+    const removeMs = baseMs / speed + 50; // wait slightly longer than the CSS transition
 
     requestAnimationFrame(() => {
         wrapper.style.opacity = '1';
 
         setTimeout(() => {
-            const finalRect = wrapper.getBoundingClientRect();
-            const targetX = 0 - finalRect.left + finalRect.width + 20;
-            const targetY = window.innerHeight - finalRect.top - finalRect.height - 20;
+            const targetX = 0 - startRect.left + startRect.width + 20;
+            const targetY = window.innerHeight - startRect.top - startRect.height - 20;
 
             wrapper.style.transform = `translate(${targetX}px, ${targetY}px) scale(${scale})`;
             wrapper.style.opacity = '0.7';
@@ -171,21 +181,23 @@ export function cloneAndAnimateToElement(source, target, scale = 0.3, speed = 1.
     if (!source || !target) return;
     const wrapper = cloneElementHidden(source);
     if (!wrapper) return;
+    const startRect = wrapper.getBoundingClientRect();
+    const baseMs = _getTransitionDurationMs(wrapper);
+    const appearMs = (baseMs * 0.8) / speed;
+    const removeMs = baseMs / speed + 50; // wait slightly longer than the CSS transition
 
-
-    const appearMs = 400 / speed;
-    const removeMs = 500 / speed;
+    // Capture the id for later lookup in case the element gets re-rendered
+    const targetId = target.id;
 
     requestAnimationFrame(() => {
         wrapper.style.opacity = '1';
 
         setTimeout(() => {
-
-            const startRect = wrapper.getBoundingClientRect();
-            const targetRect = target.getBoundingClientRect();
+            const currentTarget = targetId ? document.getElementById(targetId) || target : target;
+            const targetRect = currentTarget.getBoundingClientRect();
 
             const startOrigin = _getOrigin(wrapper, startRect);
-            const targetOrigin = _getOrigin(target, targetRect, targetAnchor);
+            const targetOrigin = _getOrigin(currentTarget, targetRect, targetAnchor);
 
             const tx = (targetRect.left + targetOrigin.x) - (startRect.left + startOrigin.x);
             const ty = (targetRect.top + targetOrigin.y) - (startRect.top + startOrigin.y);
@@ -212,11 +224,11 @@ export function cloneAndAnimateIdToId(sourceId, targetId, scale = 0.3, speed = 1
 export function cloneAndAnimateIdFromIdToId(sourceId, startId, targetId, scale = 0.3, speed = 1.0, startAnchor, targetAnchor)  {
     const source = document.getElementById(sourceId);
     const start = document.getElementById(startId);
-    const target = document.getElementById(targetId);
-    if (!source || !start || !target) return;
+    if (!source || !start) return;
 
     const wrapper = cloneElementHidden(source);
     if (!wrapper) return;
+
 
     const startRect = start.getBoundingClientRect();
     const wRectInit = wrapper.getBoundingClientRect();
@@ -225,19 +237,27 @@ export function cloneAndAnimateIdFromIdToId(sourceId, startId, targetId, scale =
     wrapper.style.top = `${startRect.top + startAnchorPt.y - originInit.y}px`;
     wrapper.style.left = `${startRect.left + startAnchorPt.x - originInit.x}px`;
 
-    const appearMs = 400 / speed;
-    const removeMs = 500 / speed;
+    const startWrapperRect = wrapper.getBoundingClientRect();
+
+    // Keep target id for later lookup after potential rerenders
+    const targetLookupId = targetId;
+
+    const baseMs = _getTransitionDurationMs(wrapper);
+    const appearMs = (baseMs * 0.8) / speed;
+    const removeMs = baseMs / speed + 50; // wait slightly longer than the CSS transition
 
 
     requestAnimationFrame(() => {
         wrapper.style.opacity = '1';
 
         setTimeout(() => {
-            const wRect = wrapper.getBoundingClientRect();
-            const tRect = target.getBoundingClientRect();
+            const wRect = startWrapperRect;
+            const currentTarget = document.getElementById(targetLookupId);
+            if (!currentTarget) { wrapper.remove(); return; }
+            const tRect = currentTarget.getBoundingClientRect();
 
             const startOrigin = _getOrigin(wrapper, wRect);
-            const targetOrigin = _getOrigin(target, tRect, targetAnchor);
+            const targetOrigin = _getOrigin(currentTarget, tRect, targetAnchor);
 
             const tx = (tRect.left + targetOrigin.x) - (wRect.left + startOrigin.x);
             const ty = (tRect.top + targetOrigin.y) - (wRect.top + startOrigin.y);
