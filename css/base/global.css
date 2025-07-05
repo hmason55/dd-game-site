@@ -4,7 +4,6 @@ html, body {
     padding: 0;
     width: 100%;
     min-height: 100%;
-    background-color: black;
     overflow-x: hidden;
     overflow-y: auto;
     user-select: none;
@@ -212,7 +211,7 @@ button[role="checkbox"] .card img {
     transition: opacity 0.4s ease-in;
 }
 
-.mud-button,
+.mud-button:not(.mud-toggle-item),
 .mud-tabs-tabbar-wrapper {
     --notch: calc(var(--mud-typography-button-lineheight) * 0.5em);
     height: var(--mud-typography-button-lineheight);
