@@ -17,12 +17,14 @@
     flex: 1 1 0;
     min-width: 0;
     padding: 0.5rem;
+    margin: 0.25rem;
     display: flex;
     align-items: stretch;
     justify-content: center;
     border: 2px dashed var(--mud-palette-lines-default);
     border-radius: 0.5rem;
     box-sizing: border-box;
+    transition: opacity 0.25s ease-in-out;
 }
 
 .enemy-wrapper {
@@ -51,4 +53,8 @@
     max-height: 80px;
     width: auto;
     margin: 0 auto;
+}
+
+.dead {
+    opacity: 0 !important;
 }
