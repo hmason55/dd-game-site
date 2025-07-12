@@ -223,6 +223,10 @@ button[role="checkbox"] .card img {
     padding-left: 8px;
 }
 
+.mud-snackbar-location-bottom-right {
+    bottom: 64px;
+}
+
 .saving-spinner {
     position: fixed;
     bottom: 64px;
