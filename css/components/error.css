@@ -1,0 +1,26 @@
+#blazor-error-ui {
+    background-color: #1A1A1A;
+    color: #C2B49A;
+    font-family: 'Alegreya', serif;
+    position: fixed;
+    left: 50%;
+    bottom: 10px;
+    transform: translateX(-50%);
+    padding: 12px 20px;
+    border: 2px solid #D34B4B;
+    border-radius: 8px;
+    box-shadow: 0 0 8px #000;
+    z-index: 1000;
+    display: none;
+}
+
+#blazor-error-ui a.reload {
+    color: #48C3D6;
+    text-decoration: underline;
+    margin-left: 12px;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    margin-left: 12px;
+}
