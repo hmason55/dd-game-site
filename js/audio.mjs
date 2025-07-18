@@ -9,7 +9,6 @@ export const audioPlayer = {
         this.sounds[name] = audio;
         audio.volume = this.volume;
 
-        audio.oncanplaythrough = () => console.log("Sound loaded:", name);
         audio.onerror = () => console.error("Failed to load sound:", name, src);
     },
 
@@ -29,7 +28,6 @@ export const audioPlayer = {
     unlockAudio() {
         const unlock = new Audio();
         unlock.play().catch(() => {});
-        console.log("Audio unlocked");
     },
 
     setVolume(volume) {

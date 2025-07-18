@@ -10,3 +10,10 @@ export async function pasteFromClipboard() {
         return '';
     }
 }
+
+export function hideErrorUi() {
+    const el = document.getElementById('blazor-error-ui');
+    if (el) {
+        el.style.display = 'none';
+    }
+}
