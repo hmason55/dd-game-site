@@ -212,7 +212,8 @@ button[role="checkbox"] .card img {
 }
 
 .mud-button:not(.mud-toggle-item),
-.mud-tabs-tabbar-wrapper {
+.mud-tabs-tabbar-wrapper,
+.mud-snackbar {
     --notch: calc(var(--mud-typography-button-lineheight) * 0.5em);
     height: var(--mud-typography-button-lineheight);
     clip-path: polygon( var(--notch) 0, calc(100% - var(--notch)) 0, 100% 50%, calc(100% - var(--notch)) 100%, var(--notch) 100%, 0 50% );
