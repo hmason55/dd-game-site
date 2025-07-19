@@ -268,3 +268,13 @@ button[role="checkbox"] .card img {
         transform: rotate(720deg);
     }
 }
+
+/* Limit dialog tab widths so they stay visible without scrolling */
+.dialog-tabs .mud-tab {
+    flex: 1 1 25%;
+    min-width: 48px !important;
+}
+
+.icons-only.mud-tooltip-root {
+    width: 48px;
+}
