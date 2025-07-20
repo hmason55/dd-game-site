@@ -51,11 +51,18 @@ export function registerHotkeys(dotNetRef) {
             return;
         }
 
+        if (e.repeat) {
+            return;
+        }
+
         if (e.code === 'Escape') {
             dotNetRef.invokeMethodAsync('OnHotkey', 'Escape');
         } else if (e.code === 'Tab') {
             e.preventDefault();
             dotNetRef.invokeMethodAsync('OnHotkey', 'Tab');
+        } else if (e.code === 'F11') {
+            e.preventDefault();
+            dotNetRef.invokeMethodAsync('OnHotkey', 'F11');
         }
     });
 }
