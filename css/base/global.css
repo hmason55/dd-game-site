@@ -294,3 +294,7 @@ button[role="checkbox"] .card img {
     margin-left: 4px;
     margin-bottom: -24px;
 }
+
+.scalable-text {
+    font-size: clamp(0.5rem, 2vw, 1rem);
+}
