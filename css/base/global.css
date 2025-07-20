@@ -135,6 +135,7 @@ button[role="checkbox"] .card img {
     filter: blur(1px);
 }
 
+.mud-button,
 .card-wrapper .mud-typography {
     text-shadow: 0 0 1px black, 0 0 1px black, 0 0 2px black, 0 0 2px black;
 }
@@ -278,5 +279,18 @@ button[role="checkbox"] .card img {
 
 
 .dialog-tabs .mud-tab {
-    min-width: max(10vw, 48px) !important;
+    min-width: max(10vw, 64px) !important;
+}
+
+.mud-badge.triangle {
+    clip-path: polygon(7.5% 25%, 50% 100%, 92.5% 25%);
+}
+
+.mud-badge.diamond {
+    clip-path: polygon(50% 5%, 95% 50%, 50% 95%, 5% 50%)
+}
+
+.mud-tab-badge {
+    margin-left: 4px;
+    margin-bottom: -24px;
 }
