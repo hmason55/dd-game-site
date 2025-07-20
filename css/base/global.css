@@ -219,6 +219,10 @@ button[role="checkbox"] .card img {
     clip-path: polygon( var(--notch) 0, calc(100% - var(--notch)) 0, 100% 50%, calc(100% - var(--notch)) 100%, var(--notch) 100%, 0 50% );
 }
 
+.mud-icon-button:not(.mud-icon-button-size-small) {
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%) !important;
+}
+
 .mud-button-label {
     padding-right: 8px;
     padding-left: 8px;
@@ -271,11 +275,8 @@ button[role="checkbox"] .card img {
 }
 
 /* Limit dialog tab widths so they stay visible without scrolling */
-.dialog-tabs .mud-tab {
-    flex: 1 1 25%;
-    min-width: 48px !important;
-}
 
-.icons-only.mud-tooltip-root {
-    width: 48px;
+
+.dialog-tabs .mud-tab {
+    min-width: max(10vw, 48px) !important;
 }
