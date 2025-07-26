@@ -1,7 +1,24 @@
+const textOffsetMap = new Map();
+
+function getNextTextOffset(id) {
+    const key = id || 'global';
+    const value = textOffsetMap.get(key) || 0;
+    textOffsetMap.set(key, value + 1);
+    setTimeout(() => {
+        const current = textOffsetMap.get(key) || 1;
+        textOffsetMap.set(key, Math.max(0, current - 1));
+    }, 600);
+    return value;
+}
+
 export const particleSystem = {
     createParticleEmitter: function (options) {
         const canvas = setupCanvas(options);
         const ctx = canvas.getContext("2d");
+        const dpr = window.devicePixelRatio || 1;
+        if (dpr !== 1) {
+            ctx.scale(dpr, dpr);
+        }
         let particles = [];
         let emitting = true;
 
@@ -208,6 +225,10 @@ function setupCanvas(options) {
             position.y = rect.top + rect.height / 2 + options.offset.y;
         }
     }
+    if ((options.renderMode || "").toLowerCase() === "text") {
+        const step = getNextTextOffset(options.elementId);
+        position.y -= step * 30;
+    }
     const canvas = document.createElement("canvas");
     canvas.id = options.id;
     Object.assign(canvas.style, {
@@ -217,8 +238,11 @@ function setupCanvas(options) {
         pointerEvents: "none",
         zIndex: options.zIndex
     });
-    canvas.width = 2048;
-    canvas.height = 2048;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = 2048 * dpr;
+    canvas.height = 2048 * dpr;
+    canvas.style.width = "2048px";
+    canvas.style.height = "2048px";
     document.body.appendChild(canvas);
     return canvas;
 }
