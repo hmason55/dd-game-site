@@ -59,6 +59,7 @@ html, body {
 button[role="checkbox"] .card {
     transform: scale(1.5);
     z-index: 10;
+    transition: none;
 }
 
 .hand .mud-drop-item,
@@ -127,12 +128,13 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     margin: -8px -2px;
     transform: translateX(-25%);
     clip-path: inset(0% 24px 0% 24px round 5px);
-    transition: filter 250ms ease;
+    transition: filter 150ms ease;
 }
 
 .card:hover img,
 button[role="checkbox"] .card img {
     filter: blur(1px);
+    transition: none;
 }
 
 .mud-button,
@@ -181,7 +183,7 @@ button[role="checkbox"] .card img {
     --mud-typography-caption-lineheight: 1.16 !important;
 
     /* Duration for card transitions and clone animations */
-    --card-transition-duration: 150ms;
+    --card-transition-duration: 400ms;
     --clone-animation-duration: 0.5s;
 }
 
@@ -327,4 +329,28 @@ button[role="checkbox"] .card img {
 
 .diamond-segment.empty {
     opacity: 0.2;
+}
+
+.no-hover,
+.no-hover * {
+    pointer-events: none !important;
+    cursor: default !important;
+}
+
+.draggable-box {
+    width: 150px;
+    height: 100px;
+    background-color: #c2185b;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    cursor: grab;
+}
+
+.resource-badge-stack {
+    inset: -14px auto 100% calc(100% - 16px);
+    height: 100%;
+    pointer-events: none;
 }
