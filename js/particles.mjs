@@ -19,6 +19,8 @@ export const particleSystem = {
         if (dpr !== 1) {
             ctx.scale(dpr, dpr);
         }
+        const renderWidth = canvas.width / dpr;
+        const renderHeight = canvas.height / dpr;
         let particles = [];
         let emitting = true;
 
@@ -93,8 +95,8 @@ export const particleSystem = {
         function createParticle() {
             const color = randomColor(options.particleColor);
             const radius = randomRange(options.size);
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
+            const centerX = renderWidth / 2;
+            const centerY = renderHeight / 2;
             const rotationRad = (options.emitterRotation || 0) * Math.PI / 180;
 
             let { x: spawnX, y: spawnY } = calculateSpawnPosition(
@@ -231,18 +233,20 @@ function setupCanvas(options) {
     }
     const canvas = document.createElement("canvas");
     canvas.id = options.id;
+    const dpr = window.devicePixelRatio || 1;
+    const size = 2048;
+    const half = size / 2;
     Object.assign(canvas.style, {
         position: "fixed",
-        left: `${position.x - 1024}px`,
-        top: `${position.y - 1024}px`,
+        left: `${position.x - half}px`,
+        top: `${position.y - half}px`,
         pointerEvents: "none",
         zIndex: options.zIndex
     });
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = 2048 * dpr;
-    canvas.height = 2048 * dpr;
-    canvas.style.width = "2048px";
-    canvas.style.height = "2048px";
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
     document.body.appendChild(canvas);
     return canvas;
 }
