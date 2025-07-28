@@ -17,8 +17,12 @@
 }
 
 .map-location .mud-drop-zone.can-drop,
-.map-location .mud-drop-zone:hover {
+.map-location .mud-drop-zone.available:hover {
     transform: scale(120%);
+}
+
+.map-location .mud-drop-zone.available:hover {
+    border-color: var(--mud-palette-success);
 }
 
 .map-location .mud-icon-root.visited {
