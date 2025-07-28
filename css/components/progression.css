@@ -1,0 +1,16 @@
+/* Skill progression tree layout */
+.skill-tree-container {
+    position: relative;
+}
+.skill-connections {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+}
+.skill-btn {
+    min-width: 0;
+    padding: 0.25rem 0.5rem;
+}
