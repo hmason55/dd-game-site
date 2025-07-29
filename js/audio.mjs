@@ -25,6 +25,14 @@ export const audioPlayer = {
         }
     },
 
+    playRandom(names) {
+        if (!names || names.length === 0) {
+            return;
+        }
+        const index = Math.floor(Math.random() * names.length);
+        this.playSound(names[index]);
+    },
+
     unlockAudio() {
         const unlock = new Audio();
         unlock.play().catch(() => {});
@@ -43,3 +51,17 @@ export const audioPlayer = {
 document.addEventListener("click", () => {
     audioPlayer.unlockAudio();
 }, { once: true });
+
+const uiClickSounds = [
+    "UI Select Click 01",
+    "UI Select Click 02",
+    "UI Select Click 03",
+    "UI Select Click 04",
+    "UI Select Click 05"
+];
+
+document.addEventListener("click", (e) => {
+    if (e.target.closest("button")) {
+        audioPlayer.playRandom(uiClickSounds);
+    }
+});
