@@ -1,7 +1,7 @@
 export const audioPlayer = {
     sounds: {},
     volume: 0.75,
-    pitchVariance: 0.05,
+    pitchVariance: 0.10,
 
     loadSound(name, src) {
         const audio = new Audio(src);
@@ -16,7 +16,7 @@ export const audioPlayer = {
         const audio = this.sounds[name];
         if (audio) {
             audio.currentTime = 0;
-            audio.volume = this.volume;
+            audio.volume = this.volume * 0.5;
             const variance = (Math.random() * 2 - 1) * this.pitchVariance;
             audio.playbackRate = 1 + variance;
             audio.play().catch(err => console.error("Audio playback failed:", err));
