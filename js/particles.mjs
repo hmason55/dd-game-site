@@ -22,7 +22,17 @@ export const particleSystem = {
         const renderWidth = canvas.width / dpr;
         const renderHeight = canvas.height / dpr;
         let particles = [];
+        let particlePool = [];
         let emitting = true;
+
+        function getParticle() {
+            return particlePool.pop() || {};
+        }
+
+        function recycleParticle(p) {
+            p.tintedImage = null;
+            particlePool.push(p);
+        }
 
         /**
         * Returns a random value or vector between the given range.
@@ -93,6 +103,7 @@ export const particleSystem = {
         * @returns {object} - A new particle instance.
         */
         function createParticle() {
+            const p = getParticle();
             const color = randomColor(options.particleColor);
             const radius = randomRange(options.size);
             const centerX = renderWidth / 2;
@@ -117,8 +128,7 @@ export const particleSystem = {
             if (options.renderMode?.toLowerCase() === "image" && options._loadedImage) {
                 tintedImage = tintImage(options._loadedImage, color.r, color.g, color.b, color.a, radius * 2);
             }
-
-            return {
+            Object.assign(p, {
                 x: spawnX,
                 y: spawnY,
                 radius,
@@ -136,7 +146,8 @@ export const particleSystem = {
                 tintedImage,
                 rotation: randomRange(options.rotation || { min: 0, max: 0 }),
                 rotationSpeed: randomRange(options.rotationSpeed || { min: 0, max: 0 })
-            };
+            });
+            return p;
         }
 
         /**
@@ -160,7 +171,9 @@ export const particleSystem = {
             for (let i = particles.length - 1; i >= 0; i--) {
                 const p = particles[i];
                 if ((now - p.startTime) >= p.lifespan) {
-                    particles.splice(i, 1);
+                    particles[i] = particles[particles.length - 1];
+                    particles.pop();
+                    recycleParticle(p);
                     continue;
                 }
 
