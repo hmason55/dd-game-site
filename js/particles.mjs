@@ -102,9 +102,10 @@ export const particleSystem = {
         * Creates and returns a new particle with randomized properties based on emitter settings.
         * @returns {object} - A new particle instance.
         */
-        function createParticle() {
-            const p = getParticle();
-            const color = randomColor(options.particleColor);
+       function createParticle() {
+           const p = getParticle();
+           const color = randomColor(options.particleColor);
+            const endColor = options.endParticleColor ? randomColor(options.endParticleColor) : color;
             const radius = randomRange(options.size);
             const centerX = renderWidth / 2;
             const centerY = renderHeight / 2;
@@ -133,6 +134,7 @@ export const particleSystem = {
                 y: spawnY,
                 radius,
                 r: color.r, g: color.g, b: color.b, a: color.a,
+                endR: endColor.r, endG: endColor.g, endB: endColor.b, endA: endColor.a,
                 speed: randomRange(options.speed),
                 directionX: Math.cos(randomAngle),
                 directionY: Math.sin(randomAngle),
@@ -189,7 +191,12 @@ export const particleSystem = {
                 const alpha = options.endAlpha != null
                     ? fade * (1 - options.endAlpha) + options.endAlpha
                     : fade; // default behavior if endAlpha not passed
-                renderParticle(ctx, options, p, alpha);
+
+                const r = p.r + (p.endR - p.r) * lifeProgress;
+                const g = p.g + (p.endG - p.g) * lifeProgress;
+                const b = p.b + (p.endB - p.b) * lifeProgress;
+                const a = p.a + (p.endA - p.a) * lifeProgress;
+                renderParticle(ctx, options, { ...p, r, g, b, a }, alpha);
             }
 
             if (particles.length > 0 || options.loop) requestAnimationFrame(updateParticles);
