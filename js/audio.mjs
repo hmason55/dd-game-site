@@ -1,7 +1,7 @@
 export const audioPlayer = {
     sounds: {},
     volume: 0.75,
-    pitchVariance: 0.10,
+    pitchVariance: 0.15,
 
     loadSound(name, src, volume = 0.5) {
         const audio = new Audio(src);
