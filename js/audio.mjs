@@ -3,20 +3,21 @@ export const audioPlayer = {
     volume: 0.75,
     pitchVariance: 0.10,
 
-    loadSound(name, src) {
+    loadSound(name, src, volume = 0.5) {
         const audio = new Audio(src);
         audio.preload = "auto";
-        this.sounds[name] = audio;
-        audio.volume = this.volume;
+        this.sounds[name] = { audio, baseVolume: volume };
+        audio.volume = volume * this.volume;
 
         audio.onerror = () => console.error("Failed to load sound:", name, src);
     },
 
     playSound(name) {
-        const audio = this.sounds[name];
-        if (audio) {
+        const sound = this.sounds[name];
+        if (sound) {
+            const audio = sound.audio;
             audio.currentTime = 0;
-            audio.volume = this.volume * 0.5;
+            audio.volume = sound.baseVolume * this.volume;
             const variance = (Math.random() * 2 - 1) * this.pitchVariance;
             audio.playbackRate = 1 + variance;
             audio.play().catch(err => console.error("Audio playback failed:", err));
@@ -41,8 +42,9 @@ export const audioPlayer = {
     setVolume(volume) {
         this.volume = volume;
         for (const key in this.sounds) {
-            if (this.sounds[key]) {
-                this.sounds[key].volume = volume;
+            const sound = this.sounds[key];
+            if (sound) {
+                sound.audio.volume = sound.baseVolume * volume;
             }
         }
     }
