@@ -19,6 +19,7 @@
 .map-location .mud-drop-zone.can-drop,
 .map-location .mud-drop-zone.available:hover {
     transform: scale(120%);
+    cursor: pointer;
 }
 
 .map-location .mud-drop-zone.available:hover {
