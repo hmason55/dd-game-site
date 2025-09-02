@@ -39,14 +39,25 @@ export function isFullscreen() {
     return !!document.fullscreenElement;
 }
 
+let fullscreenHandler = null;
+let hotkeyHandler = null;
+
 export function observeFullscreenChange(dotNetRef) {
-    const handler = () => dotNetRef.invokeMethodAsync('OnFullscreenChange');
-    document.addEventListener('fullscreenchange', handler);
-    document.addEventListener('webkitfullscreenchange', handler);
+    fullscreenHandler = () => dotNetRef.invokeMethodAsync('OnFullscreenChange');
+    document.addEventListener('fullscreenchange', fullscreenHandler);
+    document.addEventListener('webkitfullscreenchange', fullscreenHandler);
+}
+
+export function unobserveFullscreenChange() {
+    if (fullscreenHandler) {
+        document.removeEventListener('fullscreenchange', fullscreenHandler);
+        document.removeEventListener('webkitfullscreenchange', fullscreenHandler);
+        fullscreenHandler = null;
+    }
 }
 
 export function registerHotkeys(dotNetRef) {
-    document.addEventListener('keydown', (e) => {
+    hotkeyHandler = (e) => {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
             return;
         }
@@ -64,5 +75,13 @@ export function registerHotkeys(dotNetRef) {
             e.preventDefault();
             dotNetRef.invokeMethodAsync('OnHotkey', 'F11');
         }
-    });
+    };
+    document.addEventListener('keydown', hotkeyHandler);
+}
+
+export function unregisterHotkeys() {
+    if (hotkeyHandler) {
+        document.removeEventListener('keydown', hotkeyHandler);
+        hotkeyHandler = null;
+    }
 }
