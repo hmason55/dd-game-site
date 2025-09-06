@@ -1,11 +1,10 @@
 /* Global styles used across the application */
-html, body {
+html, body, #app {
     margin: 0;
     padding: 0;
     width: 100%;
-    min-height: 100%;
-    overflow-x: hidden;
-    overflow-y: auto;
+    height: 100dvh;
+    overflow: hidden;
     user-select: none;
 }
 .inventory-swap {
@@ -27,6 +26,7 @@ html, body {
     column-gap: 1vw;
     min-height: 144px;
     padding-top: 64px;
+    margin-top: auto;
 }
 
 .hand .card,
