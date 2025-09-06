@@ -1,0 +1,39 @@
+/* Styles specific to the backpack dialog */
+
+/* Ensure only the dialog content scrolls and tabs remain visible */
+.backpack-dialog .backpack-dialog-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0;
+}
+
+.backpack-dialog .mud-tabs {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.backpack-dialog .mud-tabs-panels {
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* Reduce title bar and tab header height on short landscape screens */
+@media (orientation: landscape) and (max-height: 500px) {
+    .backpack-dialog .mud-toolbar-dense {
+        min-height: 32px;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
+    .backpack-dialog .mud-tabs-toolbar {
+        min-height: 32px;
+    }
+
+    .backpack-dialog .mud-tab {
+        min-height: 32px;
+    }
+}
+
