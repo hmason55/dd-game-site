@@ -318,6 +318,18 @@ button[role="checkbox"] .card img {
     display: none;
 }
 
+/* Keep tabs visible while allowing dialog content to scroll */
+.dialog-tabs-container {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background-color: var(--mud-palette-surface);
+}
+
+.mud-dialog-content {
+    overflow-y: auto;
+}
+
 .mud-badge.triangle {
     clip-path: polygon(7.5% 25%, 50% 100%, 92.5% 25%);
 }
