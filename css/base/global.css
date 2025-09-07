@@ -350,6 +350,18 @@ button[role="checkbox"] .card img {
     margin: 4px;
 }
 
+.diamond-progress-bar.vertical {
+    flex-direction: column-reverse;
+    width: 4px;
+    height: 100%;
+}
+
+.diamond-progress-bar.vertical .diamond-segment {
+    width: 4px;
+    height: auto;
+    flex: 1;
+}
+
 .diamond-segment {
     flex: 1;
     --notch: 4px;

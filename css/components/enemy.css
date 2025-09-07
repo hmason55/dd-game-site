@@ -43,6 +43,30 @@
     gap: 0.25rem;
 }
 
+.enemy-main {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+.enemy-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    flex: 1 1 auto;
+    width: 100%;
+}
+
+.status-area {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    margin-right: 0.25rem;
+    gap: 0.25rem;
+}
+
 .enemy-tile img {
     max-width: 100%;
     max-height: 100%;
@@ -62,6 +86,7 @@
 @media (pointer: coarse) {
     .enemy-container {
         min-height: 150px;
+        padding-top: 0 !important;
     }
 
     .enemy-tile .mud-image {
@@ -72,6 +97,7 @@
 @media (orientation: landscape) and (pointer: coarse) {
     .enemy-container {
         min-height: 120px;
+        padding-top: 0 !important;
     }
 
     .enemy-tile .mud-image {
