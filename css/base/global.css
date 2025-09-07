@@ -29,6 +29,32 @@ html, body, #app {
     margin-top: auto;
 }
 
+.player-hand-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.player-hand-container .hand {
+    margin-top: auto;
+}
+
+@media (orientation: landscape) and (pointer: coarse) {
+    .player-hand-container {
+        flex-direction: row;
+        align-items: flex-end;
+        gap: 1rem;
+    }
+
+    .player-hand-container .enemy-tile {
+        flex: 0 0 150px;
+    }
+
+    .player-hand-container .hand {
+        flex: 1;
+        margin-top: 0;
+    }
+}
+
 .hand .card,
 .inventory .card {
     flex: 0 0 auto;
@@ -284,6 +310,10 @@ button[role="checkbox"] .card img {
 
 .dialog-tabs .mud-tab {
     min-width: max(10vw, 64px) !important;
+}
+
+.dialog-tabs-container .mud-tabs-panels {
+    display: none;
 }
 
 .mud-badge.triangle {

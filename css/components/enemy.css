@@ -58,3 +58,23 @@
 .dead {
     opacity: 0 !important;
 }
+
+@media (pointer: coarse) {
+    .enemy-container {
+        min-height: 150px;
+    }
+
+    .enemy-tile .mud-image {
+        max-height: 64px;
+    }
+}
+
+@media (orientation: landscape) and (pointer: coarse) {
+    .enemy-container {
+        min-height: 120px;
+    }
+
+    .enemy-tile .mud-image {
+        max-height: 48px;
+    }
+}
