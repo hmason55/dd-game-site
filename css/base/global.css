@@ -140,6 +140,11 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     scroll-snap-align: start;
 }
 
+.deck-preview-container .card {
+    width: 80px;
+    height: calc(80px * 1.6);
+}
+
 /* --- Fix for dragged cards going behind --- */
 .mud-drop-item.mud-drop-dragging {
     position: fixed !important;
