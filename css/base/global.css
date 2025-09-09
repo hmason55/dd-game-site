@@ -40,7 +40,8 @@ html, body, #app {
 
 @media (orientation: landscape) and (pointer: coarse) {
     .player-hand-container {
-        flex-direction: row;
+        /* On mobile in landscape, show the hand to the left of the player */
+        flex-direction: row-reverse;
         align-items: flex-end;
         gap: 1rem;
     }
