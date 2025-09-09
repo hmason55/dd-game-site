@@ -3,13 +3,29 @@ export const audioPlayer = {
     volume: 0.75,
     pitchVariance: 0.15,
 
-    loadSound(name, src, volume = 0.5) {
-        const audio = new Audio(src);
-        audio.preload = "auto";
-        this.sounds[name] = { audio, baseVolume: volume };
-        audio.volume = volume * this.volume;
+    async loadSound(name, src, volume = 0.5) {
+        try {
+            const response = await fetch(src, { method: 'HEAD' });
+            if (!response.ok) {
+                console.error("Failed to load sound:", name, src);
+                return false;
+            }
 
-        audio.onerror = () => console.error("Failed to load sound:", name, src);
+            const audio = new Audio(src);
+            audio.preload = "auto";
+            this.sounds[name] = { audio, baseVolume: volume };
+            audio.volume = volume * this.volume;
+
+            audio.onerror = () => {
+                console.error("Failed to load sound:", name, src);
+                delete this.sounds[name];
+            };
+
+            return true;
+        } catch (e) {
+            console.error("Failed to load sound:", name, src, e);
+            return false;
+        }
     },
 
     playSound(name) {
