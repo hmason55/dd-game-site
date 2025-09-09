@@ -37,17 +37,11 @@
 .enemy-stack {
     width: 100%;
     height: 100%;
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     gap: 0.25rem;
-}
-
-.enemy-main {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
 }
 
 .enemy-content {
@@ -62,9 +56,10 @@
 .status-area {
     display: flex;
     flex-direction: row;
-    align-items: center;
+    align-items: stretch;
     margin-right: 0.25rem;
     gap: 0.25rem;
+    height: 100%;
 }
 
 .enemy-tile img {

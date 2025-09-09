@@ -383,6 +383,23 @@ button[role="checkbox"] .card img {
     width: 4px;
     height: auto;
     flex: 1;
+    --notch: 2px;
+    clip-path: polygon(0 var(--notch), 50% 0, 100% var(--notch),
+                       100% calc(100% - var(--notch)), 50% 100%, 0 calc(100% - var(--notch)));
+}
+
+.vertical-health-wrapper {
+    height: 100%;
+}
+
+.vertical-health-wrapper .vertical-health-bars {
+    flex: 1;
+    align-items: stretch;
+}
+
+.vertical-health-wrapper .health-text {
+    align-self: flex-start;
+    width: max-content;
 }
 
 .diamond-segment {
