@@ -42,12 +42,14 @@ html, body, #app {
     .player-hand-container {
         /* On mobile in landscape, show the hand to the left of the player */
         flex-direction: row-reverse;
-        align-items: flex-end;
+        align-items: stretch;
         gap: 1rem;
+        height: 100%;
     }
 
     .player-hand-container .enemy-tile {
         flex: 0 0 150px;
+        height: 100%;
     }
 
     .player-hand-container .hand {
@@ -55,6 +57,7 @@ html, body, #app {
         margin-top: 0;
         padding-top: 16px;
         min-height: 96px;
+        height: 100%;
     }
 }
 
@@ -187,7 +190,13 @@ button[role="checkbox"] .card img {
 .card .mud-icon-root,
 .resource-bar-wrapper,
 .health-bar-wrapper {
-    filter: drop-shadow(0 0 1px black) drop-shadow(0 0 1px black)
+    filter: drop-shadow(0 0 1px black) drop-shadow(0 0 1px black);
+}
+
+.health-bar-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .center-container {
