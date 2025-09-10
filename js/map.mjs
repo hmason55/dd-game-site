@@ -24,23 +24,23 @@ export function getRelativeBoundingClientRect(element, parent) {
 const resizeObservers = new Map();
 const zoomListeners = new Map();
 
-export function observeResize(element, dotNetRef) {
+export function observeResize(element, dotNetRef, id) {
     const resizeObserver = new ResizeObserver(() => {
         dotNetRef.invokeMethodAsync('OnResize');
     });
     resizeObserver.observe(element);
-    resizeObservers.set(dotNetRef, resizeObserver);
+    resizeObservers.set(id, resizeObserver);
 }
 
-export function unobserveResize(dotNetRef) {
-    const observer = resizeObservers.get(dotNetRef);
+export function unobserveResize(id) {
+    const observer = resizeObservers.get(id);
     if (observer) {
         observer.disconnect();
-        resizeObservers.delete(dotNetRef);
+        resizeObservers.delete(id);
     }
 }
 
-export function observeZoomChange(dotNetRef) {
+export function observeZoomChange(dotNetRef, id) {
     let query = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
 
     const handleChange = () => {
@@ -51,14 +51,14 @@ export function observeZoomChange(dotNetRef) {
     };
 
     query.addEventListener('change', handleChange);
-    zoomListeners.set(dotNetRef, { query, handleChange });
+    zoomListeners.set(id, { query, handleChange });
 }
 
-export function unobserveZoomChange(dotNetRef) {
-    const data = zoomListeners.get(dotNetRef);
+export function unobserveZoomChange(id) {
+    const data = zoomListeners.get(id);
     if (data) {
         const { query, handleChange } = data;
         query.removeEventListener('change', handleChange);
-        zoomListeners.delete(dotNetRef);
+        zoomListeners.delete(id);
     }
 }
