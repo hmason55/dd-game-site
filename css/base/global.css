@@ -370,7 +370,12 @@ button[role="checkbox"] .card img {
 .diamond-progress-bar.vertical {
     flex-direction: column-reverse;
     width: 4px;
-    height: 100%;
+    height: calc(100% - 8px);
+}
+
+.diamond-progress-bar.vertical.health,
+.diamond-progress-bar.vertical.health .diamond-segment {
+    width: 6px;
 }
 
 .diamond-progress-bar.vertical .diamond-segment {
@@ -378,8 +383,7 @@ button[role="checkbox"] .card img {
     height: auto;
     flex: 1;
     --notch: 2px;
-    clip-path: polygon(0 var(--notch), 50% 0, 100% var(--notch),
-                       100% calc(100% - var(--notch)), 50% 100%, 0 calc(100% - var(--notch)));
+    clip-path: polygon(0 var(--notch), 50% 0, 100% var(--notch), 100% calc(100% - var(--notch)), 50% 100%, 0 calc(100% - var(--notch)));
 }
 
 .diamond-progress-bar.vertical .diamond-segment.single {
