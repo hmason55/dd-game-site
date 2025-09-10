@@ -254,7 +254,7 @@ function setupCanvas(options) {
     const canvas = document.createElement("canvas");
     canvas.id = options.id;
     const dpr = window.devicePixelRatio || 1;
-    const size = 2048;
+    const size = 1024;
     const half = size / 2;
     Object.assign(canvas.style, {
         position: "fixed",
