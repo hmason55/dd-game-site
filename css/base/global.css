@@ -125,29 +125,6 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
 
 
 
-/* --- Deck Dialog scroll snapping by row --- */
-.deck-preview-container {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    max-height: 60vh;
-    overflow-y: auto;
-    scroll-snap-type: y mandatory;
-    scroll-padding: 1rem;
-}
-
-.deck-card-wrapper {
-    flex: 1 1 45%;
-    max-width: 45%;
-    margin: 0.5rem;
-    scroll-snap-align: start;
-}
-
-.deck-preview-container .card {
-    width: 80px;
-    height: calc(80px * 1.6);
-}
-
 /* --- Fix for dragged cards going behind --- */
 .mud-drop-item.mud-drop-dragging {
     position: fixed !important;
