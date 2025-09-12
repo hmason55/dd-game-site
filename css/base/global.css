@@ -53,7 +53,8 @@ html, body, #app {
 
     .player-hand-container .enemy-tile {
         flex: 0 0 150px;
-        height: 100%;
+        min-height: 150px;
+        height: auto;
     }
 
     .player-hand-container .hand {
