@@ -32,6 +32,7 @@ export const audioPlayer = {
         const sound = this.sounds[name];
         if (sound) {
             const audio = sound.audio;
+            audio.pause();
             audio.currentTime = 0;
             audio.volume = sound.baseVolume * this.volume;
             const variance = (Math.random() * 2 - 1) * this.pitchVariance;
@@ -66,7 +67,7 @@ export const audioPlayer = {
     }
 };
 
-document.addEventListener("click", () => {
+document.addEventListener("pointerdown", () => {
     audioPlayer.unlockAudio();
 }, { once: true });
 

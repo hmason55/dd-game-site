@@ -27,6 +27,11 @@ html, body, #app {
     min-height: 144px;
     padding-top: 64px;
     margin-top: auto;
+    touch-action: none;
+}
+
+.inventory {
+    touch-action: none;
 }
 
 .player-hand-container {

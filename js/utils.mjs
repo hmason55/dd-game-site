@@ -19,7 +19,9 @@ export function hideErrorUi() {
 }
 
 export function toggleFullscreen() {
-    if (!document.fullscreenElement) {
+    const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+
+    if (!fullscreenElement) {
         const el = document.documentElement;
         if (el.requestFullscreen) {
             el.requestFullscreen();
@@ -36,7 +38,7 @@ export function toggleFullscreen() {
 }
 
 export function isFullscreen() {
-    return !!document.fullscreenElement;
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
 }
 
 let fullscreenHandler = null;
