@@ -257,6 +257,7 @@ button[role="checkbox"] .card img {
     --notch: calc(var(--mud-typography-button-lineheight) * 0.5em);
     height: var(--mud-typography-button-lineheight);
     clip-path: polygon( var(--notch) 0, calc(100% - var(--notch)) 0, 100% 50%, calc(100% - var(--notch)) 100%, var(--notch) 100%, 0 50% );
+    margin-top: 4px;
 }
 
 .mud-icon-button:not(.mud-icon-button-size-small) {
@@ -269,7 +270,7 @@ button[role="checkbox"] .card img {
 }
 
 .mud-snackbar-location-bottom-right {
-    bottom: 64px;
+    bottom: 48px;
 }
 
 .saving-spinner {
@@ -481,4 +482,9 @@ button[role="checkbox"] .card img {
     #app {
         display: none;
     }
+}
+
+/* Align snackbar text to the right to match right-justified snackbars */
+.mud-snackbar-content-message {
+    text-align: right;
 }
