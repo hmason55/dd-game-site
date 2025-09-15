@@ -30,6 +30,11 @@ html, body, #app {
     touch-action: none;
 }
 
+/* Allow dragging to scroll when the hand is shown inside dialogs or reward screens */
+.mud-dialog-content .hand {
+    touch-action: auto;
+}
+
 .inventory {
     touch-action: none;
 }
