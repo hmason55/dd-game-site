@@ -109,47 +109,44 @@ html, body, #app {
     justify-content: center;
 }
 
-.shop-price-chip-sale {
+.shop-sale-badge {
+    width: 100%;
+    display: flex;
     justify-content: center;
-    text-align: center;
 }
 
-.shop-price-chip-sale .shop-price-chip-content {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    align-items: center;
+.shop-sale-badge .mud-chip {
+    width: 100%;
 }
 
-.shop-sale-prices {
-    display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
-    align-items: center;
-}
-
-.shop-sale-banner {
+.shop-sale-badge-label {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.02em;
 }
 
-.shop-sale-old {
-    opacity: 0.75;
-}
-
-.shop-sale-new {
-    font-weight: 700;
-}
-
 .shop-card-preview {
     display: flex;
     justify-content: center;
+    align-items: center;
+    width: 100%;
 }
 
 .shop-card-preview .card {
     width: min(120px, 100%);
     height: calc(min(120px, 100%) * 1.6);
+}
+
+.shop-card-preview .card-wrapper {
+    margin: 0 auto;
+}
+
+.shop-card-costs {
+    justify-content: center;
+}
+
+.shop-cost-chip {
+    font-weight: 600;
 }
 
 .shop-equipment-preview,
