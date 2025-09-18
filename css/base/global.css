@@ -347,6 +347,17 @@ button[role="checkbox"] .card img {
     overflow-y: auto;
 }
 
+.reward-dialog-list {
+    max-height: calc(95vh - 128px);
+    overflow-y: auto;
+}
+
+@supports (height: 1dvh) {
+    .reward-dialog-list {
+        max-height: calc(95dvh - 128px);
+    }
+}
+
 .mud-badge.triangle {
     clip-path: polygon(7.5% 25%, 50% 100%, 92.5% 25%);
 }
