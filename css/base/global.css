@@ -3,6 +3,7 @@ html, body, #app {
     margin: 0;
     padding: 0;
     width: 100%;
+    min-height: 100vh;
     min-height: 100dvh;
     overflow-x: hidden;
     user-select: none;
@@ -83,8 +84,8 @@ html, body, #app {
     scroll-snap-align: start;
     scroll-snap-stop: always;
     z-index: 1;
-    width: min(80px);
-    height: calc(min(80px) * 1.6);
+    width: min(80px, 20vw);
+    height: calc(min(80px, 20vw) * 1.6);
     transition: transform var(--card-transition-duration, 150ms) ease,
                 box-shadow var(--card-transition-duration, 150ms) ease,
                 filter var(--card-transition-duration, 150ms) ease;
@@ -195,7 +196,9 @@ button[role="checkbox"] .card img {
     position: fixed;
     top: 0;
     left: 0;
+    width: 100vw;
     width: 100dvw;
+    height: 100vh;
     height: 100dvh;
     display: flex;
     align-items: center;
@@ -203,6 +206,7 @@ button[role="checkbox"] .card img {
 }
 
 .encounter-screen {
+    height: 100vh;
     height: 100dvh;
     overflow: hidden;
 }
