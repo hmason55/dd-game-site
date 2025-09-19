@@ -125,19 +125,19 @@ html, body, #app {
     letter-spacing: 0.02em;
 }
 
-.shop-card-preview {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
+
+.shop-item-card .hand {
+    padding-top: 0;
+    margin-top: 0;
+    min-height: auto;
 }
 
-.shop-card-preview .card {
+.shop-item-card .hand .card {
     width: min(120px, 100%);
     height: calc(min(120px, 100%) * 1.6);
 }
 
-.shop-card-preview .card-wrapper {
+.shop-item-card .hand .card-wrapper {
     margin: 0 auto;
 }
 
