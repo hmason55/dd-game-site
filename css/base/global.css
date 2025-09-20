@@ -361,10 +361,12 @@ button[role="checkbox"] .card img {
 }
 
 .mud-snackbar {
-    --snackbar-height: calc(var(--mud-typography-button-lineheight) * 0.8);
+    --snackbar-height: calc(var(--mud-typography-button-lineheight) * 0.8em);
     --notch: calc(var(--snackbar-height) * 0.5);
     height: var(--snackbar-height);
     min-height: var(--snackbar-height);
+    line-height: calc(var(--mud-typography-button-lineheight) * 0.8);
+    padding-block: 0;
 }
 
 .mud-icon-button:not(.mud-icon-button-size-small) {
