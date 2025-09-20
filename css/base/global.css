@@ -357,7 +357,7 @@ button[role="checkbox"] .card img {
     --notch: calc(var(--snackbar-height) * 0.5);
     height: var(--snackbar-height);
     min-height: var(--snackbar-height);
-    padding: 0;
+    padding: 0 12px;
 }
 
 .mud-snackbar .mud-snackbar-content {
