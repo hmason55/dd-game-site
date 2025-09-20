@@ -344,6 +344,13 @@ button[role="checkbox"] .card img {
     --notch: calc(var(--snackbar-height) * 0.5);
     height: var(--snackbar-height);
     min-height: var(--snackbar-height);
+    padding: 0;
+}
+
+.mud-snackbar .mud-snackbar-content {
+    height: 100%;
+    min-height: var(--snackbar-height);
+    clip-path: polygon( var(--notch) 0, calc(100% - var(--notch)) 0, 100% 50%, calc(100% - var(--notch)) 100%, var(--notch) 100%, 0 50% );
 }
 
 .mud-icon-button:not(.mud-icon-button-size-small) {
