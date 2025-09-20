@@ -1,0 +1,16 @@
+{
+  "name": "DDGame",
+  "short_name": "DDGame",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0b1622",
+  "theme_color": "#0b1622",
+  "description": "Delve into a deckbuilding dungeon crawler right in your browser.",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
