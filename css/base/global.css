@@ -99,6 +99,13 @@ html, body, #app {
     justify-content: flex-start;
     gap: 0.75rem;
     height: 100%;
+    background-color: transparent;
+    border: none;
+}
+
+.shop-item-card:focus-visible {
+    outline: 2px solid var(--mud-palette-info);
+    outline-offset: 2px;
 }
 
 .shop-item-card .mud-stack {
@@ -113,6 +120,12 @@ html, body, #app {
     display: inline-flex;
     justify-content: center;
     align-items: center;
+    --mud-badge-size: 1.75rem;
+}
+
+.shop-sale-badge .mud-badge-content {
+    min-width: auto;
+    padding: 0.25rem 0.5rem;
 }
 
 .shop-sale-badge .mud-chip {
@@ -123,22 +136,21 @@ html, body, #app {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.02em;
+    transform: translateX(-50%);
 }
 
 
-.shop-item-card .hand {
+
+.shop-card-hand {
     padding-top: 0;
     margin-top: 0;
-    min-height: auto;
-    touch-action: auto;
+    min-height: 0;
+    width: 100%;
+    justify-content: center;
+    column-gap: 0;
 }
 
-.shop-item-card .hand .card {
-    width: min(120px, 100%);
-    height: calc(min(120px, 100%) * 1.6);
-}
-
-.shop-item-card .hand .card-wrapper {
+.shop-card-hand .card-wrapper {
     margin: 0 auto;
 }
 
