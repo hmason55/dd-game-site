@@ -231,6 +231,27 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     transition: filter 150ms ease;
 }
 
+.card-portrait {
+    position: relative;
+    width: 100%;
+    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card-portrait .mud-image,
+.card-portrait img {
+    width: 100%;
+    height: 100%;
+}
+
+.card-portrait .mud-icon-root,
+.card-portrait-icon {
+    font-size: 3.5rem;
+    line-height: 1;
+}
+
 .card:hover img,
 button[role="checkbox"] .card img {
     filter: blur(1px);
