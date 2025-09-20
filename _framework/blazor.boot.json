@@ -1,7 +1,7 @@
 {
   "mainAssemblyName": "DDGame",
   "resources": {
-    "hash": "sha256-1VvqQi5Ld4c22v4Pw0PzHAFamIn92ls8N2kKIeV4Bb4=",
+    "hash": "sha256-IukT+BeqrpH2Utu4UsVXajK2ET60OiCUGbhKKlKHg8s=",
     "fingerprinting": {
       "Blazored.LocalStorage.somf8dykn2.dll": "Blazored.LocalStorage.dll",
       "Bromix.MudBlazor.MaterialDesignIcons.j7kuua9m2l.dll": "Bromix.MudBlazor.MaterialDesignIcons.dll",
@@ -213,7 +213,7 @@
       "mscorlib.8vhwpewl3c.dll": "mscorlib.dll",
       "netstandard.v9yer03tqx.dll": "netstandard.dll",
       "System.Private.CoreLib.msbeqplvps.dll": "System.Private.CoreLib.dll",
-      "DDGame.3xejdpdkar.dll": "DDGame.dll",
+      "DDGame.xw5xyqutv6.dll": "DDGame.dll",
       "Humanizer.resources.sfer2dhmt0.dll": "Humanizer.resources.dll",
       "Humanizer.resources.ygqmn46lh5.dll": "Humanizer.resources.dll",
       "Humanizer.resources.yybbt24gyc.dll": "Humanizer.resources.dll",
@@ -493,7 +493,7 @@
       "WindowsBase.dlsk3w3gx0.dll": "sha256-wWBS+G2ZhcZJMAWTFN3dVlfrLvKk6DWfFMeI9h0CWO0=",
       "mscorlib.8vhwpewl3c.dll": "sha256-dBMdfi088r09d5sH4BJgb/FUfb7GiTwk1q57XpIbMgM=",
       "netstandard.v9yer03tqx.dll": "sha256-/e8oZl5HLO/i4+QvD6kfbcc46bUDSENZg/XMft3GSLA=",
-      "DDGame.3xejdpdkar.dll": "sha256-R9P7BiSwY/YCUouM78vfSzcOkLae0MVaDVrMbf8X/p0="
+      "DDGame.xw5xyqutv6.dll": "sha256-zznkg0wj/S2vYnrBbtw+Rh06SzF/CFZoKNh8gBQjSS0="
     },
     "satelliteResources": {
       "af": {
