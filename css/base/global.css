@@ -221,50 +221,18 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     left: 0;
 }
 
-
-.card-portrait {
-    position: relative;
-    width: 100%;
-    height: 120px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    border-radius: 6px;
-}
-
-.card-portrait-image {
-    position: relative;
-    width: 100%;
-    height: 100%;
-}
-
-.card-portrait-image img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: center;
-    margin: 0;
+.card img {
     position: absolute;
-    inset: 0;
-    clip-path: inset(0 round 6px);
-    transition: transform 150ms ease, filter 150ms ease;
+    height: 120px;
+    z-index: -1;
+    margin: -8px -2px;
+    transform: translateX(-25%);
+    clip-path: inset(0% 24px 0% 24px round 5px);
+    transition: filter 150ms ease;
 }
 
-.card-portrait .mud-image,
-.card-portrait .mud-image img {
-    width: 100%;
-    height: 100%;
-}
-
-.card-portrait .mud-icon-root,
-.card-portrait-icon {
-    font-size: 3.5rem;
-    line-height: 1;
-}
-
-.card:hover .card-portrait-image img,
-button[role="checkbox"] .card .card-portrait-image img {
+.card:hover img,
+button[role="checkbox"] .card img {
     filter: blur(1px);
     transition: none;
 }
@@ -372,12 +340,10 @@ button[role="checkbox"] .card .card-portrait-image img {
 }
 
 .mud-snackbar {
-    --snackbar-height: calc(var(--mud-typography-button-lineheight) * 0.8em);
+    --snackbar-height: calc(var(--mud-typography-button-lineheight) * 0.8);
     --notch: calc(var(--snackbar-height) * 0.5);
     height: var(--snackbar-height);
     min-height: var(--snackbar-height);
-    line-height: calc(var(--mud-typography-button-lineheight) * 0.8);
-    padding-block: 0;
 }
 
 .mud-icon-button:not(.mud-icon-button-size-small) {
