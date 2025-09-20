@@ -1,7 +1,23 @@
 /* Skill progression tree layout */
+
+.progress-node {
+    background-color: var(--mud-palette-surface);
+    z-index: 1;
+    position: relative;
+    padding: 4px;
+    transition: ease 0.2s;
+    border-radius: 50%;
+}
+
+.progress-node:hover {
+    transform: scale(1.25);
+    transition: none;
+}
+
 .skill-tree-container {
     position: relative;
 }
+
 .skill-connections {
     position: absolute;
     width: 100%;
@@ -10,7 +26,61 @@
     left: 0;
     pointer-events: none;
 }
+
 .skill-btn {
-    min-width: 0;
-    padding: 0.25rem 0.5rem;
+    --skill-node-color: var(--mud-palette-secondary);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 50%;
+    min-width: unset;
+    padding: 0;
+    z-index: 1;
+}
+
+.skill-btn::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--skill-node-color) 30%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--skill-node-color) 55%, transparent);
+    transition: transform 120ms ease;
+    z-index: -1;
+}
+
+.skill-btn:hover::before {
+    transform: scale(1.05);
+}
+
+.skill-btn.unlocked {
+    --skill-node-color: var(--mud-palette-success);
+}
+
+.skill-btn.unlocked::before {
+    background: color-mix(in srgb, var(--mud-palette-success) 35%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mud-palette-success) 65%, transparent);
+}
+
+.skill-btn.health {
+    --skill-node-color: var(--mud-palette-error);
+}
+
+.skill-btn.attack {
+    --skill-node-color: var(--mud-palette-warning);
+}
+
+.skill-btn.mana {
+    --skill-node-color: var(--mud-palette-primary);
+}
+
+.skill-btn.energy {
+    --skill-node-color: var(--mud-palette-success);
+}
+
+.skill-btn.utility {
+    --skill-node-color: var(--mud-palette-secondary);
 }
