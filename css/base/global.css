@@ -221,16 +221,6 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     left: 0;
 }
 
-.card img {
-    position: absolute;
-    height: 120px;
-    z-index: -1;
-    margin: -8px -2px;
-    transform: translateX(-25%);
-    clip-path: inset(0% 24px 0% 24px round 5px);
-    transition: filter 150ms ease;
-}
-
 .card-portrait {
     position: relative;
     width: 100%;
@@ -238,6 +228,25 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+.card-portrait-image {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card-portrait-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    margin: 0;
+    position: static;
+    transform: none;
+    clip-path: none;
+    transition: filter 150ms ease;
 }
 
 .card-portrait .mud-image,
@@ -252,8 +261,8 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     line-height: 1;
 }
 
-.card:hover img,
-button[role="checkbox"] .card img {
+.card:hover .card-portrait-image img,
+button[role="checkbox"] .card .card-portrait-image img {
     filter: blur(1px);
     transition: none;
 }
