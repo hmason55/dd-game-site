@@ -54,12 +54,90 @@
     <div id="orientation-warning">Please rotate your device to landscape.</div>
 
     <div id="blazor-error-ui">
-        An unexpected error occurred.
+        <span class="message">An unexpected error occurred.</span>
         <a href="." class="reload">Restart</a>
         <span class="dismiss">🗙</span>
     </div>
 
-    <script src="_framework/blazor.webassembly.js"></script>
+    <script>
+        (function () {
+            const WARNING_TEXT = "DDGame couldn't load because required scripts were blocked.";
+            const INSTRUCTIONS_TEXT = "Privacy tools such as Brave Shields or other script blockers can stop the app from loading. Please allow scripts for this site or temporarily disable the blocker, then reload.";
+
+            function showScriptBlockingWarning(reason) {
+                if (window.__ddgScriptBlockingWarned) {
+                    return;
+                }
+
+                window.__ddgScriptBlockingWarned = true;
+
+                try {
+                    console.warn("Scripts required to run DDGame were blocked.", reason);
+                } catch (error) {
+                    /* no-op */
+                }
+
+                const loadingMessage = document.getElementById("loading-message");
+                if (loadingMessage) {
+                    loadingMessage.textContent = WARNING_TEXT;
+                }
+
+                const loadingContainer = document.getElementById("loading-container");
+                if (loadingContainer) {
+                    loadingContainer.classList.add("script-blocked");
+
+                    const existingInstructions = document.getElementById("script-blocking-instructions");
+                    if (!existingInstructions) {
+                        const instructions = document.createElement("p");
+                        instructions.id = "script-blocking-instructions";
+                        instructions.className = "script-blocking-instructions";
+                        instructions.textContent = INSTRUCTIONS_TEXT;
+                        loadingContainer.appendChild(instructions);
+                    }
+                }
+
+                const blazorErrorUi = document.getElementById("blazor-error-ui");
+                if (blazorErrorUi) {
+                    blazorErrorUi.style.display = "block";
+                    blazorErrorUi.classList.add("script-blocked");
+
+                    const messageElement = blazorErrorUi.querySelector(".message");
+                    if (messageElement) {
+                        messageElement.textContent = WARNING_TEXT;
+                    }
+
+                    const reloadLink = blazorErrorUi.querySelector("a.reload");
+                    if (reloadLink) {
+                        reloadLink.textContent = "Reload";
+                    }
+
+                    const dismissButton = blazorErrorUi.querySelector(".dismiss");
+                    if (dismissButton) {
+                        dismissButton.remove();
+                    }
+                }
+            }
+
+            window.__ddgShowScriptBlockingWarning = showScriptBlockingWarning;
+
+            window.__ddgMarkBlazorStarted = function () {
+                window.__ddgBlazorStarted = true;
+
+                if (window.__ddgBlazorStartupTimer) {
+                    window.clearTimeout(window.__ddgBlazorStartupTimer);
+                    window.__ddgBlazorStartupTimer = undefined;
+                }
+            };
+
+            window.__ddgBlazorStartupTimer = window.setTimeout(function () {
+                if (!window.__ddgBlazorStarted) {
+                    showScriptBlockingWarning(new Error("Blazor did not start within the expected time window."));
+                }
+            }, 15000);
+        })();
+    </script>
+
+    <script src="_framework/blazor.webassembly.js" onerror="window.__ddgShowScriptBlockingWarning && window.__ddgShowScriptBlockingWarning('The Blazor framework script failed to load.');"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
     <script type="module" src="js/main.mjs"></script>
 </body>

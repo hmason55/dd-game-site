@@ -12,6 +12,12 @@
     color: #C2B49A;
 }
 
+.loading-container.script-blocked {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 16px;
+}
+
 .loading-progress {
     position: relative;
     width: 80%;
@@ -29,6 +35,15 @@
     width: 30%;
     background-color: #6FB9B4;
     animation: loading-animation 1.5s infinite ease-in-out;
+}
+
+.loading-container.script-blocked .loading-progress {
+    display: none;
+}
+
+.script-blocking-instructions {
+    margin-top: 16px;
+    line-height: 1.6;
 }
 
 @keyframes loading-animation {
