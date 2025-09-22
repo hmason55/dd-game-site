@@ -107,7 +107,11 @@ self.addEventListener('fetch', (event) => {
       try {
         const response = await fetch(event.request);
         if (response && response.ok && response.status === 200) {
-          cache.put(event.request, response.clone());
+          try {
+            await cache.put(event.request, response.clone());
+          } catch (cacheError) {
+            console.warn(`DDGame service worker: failed to cache ${event.request.url}`, cacheError);
+          }
         }
         return response;
       } catch (error) {
@@ -162,7 +166,11 @@ async function ensureFullAssetCached(cache, request) {
   try {
     const fullResponse = await fetch(request, { cache: 'no-cache' });
     if (fullResponse && fullResponse.ok && fullResponse.status === 200) {
-      await cache.put(request, fullResponse.clone());
+      try {
+        await cache.put(request, fullResponse.clone());
+      } catch (cacheError) {
+        console.warn(`DDGame service worker: failed to cache ${request.url}`, cacheError);
+      }
     }
   } catch (error) {
     console.warn('DDGame service worker: unable to cache full asset for range request.', error);
