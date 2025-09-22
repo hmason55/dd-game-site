@@ -287,10 +287,11 @@ button[role="checkbox"] .card img {
     justify-content: center;
 }
 
-.multiplayer-dialog {
-    max-height: 90vh;
-    max-height: 90dvh;
+.manual-multiplayer-dialog-content {
+    max-height: 70vh;
+    max-height: 70dvh;
     overflow-y: auto;
+    padding: 1rem;
 }
 
 .encounter-screen {
