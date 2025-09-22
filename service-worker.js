@@ -12,10 +12,12 @@ function toAbsoluteUrl(path) {
 function getPrecachedAssets() {
   const precached = new Set(OFFLINE_ASSETS.map(toAbsoluteUrl));
 
-  try {
-    importScripts('./service-worker-assets.js');
-  } catch (error) {
-    console.warn('DDGame service worker: unable to load assets manifest.', error);
+  if (!self.assetsManifest) {
+    try {
+      importScripts('./service-worker-assets.js');
+    } catch (error) {
+      console.warn('DDGame service worker: unable to load assets manifest.', error);
+    }
   }
 
   const manifestAssets = self.assetsManifest?.assets ?? [];
