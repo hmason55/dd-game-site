@@ -81,6 +81,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Let the framework resources bypass the custom caching logic. These
+  // files (DLLs, wasm, boot manifest, etc.) include integrity metadata in
+  // the blazor.boot.json manifest. If the service worker returns a stale
+  // cached response for them, the browser blocks the load because the hash
+  // no longer matches. By delegating these requests directly to the
+  // network we guarantee the latest bytes are used after each publish while
+  // still keeping the rest of the offline-first behaviour for app assets.
+  if (requestUrl.pathname.includes('/_framework/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(async () => {
@@ -115,9 +127,11 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       } catch (error) {
-        const fallback = await cache.match(toAbsoluteUrl('./index.html'));
-        if (fallback) {
-          return fallback;
+        if (event.request.mode === 'navigate') {
+          const fallback = await cache.match(toAbsoluteUrl('./index.html'));
+          if (fallback) {
+            return fallback;
+          }
         }
         throw error;
       }
