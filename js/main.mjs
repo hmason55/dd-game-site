@@ -4,7 +4,6 @@ import * as animations from './animations.mjs';
 import { particleSystem } from './particles.mjs';
 import * as map from './map.mjs';
 import * as utils from './utils.mjs';
-import { initializePwaSupport } from './pwa.mjs';
 
 window.audioPlayer = audioPlayer;
 Object.assign(window, animations);
@@ -13,4 +12,3 @@ Object.assign(window, map);
 Object.assign(window, utils);
 
 initLoadingMessages();
-initializePwaSupport();
