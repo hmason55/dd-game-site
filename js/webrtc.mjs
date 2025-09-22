@@ -14,8 +14,23 @@ const ICE_SERVERS = [
     }
 ];
 
+function isWebRtcSupported() {
+    return typeof window !== "undefined" && typeof window.RTCPeerConnection === "function";
+}
+
 function createPeerConnection() {
-    const connection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    if (!isWebRtcSupported()) {
+        throw new Error("WebRTC is not supported in this browser or has been disabled.");
+    }
+
+    let connection;
+
+    try {
+        connection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    } catch (error) {
+        notifyError(error?.message ?? "Failed to create a WebRTC peer connection.");
+        throw error;
+    }
 
     connection.addEventListener("connectionstatechange", () => {
         notifyState(connection.connectionState);
@@ -178,33 +193,57 @@ function waitForIceGatheringComplete(connection) {
 export async function createOffer(dotNetRef) {
     cleanupConnection();
     dotNetReference = dotNetRef;
-    peerConnection = createPeerConnection();
 
-    registerDataChannel(peerConnection.createDataChannel("ddgame"));
-    notifyState("connecting");
+    try {
+        peerConnection = createPeerConnection();
+    } catch (error) {
+        cleanupConnection();
+        throw error;
+    }
 
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
+    try {
+        registerDataChannel(peerConnection.createDataChannel("ddgame"));
+        notifyState("connecting");
 
-    const description = await waitForIceGatheringComplete(peerConnection);
-    return encodeDescription(description);
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+
+        const description = await waitForIceGatheringComplete(peerConnection);
+        return encodeDescription(description);
+    } catch (error) {
+        notifyError(error?.message ?? "Failed to create a WebRTC offer.");
+        cleanupConnection();
+        throw error;
+    }
 }
 
 export async function acceptOffer(offerCode, dotNetRef) {
     cleanupConnection();
     dotNetReference = dotNetRef;
-    peerConnection = createPeerConnection();
 
-    const remoteDescription = decodeDescription(offerCode);
-    await peerConnection.setRemoteDescription(remoteDescription);
+    try {
+        peerConnection = createPeerConnection();
+    } catch (error) {
+        cleanupConnection();
+        throw error;
+    }
 
-    notifyState("connecting");
+    try {
+        const remoteDescription = decodeDescription(offerCode);
+        await peerConnection.setRemoteDescription(remoteDescription);
 
-    const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
+        notifyState("connecting");
 
-    const description = await waitForIceGatheringComplete(peerConnection);
-    return encodeDescription(description);
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+
+        const description = await waitForIceGatheringComplete(peerConnection);
+        return encodeDescription(description);
+    } catch (error) {
+        notifyError(error?.message ?? "Failed to accept the WebRTC offer.");
+        cleanupConnection();
+        throw error;
+    }
 }
 
 export async function acceptAnswer(answerCode) {
@@ -212,8 +251,14 @@ export async function acceptAnswer(answerCode) {
         throw new Error("Peer connection has not been created.");
     }
 
-    const remoteDescription = decodeDescription(answerCode);
-    await peerConnection.setRemoteDescription(remoteDescription);
+    try {
+        const remoteDescription = decodeDescription(answerCode);
+        await peerConnection.setRemoteDescription(remoteDescription);
+    } catch (error) {
+        notifyError(error?.message ?? "Failed to accept the WebRTC answer.");
+        cleanupConnection();
+        throw error;
+    }
 }
 
 export function sendMessage(message) {
@@ -221,7 +266,12 @@ export function sendMessage(message) {
         throw new Error("Data channel is not ready.");
     }
 
-    dataChannel.send(message ?? "");
+    try {
+        dataChannel.send(message ?? "");
+    } catch (error) {
+        notifyError(error?.message ?? "Failed to send the message over WebRTC.");
+        throw error;
+    }
 }
 
 export function resetConnection() {

@@ -6,24 +6,40 @@ export function initLoadingMessages() {
     ];
 
     const loadingMessage = document.getElementById("loading-message");
-    if (!loadingMessage) return;
+    let intervalId = null;
 
     function getRandomMessage() {
         return messages[Math.floor(Math.random() * messages.length)];
     }
 
-    loadingMessage.innerText = getRandomMessage() + "...";
-
-    const intervalId = setInterval(() => {
-        if (document.getElementById("loading-container")) {
-            loadingMessage.innerText = getRandomMessage();
-        } else {
-            clearInterval(intervalId);
+    function setMessage() {
+        if (!loadingMessage) {
+            return;
         }
-    }, 1500);
+
+        loadingMessage.innerText = `${getRandomMessage()}...`;
+    }
 
     window.stopLoadingMessages = function () {
-        clearInterval(intervalId);
+        if (intervalId !== null) {
+            clearInterval(intervalId);
+            intervalId = null;
+        }
+
         document.getElementById("loading-container")?.remove();
     };
+
+    if (!loadingMessage) {
+        return;
+    }
+
+    setMessage();
+
+    intervalId = setInterval(() => {
+        if (document.getElementById("loading-container")) {
+            setMessage();
+        } else {
+            window.stopLoadingMessages();
+        }
+    }, 1500);
 }
