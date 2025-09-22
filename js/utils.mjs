@@ -1,44 +1,10 @@
-export async function copyToClipboard(text) {
-    if (navigator.clipboard?.writeText) {
-        try {
-            await navigator.clipboard.writeText(text);
-            return;
-        } catch (err) {
-            console.warn('Clipboard writeText failed, falling back to execCommand.', err);
-        }
-    }
-
-    if (typeof document.execCommand !== 'function' || !document.body) {
-        console.warn('Clipboard API unavailable and no fallback supported.');
+export function copyToClipboard(text) {
+    if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+        console.warn('Copy to clipboard is not supported in this browser.');
         return;
     }
 
-    const textarea = document.createElement('textarea');
-    try {
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        textarea.style.pointerEvents = 'none';
-        textarea.setAttribute('readonly', '');
-        document.body.appendChild(textarea);
-        if (typeof textarea.focus === 'function') {
-            textarea.focus({ preventScroll: true });
-        }
-        textarea.select();
-        if (typeof textarea.setSelectionRange === 'function') {
-            textarea.setSelectionRange(0, textarea.value.length);
-        }
-        const successful = document.execCommand('copy');
-        if (!successful) {
-            console.warn('Fallback execCommand copy returned false.');
-        }
-    } catch (err) {
-        console.warn('Fallback copy failed.', err);
-    } finally {
-        if (textarea.parentElement) {
-            textarea.parentElement.removeChild(textarea);
-        }
-    }
+    navigator.clipboard.writeText(text).catch(err => console.error('Copy failed', err));
 }
 
 export async function pasteFromClipboard() {
@@ -48,11 +14,36 @@ export async function pasteFromClipboard() {
     }
 
     try {
+        if (!navigator.clipboard || typeof navigator.clipboard.readText !== 'function') {
+            console.warn('Paste from clipboard is not supported in this browser.');
+            return '';
+        }
+
         return await navigator.clipboard.readText();
     } catch (err) {
         console.warn('Paste failed', err);
         return '';
     }
+}
+
+export function getUserAgent() {
+    if (typeof navigator === 'undefined') {
+        return null;
+    }
+
+    return navigator.userAgent || null;
+}
+
+export function supportsErrorReporting() {
+    if (typeof fetch !== 'function') {
+        return false;
+    }
+
+    if (typeof navigator === 'undefined') {
+        return false;
+    }
+
+    return true;
 }
 
 export function hideErrorUi() {

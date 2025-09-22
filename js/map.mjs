@@ -25,6 +25,11 @@ const resizeObservers = new Map();
 const zoomListeners = new Map();
 
 export function observeResize(element, dotNetRef, id) {
+    if (typeof ResizeObserver === 'undefined') {
+        console.warn('ResizeObserver is not supported in this browser; resize updates will be disabled.', { id });
+        return;
+    }
+
     const resizeObserver = new ResizeObserver(() => {
         dotNetRef.invokeMethodAsync('OnResize');
     });
@@ -41,6 +46,11 @@ export function unobserveResize(id) {
 }
 
 export function observeZoomChange(dotNetRef, id) {
+    if (typeof window.matchMedia !== 'function') {
+        console.warn('matchMedia is not supported in this browser; zoom change detection will be disabled.', { id });
+        return;
+    }
+
     let query = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
 
     const handleChange = () => {

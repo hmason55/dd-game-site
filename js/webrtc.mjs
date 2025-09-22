@@ -14,19 +14,50 @@ const ICE_SERVERS = [
     }
 ];
 
-function isWebRtcSupported() {
-    return typeof window !== "undefined" && typeof window.RTCPeerConnection === "function";
+function getPeerConnectionConstructor() {
+    if (typeof window === "undefined") {
+        return null;
+    }
+
+    const ctor = window.RTCPeerConnection || window.webkitRTCPeerConnection || window.mozRTCPeerConnection;
+    return typeof ctor === "function" ? ctor : null;
+}
+
+export function isSupported() {
+    const ctor = getPeerConnectionConstructor();
+
+    if (!ctor) {
+        return false;
+    }
+
+    if (typeof window !== "undefined" && window.isSecureContext === false) {
+        return false;
+    }
+
+    try {
+        const connection = new ctor({ iceServers: ICE_SERVERS });
+        const supportsDataChannel = typeof connection.createDataChannel === "function";
+        if (typeof connection.close === "function") {
+            connection.close();
+        }
+
+        return supportsDataChannel;
+    } catch {
+        return false;
+    }
 }
 
 function createPeerConnection() {
-    if (!isWebRtcSupported()) {
+    const ctor = getPeerConnectionConstructor();
+
+    if (!ctor) {
         throw new Error("WebRTC is not supported in this browser or has been disabled.");
     }
 
     let connection;
 
     try {
-        connection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+        connection = new ctor({ iceServers: ICE_SERVERS });
     } catch (error) {
         notifyError(error?.message ?? "Failed to create a WebRTC peer connection.");
         throw error;
@@ -164,7 +195,12 @@ function decodeDescription(code) {
     }
 
     const payload = JSON.parse(atob(code));
-    return new RTCSessionDescription(payload);
+
+    if (typeof RTCSessionDescription === "function") {
+        return new RTCSessionDescription(payload);
+    }
+
+    return payload;
 }
 
 function waitForIceGatheringComplete(connection) {
