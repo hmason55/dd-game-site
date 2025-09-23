@@ -33,6 +33,36 @@ export function sanitizeConfig(config) {
         }
     }
 
+    if (typeof normalized.storageBucket === "string") {
+        let bucket = normalized.storageBucket;
+
+        if (bucket.startsWith("gs://")) {
+            bucket = bucket.substring(5);
+        }
+
+        if (bucket.startsWith("https://")) {
+            bucket = bucket.substring(8);
+        } else if (bucket.startsWith("http://")) {
+            bucket = bucket.substring(7);
+        }
+
+        if (bucket.startsWith("storage.googleapis.com/")) {
+            bucket = bucket.substring("storage.googleapis.com/".length);
+        }
+
+        if (bucket.startsWith("//")) {
+            bucket = bucket.substring(2);
+        }
+
+        if (bucket.endsWith(".firebasestorage.app")) {
+            bucket = `${bucket.substring(0, bucket.length - ".firebasestorage.app".length)}.appspot.com`;
+        }
+
+        bucket = bucket.replace(/\/+$/, "");
+
+        normalized.storageBucket = bucket;
+    }
+
     for (const requiredKey of REQUIRED_CONFIG_KEYS) {
         if (!normalized[requiredKey]) {
             throw new Error(`Firebase configuration is missing '${requiredKey}'.`);

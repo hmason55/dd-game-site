@@ -134,9 +134,13 @@ export async function getLatestSaveMetadata() {
 
     try {
         const metadata = await getMetadata(saveRef);
+        const customHash = typeof metadata?.customMetadata?.hash === "string"
+            ? metadata.customMetadata.hash.trim().toUpperCase()
+            : null;
         return {
             updatedAt: metadata?.updated ? new Date(metadata.updated).toISOString() : null,
-            sizeBytes: typeof metadata?.size === "number" ? metadata.size : null
+            sizeBytes: typeof metadata?.size === "number" ? metadata.size : null,
+            hash: customHash
         };
     } catch (error) {
         if (isMissingSaveError(error)) {
@@ -173,7 +177,7 @@ export async function downloadLatestSave() {
     }
 }
 
-export async function uploadLatestSave(payload) {
+export async function uploadLatestSave(payload, hash) {
     ensureConfigured();
 
     if (!(payload instanceof Uint8Array) && !(payload instanceof ArrayBuffer)) {
@@ -193,10 +197,18 @@ export async function uploadLatestSave(payload) {
 
     const buffer = payload instanceof Uint8Array ? payload : new Uint8Array(payload);
 
-    await uploadBytes(saveRef, buffer, {
+    const normalizedHash = typeof hash === "string" ? hash.trim().toUpperCase() : "";
+
+    const metadata = {
         contentType: "application/octet-stream",
         cacheControl: "no-store"
-    });
+    };
+
+    if (normalizedHash) {
+        metadata.customMetadata = { hash: normalizedHash };
+    }
+
+    await uploadBytes(saveRef, buffer, metadata);
 }
 
 export function dispose() {
