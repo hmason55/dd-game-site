@@ -27,6 +27,21 @@ function getUserPath(userId) {
     return `${SAVE_FOLDER}/${userId}/${SAVE_FILE}`;
 }
 
+function isMissingSaveError(error) {
+    if (!error || typeof error.code !== "string") {
+        return false;
+    }
+
+    switch (error.code) {
+        case "storage/object-not-found":
+        case "storage/unauthorized":
+        case "storage/permission-denied":
+            return true;
+        default:
+            return false;
+    }
+}
+
 function notifyAuthState(user) {
     if (!dotNetReference) {
         return;
@@ -124,7 +139,7 @@ export async function getLatestSaveMetadata() {
             sizeBytes: typeof metadata?.size === "number" ? metadata.size : null
         };
     } catch (error) {
-        if (error?.code === "storage/object-not-found") {
+        if (isMissingSaveError(error)) {
             return null;
         }
 
@@ -150,7 +165,7 @@ export async function downloadLatestSave() {
         const bytes = await getBytes(saveRef);
         return bytes;
     } catch (error) {
-        if (error?.code === "storage/object-not-found") {
+        if (isMissingSaveError(error)) {
             return null;
         }
 
