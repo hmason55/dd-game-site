@@ -1,7 +1,5 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
-import { getAnalytics, isSupported as isAnalyticsSupported } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-analytics.js";
+import { ensureFirebaseInitialized, getFirestoreInstance, isBrowserEnvironment } from "./firebaseCore.mjs";
 import {
-    getFirestore,
     doc,
     getDoc,
     setDoc,
@@ -14,9 +12,7 @@ import {
     orderBy
 } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
 
-let firebaseApp = null;
 let firestore = null;
-let analyticsInitialized = false;
 let dotNetReference = null;
 let sessionUnsubscribe = null;
 let messagesUnsubscribe = null;
@@ -28,40 +24,12 @@ const seenMessageIds = new Set();
 const ROLE_HOST = "host";
 const ROLE_GUEST = "guest";
 
-const REQUIRED_CONFIG_KEYS = ["apiKey", "authDomain", "projectId", "appId"];
-
-function sanitizeConfig(config) {
-    if (!config || typeof config !== "object") {
-        throw new Error("Firebase configuration is missing.");
-    }
-
-    const normalized = {};
-
-    for (const key of Object.keys(config)) {
-        const value = config[key];
-        if (typeof value === "string") {
-            const trimmed = value.trim();
-            if (trimmed.length > 0) {
-                normalized[key] = trimmed;
-            }
-        }
-    }
-
-    for (const requiredKey of REQUIRED_CONFIG_KEYS) {
-        if (!normalized[requiredKey]) {
-            throw new Error(`Firebase configuration is missing '${requiredKey}'.`);
-        }
-    }
-
-    return normalized;
-}
-
 function ensureInitialized(reference) {
-    if (typeof window === "undefined") {
+    if (!isBrowserEnvironment()) {
         throw new Error("Firebase multiplayer is not available in this environment.");
     }
 
-    if (!firebaseApp || !firestore) {
+    if (!firestore) {
         throw new Error("Firebase has not been initialized.");
     }
 
@@ -242,27 +210,12 @@ function registerMessageListener(sessionRef) {
 }
 
 export async function initializeFirebase(config) {
-    if (firebaseApp || typeof window === "undefined") {
-        return;
-    }
-
-    const sanitized = sanitizeConfig(config);
-
-    firebaseApp = initializeApp(sanitized);
-    firestore = getFirestore(firebaseApp);
-
-    try {
-        if (!analyticsInitialized && (await isAnalyticsSupported())) {
-            getAnalytics(firebaseApp);
-            analyticsInitialized = true;
-        }
-    } catch (error) {
-        console.debug("Analytics initialization failed", error);
-    }
+    await ensureFirebaseInitialized(config);
+    firestore = getFirestoreInstance();
 }
 
 export function isSupported() {
-    return typeof window !== "undefined" && firebaseApp !== null && firestore !== null;
+    return isBrowserEnvironment() && firestore !== null;
 }
 
 export async function createSession(reference) {
