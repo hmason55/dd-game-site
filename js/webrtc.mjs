@@ -2,7 +2,7 @@ let peerConnection = null;
 let dataChannel = null;
 let dotNetReference = null;
 
-const ICE_SERVERS = [
+const DEFAULT_ICE_SERVERS = [
     {
         urls: [
             "stun:stun.l.google.com:19302",
@@ -13,6 +13,58 @@ const ICE_SERVERS = [
         ]
     }
 ];
+
+let iceServers = DEFAULT_ICE_SERVERS.map(server => ({ ...server, urls: [...server.urls] }));
+
+function normalizeIceServers(servers) {
+    if (!Array.isArray(servers)) {
+        return DEFAULT_ICE_SERVERS.map(server => ({ ...server, urls: [...server.urls] }));
+    }
+
+    const normalized = [];
+
+    for (const server of servers) {
+        if (!server) {
+            continue;
+        }
+
+        const urls = Array.isArray(server.urls)
+            ? server.urls
+                .map(url => (typeof url === "string" ? url.trim() : ""))
+                .filter(url => url.length > 0)
+            : [];
+
+        if (urls.length === 0) {
+            continue;
+        }
+
+        const entry = { urls };
+
+        if (typeof server.username === "string") {
+            const username = server.username.trim();
+            if (username.length > 0) {
+                entry.username = username;
+            }
+        }
+
+        if (typeof server.credential === "string") {
+            const credential = server.credential.trim();
+            if (credential.length > 0) {
+                entry.credential = credential;
+            }
+        }
+
+        normalized.push(entry);
+    }
+
+    return normalized.length > 0
+        ? normalized
+        : DEFAULT_ICE_SERVERS.map(server => ({ ...server, urls: [...server.urls] }));
+}
+
+export function configureIceServers(servers) {
+    iceServers = normalizeIceServers(servers);
+}
 
 function getPeerConnectionConstructor() {
     if (typeof window === "undefined") {
@@ -35,7 +87,7 @@ export function isSupported() {
     }
 
     try {
-        const connection = new ctor({ iceServers: ICE_SERVERS });
+        const connection = new ctor({ iceServers });
         const supportsDataChannel = typeof connection.createDataChannel === "function";
         if (typeof connection.close === "function") {
             connection.close();
@@ -57,7 +109,7 @@ function createPeerConnection() {
     let connection;
 
     try {
-        connection = new ctor({ iceServers: ICE_SERVERS });
+        connection = new ctor({ iceServers });
     } catch (error) {
         notifyError(error?.message ?? "Failed to create a WebRTC peer connection.");
         throw error;
