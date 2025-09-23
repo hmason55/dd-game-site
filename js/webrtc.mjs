@@ -54,6 +54,15 @@ function normalizeIceServers(servers) {
             }
         }
 
+        const requiresCredential = urls.some(url => {
+            const lower = url.toLowerCase();
+            return lower.startsWith("turn:") || lower.startsWith("turns:");
+        });
+
+        if (requiresCredential && (!entry.username || !entry.credential)) {
+            continue;
+        }
+
         normalized.push(entry);
     }
 
