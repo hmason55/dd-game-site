@@ -86,7 +86,7 @@ html, body, #app {
     --card-specular-pointer-x: 0.5;
     --card-specular-pointer-y: 0.5;
     --card-specular-strength: 0;
-    --card-holo-elevation: 2.5px;
+    --card-holo-elevation: 1.5px;
     flex: 0 0 auto;
     position: relative;
     scroll-snap-align: start;
@@ -97,7 +97,7 @@ html, body, #app {
     transition: transform var(--card-transition-duration, 150ms) ease,
                 box-shadow var(--card-transition-duration, 150ms) ease,
                 filter var(--card-transition-duration, 150ms) ease;
-    transform-origin: bottom center;
+    transform-origin: center;
     transform: perspective(var(--card-perspective))
                rotateX(var(--card-rotate-x))
                rotateY(var(--card-rotate-y))
@@ -113,19 +113,21 @@ html, body, #app {
     inset: 0;
     border-radius: inherit;
     background-image:
-        radial-gradient(circle at calc(var(--card-specular-pointer-x) * 100%) calc(var(--card-specular-pointer-y) * 100%), rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.15) 40%, rgba(255, 255, 255, 0) 70%),
-        conic-gradient(from 0turn at 50% 50%, rgba(255, 0, 128, 0.24), rgba(255, 128, 0, 0.24), rgba(255, 255, 0, 0.24), rgba(0, 255, 128, 0.24), rgba(0, 128, 255, 0.24), rgba(128, 0, 255, 0.24), rgba(255, 0, 128, 0.24)),
-        repeating-conic-gradient(from 0turn at 50% 50%, rgba(255, 255, 255, 0.2) 0deg 6deg, rgba(255, 255, 255, 0) 6deg 12deg);
-    background-size: 200% 200%, 160% 160%, 220% 220%;
+        radial-gradient(circle at calc(var(--card-specular-pointer-x) * 100%) calc(var(--card-specular-pointer-y) * 100%), rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.1) 40%, rgba(255, 255, 255, 0) 70%),
+        conic-gradient(from 0.05turn at 50% 50%, rgba(255, 0, 128, 0.22), rgba(255, 128, 0, 0.18), rgba(255, 255, 0, 0.16), rgba(0, 255, 128, 0.18), rgba(0, 128, 255, 0.2), rgba(128, 0, 255, 0.22), rgba(255, 0, 128, 0.22)),
+        conic-gradient(from 0.3turn at 50% 50%, rgba(255, 255, 255, 0.06) 0deg, rgba(255, 255, 255, 0) 70deg, rgba(255, 255, 255, 0.08) 140deg, rgba(255, 255, 255, 0) 210deg, rgba(255, 255, 255, 0.06) 320deg, rgba(255, 255, 255, 0) 360deg),
+        repeating-conic-gradient(from 0turn at 50% 50%, rgba(255, 255, 255, 0.16) 0deg 5deg, rgba(255, 255, 255, 0) 5deg 12deg);
+    background-size: 180% 180%, 150% 150%, 200% 200%, 220% 220%;
     background-position:
-        calc((var(--card-specular-pointer-x) - 0.5) * 60%) calc((var(--card-specular-pointer-y) - 0.5) * 60%),
+        calc((var(--card-specular-pointer-x) - 0.5) * 24%) calc((var(--card-specular-pointer-y) - 0.5) * 24%),
+        calc(50% + (var(--card-specular-pointer-x) - 0.5) * 12%) calc(50% + (var(--card-specular-pointer-y) - 0.5) * 12%),
         50% 50%,
-        calc(50% + (var(--card-specular-pointer-x) - 0.5) * 40%) calc(50% + (var(--card-specular-pointer-y) - 0.5) * 40%);
+        calc(50% + (var(--card-specular-pointer-x) - 0.5) * 18%) calc(50% + (var(--card-specular-pointer-y) - 0.5) * 18%);
     mix-blend-mode: screen;
-    opacity: calc(0.18 + var(--card-specular-strength) * 0.6);
+    opacity: calc(0.12 + var(--card-specular-strength) * 0.45);
     pointer-events: none;
     transition: opacity 150ms ease, background-position 150ms ease;
-    transform: translateZ(var(--card-holo-elevation, 2.5px));
+    transform: translateZ(var(--card-holo-elevation, 1.5px));
     backface-visibility: hidden;
 }
 
