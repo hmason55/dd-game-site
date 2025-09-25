@@ -236,7 +236,12 @@ button[role="checkbox"] .card {
 button[role="checkbox"][aria-checked="true"] .card,
 button[role="checkbox"][aria-checked="true"] .mud-image {
     box-shadow: none !important;
-    filter: drop-shadow(0px 0px 2px var(--mud-palette-secondary)) drop-shadow(0px 0px 2px var(--mud-palette-secondary));
+    filter: drop-shadow(0px 0px 2px var(--card-highlight-color, var(--mud-palette-secondary)))
+            drop-shadow(0px 0px 2px var(--card-highlight-color, var(--mud-palette-secondary)));
+}
+
+.highlight-conditional {
+    --card-highlight-color: var(--mud-palette-success);
 }
 
 
