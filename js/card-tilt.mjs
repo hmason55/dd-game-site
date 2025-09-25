@@ -2,6 +2,28 @@ const CARD_SELECTOR = '.card-wrapper .card';
 const MAX_TILT_DEGREES = 14;
 const observerConfig = { childList: true, subtree: true };
 
+let tiltEnabled = true;
+
+function isElementWithinSelector(element, selector) {
+    return typeof element.closest === 'function' && element.closest(selector) !== null;
+}
+
+function isTiltSuppressed(card) {
+    if (!tiltEnabled) {
+        return true;
+    }
+
+    if (isElementWithinSelector(card, '.animated-clone')) {
+        return true;
+    }
+
+    if (isElementWithinSelector(card, '.mud-drop-dragging')) {
+        return true;
+    }
+
+    return false;
+}
+
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
@@ -9,6 +31,10 @@ function clamp(value, min, max) {
 function updateCardTilt(card, rotateX, rotateY) {
     card.style.setProperty('--card-rotate-x', `${rotateX}deg`);
     card.style.setProperty('--card-rotate-y', `${rotateY}deg`);
+}
+
+function resetCardTilt(card) {
+    updateCardTilt(card, 0, 0);
 }
 
 function attachTiltHandlers(card) {
@@ -35,6 +61,12 @@ function attachTiltHandlers(card) {
     };
 
     const handlePointerMove = (event) => {
+        if (isTiltSuppressed(card)) {
+            pendingRotation = { rotateX: 0, rotateY: 0 };
+            scheduleUpdate();
+            return;
+        }
+
         const rect = card.getBoundingClientRect();
         const offsetX = event.clientX - rect.left;
         const offsetY = event.clientY - rect.top;
@@ -85,9 +117,40 @@ function observeCardInsertions() {
     observer.observe(document.body, observerConfig);
 }
 
+function resetAllCardTilts() {
+    if (typeof document === 'undefined') {
+        return;
+    }
+
+    const cards = document.querySelectorAll(CARD_SELECTOR);
+    for (const card of cards) {
+        resetCardTilt(card);
+    }
+}
+
+export function setCardTiltEnabled(enabled) {
+    tiltEnabled = Boolean(enabled);
+
+    if (!tiltEnabled) {
+        resetAllCardTilts();
+    }
+
+    if (typeof window !== 'undefined') {
+        window.__ddgCardTiltEnabled = tiltEnabled;
+    }
+}
+
+export function isCardTiltEnabled() {
+    return tiltEnabled;
+}
+
 export function initCardTilt() {
     if (typeof window === 'undefined' || typeof document === 'undefined') {
         return;
+    }
+
+    if (typeof window.__ddgCardTiltEnabled === 'boolean') {
+        setCardTiltEnabled(window.__ddgCardTiltEnabled);
     }
 
     initializeExistingCards();
