@@ -83,6 +83,9 @@ html, body, #app {
     --card-rotate-x: 0deg;
     --card-rotate-y: 0deg;
     --card-perspective: 600px;
+    --card-specular-pointer-x: 0.5;
+    --card-specular-pointer-y: 0.5;
+    --card-specular-strength: 0;
     flex: 0 0 auto;
     position: relative;
     scroll-snap-align: start;
@@ -100,6 +103,26 @@ html, body, #app {
                scale(var(--card-scale));
     transform-style: preserve-3d;
     will-change: transform;
+}
+
+.hand .card::after,
+.inventory .card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background-image:
+        radial-gradient(circle at calc(var(--card-specular-pointer-x) * 100%) calc(var(--card-specular-pointer-y) * 100%), rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.15) 40%, rgba(255, 255, 255, 0) 70%),
+        conic-gradient(from 0.25turn at 50% 50%, rgba(255, 0, 170, 0.25), rgba(0, 180, 255, 0.2), rgba(255, 255, 255, 0.35), rgba(0, 210, 170, 0.2), rgba(255, 255, 0, 0.25));
+    background-size: 200% 200%, 140% 140%;
+    background-position:
+        calc((var(--card-specular-pointer-x) - 0.5) * 60%) calc((var(--card-specular-pointer-y) - 0.5) * 60%),
+        50% 50%;
+    mix-blend-mode: screen;
+    opacity: calc(0.18 + var(--card-specular-strength) * 0.6);
+    pointer-events: none;
+    transition: opacity 150ms ease, background-position 150ms ease;
+    transform: translateZ(1px);
 }
 
 .card.card-rarity-uncommon {

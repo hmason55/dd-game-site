@@ -1,6 +1,7 @@
 const CARD_SELECTOR = '.card-wrapper .card';
 const MAX_TILT_DEGREES = 14;
 const observerConfig = { childList: true, subtree: true };
+const DEFAULT_POINTER_POSITION = 0.5;
 
 let tiltEnabled = true;
 
@@ -28,9 +29,12 @@ function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
 
-function updateCardTilt(card, rotateX, rotateY) {
+function updateCardTilt(card, rotateX, rotateY, pointerX = DEFAULT_POINTER_POSITION, pointerY = DEFAULT_POINTER_POSITION, tiltStrength = 0) {
     card.style.setProperty('--card-rotate-x', `${rotateX}deg`);
     card.style.setProperty('--card-rotate-y', `${rotateY}deg`);
+    card.style.setProperty('--card-specular-pointer-x', `${pointerX}`);
+    card.style.setProperty('--card-specular-pointer-y', `${pointerY}`);
+    card.style.setProperty('--card-specular-strength', `${tiltStrength}`);
 }
 
 function resetCardTilt(card) {
@@ -54,15 +58,21 @@ function attachTiltHandlers(card) {
 
         frameHandle = window.requestAnimationFrame(() => {
             frameHandle = null;
-            const { rotateX, rotateY } = pendingRotation;
+            const { rotateX, rotateY, pointerX, pointerY, tiltStrength } = pendingRotation;
             pendingRotation = null;
-            updateCardTilt(card, rotateX, rotateY);
+            updateCardTilt(card, rotateX, rotateY, pointerX, pointerY, tiltStrength);
         });
     };
 
     const handlePointerMove = (event) => {
         if (isTiltSuppressed(card)) {
-            pendingRotation = { rotateX: 0, rotateY: 0 };
+            pendingRotation = {
+                rotateX: 0,
+                rotateY: 0,
+                pointerX: DEFAULT_POINTER_POSITION,
+                pointerY: DEFAULT_POINTER_POSITION,
+                tiltStrength: 0,
+            };
             scheduleUpdate();
             return;
         }
@@ -77,12 +87,22 @@ function attachTiltHandlers(card) {
         const rotateY = percentX * MAX_TILT_DEGREES;
         const rotateX = -percentY * MAX_TILT_DEGREES;
 
-        pendingRotation = { rotateX, rotateY };
+        const pointerX = (percentX + 1) / 2;
+        const pointerY = (percentY + 1) / 2;
+        const tiltStrength = clamp(Math.hypot(percentX, percentY), 0, 1);
+
+        pendingRotation = { rotateX, rotateY, pointerX, pointerY, tiltStrength };
         scheduleUpdate();
     };
 
     const handlePointerLeave = () => {
-        pendingRotation = { rotateX: 0, rotateY: 0 };
+        pendingRotation = {
+            rotateX: 0,
+            rotateY: 0,
+            pointerX: DEFAULT_POINTER_POSITION,
+            pointerY: DEFAULT_POINTER_POSITION,
+            tiltStrength: 0,
+        };
         scheduleUpdate();
     };
 
