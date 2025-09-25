@@ -92,6 +92,14 @@ html, body, #app {
     transform-origin: bottom center;
 }
 
+.card.card-rarity-uncommon {
+    border-color: var(--mud-palette-info) !important;
+}
+
+.card.card-rarity-rare {
+    border-color: var(--mud-palette-warning) !important;
+}
+
 .shop-item-card {
     display: flex;
     flex-direction: column;
