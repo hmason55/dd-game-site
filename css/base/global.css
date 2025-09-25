@@ -79,6 +79,10 @@ html, body, #app {
 
 .hand .card,
 .inventory .card {
+    --card-scale: 1;
+    --card-rotate-x: 0deg;
+    --card-rotate-y: 0deg;
+    --card-perspective: 600px;
     flex: 0 0 auto;
     position: relative;
     scroll-snap-align: start;
@@ -90,6 +94,12 @@ html, body, #app {
                 box-shadow var(--card-transition-duration, 150ms) ease,
                 filter var(--card-transition-duration, 150ms) ease;
     transform-origin: bottom center;
+    transform: perspective(var(--card-perspective))
+               rotateX(var(--card-rotate-x))
+               rotateY(var(--card-rotate-y))
+               scale(var(--card-scale));
+    transform-style: preserve-3d;
+    will-change: transform;
 }
 
 .card.card-rarity-uncommon {
@@ -195,7 +205,7 @@ html, body, #app {
 .inventory .card:hover,
 .inventory .card:focus,
 button[role="checkbox"] .card {
-    transform: scale(1.5);
+    --card-scale: 1.5;
     z-index: 10;
     transition: none;
 }
