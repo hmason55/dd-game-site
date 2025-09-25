@@ -86,6 +86,7 @@ html, body, #app {
     --card-specular-pointer-x: 0.5;
     --card-specular-pointer-y: 0.5;
     --card-specular-strength: 0;
+    --card-holo-elevation: 2.5px;
     flex: 0 0 auto;
     position: relative;
     scroll-snap-align: start;
@@ -113,16 +114,19 @@ html, body, #app {
     border-radius: inherit;
     background-image:
         radial-gradient(circle at calc(var(--card-specular-pointer-x) * 100%) calc(var(--card-specular-pointer-y) * 100%), rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.15) 40%, rgba(255, 255, 255, 0) 70%),
-        conic-gradient(from 0.25turn at 50% 50%, rgba(255, 0, 170, 0.25), rgba(0, 180, 255, 0.2), rgba(255, 255, 255, 0.35), rgba(0, 210, 170, 0.2), rgba(255, 255, 0, 0.25));
-    background-size: 200% 200%, 140% 140%;
+        conic-gradient(from 0turn at 50% 50%, rgba(255, 0, 128, 0.24), rgba(255, 128, 0, 0.24), rgba(255, 255, 0, 0.24), rgba(0, 255, 128, 0.24), rgba(0, 128, 255, 0.24), rgba(128, 0, 255, 0.24), rgba(255, 0, 128, 0.24)),
+        repeating-conic-gradient(from 0turn at 50% 50%, rgba(255, 255, 255, 0.2) 0deg 6deg, rgba(255, 255, 255, 0) 6deg 12deg);
+    background-size: 200% 200%, 160% 160%, 220% 220%;
     background-position:
         calc((var(--card-specular-pointer-x) - 0.5) * 60%) calc((var(--card-specular-pointer-y) - 0.5) * 60%),
-        50% 50%;
+        50% 50%,
+        calc(50% + (var(--card-specular-pointer-x) - 0.5) * 40%) calc(50% + (var(--card-specular-pointer-y) - 0.5) * 40%);
     mix-blend-mode: screen;
     opacity: calc(0.18 + var(--card-specular-strength) * 0.6);
     pointer-events: none;
     transition: opacity 150ms ease, background-position 150ms ease;
-    transform: translateZ(1px);
+    transform: translateZ(var(--card-holo-elevation, 2.5px));
+    backface-visibility: hidden;
 }
 
 .card.card-rarity-uncommon {
