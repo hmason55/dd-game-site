@@ -104,6 +104,17 @@ html, body, #app {
                scale(var(--card-scale));
     transform-style: preserve-3d;
     will-change: transform;
+    -webkit-touch-callout: none;
+}
+
+.hand .card img,
+.hand .card svg,
+.inventory .card img,
+.inventory .card svg {
+    pointer-events: none;
+    -webkit-user-drag: none;
+    user-drag: none;
+    -webkit-touch-callout: none;
 }
 
 .hand .card.card-rarity-rare::after,
