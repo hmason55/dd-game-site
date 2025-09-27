@@ -106,8 +106,8 @@ html, body, #app {
     will-change: transform;
 }
 
-.hand .card::after,
-.inventory .card::after {
+.hand .card.card-rarity-rare::after,
+.inventory .card.card-rarity-rare::after {
     content: "";
     position: absolute;
     inset: 0;
