@@ -222,7 +222,6 @@ html, body, #app {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.02em;
-    transform: translateX(-50%);
 }
 
 @keyframes card-oil-flow {
