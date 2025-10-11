@@ -175,7 +175,7 @@ html, body, #app {
 }
 
 .card.card-rarity-uncommon {
-    border-color: var(--mud-palette-info) !important;
+    border-color: silver !important;
 }
 
 .card.card-rarity-rare {
