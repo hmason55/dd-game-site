@@ -170,6 +170,10 @@ html, body, #app {
     backface-visibility: hidden;
 }
 
+.card.card-rarity-common {
+    border-color: var(--mud-palette-secondary) !important;
+}
+
 .card.card-rarity-uncommon {
     border-color: var(--mud-palette-info) !important;
 }
