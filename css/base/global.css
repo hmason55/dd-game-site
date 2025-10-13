@@ -170,16 +170,22 @@ html, body, #app {
     backface-visibility: hidden;
 }
 
+.card.card-rarity-common,
+.card.card-rarity-uncommon,
+.card.card-rarity-rare {
+    border-width: 1px !important;
+}
+
 .card.card-rarity-common {
     border-color: var(--mud-palette-secondary) !important;
 }
 
 .card.card-rarity-uncommon {
-    border-color: silver !important;
+    border-color: #8c8c8c !important;
 }
 
 .card.card-rarity-rare {
-    border-color: var(--mud-palette-warning) !important;
+    border-color: #b8860b !important;
 }
 
 .shop-item-card {
