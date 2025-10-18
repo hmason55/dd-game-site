@@ -369,6 +369,26 @@ button[role="checkbox"] .card {
     justify-content: space-between;
 }
 
+.mud-card.card-character-oathbound,
+.mud-card.card-character-oathbound .mud-card-content {
+    background-color: #A48755;
+}
+
+.mud-card.card-character-hollowblade,
+.mud-card.card-character-hollowblade .mud-card-content {
+    background-color: #7D56A7;
+}
+
+.mud-card.card-character-dredgecaller,
+.mud-card.card-character-dredgecaller .mud-card-content {
+    background-color: #4A718C;
+}
+
+.mud-card.card-character-gravetender,
+.mud-card.card-character-gravetender .mud-card-content {
+    background-color: #965353;
+}
+
 .highlight,
 button[role="checkbox"][aria-checked="true"] .card,
 button[role="checkbox"][aria-checked="true"] .mud-image {
