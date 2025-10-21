@@ -369,6 +369,18 @@ button[role="checkbox"] .card {
     justify-content: space-between;
 }
 
+.card-description-change {
+    font-weight: 700;
+}
+
+.card-description-change--increase {
+    color: var(--mud-palette-success);
+}
+
+.card-description-change--decrease {
+    color: var(--mud-palette-error);
+}
+
 .mud-card.card-character-oathbound,
 .mud-card.card-character-oathbound .mud-card-content {
     background-color: #A48755;
