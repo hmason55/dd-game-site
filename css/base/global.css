@@ -105,6 +105,7 @@ html, body, #app {
     transform-style: preserve-3d;
     will-change: transform;
     -webkit-touch-callout: none;
+    border-radius: 4px;
 }
 
 .hand .card img,
@@ -367,6 +368,7 @@ button[role="checkbox"] .card {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    border-radius: 4px;
 }
 
 .card-description-change {
