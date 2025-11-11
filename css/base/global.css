@@ -371,16 +371,29 @@ button[role="checkbox"] .card {
     border-radius: 4px;
 }
 
+.card-description-container {
+    display: flex;
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.card-description {
+    width: 100%;
+    white-space: pre-line;
+}
+
 .card-description-change {
     font-weight: 700;
 }
 
 .card-description-change--increase {
-    color: var(--mud-palette-success);
+    color: var(--mud-palette-success) !important;
 }
 
 .card-description-change--decrease {
-    color: var(--mud-palette-error);
+    color: var(--mud-palette-error) !important;
 }
 
 .mud-card.card-character-oathbound,
