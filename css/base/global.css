@@ -470,6 +470,14 @@ button[role="checkbox"] .card img {
     text-shadow: 0 0 2px black, 0 0 2px black, 0 0 2px black, 0 0 2px black;
 }
 
+.cost-increased {
+    color: var(--mud-palette-error) !important;
+}
+
+.cost-decreased {
+    color: var(--mud-palette-success) !important;
+}
+
 .card .mud-icon-root,
 .resource-bar-wrapper,
 .health-bar-wrapper {
