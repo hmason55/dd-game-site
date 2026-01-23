@@ -5,16 +5,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DDGame</title>
-    <base href="/" id="dynamic-base">
-    <script>
-        (function () {
-            const base = document.getElementById('dynamic-base');
-            const isGitHubPages = location.hostname === 'hmason55.github.io';
-            if (isGitHubPages) {
-                base.setAttribute('href', '/dd-game-site/');
-            }
-        })();
-    </script>
+
+    <!-- Hosted at the root of dd-game.hmason55.dev -->
+    <base href="/" />
 
     <link rel="icon" type="image/png" href="favicon.png" />
     <meta name="theme-color" content="#0b1622">
@@ -136,7 +129,10 @@
         })();
     </script>
 
-    <script src="_framework/blazor.webassembly.js" onerror="window.__ddgShowScriptBlockingWarning && window.__ddgShowScriptBlockingWarning('The Blazor framework script failed to load.');"></script>
+    <script src="_framework/blazor.webassembly.js"
+            onload="window.__ddgMarkBlazorStarted && window.__ddgMarkBlazorStarted();"
+            onerror="window.__ddgShowScriptBlockingWarning && window.__ddgShowScriptBlockingWarning('The Blazor framework script failed to load.');"></script>
+
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
     <script type="module" src="js/main.mjs"></script>
 </body>
