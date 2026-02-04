@@ -80,9 +80,7 @@ html, body, #app {
 
 .hand .card,
 .inventory .card {
-    --card-base-size: min(92px, 22vw);
     --card-scale: 1;
-    --card-text-scale: 1;
     --card-rotate-x: 0deg;
     --card-rotate-y: 0deg;
     --card-perspective: 600px;
@@ -95,12 +93,8 @@ html, body, #app {
     scroll-snap-align: start;
     scroll-snap-stop: always;
     z-index: 1;
-    width: calc(var(--card-base-size) * var(--card-scale));
-    height: calc(var(--card-base-size) * var(--card-scale) * 1.6);
-    --mud-typography-body2-size: calc(.85rem * var(--card-text-scale)) !important;
-    --mud-typography-body2-lineheight: 1.3 !important;
-    --mud-typography-caption-size: calc(.5rem * var(--card-text-scale)) !important;
-    --mud-typography-caption-lineheight: 1.2 !important;
+    width: min(80px, 20vw);
+    height: calc(min(80px, 20vw) * 1.6);
     transition: transform var(--card-transition-duration, 150ms) ease,
                 box-shadow var(--card-transition-duration, 150ms) ease,
                 filter var(--card-transition-duration, 150ms) ease;
@@ -340,7 +334,8 @@ html, body, #app {
 @media (max-width: 400px) {
     .hand .card,
     .inventory .card {
-        --card-base-size: 80px;
+        width: 80px;
+        height: calc(80px * 1.6);
     }
 }
 
@@ -349,8 +344,7 @@ html, body, #app {
 .inventory .card:hover,
 .inventory .card:focus,
 button[role="checkbox"] .card {
-    --card-scale: 1;
-    --card-text-scale: 1.15;
+    --card-scale: 1.5;
     z-index: 10;
     transition: none;
 }
