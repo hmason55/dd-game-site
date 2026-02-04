@@ -108,6 +108,8 @@ export function registerHotkeys(dotNetRef) {
         } else if (e.code === 'Tab') {
             e.preventDefault();
             dotNetRef.invokeMethodAsync('OnHotkey', 'Tab');
+        } else if (e.code === 'KeyE') {
+            dotNetRef.invokeMethodAsync('OnHotkey', 'KeyE');
         } else if (e.code === 'F11') {
             e.preventDefault();
             dotNetRef.invokeMethodAsync('OnHotkey', 'F11');
