@@ -104,6 +104,7 @@ html, body, #app {
                rotateY(var(--card-rotate-y))
                scale(var(--card-scale));
     transform-style: preserve-3d;
+    backface-visibility: hidden;
     will-change: transform;
     -webkit-touch-callout: none;
     border-radius: 4px;
@@ -117,6 +118,7 @@ html, body, #app {
     -webkit-user-drag: none;
     user-drag: none;
     -webkit-touch-callout: none;
+    backface-visibility: hidden;
 }
 
 .hand .card.card-rarity-rare::before,
@@ -449,17 +451,21 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     transform: translateX(-25%);
     clip-path: inset(0% 24px 0% 24px round 5px);
     transition: filter 150ms ease;
+    backface-visibility: hidden;
 }
 
 .card:hover img,
 button[role="checkbox"] .card img {
-    filter: blur(1px);
+    filter: none;
     transition: none;
 }
 
 .mud-button,
+.card .mud-card-content,
 .card-wrapper .mud-typography {
     text-shadow: 0 0 1px black, 0 0 1px black, 0 0 2px black, 0 0 2px black;
+    backface-visibility: hidden;
+    transform: translateZ(0);
 }
 
 .mud-progress-linear-content > .mud-typography {
