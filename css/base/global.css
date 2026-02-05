@@ -524,12 +524,13 @@ button[role="checkbox"] .card img {
 
 :root {
     /* Card names */
-    --mud-typography-body2-size: .75rem !important;
+    --mud-typography-body2-weight: 900 !important;
+    --mud-typography-body2-size: 1.0rem !important;
     --mud-typography-body2-lineheight: 1.33 !important;
     /* Card descriptions */
-    --mud-typography-caption-size: .4rem !important;
+    --mud-typography-caption-weight: 900 !important;
+    --mud-typography-caption-size: 0.6rem !important;
     --mud-typography-caption-lineheight: 1.16 !important;
-
     /* Duration for card transitions and clone animations */
     --card-transition-duration: 400ms;
     --clone-animation-duration: 0.5s;
