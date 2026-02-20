@@ -58,11 +58,20 @@ export const particleSystem = {
         * @returns {{r: number, g: number, b: number, a: number}} - Random color object.
         */
         function randomColor(colorRange) {
+            const min = colorRange?.min || {};
+            const max = colorRange?.max || {};
+
+            function readChannel(channel, fallback) {
+                const minValue = min[channel] ?? fallback;
+                const maxValue = max[channel] ?? minValue;
+                return randomRange({ min: minValue, max: maxValue });
+            }
+
             return {
-                r: randomRange({ min: colorRange.min.r, max: colorRange.max.r }) * 255,
-                g: randomRange({ min: colorRange.min.g, max: colorRange.max.g }) * 255,
-                b: randomRange({ min: colorRange.min.b, max: colorRange.max.b }) * 255,
-                a: randomRange({ min: colorRange.min.a, max: colorRange.max.a })
+                r: readChannel("r", 1) * 255,
+                g: readChannel("g", 1) * 255,
+                b: readChannel("b", 1) * 255,
+                a: readChannel("a", 1)
             };
         }
 
@@ -84,13 +93,17 @@ export const particleSystem = {
 
             octx.drawImage(baseImage, 0, 0, size, size);
 
-            // TODO: Handle nullable colors
-            if (r == 255 && g == 255 && b == 255 && a == 1)
+            const red = r ?? 255;
+            const green = g ?? 255;
+            const blue = b ?? 255;
+            const alpha = a ?? 1;
+
+            if (red === 255 && green === 255 && blue === 255 && alpha === 1)
             {
                 return off;
             }
 
-            octx.fillStyle = `rgba(${r}, ${g}, ${b}, ${a})`;
+            octx.fillStyle = `rgba(${red}, ${green}, ${blue}, ${alpha})`;
             octx.globalCompositeOperation = "source-atop";
             octx.fillRect(0, 0, size, size);
             octx.globalCompositeOperation = "source-over";
