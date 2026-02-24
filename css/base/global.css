@@ -387,6 +387,16 @@ button[role="checkbox"] .card {
     white-space: pre-line;
 }
 
+.card-inline-icon {
+    display: inline-flex;
+    margin: 0 0.08rem;
+    line-height: 1;
+    font-size: 0.9em;
+    vertical-align: text-top;
+    align-items: center;
+    justify-content: center;
+}
+
 .card-description-change {
     font-weight: 700;
 }
