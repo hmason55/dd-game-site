@@ -558,6 +558,23 @@ button[role="checkbox"] .card img {
     --clone-animation-duration: 0.5s;
 }
 
+
+.card-clone {
+    overflow: visible;
+}
+
+.card-clone .card {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    aspect-ratio: auto !important;
+    --card-scale: 1 !important;
+    --card-rotate-x: 0deg !important;
+    --card-rotate-y: 0deg !important;
+    transform: none !important;
+}
+
 .animated-clone {
     z-index: 9999;
     pointer-events: none;
@@ -849,4 +866,264 @@ button[role="checkbox"] .card img {
 /* Align snackbar text to the right to match right-justified snackbars */
 .mud-snackbar-content-message {
     text-align: right;
+}
+
+/* --- Card redesign: resilient layered card layout --- */
+.hand {
+    column-gap: clamp(0.2rem, 0.8vw, 0.6rem);
+    row-gap: clamp(0.6rem, 1.4vw, 1rem);
+    padding: clamp(0.75rem, 2vw, 1.25rem) 0.25rem;
+}
+
+.hand .card,
+.inventory .card {
+    width: clamp(84px, 11vw, 168px);
+    height: auto;
+    aspect-ratio: 5 / 8;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.hand .card:hover,
+.hand .card:focus,
+.inventory .card:hover,
+.inventory .card:focus,
+button[role="checkbox"] .card {
+    --card-scale: 1.16;
+    z-index: 40;
+}
+
+.card.card-surface,
+.card.card-surface .mud-card-content {
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    background-color: #1f1b24;
+}
+
+.card-content {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+}
+
+.card-art-layer {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    transform: translateZ(0);
+}
+
+.card-art-scrim {
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.38) 22%, rgba(0, 0, 0, 0.26) 48%, rgba(0, 0, 0, 0.58) 100%);
+}
+
+.card-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.card-header-overlay {
+    top: 0;
+    padding: clamp(0.28rem, 0.8vw, 0.5rem) clamp(0.24rem, 0.8vw, 0.5rem) 0;
+}
+
+.card-title {
+    font-weight: 700;
+    line-height: 1.1;
+    font-size: clamp(0.56rem, 1.2vw, 0.9rem);
+    text-wrap: balance;
+    text-shadow: 0 0 1px #000, 0 1px 2px #000, 0 0 6px rgba(0, 0, 0, 0.95);
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.card-description-overlay {
+    top: 26%;
+    bottom: 16%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 clamp(0.36rem, 0.9vw, 0.7rem);
+}
+
+.card-description {
+    width: 100%;
+    white-space: pre-line;
+    line-height: 1.2;
+    font-size: clamp(0.54rem, 1.05vw, 0.8rem);
+    text-shadow: 0 0 1px #000, 0 1px 2px #000, 0 0 5px rgba(0, 0, 0, 0.9);
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 7;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.card-fallback-icon {
+    position: absolute;
+    z-index: 1;
+    top: 36%;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0.38;
+    width: clamp(20px, 3vw, 36px);
+    height: clamp(20px, 3vw, 36px);
+}
+
+.card-cost-stack {
+    position: absolute;
+    top: clamp(4px, 1vw, 8px);
+    left: clamp(4px, 1vw, 8px);
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: clamp(2px, 0.4vw, 6px);
+    pointer-events: none;
+}
+
+.card-cost-chip {
+    --chip-size: clamp(16px, 2.2vw, 24px);
+    width: var(--chip-size);
+    height: var(--chip-size);
+    display: grid;
+    place-items: center;
+    font-size: clamp(0.55rem, 0.95vw, 0.78rem);
+    font-weight: 700;
+    color: var(--mud-palette-text-primary);
+    background-color: rgba(0, 0, 0, 0.64);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    text-shadow: 0 0 2px #000;
+}
+
+.card-type-icon {
+    position: absolute;
+    z-index: 3;
+    right: clamp(4px, 1vw, 8px);
+    bottom: clamp(4px, 1vw, 8px);
+    width: clamp(12px, 1.8vw, 18px);
+    height: clamp(12px, 1.8vw, 18px);
+    filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 2px #000);
+}
+
+@media (max-width: 900px) {
+    .hand .card,
+    .inventory .card {
+        width: clamp(78px, 20vw, 124px);
+    }
+
+    .hand {
+        justify-content: center;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scroll-snap-type: x proximity;
+    }
+}
+
+@media (max-width: 520px) {
+    .hand {
+        justify-content: flex-start;
+        flex-wrap: nowrap;
+        padding-inline: 0.25rem;
+    }
+
+    .hand .mud-drop-item {
+        flex: 0 0 auto;
+    }
+
+    .hand .card {
+        width: clamp(74px, 24vw, 100px);
+    }
+}
+
+/* --- Card/content safeguards for title overlap and item/equipment parity --- */
+.card-header-overlay--with-left-cost {
+    padding-left: clamp(1.5rem, 2.8vw, 2.25rem);
+    padding-right: clamp(0.35rem, 1vw, 0.65rem);
+}
+
+.card-header-overlay--center {
+    padding-left: clamp(0.35rem, 1vw, 0.65rem);
+    padding-right: clamp(0.35rem, 1vw, 0.65rem);
+}
+
+.card-title {
+    text-wrap: pretty;
+}
+
+.item-uses-cost {
+    background: color-mix(in srgb, var(--mud-palette-warning) 80%, #000 20%);
+    border-color: rgba(255, 255, 255, 0.55);
+}
+
+/* --- Encounter-only hand compaction (landscape) to avoid vertical overflow/wrapping --- */
+@media (orientation: landscape) {
+    .encounter-screen .player-hand-container {
+        min-height: 0;
+    }
+
+    .encounter-screen .player-hand-container .hand {
+        --encounter-hand-overlap: 0px;
+        flex-wrap: nowrap;
+        justify-content: center;
+        align-items: flex-end;
+        column-gap: 0;
+        row-gap: 0;
+        min-height: 0;
+        padding: clamp(0.2rem, 1vh, 0.5rem) 0.25rem;
+        overflow: visible;
+    }
+
+    .encounter-screen .player-hand-container .hand:has(> .mud-drop-item:nth-child(n+10)) {
+        --encounter-hand-overlap: clamp(12px, 1.7vw, 22px);
+    }
+
+    .encounter-screen .player-hand-container .hand .mud-drop-item {
+        position: relative;
+        flex: 0 0 auto;
+        margin-left: calc(var(--encounter-hand-overlap) * -1);
+        z-index: 20;
+    }
+
+    .encounter-screen .player-hand-container .hand .mud-drop-item:first-child {
+        margin-left: 0;
+    }
+
+    .encounter-screen .player-hand-container .hand .mud-drop-item:hover,
+    .encounter-screen .player-hand-container .hand .mud-drop-item:focus-within {
+        z-index: 140;
+    }
+
+    .encounter-screen .player-hand-container .hand .card {
+        width: clamp(64px, 8.8vw, 116px);
+    }
+}
+
+@media (orientation: landscape) and (max-width: 1200px) {
+    .encounter-screen .player-hand-container .hand:has(> .mud-drop-item:nth-child(n+8)) {
+        --encounter-hand-overlap: clamp(12px, 2.6vw, 24px);
+    }
+}
+
+@media (orientation: landscape) and (max-width: 900px) {
+    .encounter-screen .player-hand-container .hand:has(> .mud-drop-item:nth-child(n+6)) {
+        --encounter-hand-overlap: clamp(14px, 4vw, 26px);
+    }
+
+    .encounter-screen .player-hand-container .hand .card {
+        width: clamp(58px, 14vw, 88px);
+    }
 }

@@ -9,11 +9,46 @@ function _getTransitionDurationMs(el) {
     return isNaN(ms) ? 0 : ms;
 }
 
+function updateLatestMousePos(x, y) {
+    if (typeof x !== 'number' || typeof y !== 'number') {
+        return;
+    }
+
+    latestMousePos = { x, y };
+}
+
 window.addEventListener('mousemove', e => {
-    latestMousePos = {
-        x: e.clientX,
-        y: e.clientY
-    };
+    updateLatestMousePos(e.clientX, e.clientY);
+}, { passive: true });
+
+window.addEventListener('pointermove', e => {
+    updateLatestMousePos(e.clientX, e.clientY);
+}, { passive: true });
+
+window.addEventListener('dragover', e => {
+    updateLatestMousePos(e.clientX, e.clientY);
+}, { passive: true });
+
+window.addEventListener('drop', e => {
+    updateLatestMousePos(e.clientX, e.clientY);
+}, { passive: true });
+
+window.addEventListener('touchmove', e => {
+    const touch = e.touches?.[0] ?? e.changedTouches?.[0];
+    if (!touch) {
+        return;
+    }
+
+    updateLatestMousePos(touch.clientX, touch.clientY);
+}, { passive: true });
+
+window.addEventListener('touchend', e => {
+    const touch = e.changedTouches?.[0];
+    if (!touch) {
+        return;
+    }
+
+    updateLatestMousePos(touch.clientX, touch.clientY);
 }, { passive: true });
 
 // Safe fallback access
@@ -28,16 +63,16 @@ export function getCurrentMousePos() {
 export function cloneElementHidden(element) {
     if (!element) return null;
 
-    const mouse = latestMousePos || { x: 0, y: 0 };
-    const rect = element.getBoundingClientRect();
+    const sourceElement = element.querySelector?.('.card') ?? element;
+    const rect = sourceElement.getBoundingClientRect();
 
-    // Compute offset from mouse to top-left of scaled rect
-    const offsetX = mouse.x - rect.left;
-    const offsetY = mouse.y - rect.top + 104; // this offset aligns the center perfectly when dropped.
+    // Use card center anchor so clone spawns at drop location.
+    const offsetX = rect.width / 2;
+    const offsetY = rect.height / 2;
 
-    const clone = element.cloneNode(true);
+    const clone = sourceElement.cloneNode(true);
 
-    const computedStyle = getComputedStyle(element);
+    const computedStyle = getComputedStyle(sourceElement);
     const originalTransform = computedStyle.transform;
     const originalOrigin = computedStyle.transformOrigin;
 
@@ -63,7 +98,7 @@ export function cloneElementHidden(element) {
         wrapper.style.transformOrigin = originalOrigin;
     }
 
-    wrapper.classList.add("hand", "animated-clone");
+    wrapper.classList.add("animated-clone", "card-clone");
 
     wrapper.appendChild(clone);
     document.body.appendChild(wrapper);
