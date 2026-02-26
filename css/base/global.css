@@ -396,6 +396,7 @@ button[role="checkbox"] .card {
     vertical-align: text-top;
     align-items: center;
     justify-content: center;
+    transform: translateY(25%);
 }
 
 .card-inline-icon-image {
@@ -784,7 +785,7 @@ button[role="checkbox"] .card img {
 
 .vertical-health-wrapper .vertical-health-bars {
     flex: 0 0 auto;
-    height: calc(100% - 0.75rem);
+    height: calc(100% - 1.15rem);
     align-items: stretch;
 }
 
@@ -991,12 +992,12 @@ button[role="checkbox"] .card {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: clamp(2px, 0.4vw, 6px);
+    gap: clamp(2px, 0.8vw, 12px);
     pointer-events: none;
 }
 
 .card-cost-chip {
-    --chip-size: clamp(16px, 2.2vw, 24px);
+    --chip-size: clamp(14px, 0.5vw, 14px);
     width: var(--chip-size);
     height: var(--chip-size);
     display: grid;
@@ -1007,6 +1008,14 @@ button[role="checkbox"] .card {
     background-color: rgba(0, 0, 0, 0.64);
     border: 1px solid rgba(255, 255, 255, 0.5);
     text-shadow: 0 0 2px #000;
+}
+
+.card-cost-chip.diamond {
+    transform: rotate(45deg);
+}
+
+.card-cost-chip.diamond span {
+    transform: rotate(-45deg) translate(0%, 0%);
 }
 
 .card-type-icon {
