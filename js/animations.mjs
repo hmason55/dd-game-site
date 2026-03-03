@@ -126,7 +126,7 @@ export function revealAndAnimateCloneAtPos(wrapper, mouseX, mouseY, scale = 0.3,
     const startRect = wrapper.getBoundingClientRect();
 
     const baseMs = _getTransitionDurationMs(wrapper);
-    const appearMs = (baseMs * 0.8) / speed;
+    const appearMs = Math.min((baseMs * 0.35) / speed, 80);
     const removeMs = baseMs / speed + 50; // wait slightly longer than the CSS transition
 
     requestAnimationFrame(() => {
@@ -218,7 +218,7 @@ export function cloneAndAnimateToElement(source, target, scale = 0.3, speed = 1.
     if (!wrapper) return;
     const startRect = wrapper.getBoundingClientRect();
     const baseMs = _getTransitionDurationMs(wrapper);
-    const appearMs = (baseMs * 0.8) / speed;
+    const appearMs = Math.min((baseMs * 0.35) / speed, 80);
     const removeMs = baseMs / speed + 50; // wait slightly longer than the CSS transition
 
     // Capture the id for later lookup in case the element gets re-rendered
@@ -278,7 +278,7 @@ export function cloneAndAnimateIdFromIdToId(sourceId, startId, targetId, scale =
     const targetLookupId = targetId;
 
     const baseMs = _getTransitionDurationMs(wrapper);
-    const appearMs = (baseMs * 0.8) / speed;
+    const appearMs = Math.min((baseMs * 0.35) / speed, 80);
     const removeMs = baseMs / speed + 50; // wait slightly longer than the CSS transition
 
 
