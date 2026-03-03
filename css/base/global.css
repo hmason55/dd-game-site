@@ -1055,6 +1055,11 @@ button[role="checkbox"] .card {
     transform: translateX(-50%);
 }
 
+.card-type-icon-image {
+    object-fit: contain;
+    pointer-events: none;
+}
+
 @media (max-width: 900px) {
     .hand .card,
     .inventory .card {
