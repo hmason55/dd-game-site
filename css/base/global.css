@@ -964,7 +964,7 @@ button[role="checkbox"] .card {
     width: 100%;
     white-space: pre-line;
     line-height: 1.2;
-    font-size: clamp(0.54rem, 1.05vw, 0.8rem);
+    font-size: clamp(0.6rem, 1.2vw, 0.9rem);
     text-shadow: 0 0 1px #000, 0 1px 2px #000, 0 0 5px rgba(0, 0, 0, 0.9);
     overflow-wrap: anywhere;
     display: -webkit-box;
