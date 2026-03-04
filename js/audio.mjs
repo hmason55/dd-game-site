@@ -52,8 +52,11 @@ export const audioPlayer = {
 
             const audio = new Audio(src);
             audio.preload = "auto";
-            audio.loop = loop;
-            this.tracks[name] = { audio, baseVolume: volume, layer };
+            audio.loop = false;
+            this.tracks[name] = { audio, baseVolume: volume, layer, loop, shouldLoop: false };
+            audio.addEventListener("ended", () => {
+                this.handleTrackEnded(name);
+            });
             this.applyTrackVolume(name);
             this.tryProcessPendingLayerTransition(layer, name);
 
@@ -159,6 +162,7 @@ export const audioPlayer = {
             return;
         }
 
+        track.shouldLoop = false;
         const { audio } = track;
         await this.fadeAudio(audio, audio.volume, 0, fadeMs);
         audio.pause();
@@ -171,6 +175,7 @@ export const audioPlayer = {
             return false;
         }
 
+        track.shouldLoop = track.loop;
         const { audio } = track;
         if (randomStart) {
             this.setRandomStart(audio);
@@ -187,6 +192,21 @@ export const audioPlayer = {
 
         await this.fadeAudio(audio, 0, targetVolume, fadeMs);
         return true;
+    },
+
+    async handleTrackEnded(trackName) {
+        const track = this.tracks[trackName];
+        if (!track || !track.loop || !track.shouldLoop) {
+            return;
+        }
+
+        const { audio } = track;
+        audio.currentTime = 0;
+        try {
+            await audio.play();
+        } catch (err) {
+            console.error("Audio playback failed:", err);
+        }
     },
 
     tryProcessPendingLayerTransition(layer, loadedTrackName) {
