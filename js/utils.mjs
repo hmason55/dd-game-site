@@ -53,6 +53,10 @@ export function hideErrorUi() {
     }
 }
 
+export function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+}
+
 export function toggleFullscreen() {
     const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
 
