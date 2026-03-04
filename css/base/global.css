@@ -466,23 +466,6 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     left: 0;
 }
 
-.card img {
-    position: absolute;
-    height: 120px;
-    z-index: -1;
-    margin: -8px -2px;
-    transform: translateX(-25%);
-    clip-path: inset(0% 24px 0% 24px round 5px);
-    transition: filter 150ms ease;
-    backface-visibility: hidden;
-}
-
-.card:hover img,
-button[role="checkbox"] .card img {
-    filter: none;
-    transition: none;
-}
-
 .mud-button,
 .card .mud-card-content,
 .card-wrapper .mud-typography {
