@@ -695,6 +695,29 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     overflow-y: auto;
 }
 
+.reward-select-dialog .mud-dialog-content {
+    overflow-y: visible;
+}
+
+.reward-select-dialog .reward-select-toggle-group {
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: center;
+    column-gap: 8px;
+    row-gap: 8px;
+}
+
+.reward-select-dialog .reward-select-toggle-item {
+    flex: 0 0 auto;
+    padding: 8px 24px;
+}
+
+.reward-select-dialog .reward-select-hand {
+    overflow: visible;
+    padding-bottom: 16px;
+}
+
 @supports (height: 1dvh) {
     .reward-dialog-list {
         max-height: calc(95dvh - 128px);
