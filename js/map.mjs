@@ -72,3 +72,13 @@ export function unobserveZoomChange(id) {
         zoomListeners.delete(id);
     }
 }
+
+export function centerElementVertically(element) {
+    if (!element) return;
+
+    element.scrollIntoView({
+        block: 'center',
+        inline: 'nearest',
+        behavior: 'auto'
+    });
+}
