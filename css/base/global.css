@@ -1180,3 +1180,41 @@ button[role="checkbox"] .card {
         width: clamp(58px, 14vw, 88px);
     }
 }
+
+.card.highlight-conditional-chain {
+    position: relative;
+    isolation: isolate;
+    --chain-highlight-progress: 1;
+    --chain-highlight-elapsed: calc((1 - var(--chain-highlight-progress)) * 1turn);
+    --chain-highlight-color: var(--mud-palette-success);
+}
+
+
+.card.highlight-conditional-chain::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border: 2px solid color-mix(in srgb, var(--mud-palette-success) 30%, black 70%);
+    z-index: 3;
+    pointer-events: none;
+}
+
+.card.highlight-conditional-chain::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    padding: 4px;
+    background: conic-gradient(
+        from 0deg,
+        transparent 0turn var(--chain-highlight-elapsed),
+        var(--chain-highlight-color) var(--chain-highlight-elapsed) 1turn
+    );
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mud-palette-success) 65%, transparent));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    z-index: 4;
+    pointer-events: none;
+}
