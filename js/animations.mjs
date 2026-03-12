@@ -212,7 +212,7 @@ export function cloneAndAnimateToCorner(element, scale = 0.3, speed = 1.0)  {
 }
 
 // Clone an element and animate it towards a target element
-export function cloneAndAnimateToElement(source, target, scale = 0.3, speed = 1.0, targetAnchor)  {
+export async function cloneAndAnimateToElement(source, target, scale = 0.3, speed = 1.0, targetAnchor)  {
     if (!source || !target) return;
     const wrapper = cloneElementHidden(source);
     if (!wrapper) return;
@@ -224,46 +224,48 @@ export function cloneAndAnimateToElement(source, target, scale = 0.3, speed = 1.
     // Capture the id for later lookup in case the element gets re-rendered
     const targetId = target.id;
 
-    requestAnimationFrame(() => {
-        wrapper.style.opacity = '1';
-
-        setTimeout(() => {
-            const currentTarget = targetId ? document.getElementById(targetId) || target : target;
-            const targetRect = currentTarget.getBoundingClientRect();
-
-            const startOrigin = _getOrigin(wrapper, startRect);
-            const targetOrigin = _getOrigin(currentTarget, targetRect, targetAnchor);
-
-            const tx = (targetRect.left + targetOrigin.x) - (startRect.left + startOrigin.x);
-            const ty = (targetRect.top + targetOrigin.y) - (startRect.top + startOrigin.y);
-
-            wrapper.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
-            wrapper.style.opacity = '0.7';
+    await new Promise(resolve => {
+        requestAnimationFrame(() => {
+            wrapper.style.opacity = '1';
 
             setTimeout(() => {
-                wrapper.remove();
-            }, removeMs);
-        }, appearMs);
+                const currentTarget = targetId ? document.getElementById(targetId) || target : target;
+                const targetRect = currentTarget.getBoundingClientRect();
+
+                const startOrigin = _getOrigin(wrapper, startRect);
+                const targetOrigin = _getOrigin(currentTarget, targetRect, targetAnchor);
+
+                const tx = (targetRect.left + targetOrigin.x) - (startRect.left + startOrigin.x);
+                const ty = (targetRect.top + targetOrigin.y) - (startRect.top + startOrigin.y);
+
+                wrapper.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+                wrapper.style.opacity = '0.7';
+
+                setTimeout(() => {
+                    wrapper.remove();
+                    resolve();
+                }, removeMs);
+            }, appearMs);
+        });
     });
 }
 
 // Clone an element specified by id and animate it towards another element id
-export function cloneAndAnimateIdToId(sourceId, targetId, scale = 0.3, speed = 1.0, targetAnchor)  {
+export async function cloneAndAnimateIdToId(sourceId, targetId, scale = 0.3, speed = 1.0, targetAnchor)  {
     const source = document.getElementById(sourceId);
     const target = document.getElementById(targetId);
     if (!source || !target) return;
-    cloneAndAnimateToElement(source, target, scale, speed, targetAnchor);
+    await cloneAndAnimateToElement(source, target, scale, speed, targetAnchor);
 }
 
 // Clone an element by id, start the clone at the position of another element, then animate to the target element
-export function cloneAndAnimateIdFromIdToId(sourceId, startId, targetId, scale = 0.3, speed = 1.0, startAnchor, targetAnchor)  {
+export async function cloneAndAnimateIdFromIdToId(sourceId, startId, targetId, scale = 0.3, speed = 1.0, startAnchor, targetAnchor)  {
     const source = document.getElementById(sourceId);
     const start = document.getElementById(startId);
     if (!source || !start) return;
 
     const wrapper = cloneElementHidden(source);
     if (!wrapper) return;
-
 
     const startRect = start.getBoundingClientRect();
     const wRectInit = wrapper.getBoundingClientRect();
@@ -281,29 +283,37 @@ export function cloneAndAnimateIdFromIdToId(sourceId, startId, targetId, scale =
     const appearMs = Math.min((baseMs * 0.35) / speed, 80);
     const removeMs = baseMs / speed + 50; // wait slightly longer than the CSS transition
 
-
-    requestAnimationFrame(() => {
-        wrapper.style.opacity = '1';
-
-        setTimeout(() => {
-            const wRect = startWrapperRect;
-            const currentTarget = document.getElementById(targetLookupId);
-            if (!currentTarget) { wrapper.remove(); return; }
-            const tRect = currentTarget.getBoundingClientRect();
-
-            const startOrigin = _getOrigin(wrapper, wRect);
-            const targetOrigin = _getOrigin(currentTarget, tRect, targetAnchor);
-
-            const tx = (tRect.left + targetOrigin.x) - (wRect.left + startOrigin.x);
-            const ty = (tRect.top + targetOrigin.y) - (wRect.top + startOrigin.y);
-
-            wrapper.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
-            wrapper.style.opacity = '0.7';
+    await new Promise(resolve => {
+        requestAnimationFrame(() => {
+            wrapper.style.opacity = '1';
 
             setTimeout(() => {
-                wrapper.remove();
-            }, removeMs);
-        }, appearMs);
+                const wRect = startWrapperRect;
+                const currentTarget = document.getElementById(targetLookupId);
+                if (!currentTarget)
+                {
+                    wrapper.remove();
+                    resolve();
+                    return;
+                }
+
+                const tRect = currentTarget.getBoundingClientRect();
+
+                const startOrigin = _getOrigin(wrapper, wRect);
+                const targetOrigin = _getOrigin(currentTarget, tRect, targetAnchor);
+
+                const tx = (tRect.left + targetOrigin.x) - (wRect.left + startOrigin.x);
+                const ty = (tRect.top + targetOrigin.y) - (wRect.top + startOrigin.y);
+
+                wrapper.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+                wrapper.style.opacity = '0.7';
+
+                setTimeout(() => {
+                    wrapper.remove();
+                    resolve();
+                }, removeMs);
+            }, appearMs);
+        });
     });
 }
 
