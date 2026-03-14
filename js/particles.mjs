@@ -1,6 +1,8 @@
 const textOffsetMap = new Map();
 const tintCanvas = document.createElement("canvas");
 const tintContext = tintCanvas.getContext("2d");
+const baselineFrameMs = 1000 / 60;
+const maxCanvasSize = 600;
 
 function getNextTextOffset(id) {
     const key = id || "global";
@@ -129,6 +131,22 @@ function tintImage(baseImage, r, g, b, a, size, tintCache) {
     return source;
 }
 
+function calculateCanvasSize(options) {
+    const radiusByShape = options.shape === "box"
+        ? Math.max(options.areaSize?.x || 0, options.areaSize?.y || 0)
+        : options.shape === "arc"
+            ? Math.max(options.areaSize?.x || 0, options.areaSize?.y || 0)
+            : 0;
+
+    const travelDistance = options.lifespan.max > 0
+        ? options.speed.max * (options.lifespan.max / baselineFrameMs)
+        : 0;
+
+    const dynamicPadding = Math.ceil((options.size.max * 2) + radiusByShape + travelDistance + options.glowIntensity + 24);
+    const unclampedSize = Math.max(220, dynamicPadding * 2);
+    return Math.min(maxCanvasSize, unclampedSize);
+}
+
 function setupCanvas(options) {
     let position = {
         x: options.position.x + options.offset.x,
@@ -153,7 +171,7 @@ function setupCanvas(options) {
     canvas.id = options.id;
 
     const dpr = window.devicePixelRatio || 1;
-    const size = 1024;
+    const size = calculateCanvasSize(options);
     const half = size / 2;
 
     Object.assign(canvas.style, {
@@ -277,7 +295,10 @@ export const particleSystem = {
         const tintCache = new Map();
         const particlePool = [];
         const particles = [];
+        const maxActiveParticles = Math.max(24, options.loop ? Math.ceil(options.particleCount.max * 4) : options.particleCount.max);
         let emitting = true;
+        let frameMs = baselineFrameMs;
+        let lastFrameAt = performance.now();
 
         ctx.globalCompositeOperation = options.blendMode;
 
@@ -345,7 +366,9 @@ export const particleSystem = {
             }
 
             const count = Math.floor(randomRange(options.particleCount));
-            for (let i = 0; i < count; i++) {
+            const available = Math.max(0, maxActiveParticles - particles.length);
+            const spawnCount = Math.min(count, available);
+            for (let i = 0; i < spawnCount; i++) {
                 particles.push(createParticle());
             }
 
@@ -362,7 +385,12 @@ export const particleSystem = {
 
         function updateParticles() {
             const now = performance.now();
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const elapsed = now - lastFrameAt;
+            lastFrameAt = now;
+            frameMs = (frameMs * 0.9) + (elapsed * 0.1);
+            const frameScale = Math.min(1.35, Math.max(0.55, baselineFrameMs / Math.max(1, frameMs)));
+            const step = Math.max(0.3, Math.min(2.2, elapsed / baselineFrameMs));
+            ctx.clearRect(0, 0, renderWidth, renderHeight);
 
             for (let i = particles.length - 1; i >= 0; i--) {
                 const particle = particles[i];
@@ -373,12 +401,13 @@ export const particleSystem = {
                     continue;
                 }
 
-                particle.rotation += particle.rotationSpeed;
-                particle.externalVelocityX += particle.externalAccelerationX;
-                particle.externalVelocityY += particle.externalAccelerationY;
-                particle.x += (particle.directionX * particle.speed) + particle.externalVelocityX;
-                particle.y += (particle.directionY * particle.speed) + particle.externalVelocityY;
-                particle.speed *= particle.friction;
+                particle.rotation += particle.rotationSpeed * step;
+                particle.externalVelocityX += particle.externalAccelerationX * step;
+                particle.externalVelocityY += particle.externalAccelerationY * step;
+                const speed = particle.speed * frameScale;
+                particle.x += ((particle.directionX * speed) + particle.externalVelocityX) * step;
+                particle.y += ((particle.directionY * speed) + particle.externalVelocityY) * step;
+                particle.speed *= Math.pow(particle.friction, step);
 
                 const lifeProgress = Math.min((now - particle.startTime) / particle.lifespan, 1);
                 const fade = Math.pow(1 - lifeProgress, 2.5);
