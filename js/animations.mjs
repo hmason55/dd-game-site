@@ -190,6 +190,25 @@ function _getOrigin(el, rect, override) {
     return { x: ox, y: oy };
 }
 
+// Prepares an existing element for a FLIP-style animation.
+// First: capture the element's current bounds.
+// Last/Invert: immediately hide and disable interactions so no hand flicker occurs while a clone animates.
+// Play: the caller triggers motion and then restores visibility.
+export function prepareFlipAnimation(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const first = el.getBoundingClientRect();
+    el.dataset.flipFirstLeft = `${first.left}`;
+    el.dataset.flipFirstTop = `${first.top}`;
+    el.dataset.flipFirstWidth = `${first.width}`;
+    el.dataset.flipFirstHeight = `${first.height}`;
+
+    el.style.visibility = 'hidden';
+    el.style.opacity = '0';
+    el.style.pointerEvents = 'none';
+}
+
 // Show or hide an element by id
 export function setVisibility(id, visible)  {
     const el = document.getElementById(id);
@@ -198,9 +217,11 @@ export function setVisibility(id, visible)  {
     const opacity = visible ? '1' : '0';
     el.style.visibility = visibility;
     el.style.opacity = opacity;
+    el.style.pointerEvents = visible ? '' : 'none';
     el.querySelectorAll('.mud-badge, .mud-badge-root, .mud-badge-wrapper').forEach(b => {
         b.style.visibility = visibility;
         b.style.opacity = opacity;
+        b.style.pointerEvents = visible ? '' : 'none';
     });
 }
 

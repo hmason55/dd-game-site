@@ -341,6 +341,11 @@ html, body, #app {
     }
 }
 
+.card.card-interaction-locked {
+    pointer-events: none;
+    filter: saturate(0.85);
+}
+
 .hand .card:hover,
 .hand .card:focus,
 .inventory .card:hover,
