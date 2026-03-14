@@ -621,7 +621,7 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     padding-left: 8px;
 }
 
-.mud-snackbar-location-bottom-right {
+.mud-snackbar-location-bottom-center {
     bottom: 52px;
 }
 
@@ -870,9 +870,9 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     }
 }
 
-/* Align snackbar text to the right to match right-justified snackbars */
+/* Align snackbar text to the center for bottom-center snackbars */
 .mud-snackbar-content-message {
-    text-align: right;
+    text-align: center;
 }
 
 /* --- Card redesign: resilient layered card layout --- */
