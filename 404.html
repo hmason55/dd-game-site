@@ -55,6 +55,78 @@
         (function () {
             const WARNING_TEXT = "DDGame couldn't load because required scripts were blocked.";
             const INSTRUCTIONS_TEXT = "Privacy tools such as Brave Shields or other script blockers can stop the app from loading. Please allow scripts for this site or temporarily disable the blocker, then reload.";
+            const RECOVERY_STORAGE_FLAG = "__ddgRecoveryAttempted";
+
+            async function clearStartupBlockingState() {
+                try {
+                    localStorage.clear();
+                } catch (error) {
+                    console.warn("Unable to clear localStorage during startup recovery.", error);
+                }
+
+                try {
+                    sessionStorage.clear();
+                } catch (error) {
+                    console.warn("Unable to clear sessionStorage during startup recovery.", error);
+                }
+
+                if (window.caches && typeof window.caches.keys === "function") {
+                    try {
+                        const cacheKeys = await window.caches.keys();
+                        await Promise.all(cacheKeys.map((key) => window.caches.delete(key)));
+                    } catch (error) {
+                        console.warn("Unable to clear cache storage during startup recovery.", error);
+                    }
+                }
+
+                if (navigator.serviceWorker && typeof navigator.serviceWorker.getRegistrations === "function") {
+                    try {
+                        const registrations = await navigator.serviceWorker.getRegistrations();
+                        await Promise.all(registrations.map((registration) => registration.unregister()));
+                    } catch (error) {
+                        console.warn("Unable to unregister service workers during startup recovery.", error);
+                    }
+                }
+            }
+
+            async function restartWithRecovery(event) {
+                event.preventDefault();
+
+                const reloadTarget = event.currentTarget?.getAttribute("href") || ".";
+                let hasAttemptedRecovery = false;
+
+                try {
+                    hasAttemptedRecovery = localStorage.getItem(RECOVERY_STORAGE_FLAG) === "true";
+                } catch (error) {
+                    console.warn("Unable to read localStorage during startup recovery.", error);
+                    window.location.href = reloadTarget;
+                    return;
+                }
+
+                if (window.__ddgBlazorStarted || hasAttemptedRecovery) {
+                    window.location.href = reloadTarget;
+                    return;
+                }
+
+                await clearStartupBlockingState();
+
+                try {
+                    localStorage.setItem(RECOVERY_STORAGE_FLAG, "true");
+                } catch (error) {
+                    console.warn("Unable to write localStorage recovery flag.", error);
+                }
+
+                window.location.href = `${reloadTarget}${reloadTarget.includes("?") ? "&" : "?"}ddg-recover=${Date.now()}`;
+            }
+
+            function registerRecoveryRestartHandler() {
+                const reloadLink = document.querySelector("#blazor-error-ui a.reload");
+                if (!reloadLink) {
+                    return;
+                }
+
+                reloadLink.addEventListener("click", restartWithRecovery);
+            }
 
             function showScriptBlockingWarning(reason) {
                 if (window.__ddgScriptBlockingWarned) {
@@ -126,6 +198,8 @@
                     showScriptBlockingWarning(new Error("Blazor did not start within the expected time window."));
                 }
             }, 15000);
+
+            registerRecoveryRestartHandler();
         })();
     </script>
 
