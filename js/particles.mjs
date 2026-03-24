@@ -1,8 +1,17 @@
 const textOffsetMap = new Map();
+const imageCache = new Map();
 const tintCanvas = document.createElement("canvas");
 const tintContext = tintCanvas.getContext("2d");
 const baselineFrameMs = 1000 / 60;
 const maxCanvasSize = 600;
+const maxLowEndCanvasSize = 440;
+const lowEndHeuristics = {
+    reducedMotion: typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    lowCoreCount: typeof navigator.hardwareConcurrency === "number" && navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4,
+    saveData: navigator.connection?.saveData === true
+};
+const isLowEndMode = Object.values(lowEndHeuristics).some(Boolean);
+const baseQualityFactor = isLowEndMode ? 0.65 : 1;
 
 function getNextTextOffset(id) {
     const key = id || "global";
@@ -23,10 +32,18 @@ function vectorRange(minX, minY, maxX, maxY) {
     return { min: { x: minX, y: minY }, max: { x: maxX, y: maxY } };
 }
 
+function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+}
+
 function normalizeOptions(options) {
     const input = options || {};
+    const quality = clamp(input.qualityFactor ?? baseQualityFactor, 0.35, 1);
+    const glow = (input.glowIntensity || 0) * quality;
+
     return {
         ...input,
+        quality,
         position: input.position || { x: 0, y: 0 },
         offset: input.offset || { x: 0, y: 0 },
         particleCount: input.particleCount || scalarRange(1, 1),
@@ -46,7 +63,7 @@ function normalizeOptions(options) {
         arcAngle: input.arcAngle ?? 90,
         emitterRotation: input.emitterRotation ?? 0,
         blendMode: input.blendMode || "source-over",
-        glowIntensity: input.glowIntensity || 0,
+        glowIntensity: glow,
         endAlpha: input.endAlpha ?? 0,
         zIndex: input.zIndex ?? 1000
     };
@@ -131,6 +148,26 @@ function tintImage(baseImage, r, g, b, a, size, tintCache) {
     return source;
 }
 
+function loadEmitterImage(src) {
+    if (!src) {
+        return Promise.resolve(null);
+    }
+
+    if (imageCache.has(src)) {
+        return imageCache.get(src);
+    }
+
+    const imagePromise = new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = src;
+    });
+
+    imageCache.set(src, imagePromise);
+    return imagePromise;
+}
+
 function calculateCanvasSize(options) {
     const radiusByShape = options.shape === "box"
         ? Math.max(options.areaSize?.x || 0, options.areaSize?.y || 0)
@@ -144,7 +181,7 @@ function calculateCanvasSize(options) {
 
     const dynamicPadding = Math.ceil((options.size.max * 2) + radiusByShape + travelDistance + options.glowIntensity + 24);
     const unclampedSize = Math.max(220, dynamicPadding * 2);
-    return Math.min(maxCanvasSize, unclampedSize);
+    return Math.min(isLowEndMode ? maxLowEndCanvasSize : maxCanvasSize, unclampedSize);
 }
 
 function setupCanvas(options) {
@@ -170,7 +207,7 @@ function setupCanvas(options) {
     const canvas = document.createElement("canvas");
     canvas.id = options.id;
 
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(window.devicePixelRatio || 1, isLowEndMode ? 1.25 : 1.75);
     const size = calculateCanvasSize(options);
     const half = size / 2;
 
@@ -182,12 +219,12 @@ function setupCanvas(options) {
         zIndex: options.zIndex
     });
 
-    canvas.width = size * dpr;
-    canvas.height = size * dpr;
+    canvas.width = Math.round(size * dpr);
+    canvas.height = Math.round(size * dpr);
     canvas.style.width = `${size}px`;
     canvas.style.height = `${size}px`;
     document.body.appendChild(canvas);
-    return canvas;
+    return { canvas, dpr };
 }
 
 function calculateSpawnPosition(shape, areaSize, centerX, centerY, rotationRad, arcDirection, arcAngle) {
@@ -279,13 +316,14 @@ function renderParticle(ctx, options, p, alpha) {
 export const particleSystem = {
     createParticleEmitter: function (rawOptions) {
         const options = normalizeOptions(rawOptions);
-        const canvas = setupCanvas(options);
+        const canvasSetup = setupCanvas(options);
+        const canvas = canvasSetup.canvas;
         const ctx = canvas.getContext("2d");
         if (!ctx) {
             return;
         }
 
-        const dpr = window.devicePixelRatio || 1;
+        const dpr = canvasSetup.dpr;
         if (dpr !== 1) {
             ctx.scale(dpr, dpr);
         }
@@ -295,9 +333,11 @@ export const particleSystem = {
         const tintCache = new Map();
         const particlePool = [];
         const particles = [];
-        const maxActiveParticles = Math.max(24, options.loop ? Math.ceil(options.particleCount.max * 4) : options.particleCount.max);
+        const effectiveMax = options.loop ? Math.ceil(options.particleCount.max * 4) : options.particleCount.max;
+        const maxActiveParticles = Math.max(12, Math.ceil(effectiveMax * options.quality));
         let emitting = true;
         let frameMs = baselineFrameMs;
+        let dynamicQuality = options.quality;
         let lastFrameAt = performance.now();
 
         ctx.globalCompositeOperation = options.blendMode;
@@ -365,7 +405,7 @@ export const particleSystem = {
                 return;
             }
 
-            const count = Math.floor(randomRange(options.particleCount));
+            const count = Math.floor(randomRange(options.particleCount) * dynamicQuality);
             const available = Math.max(0, maxActiveParticles - particles.length);
             const spawnCount = Math.min(count, available);
             for (let i = 0; i < spawnCount; i++) {
@@ -388,6 +428,12 @@ export const particleSystem = {
             const elapsed = now - lastFrameAt;
             lastFrameAt = now;
             frameMs = (frameMs * 0.9) + (elapsed * 0.1);
+            if (frameMs > 26) {
+                dynamicQuality = Math.max(0.4, dynamicQuality - 0.03);
+            } else if (frameMs < 18) {
+                dynamicQuality = Math.min(options.quality, dynamicQuality + 0.02);
+            }
+
             const frameScale = Math.min(1.35, Math.max(0.55, baselineFrameMs / Math.max(1, frameMs)));
             const step = Math.max(0.3, Math.min(2.2, elapsed / baselineFrameMs));
             ctx.clearRect(0, 0, renderWidth, renderHeight);
@@ -428,17 +474,11 @@ export const particleSystem = {
         }
 
         if (options.renderMode === "image" && options.imageSrc) {
-            const img = new Image();
-            img.onload = () => {
+            loadEmitterImage(options.imageSrc).then(img => {
                 options._loadedImage = img;
                 emitParticles();
                 updateParticles();
-            };
-            img.onerror = () => {
-                emitParticles();
-                updateParticles();
-            };
-            img.src = options.imageSrc;
+            });
             return;
         }
 

@@ -1,3 +1,57 @@
+function createAudioPool(src, size = 3) {
+    const normalizedSize = Math.max(1, size);
+    const pool = [];
+    for (let i = 0; i < normalizedSize; i++) {
+        const instance = new Audio(src);
+        instance.preload = "auto";
+        instance.load();
+        pool.push(instance);
+    }
+
+    return {
+        pool,
+        nextIndex: 0,
+        next() {
+            const selected = this.pool[this.nextIndex];
+            this.nextIndex = (this.nextIndex + 1) % this.pool.length;
+            return selected;
+        }
+    };
+}
+
+function waitForAudioPreload(audio, timeoutMs = 5000) {
+    return new Promise(resolve => {
+        let settled = false;
+        let timeoutId = null;
+
+        const complete = result => {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            if (timeoutId !== null) {
+                window.clearTimeout(timeoutId);
+            }
+
+            audio.removeEventListener("canplaythrough", onLoaded);
+            audio.removeEventListener("loadeddata", onLoaded);
+            audio.removeEventListener("error", onError);
+            resolve(result);
+        };
+
+        const onLoaded = () => complete(true);
+        const onError = () => complete(false);
+
+        audio.addEventListener("canplaythrough", onLoaded, { once: true });
+        audio.addEventListener("loadeddata", onLoaded, { once: true });
+        audio.addEventListener("error", onError, { once: true });
+
+        timeoutId = window.setTimeout(() => complete(false), timeoutMs);
+        audio.load();
+    });
+}
+
 export const audioPlayer = {
     sounds: {},
     tracks: {},
@@ -19,21 +73,25 @@ export const audioPlayer = {
 
     async loadSound(name, src, volume = 0.5) {
         try {
-            const response = await fetch(src, { method: "HEAD" });
-            if (!response.ok) {
+            const probe = new Audio(src);
+            probe.preload = "auto";
+            const didLoad = await waitForAudioPreload(probe);
+            if (!didLoad) {
                 console.error("Failed to load sound:", name, src);
                 return false;
             }
 
-            const audio = new Audio(src);
-            audio.preload = "auto";
-            this.sounds[name] = { audio, baseVolume: volume };
+            const pool = createAudioPool(src, 3);
+            pool.pool[0] = probe;
+            this.sounds[name] = { src, pool, baseVolume: volume };
             this.applySfxVolume(name);
 
-            audio.onerror = () => {
-                console.error("Failed to load sound:", name, src);
-                delete this.sounds[name];
-            };
+            for (const audio of pool.pool) {
+                audio.onerror = () => {
+                    console.error("Failed to load sound:", name, src);
+                    delete this.sounds[name];
+                };
+            }
 
             return true;
         } catch (e) {
@@ -44,15 +102,15 @@ export const audioPlayer = {
 
     async loadTrack(name, src, layer, volume = 0.5, loop = true) {
         try {
-            const response = await fetch(src, { method: "HEAD" });
-            if (!response.ok) {
+            const audio = new Audio(src);
+            audio.preload = "auto";
+            audio.loop = false;
+            const didLoad = await waitForAudioPreload(audio);
+            if (!didLoad) {
                 console.error("Failed to load track:", name, src);
                 return false;
             }
 
-            const audio = new Audio(src);
-            audio.preload = "auto";
-            audio.loop = false;
             this.tracks[name] = { audio, baseVolume: volume, layer, loop, shouldLoop: false };
             audio.addEventListener("ended", () => {
                 this.handleTrackEnded(name);
@@ -79,10 +137,10 @@ export const audioPlayer = {
             return;
         }
 
-        const audio = sound.audio;
+        const audio = sound.pool.next();
         audio.pause();
         audio.currentTime = 0;
-        this.applySfxVolume(name);
+        audio.volume = sound.baseVolume * this.mix.master * this.mix.sfx;
         const variance = (Math.random() * 2 - 1) * this.pitchVariance;
         audio.playbackRate = 1 + variance;
         audio.play().catch(err => console.error("Audio playback failed:", err));
@@ -258,7 +316,11 @@ export const audioPlayer = {
         if (!sound) {
             return;
         }
-        sound.audio.volume = sound.baseVolume * this.mix.master * this.mix.sfx;
+
+        const volume = sound.baseVolume * this.mix.master * this.mix.sfx;
+        for (const audio of sound.pool.pool) {
+            audio.volume = volume;
+        }
     },
 
     applyTrackVolume(name) {
