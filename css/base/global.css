@@ -544,7 +544,7 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     --mud-typography-caption-lineheight: 1.16 !important;
     /* Duration for card transitions and clone animations */
     --card-transition-duration: 400ms;
-    --clone-animation-duration: 0.5s;
+    --clone-animation-duration: 0.35s;
 }
 
 
@@ -567,8 +567,8 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
 .animated-clone {
     z-index: 9999;
     pointer-events: none;
-    transition: transform var(--clone-animation-duration, 0.5s) ease,
-                opacity var(--clone-animation-duration, 0.5s) ease;
+    transition: transform var(--clone-animation-duration, 0.5s) cubic-bezier(0.22, 0.61, 0.36, 1),
+                opacity var(--clone-animation-duration, 0.5s) cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 @keyframes value-change-pop {
