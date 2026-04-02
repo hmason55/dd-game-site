@@ -715,12 +715,56 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
 
 .reward-select-dialog .reward-select-toggle-item {
     flex: 0 0 auto;
-    padding: 8px 24px;
+    padding: 8px 16px;
+    border: 2px solid transparent !important;
+    border-radius: 10px !important;
+    box-shadow: none !important;
+    transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+
+.reward-select-dialog .reward-select-toggle-item:not(.mud-toggle-item-selected) {
+    opacity: 0.82;
+}
+
+.reward-select-dialog .reward-select-toggle-item.mud-toggle-item-selected {
+    opacity: 1;
+    transform: translateY(-2px);
+    border-color: var(--mud-palette-warning) !important;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--mud-palette-warning) 75%, transparent), 0 0 16px color-mix(in srgb, var(--mud-palette-warning) 55%, transparent) !important;
 }
 
 .reward-select-dialog .reward-select-hand {
     overflow: visible;
-    padding-bottom: 16px;
+    padding: 12px 0;
+}
+
+.reward-select-dialog .reward-select-hand .card {
+    width: min(72px, 18vw);
+    height: calc(min(72px, 18vw) * 1.6);
+}
+
+@media (orientation: landscape) and (pointer: coarse) {
+    .reward-select-dialog {
+        max-height: 92dvh;
+    }
+
+    .reward-select-dialog .reward-select-toggle-group {
+        max-height: 62dvh !important;
+        row-gap: 4px;
+    }
+
+    .reward-select-dialog .reward-select-toggle-item {
+        padding: 4px 10px;
+    }
+
+    .reward-select-dialog .reward-select-hand {
+        padding: 4px 0;
+    }
+
+    .reward-select-dialog .reward-select-hand .card {
+        width: min(60px, 14vw);
+        height: calc(min(60px, 14vw) * 1.6);
+    }
 }
 
 @supports (height: 1dvh) {
