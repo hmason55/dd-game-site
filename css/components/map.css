@@ -77,7 +77,25 @@
     stroke-width: 2.2;
     stroke-linecap: round;
     stroke-dasharray: 6 6;
-    opacity: 0.95;
+    opacity: 0.72;
+    transition: opacity 180ms ease, stroke 180ms ease;
+}
+
+.map-corridor-forward {
+    stroke: color-mix(in srgb, #8da3bc 84%, #ffffff);
+    opacity: 0.88;
+}
+
+.map-corridor-next {
+    stroke: color-mix(in srgb, var(--mud-palette-info) 75%, #d9f2ff);
+    stroke-width: 2.8;
+    stroke-dasharray: 3 7;
+    opacity: 1;
+    animation: map-corridor-pulse 1.15s ease-in-out infinite;
+}
+
+.map-corridor-faded {
+    opacity: 0.2;
 }
 
 .corridor-arrow {
@@ -131,8 +149,48 @@
     opacity: 0.82;
 }
 
+.map-room.room-unreachable {
+    opacity: 0.3;
+    filter: saturate(0.65);
+}
+
 .map-location .mud-icon-root.visited {
     color: var(--mud-palette-lines-default);
+}
+
+.map-region.map-region-distant,
+.map-region-chip.map-region-distant {
+    opacity: 0.4;
+}
+
+.map-region.map-region-completed,
+.map-region-chip.map-region-completed {
+    opacity: 0.55;
+    filter: saturate(0.65);
+}
+
+.map-breadcrumb {
+    position: absolute;
+    z-index: 3;
+    right: 1rem;
+    bottom: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--mud-palette-lines-default) 70%, #a6b9cf);
+    background: color-mix(in srgb, rgba(9, 14, 22, 0.86) 86%, var(--mud-palette-surface));
+}
+
+.map-breadcrumb-node {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--mud-palette-lines-default) 25%, transparent);
 }
 
 .map-row {
@@ -152,4 +210,21 @@
 
 .map-row-merge {
     column-gap: 0.8rem;
+}
+
+@keyframes map-corridor-pulse {
+    0% {
+        stroke-dashoffset: 0;
+        filter: drop-shadow(0 0 0 rgba(96, 192, 255, 0.1));
+    }
+
+    50% {
+        stroke-dashoffset: -5;
+        filter: drop-shadow(0 0 3px rgba(96, 192, 255, 0.45));
+    }
+
+    100% {
+        stroke-dashoffset: -10;
+        filter: drop-shadow(0 0 0 rgba(96, 192, 255, 0.1));
+    }
 }
