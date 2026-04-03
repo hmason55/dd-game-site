@@ -18,11 +18,11 @@
 }
 
 .map-regions {
-    z-index: 0;
+    z-index: 1;
 }
 
 .map-connections {
-    z-index: 1;
+    z-index: 2;
 }
 
 .map-region-chip {
@@ -42,34 +42,40 @@
 }
 
 .map-region-contour {
-    fill: color-mix(in srgb, var(--region-color) 14%, transparent);
-    stroke: color-mix(in srgb, var(--region-color) 70%, #4f6076);
+    fill: rgba(var(--region-rgb), 0.18);
+    stroke: rgba(var(--region-rgb), 0.72);
     stroke-width: 2;
     stroke-dasharray: 8 6;
 }
 
 .region-palette-0 {
     --region-color: #4aa8ff;
+    --region-rgb: 74, 168, 255;
 }
 
 .region-palette-1 {
     --region-color: #8f7bff;
+    --region-rgb: 143, 123, 255;
 }
 
 .region-palette-2 {
     --region-color: #40c7a3;
+    --region-rgb: 64, 199, 163;
 }
 
 .region-palette-3 {
     --region-color: #f28a5b;
+    --region-rgb: 242, 138, 91;
 }
 
 .region-palette-4 {
     --region-color: #f2cc56;
+    --region-rgb: 242, 204, 86;
 }
 
 .region-palette-5 {
     --region-color: #d474db;
+    --region-rgb: 212, 116, 219;
 }
 
 .map-corridor {
