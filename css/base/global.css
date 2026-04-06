@@ -736,11 +736,13 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
 .reward-select-dialog .reward-select-hand {
     overflow: visible;
     padding: 12px 0;
+    min-height: auto;
 }
 
 .reward-select-dialog .reward-select-hand .card {
-    width: min(72px, 18vw);
-    height: calc(min(72px, 18vw) * 1.6);
+    width: clamp(160px, 20vw, 240px);
+    height: auto;
+    aspect-ratio: 5 / 8;
 }
 
 @media (orientation: landscape) and (pointer: coarse) {
@@ -762,8 +764,9 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     }
 
     .reward-select-dialog .reward-select-hand .card {
-        width: min(60px, 14vw);
-        height: calc(min(60px, 14vw) * 1.6);
+        width: clamp(128px, 18vw, 180px);
+        height: auto;
+        aspect-ratio: 5 / 8;
     }
 }
 
