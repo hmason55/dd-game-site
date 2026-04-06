@@ -21,20 +21,51 @@ export function getRelativeBoundingClientRect(element, parent) {
     };
 }
 
+export function getRelativeMapRoomRect(locationElement, parent) {
+    if (!locationElement || !parent) return null;
+
+    const roomElement = locationElement.querySelector('.map-room') ?? locationElement;
+    const rect = roomElement.getBoundingClientRect();
+    const parentRect = parent.getBoundingClientRect();
+    return {
+        left: rect.left - parentRect.left,
+        top: rect.top - parentRect.top,
+        width: rect.width,
+        height: rect.height
+    };
+}
+
 const resizeObservers = new Map();
 const zoomListeners = new Map();
+const windowResizeListeners = new Map();
+
+function invokeDotNetNoThrow(dotNetRef, methodName) {
+    dotNetRef.invokeMethodAsync(methodName).catch(() => {
+        // Ignore callbacks after component disposal.
+    });
+}
 
 export function observeResize(element, dotNetRef, id) {
+    unobserveResize(id);
+
+    const onWindowResize = () => {
+        invokeDotNetNoThrow(dotNetRef, 'OnResize');
+    };
+    window.addEventListener('resize', onWindowResize);
+    windowResizeListeners.set(id, onWindowResize);
+
     if (typeof ResizeObserver === 'undefined') {
-        console.warn('ResizeObserver is not supported in this browser; resize updates will be disabled.', { id });
+        console.warn('ResizeObserver is not supported in this browser; using window resize events only.', { id });
+        requestAnimationFrame(onWindowResize);
         return;
     }
 
     const resizeObserver = new ResizeObserver(() => {
-        dotNetRef.invokeMethodAsync('OnResize');
+        invokeDotNetNoThrow(dotNetRef, 'OnResize');
     });
     resizeObserver.observe(element);
     resizeObservers.set(id, resizeObserver);
+    requestAnimationFrame(onWindowResize);
 }
 
 export function unobserveResize(id) {
@@ -42,6 +73,12 @@ export function unobserveResize(id) {
     if (observer) {
         observer.disconnect();
         resizeObservers.delete(id);
+    }
+
+    const onWindowResize = windowResizeListeners.get(id);
+    if (onWindowResize) {
+        window.removeEventListener('resize', onWindowResize);
+        windowResizeListeners.delete(id);
     }
 }
 
@@ -54,7 +91,7 @@ export function observeZoomChange(dotNetRef, id) {
     let query = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
 
     const handleChange = () => {
-        dotNetRef.invokeMethodAsync('OnZoomChanged');
+        invokeDotNetNoThrow(dotNetRef, 'OnZoomChanged');
         query.removeEventListener('change', handleChange);
         query = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
         query.addEventListener('change', handleChange);

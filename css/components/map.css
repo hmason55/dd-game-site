@@ -42,10 +42,11 @@
 }
 
 .map-region-contour {
-    fill: rgba(var(--region-rgb), 0.18);
-    stroke: rgba(var(--region-rgb), 0.72);
-    stroke-width: 2;
-    stroke-dasharray: 8 6;
+    fill: rgba(var(--region-rgb), 0.28);
+    stroke: rgba(var(--region-rgb), 0.92);
+    stroke-width: 2.4;
+    stroke-dasharray: 9 6;
+    filter: drop-shadow(0 0 5px rgba(var(--region-rgb), 0.32));
 }
 
 .region-palette-0 {
