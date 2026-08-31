@@ -48117,7 +48117,7 @@ var ParticleEffectManager = class {
       return false;
     }
     this.destroy(options.id);
-    const textOffsetKey = options.renderMode === "text" ? options.elementId ?? "scene" : void 0;
+    const textOffsetKey = options.renderMode === "text" ? options.anchorId ?? "scene" : void 0;
     const emitter = {
       options,
       particles: [],
@@ -48192,8 +48192,8 @@ var ParticleEffectManager = class {
     this.textureCache.clear();
   }
   updateEmitter(emitter, deltaMs) {
-    const anchor = emitter.options.elementId ? this.resolveAnchor?.(emitter.options.elementId) : void 0;
-    if (emitter.options.elementId && !anchor) {
+    const anchor = emitter.options.anchorId ? this.resolveAnchor?.(emitter.options.anchorId) : void 0;
+    if (emitter.options.anchorId && !anchor) {
       this.destroy(emitter.options.id);
       return;
     }
@@ -48235,7 +48235,7 @@ var ParticleEffectManager = class {
     for (let index = 0; index < count2; index++) {
       const particle = this.createParticle(emitter.options, emitter.textOffset);
       emitter.particles.push(particle);
-      this.renderParticle(particle, emitter.options, emitter.options.elementId ? this.resolveAnchor?.(emitter.options.elementId) : void 0);
+      this.renderParticle(particle, emitter.options, emitter.options.anchorId ? this.resolveAnchor?.(emitter.options.anchorId) : void 0);
     }
   }
   createParticle(options, textOffset) {
@@ -48383,7 +48383,7 @@ function parseOptions(value, maxParticlesPerEmitter, reducedMotion) {
   return {
     id: value.id,
     effectDefinition: optionalString(value.effectDefinition),
-    elementId: optionalString(value.elementId),
+    anchorId: optionalString(value.anchorId),
     position: readVector(value.position),
     offset: readVector(value.offset),
     particleCount: readRange(value.particleCount, 1, 1),

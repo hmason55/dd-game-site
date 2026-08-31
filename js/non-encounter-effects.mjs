@@ -3,7 +3,8 @@
  * This deliberately avoids retaining emitter state or allocating a canvas.
  */
 export function showNonEncounterEffect(options) {
-    const anchor = options.elementId ? document.getElementById(options.elementId) : null;
+    const anchorId = options.anchorId ?? options.elementId;
+    const anchor = anchorId ? document.getElementById(anchorId) : null;
     const bounds = anchor?.getBoundingClientRect();
     const effect = document.createElement('div');
     const isText = options.renderMode === 'Text' || options.renderMode === 1;
