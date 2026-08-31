@@ -8,6 +8,35 @@ html, body, #app {
     overflow-x: hidden;
     user-select: none;
 }
+
+.pixi-encounter-surface canvas:focus-visible {
+    outline: 3px solid var(--mud-palette-secondary);
+    outline-offset: -3px;
+}
+
+.pixi-encounter-keyboard-help {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.pixi-encounter-accessibility-overlay {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
 .inventory-swap {
     position: absolute;
     top: 0;
@@ -735,14 +764,49 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
 
 .reward-select-dialog .reward-select-hand {
     overflow: visible;
-    padding: 12px 0;
-    min-height: auto;
+    min-height: 0;
+    padding: 8px 0;
 }
 
 .reward-select-dialog .reward-select-hand .card {
-    width: clamp(160px, 20vw, 240px);
-    height: auto;
-    aspect-ratio: 5 / 8;
+    width: clamp(120px, 16vw, 172px);
+    height: calc(clamp(120px, 16vw, 172px) * 1.6);
+}
+
+.reward-select-dialog .reward-select-hand .mud-drop-item:hover .card,
+.reward-select-dialog .reward-select-hand .mud-drop-item:focus-within .card,
+.reward-select-dialog .reward-select-toggle-item[aria-checked="true"] .card {
+    --card-scale: 1.08;
+}
+
+@media (max-width: 900px) and (pointer: coarse) {
+    .reward-select-dialog .mud-dialog-content {
+        padding-bottom: 4px;
+    }
+
+    .reward-select-dialog .reward-select-toggle-group {
+        max-height: 64dvh !important;
+        row-gap: 6px;
+    }
+
+    .reward-select-dialog .reward-select-toggle-item {
+        padding: 6px 8px;
+    }
+
+    .reward-select-dialog .reward-select-hand {
+        padding: 4px 0;
+    }
+
+    .reward-select-dialog .reward-select-hand .card {
+        width: clamp(88px, 24vw, 120px);
+        height: calc(clamp(88px, 24vw, 120px) * 1.6);
+    }
+
+    .reward-select-dialog .reward-select-hand .mud-drop-item:hover .card,
+    .reward-select-dialog .reward-select-hand .mud-drop-item:focus-within .card,
+    .reward-select-dialog .reward-select-toggle-item[aria-checked="true"] .card {
+        --card-scale: 1.02;
+    }
 }
 
 @media (orientation: landscape) and (pointer: coarse) {
@@ -760,13 +824,12 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     }
 
     .reward-select-dialog .reward-select-hand {
-        padding: 4px 0;
+        padding: 6px 0;
     }
 
     .reward-select-dialog .reward-select-hand .card {
-        width: clamp(128px, 18vw, 180px);
-        height: auto;
-        aspect-ratio: 5 / 8;
+        width: clamp(104px, 22vw, 156px);
+        height: calc(clamp(104px, 22vw, 156px) * 1.6);
     }
 }
 

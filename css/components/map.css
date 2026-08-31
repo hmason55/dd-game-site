@@ -1,237 +1,141 @@
 .map-shell {
     position: relative;
 }
-
-.map-surface {
-    position: relative;
-    overflow: visible;
+.map-paper {
+    overflow-x: auto;
+    overflow-y: hidden;
 }
-
-.map-regions,
+.map-canvas {
+    position: relative;
+    margin: 0 auto;
+}
 .map-connections {
     position: absolute;
+    inset: 0;
+    z-index: 1;
     width: 100%;
     height: 100%;
-    top: 0;
-    left: 0;
     pointer-events: none;
 }
-
-.map-regions {
-    z-index: 1;
+.map-region {
+    fill: rgba(136, 148, 173, 0.09);
+    stroke: rgba(136, 148, 173, 0.2);
+    stroke-width: 1.2;
 }
-
-.map-connections {
-    z-index: 2;
-}
-
-.map-region-chip {
-    position: absolute;
-    z-index: 2;
-    transform: translateY(-100%);
-    padding: 0.1rem 0.45rem;
-    border-radius: 999px;
-    border: 1px solid color-mix(in srgb, var(--region-color) 65%, #95a8be);
-    background: color-mix(in srgb, var(--region-color) 20%, rgba(16, 24, 36, 0.88));
-    color: color-mix(in srgb, var(--region-color) 88%, #ecf4ff);
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    pointer-events: none;
-}
-
-.map-region-contour {
-    fill: rgba(var(--region-rgb), 0.28);
-    stroke: rgba(var(--region-rgb), 0.92);
-    stroke-width: 2.4;
-    stroke-dasharray: 9 6;
-    filter: drop-shadow(0 0 5px rgba(var(--region-rgb), 0.32));
-}
-
-.region-palette-0 {
-    --region-color: #4aa8ff;
-    --region-rgb: 74, 168, 255;
-}
-
-.region-palette-1 {
-    --region-color: #8f7bff;
-    --region-rgb: 143, 123, 255;
-}
-
-.region-palette-2 {
-    --region-color: #40c7a3;
-    --region-rgb: 64, 199, 163;
-}
-
-.region-palette-3 {
-    --region-color: #f28a5b;
-    --region-rgb: 242, 138, 91;
-}
-
-.region-palette-4 {
-    --region-color: #f2cc56;
-    --region-rgb: 242, 204, 86;
-}
-
-.region-palette-5 {
-    --region-color: #d474db;
-    --region-rgb: 212, 116, 219;
-}
-
 .map-corridor {
-    stroke: color-mix(in srgb, #8da3bc 84%, #ffffff);
-    stroke-width: 2.2;
+    fill: none;
     stroke-linecap: round;
-    stroke-dasharray: 6 6;
-    opacity: 0.72;
-    transition: opacity 180ms ease, stroke 180ms ease;
-}
-
-.map-corridor-forward {
-    stroke: color-mix(in srgb, #8da3bc 84%, #ffffff);
-    opacity: 0.88;
-}
-
-.map-corridor-next {
-    stroke: color-mix(in srgb, var(--mud-palette-info) 75%, #d9f2ff);
+    stroke-linejoin: round;
     stroke-width: 2.8;
-    stroke-dasharray: 3 7;
-    opacity: 1;
-    animation: map-corridor-pulse 1.15s ease-in-out infinite;
 }
-
-.map-corridor-faded {
-    opacity: 0.2;
+.map-corridor.corridor-next {
+    stroke: var(--mud-palette-secondary);
+    opacity: 0.95;
 }
-
-.corridor-arrow {
-    fill: #8da3bc;
+.map-corridor.corridor-reachable {
+    stroke: rgba(155, 173, 207, 0.75);
+    opacity: 0.9;
 }
-
-.map-location {
-    z-index: 2;
+.map-corridor.corridor-distant {
+    stroke: rgba(128, 128, 128, 0.35);
+    opacity: 0.75;
+    stroke-dasharray: 5 7;
 }
-
-.map-room-paper {
-    border-radius: 12px;
-    background: transparent;
+.map-crossing-bridge .under-cut {
+    stroke: rgba(35, 39, 48, 0.98);
+    stroke-width: 4.6;
+    stroke-linecap: round;
 }
-
+.map-crossing-bridge .over-arc {
+    fill: none;
+    stroke-width: 2.6;
+    stroke-linecap: round;
+}
+.map-crossing-bridge.corridor-next .over-arc {
+    stroke: var(--mud-palette-secondary);
+}
+.map-crossing-bridge.corridor-reachable .over-arc {
+    stroke: rgba(155, 173, 207, 0.9);
+}
+.map-crossing-bridge.corridor-distant .over-arc {
+    stroke: rgba(128, 128, 128, 0.75);
+}
 .map-room {
-    border-radius: 10px;
-    border: 2px solid var(--mud-palette-lines-default);
-    background: color-mix(in srgb, var(--mud-palette-surface) 95%, #111926);
-    transition: transform 150ms ease, border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
-}
-
-.map-location .map-room.can-drop,
-.map-location .map-room.room-available:hover {
-    transform: scale(1.1);
-    cursor: pointer;
-}
-
-.map-room.room-current {
-    border-color: var(--mud-palette-secondary);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mud-palette-secondary) 45%, transparent);
-}
-
-.map-room.room-visited {
-    border-color: color-mix(in srgb, var(--mud-palette-success) 70%, #7f8c9a);
-    background: color-mix(in srgb, var(--mud-palette-success) 10%, var(--mud-palette-surface));
-}
-
-.map-room.room-available {
-    border-style: dashed;
-    border-color: var(--mud-palette-info);
-    background: color-mix(in srgb, var(--mud-palette-info) 12%, var(--mud-palette-surface));
-}
-
-.map-room.room-available:hover {
-    border-color: var(--mud-palette-success);
-    background: color-mix(in srgb, var(--mud-palette-success) 16%, var(--mud-palette-surface));
-}
-
-.map-room.room-locked {
-    opacity: 0.82;
-}
-
-.map-room.room-unreachable {
-    opacity: 0.3;
-    filter: saturate(0.65);
-}
-
-.map-location .mud-icon-root.visited {
-    color: var(--mud-palette-lines-default);
-}
-
-.map-region.map-region-distant,
-.map-region-chip.map-region-distant {
-    opacity: 0.4;
-}
-
-.map-region.map-region-completed,
-.map-region-chip.map-region-completed {
-    opacity: 0.55;
-    filter: saturate(0.65);
-}
-
-.map-breadcrumb {
     position: absolute;
-    z-index: 3;
-    right: 1rem;
-    bottom: 0.75rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.25rem 0.5rem;
-    border-radius: 999px;
-    border: 1px solid color-mix(in srgb, var(--mud-palette-lines-default) 70%, #a6b9cf);
-    background: color-mix(in srgb, rgba(9, 14, 22, 0.86) 86%, var(--mud-palette-surface));
+    transform: translate(-50%, -50%);
+    z-index: 4;
+    cursor: default;
 }
-
-.map-breadcrumb-node {
-    display: inline-flex;
+.map-room-frame {
+    width: 56px;
+    height: 56px;
+    display: flex;
     align-items: center;
     justify-content: center;
-    width: 1.4rem;
-    height: 1.4rem;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--mud-palette-lines-default) 25%, transparent);
+    border: 2px solid rgba(180, 190, 208, 0.45);
+    background: rgba(21, 28, 37, 0.9);
 }
-
-.map-row {
-    display: grid;
-    grid-template-columns: repeat(var(--cols, 7), minmax(0, 1fr));
-    grid-template-rows: 1fr;
-    grid-auto-flow: column;
-    justify-items: center;
-    column-gap: 1.05rem;
-    row-gap: 0;
-    transition: column-gap 150ms ease;
+.map-room .map-room-icon {
+    font-size: 1.35rem;
 }
-
-.map-row-branch {
-    column-gap: 1.45rem;
+.map-room.room-actionable {
+    z-index: 5;
+    cursor: pointer;
 }
-
-.map-row-merge {
-    column-gap: 0.8rem;
+.map-room.room-actionable .map-room-frame {
+    border-style: dashed;
+    border-color: var(--mud-palette-success);
 }
-
-@keyframes map-corridor-pulse {
-    0% {
-        stroke-dashoffset: 0;
-        filter: drop-shadow(0 0 0 rgba(96, 192, 255, 0.1));
-    }
-
-    50% {
-        stroke-dashoffset: -5;
-        filter: drop-shadow(0 0 3px rgba(96, 192, 255, 0.45));
-    }
-
-    100% {
-        stroke-dashoffset: -10;
-        filter: drop-shadow(0 0 0 rgba(96, 192, 255, 0.1));
-    }
+.map-room.room-current {
+    z-index: 6;
+}
+.map-room.room-current .map-room-frame {
+    border-color: var(--mud-palette-secondary);
+    box-shadow: 0 0 0 3px rgba(181, 113, 255, 0.25);
+}
+.map-room.room-visited .map-room-frame {
+    border-color: rgba(108, 182, 255, 0.7);
+    box-shadow: 0 0 0 2px rgba(108, 182, 255, 0.2);
+}
+.map-room.room-visited .map-room-icon {
+    color: rgba(194, 224, 255, 0.95);
+}
+.map-room.room-inaccessible {
+    opacity: 0.55;
+}
+.map-room.room-inaccessible .map-room-frame {
+    border-color: rgba(133, 138, 147, 0.35);
+    background: rgba(25, 29, 34, 0.78);
+}
+.map-room.room-inaccessible .map-room-icon {
+    color: rgba(138, 145, 160, 0.7);
+}
+.map-room .map-room-icon.visited {
+    color: var(--mud-palette-lines-default);
+}
+.map-legend {
+    margin-top: 0.5rem;
+    display: flex;
+    justify-content: end;
+    gap: 1rem;
+    font-size: 0.75rem;
+    color: var(--mud-palette-text-secondary);
+}
+.legend-line {
+    display: inline-block;
+    width: 16px;
+    height: 0;
+    border-top: 2px solid;
+    margin-right: 0.25rem;
+    vertical-align: middle;
+}
+.legend-line.next {
+    border-color: var(--mud-palette-secondary);
+}
+.legend-line.reachable {
+    border-color: rgba(155, 173, 207, 0.75);
+}
+.legend-line.distant {
+    border-color: rgba(128, 128, 128, 0.5);
+    border-top-style: dashed;
 }

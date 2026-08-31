@@ -99,6 +99,10 @@ export function unobserveFullscreenChange() {
 
 export function registerHotkeys(dotNetRef) {
     hotkeyHandler = (e) => {
+        if (e.defaultPrevented) {
+            return;
+        }
+
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
             return;
         }
@@ -128,3 +132,4 @@ export function unregisterHotkeys() {
         hotkeyHandler = null;
     }
 }
+
