@@ -48682,6 +48682,7 @@ var RunAssetBundleManager = class {
   loader;
   records = /* @__PURE__ */ new Map();
   leases = /* @__PURE__ */ new Set();
+  loadRequestCount = 0;
   sharedLoadRequestCount = 0;
   disposed = false;
   /**
@@ -48704,7 +48705,8 @@ var RunAssetBundleManager = class {
     let failedAssetCount = 0;
     let pendingLoadCount = 0;
     let pendingUnloadCount = 0;
-    for (const record of this.records.values()) {
+    const assets = [];
+    for (const [url, record] of this.records) {
       ownerCount += record.owners.size;
       if (record.loaded && !record.unloadTask) {
         loadedAssetCount++;
@@ -48718,7 +48720,15 @@ var RunAssetBundleManager = class {
       if (record.unloadTask) {
         pendingUnloadCount++;
       }
+      assets.push({
+        url,
+        ownerCount: record.owners.size,
+        loaded: record.loaded,
+        loadPending: record.loadTask !== void 0,
+        unloadPending: record.unloadTask !== void 0
+      });
     }
+    assets.sort((left, right) => compareAssetUrls(left.url, right.url));
     return {
       assetRecordCount: this.records.size,
       activeLeaseCount: this.leases.size,
@@ -48727,7 +48737,9 @@ var RunAssetBundleManager = class {
       failedAssetCount,
       pendingLoadCount,
       pendingUnloadCount,
+      loadRequestCount: this.loadRequestCount,
       sharedLoadRequestCount: this.sharedLoadRequestCount,
+      assets,
       disposed: this.disposed
     };
   }
@@ -48807,6 +48819,7 @@ var RunAssetBundleManager = class {
       return;
     }
     if (!record.loadTask) {
+      this.loadRequestCount++;
       const loadTask = this.loader.load(url).then(
         () => {
           record.loaded = true;
@@ -48831,6 +48844,12 @@ var RunAssetBundleManager = class {
     await record.loadTask;
   }
 };
+function compareAssetUrls(left, right) {
+  if (left < right) {
+    return -1;
+  }
+  return left > right ? 1 : 0;
+}
 var RunAssetPreloadOrchestrator = class {
   /**
    * Creates an orchestrator over a run-scoped bundle manager.
@@ -49091,10 +49110,23 @@ var EncounterAssetLoader = class {
     return this.preloader.getLoadState();
   }
   /**
-   * Gets compact run-scoped asset ownership and request diagnostics.
+   * Gets a serializable summary of renderer texture ownership and pending asset work.
    */
   getDiagnostics() {
-    return this.bundles.getDiagnostics();
+    const sceneAssetReferences = Object.fromEntries(
+      [...this.sceneAssetReferences].sort(([leftUrl], [rightUrl]) => compareAssetUrls(leftUrl, rightUrl))
+    );
+    const sceneAssetReferenceCount = [...this.sceneAssetReferences.values()].reduce((total, count2) => total + count2, 0);
+    const bundles = this.bundles.getDiagnostics();
+    return {
+      ...bundles,
+      bundles,
+      textureCount: this.textures.size,
+      sceneAssetReferenceUrlCount: this.sceneAssetReferences.size,
+      sceneAssetReferenceCount,
+      sceneAssetReferences,
+      disposed: this.disposed
+    };
   }
   getOrCreateLease(url) {
     const existing = this.leases.get(url);
@@ -50759,14 +50791,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
           pendingLifecycleOperationCount: runtimeDiagnostics.pendingLifecycleOperationCount,
           tickerCallbackCount: runtimeDiagnostics.tickerCallbackCount,
           transitionCount: runtimeDiagnostics.transitionCount,
-          assetRecordCount: assetDiagnostics.assetRecordCount,
-          activeAssetLeaseCount: assetDiagnostics.activeLeaseCount,
-          assetOwnerCount: assetDiagnostics.ownerCount,
-          loadedAssetCount: assetDiagnostics.loadedAssetCount,
-          failedAssetCount: assetDiagnostics.failedAssetCount,
-          pendingAssetLoadCount: assetDiagnostics.pendingLoadCount,
-          pendingAssetUnloadCount: assetDiagnostics.pendingUnloadCount,
-          sharedAssetLoadRequestCount: assetDiagnostics.sharedLoadRequestCount,
+          ...createAssetDiagnostics(assetDiagnostics),
           semanticInteropCount,
           pointerOrFrameInteropCount: 0,
           ...animationDiagnostics,
@@ -50795,14 +50820,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
         pendingLifecycleOperationCount: runtimeDiagnostics.pendingLifecycleOperationCount,
         tickerCallbackCount: runtimeDiagnostics.tickerCallbackCount,
         transitionCount: runtimeDiagnostics.transitionCount,
-        assetRecordCount: assetDiagnostics.assetRecordCount,
-        activeAssetLeaseCount: assetDiagnostics.activeLeaseCount,
-        assetOwnerCount: assetDiagnostics.ownerCount,
-        loadedAssetCount: assetDiagnostics.loadedAssetCount,
-        failedAssetCount: assetDiagnostics.failedAssetCount,
-        pendingAssetLoadCount: assetDiagnostics.pendingLoadCount,
-        pendingAssetUnloadCount: assetDiagnostics.pendingUnloadCount,
-        sharedAssetLoadRequestCount: assetDiagnostics.sharedLoadRequestCount,
+        ...createAssetDiagnostics(assetDiagnostics),
         semanticInteropCount,
         pointerOrFrameInteropCount: 0,
         ...animationDiagnostics,
@@ -50851,6 +50869,24 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
       }
     }
   }
+}
+function createAssetDiagnostics(assetDiagnostics) {
+  return {
+    assetRecordCount: assetDiagnostics.assetRecordCount,
+    activeAssetLeaseCount: assetDiagnostics.activeLeaseCount,
+    assetOwnerCount: assetDiagnostics.ownerCount,
+    loadedAssetCount: assetDiagnostics.loadedAssetCount,
+    failedAssetCount: assetDiagnostics.failedAssetCount,
+    pendingAssetLoadCount: assetDiagnostics.pendingLoadCount,
+    pendingAssetUnloadCount: assetDiagnostics.pendingUnloadCount,
+    assetLoadRequestCount: assetDiagnostics.loadRequestCount,
+    sharedAssetLoadRequestCount: assetDiagnostics.sharedLoadRequestCount,
+    textureCount: assetDiagnostics.textureCount,
+    sceneAssetReferenceUrlCount: assetDiagnostics.sceneAssetReferenceUrlCount,
+    sceneAssetReferenceCount: assetDiagnostics.sceneAssetReferenceCount,
+    assets: assetDiagnostics.assets,
+    sceneAssetReferences: assetDiagnostics.sceneAssetReferences
+  };
 }
 async function requireLoadedResult(preload, bundleName) {
   const result = await preload;
