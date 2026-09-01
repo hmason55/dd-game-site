@@ -48173,6 +48173,25 @@ var ParticleEffectManager = class {
     };
   }
   /**
+   * Removes all scene-bound effects while retaining run-owned pooled display objects.
+   */
+  clear() {
+    for (const id of [...this.emitters.keys()]) {
+      this.destroy(id);
+    }
+  }
+  /**
+   * Rebinds pooled effects to the active scene's persistent render layer and anchors.
+   */
+  rebind(layer, resolveAnchor) {
+    if (this.disposed) {
+      return;
+    }
+    this.clear();
+    this.layer = layer;
+    this.resolveAnchor = resolveAnchor;
+  }
+  /**
    * Releases active and pooled Pixi display objects.
    */
   dispose() {
@@ -48180,9 +48199,7 @@ var ParticleEffectManager = class {
       return;
     }
     this.disposed = true;
-    for (const id of [...this.emitters.keys()]) {
-      this.destroy(id);
-    }
+    this.clear();
     for (const pool of this.pools.values()) {
       for (const display of pool) {
         display.destroy();
@@ -48557,6 +48574,36 @@ function calculateEncounterSceneTransform(viewport) {
 }
 
 // src/asset-bundles.ts
+var AssetBundleLeaseGroup = class {
+  /**
+   * Creates a group from the leases owned by one presentation lifecycle.
+   */
+  constructor(leases) {
+    this.leases = leases;
+  }
+  leases;
+  disposed = false;
+  /**
+   * Preloads every bundle in the group concurrently and combines their results.
+   */
+  async preload() {
+    if (this.disposed) {
+      return { loadedUrls: [], failedUrls: [], canceled: true };
+    }
+    const results = await Promise.all(this.leases.map((lease) => lease.preload()));
+    return combinePreloadResults(results);
+  }
+  /**
+   * Releases every lease owned by this group. Disposal is safe to call more than once.
+   */
+  async dispose() {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    await Promise.all(this.leases.map((lease) => lease.dispose()));
+  }
+};
 var AssetBundleLease = class {
   /**
    * Creates a lease. Leases are created by {@link RunAssetBundleManager.open}.
@@ -48771,8 +48818,134 @@ var RunAssetBundleManager = class {
     await record.loadTask;
   }
 };
+var RunAssetPreloadOrchestrator = class {
+  /**
+   * Creates an orchestrator over a run-scoped bundle manager.
+   */
+  constructor(manager) {
+    this.manager = manager;
+  }
+  manager;
+  runLeases = /* @__PURE__ */ new Map();
+  latestResult;
+  pendingRequestCount = 0;
+  disposed = false;
+  /**
+   * Preloads bundles retained for the full run, reusing the same ownership lease on later calls.
+   */
+  async preloadRunAssets(definitions) {
+    this.throwIfDisposed();
+    assertResidency(definitions, "run");
+    return this.trackPreload(async () => {
+      const results = await Promise.all(definitions.map((definition) => this.getOrCreateRunLease(definition).preload()));
+      return combinePreloadResults(results);
+    });
+  }
+  /**
+   * Opens a group of scene-owned bundles for the caller to preload and later dispose.
+   */
+  openSceneAssets(definitions) {
+    this.throwIfDisposed();
+    assertResidency(definitions, "scene");
+    return new AssetBundleLeaseGroup(definitions.map((definition) => this.manager.open(definition)));
+  }
+  /**
+   * Preloads scene-owned bundles and returns their lifecycle ownership.
+   *
+   * Aborting the supplied signal releases the group, so a superseded scene cannot retain assets
+   * after its preload has finished.
+   */
+  async preloadSceneAssets(definitions, signal) {
+    this.throwIfDisposed();
+    const assets = this.openSceneAssets(definitions);
+    let disposal;
+    const dispose = () => {
+      if (!disposal) {
+        signal?.removeEventListener("abort", cancel);
+        disposal = assets.dispose();
+      }
+      return disposal;
+    };
+    const cancel = () => {
+      void dispose().catch(() => void 0);
+    };
+    signal?.addEventListener("abort", cancel, { once: true });
+    if (signal?.aborted) {
+      cancel();
+    }
+    try {
+      const result = await this.trackPreload(() => assets.preload());
+      await disposal;
+      return { result, dispose };
+    } catch (error) {
+      await dispose();
+      throw error;
+    }
+  }
+  /**
+   * Gets the current preload state without exposing renderer-owned assets.
+   */
+  getLoadState() {
+    if (this.disposed) {
+      return { phase: "disposed", pendingRequestCount: 0 };
+    }
+    const state = {
+      phase: this.pendingRequestCount > 0 ? "loading" : this.latestResult ? "ready" : "idle",
+      pendingRequestCount: this.pendingRequestCount
+    };
+    return this.latestResult ? { ...state, latestResult: this.latestResult } : state;
+  }
+  /**
+   * Releases the run-resident ownership retained by this orchestrator.
+   */
+  async dispose() {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    await Promise.all([...this.runLeases.values()].map((lease) => lease.dispose()));
+    this.runLeases.clear();
+  }
+  async trackPreload(preload) {
+    this.pendingRequestCount++;
+    try {
+      const result = await preload();
+      this.latestResult = result;
+      return result;
+    } finally {
+      this.pendingRequestCount--;
+    }
+  }
+  getOrCreateRunLease(definition) {
+    const existing = this.runLeases.get(definition.id);
+    if (existing) {
+      return existing;
+    }
+    const lease = this.manager.open(definition);
+    this.runLeases.set(definition.id, lease);
+    return lease;
+  }
+  throwIfDisposed() {
+    if (this.disposed) {
+      throw new Error("Cannot orchestrate asset bundles after the run preloader is disposed.");
+    }
+  }
+};
 function normalizeUrls(urls) {
   return [...new Set(urls.map((url) => url.trim().replace(/^\.\//, "/")).filter((url) => url.length > 0))];
+}
+function combinePreloadResults(results) {
+  return {
+    loadedUrls: [...new Set(results.flatMap((result) => result.loadedUrls))],
+    failedUrls: [...new Set(results.flatMap((result) => result.failedUrls))],
+    canceled: results.some((result) => result.canceled)
+  };
+}
+function assertResidency(definitions, expectedResidency) {
+  const invalidDefinition = definitions.find((definition) => definition.residency !== expectedResidency);
+  if (invalidDefinition) {
+    throw new Error(`Asset bundle '${invalidDefinition.id}' must declare '${expectedResidency}' residency.`);
+  }
 }
 
 // src/encounter-assets.ts
@@ -48791,6 +48964,7 @@ var encounterAssetManifest = {
 var EncounterAssetLoader = class {
   textures = /* @__PURE__ */ new Map();
   leases = /* @__PURE__ */ new Map();
+  sceneAssetReferences = /* @__PURE__ */ new Map();
   bundles = new RunAssetBundleManager({
     load: async (url) => {
       const texture = await Assets.load(url);
@@ -48806,6 +48980,7 @@ var EncounterAssetLoader = class {
       }
     }
   });
+  preloader = new RunAssetPreloadOrchestrator(this.bundles);
   disposeTask;
   disposed = false;
   /**
@@ -48822,6 +48997,10 @@ var EncounterAssetLoader = class {
     const normalizedUrl = normalizeAssetUrl(url);
     if (!normalizedUrl || this.disposed) {
       return void 0;
+    }
+    const sceneTexture = this.textures.get(normalizedUrl);
+    if (sceneTexture && this.sceneAssetReferences.has(normalizedUrl)) {
+      return sceneTexture;
     }
     const lease = this.getOrCreateLease(normalizedUrl);
     const result = await lease.preload();
@@ -48842,6 +49021,36 @@ var EncounterAssetLoader = class {
     this.disposeTask = this.disposeBundles();
     await this.disposeTask;
   }
+  /**
+   * Preloads bundles that remain available for the rest of the current renderer run.
+   */
+  preloadRunAssets(definitions) {
+    return this.preloader.preloadRunAssets(definitions);
+  }
+  /**
+   * Preloads scene-owned bundles and returns a handle that releases them when the scene exits.
+   */
+  async preloadSceneAssets(definitions, signal) {
+    const assets = await this.preloader.preloadSceneAssets(definitions, signal);
+    const urls = assets.result.loadedUrls.map(normalizeAssetUrl).filter((url) => url !== void 0);
+    this.retainSceneAssets(urls);
+    let disposal;
+    return {
+      result: assets.result,
+      dispose: () => {
+        if (!disposal) {
+          disposal = assets.dispose().finally(() => this.releaseSceneAssets(urls));
+        }
+        return disposal;
+      }
+    };
+  }
+  /**
+   * Gets the current shared run and scene preload state.
+   */
+  getLoadState() {
+    return this.preloader.getLoadState();
+  }
   getOrCreateLease(url) {
     const existing = this.leases.get(url);
     if (existing) {
@@ -48853,10 +49062,30 @@ var EncounterAssetLoader = class {
   }
   async disposeBundles() {
     try {
-      await this.bundles.dispose();
+      await this.preloader.dispose();
     } finally {
-      this.leases.clear();
-      this.textures.clear();
+      try {
+        await this.bundles.dispose();
+      } finally {
+        this.leases.clear();
+        this.sceneAssetReferences.clear();
+        this.textures.clear();
+      }
+    }
+  }
+  retainSceneAssets(urls) {
+    for (const url of urls) {
+      this.sceneAssetReferences.set(url, (this.sceneAssetReferences.get(url) ?? 0) + 1);
+    }
+  }
+  releaseSceneAssets(urls) {
+    for (const url of urls) {
+      const count2 = this.sceneAssetReferences.get(url) ?? 0;
+      if (count2 <= 1) {
+        this.sceneAssetReferences.delete(url);
+        continue;
+      }
+      this.sceneAssetReferences.set(url, count2 - 1);
     }
   }
 };
@@ -49885,8 +50114,9 @@ var RunPresentationRuntime = class {
   /**
    * Creates the persistent render layers and attaches one ticker callback for the run lifetime.
    */
-  constructor(application) {
+  constructor(application, systems4 = []) {
     this.application = application;
+    this.systems = [...systems4];
     const scene = new Container();
     const effect = new Container();
     const hud = new Container();
@@ -49909,11 +50139,20 @@ var RunPresentationRuntime = class {
   disposal;
   tickerCallbackAttached = false;
   pendingLifecycleOperationCount = 0;
+  systemsDisposed = false;
+  systems;
   /**
    * Gets the persistent ordered layers shared by all scenes.
    */
   get renderLayers() {
     return this.layers;
+  }
+  /**
+   * Registers a reusable visual system after the runtime creates its persistent render layers.
+   */
+  addSystem(system) {
+    this.throwIfDisposing();
+    this.systems.push(system);
   }
   /**
    * Replaces the current scene or reconciles state when the stable scene identity is unchanged.
@@ -50023,9 +50262,13 @@ var RunPresentationRuntime = class {
       }
       this.destroyed = true;
       try {
-        await this.removeActiveScene();
+        await this.removeActiveScene(() => this.disposeSystems());
       } finally {
-        this.releaseApplication();
+        try {
+          this.disposeSystems();
+        } finally {
+          this.releaseApplication();
+        }
       }
     });
     return this.disposal;
@@ -50055,6 +50298,9 @@ var RunPresentationRuntime = class {
   }
   advance = (deltaMs) => {
     if (!this.suspended && !this.destroyed) {
+      for (const system of this.systems) {
+        system.tick(deltaMs);
+      }
       this.activeScene?.scene.tick?.(deltaMs);
     }
   };
@@ -50075,7 +50321,7 @@ var RunPresentationRuntime = class {
   createContext(controller) {
     return { layers: this.layers, signal: controller.signal };
   }
-  async removeActiveScene() {
+  async removeActiveScene(beforeDestroy) {
     const activeScene = this.activeScene;
     if (!activeScene) {
       return;
@@ -50087,7 +50333,28 @@ var RunPresentationRuntime = class {
       await activeScene.scene.exit?.(context2);
     } finally {
       this.layers.scene.removeChild(activeScene.scene.displayObject);
-      await activeScene.scene.destroy?.(context2);
+      try {
+        beforeDestroy?.();
+      } finally {
+        await activeScene.scene.destroy?.(context2);
+      }
+    }
+  }
+  disposeSystems() {
+    if (this.systemsDisposed) {
+      return;
+    }
+    let firstError;
+    for (const system of this.systems) {
+      try {
+        system.dispose();
+      } catch (error) {
+        firstError ??= error;
+      }
+    }
+    this.systemsDisposed = true;
+    if (firstError) {
+      throw firstError;
     }
   }
   releaseApplication() {
@@ -50139,10 +50406,16 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     assetLoader,
     accessibilityOverlay.announce
   );
-  const animationDirector = new AnimationDirector(scene.createAnimationCommandExecutor());
-  const particleEffects = new ParticleEffectManager(scene.effectLayer, { resolveAnchor: (id) => scene.getEffectAnchor(id) });
-  const runtimeScene = new EncounterRuntimeScene(scene, animationDirector, particleEffects);
   const runtime = new RunPresentationRuntime(createRunRuntimeApplication(application));
+  const animationDirector = new AnimationDirector(scene.createAnimationCommandExecutor());
+  const particleEffects = new ParticleEffectManager(runtime.renderLayers.effect, { resolveAnchor: (id) => scene.getEffectAnchor(id) });
+  const runtimeScene = new EncounterRuntimeScene(scene, () => {
+    animationDirector.cancelAll();
+    particleEffects.clear();
+    scene.refreshAnimationLocks();
+  });
+  runtime.addSystem(animationDirector);
+  runtime.addSystem(particleEffects);
   scene.setAnimationLockResolver((id) => animationDirector.isObjectLocked(id));
   let appliedSequence = -1;
   let disposed = false;
@@ -50355,14 +50628,12 @@ var EncounterRuntimeScene = class {
   /**
    * Creates a lifecycle owner for the existing encounter presentation objects.
    */
-  constructor(scene, animationDirector, particleEffects) {
+  constructor(scene, cancelAnimations) {
     this.scene = scene;
-    this.animationDirector = animationDirector;
-    this.particleEffects = particleEffects;
+    this.cancelAnimations = cancelAnimations;
   }
   scene;
-  animationDirector;
-  particleEffects;
+  cancelAnimations;
   latestSnapshot;
   disposed = false;
   /** Gets the stable runtime scene identity. */
@@ -50387,8 +50658,7 @@ var EncounterRuntimeScene = class {
   }
   /** Cancels scene-local timelines before the runtime replaces or disposes this scene. */
   exit() {
-    this.animationDirector.cancelAll();
-    this.scene.refreshAnimationLocks();
+    this.cancelAnimations();
   }
   /** Releases encounter-owned renderer resources once the run scene is disposed. */
   destroy() {
@@ -50396,14 +50666,10 @@ var EncounterRuntimeScene = class {
       return;
     }
     this.disposed = true;
-    this.animationDirector.dispose();
-    this.particleEffects.dispose();
     this.scene.dispose();
   }
-  /** Advances the encounter's existing animation, effect, and interaction systems on the primary ticker. */
+  /** Advances encounter-local interaction systems on the primary ticker. */
   tick(deltaMs) {
-    this.animationDirector.tick(deltaMs);
-    this.particleEffects.tick(deltaMs);
     this.scene.tick(deltaMs);
   }
   reconcileSnapshot(snapshot) {
