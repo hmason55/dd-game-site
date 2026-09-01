@@ -47777,9 +47777,10 @@ init_eventemitter3();
 extensions.add(browserExt, webworkerExt);
 
 // src/protocol.ts
-var encounterRendererProtocolVersion = 1;
+var encounterRendererProtocolVersion = 2;
+var encounterSceneId = "encounter";
 function isEncounterPresentationSnapshot(value) {
-  if (!isRecord(value) || value.protocolVersion !== encounterRendererProtocolVersion || !isFiniteNumber(value.sequence) || !isString(value.phase) || typeof value.inventoryMode !== "boolean" || !isEntityPresentationState(value.player) || !isArrayOf(value.enemies, isEntityPresentationState) || !isArrayOf(value.hand, isCardPresentationState) || !isArrayOf(value.items, isItemPresentationState)) {
+  if (!isRecord(value) || value.protocolVersion !== encounterRendererProtocolVersion || value.sceneId !== encounterSceneId || !isFiniteNumber(value.sequence) || !isString(value.phase) || typeof value.inventoryMode !== "boolean" || !isEntityPresentationState(value.player) || !isArrayOf(value.enemies, isEntityPresentationState) || !isArrayOf(value.hand, isCardPresentationState) || !isArrayOf(value.items, isItemPresentationState)) {
     return false;
   }
   return true;
@@ -49881,14 +49882,15 @@ Rituals: ${rituals}` : ""}`;
       kind: isCardPresentationState2(entry) ? "playCard" : "useItem",
       sourceId: entry.id,
       targetId,
-      sequence: this.currentSequence
+      sequence: this.currentSequence,
+      sceneId: encounterSceneId
     });
   }
   submitEndTurn() {
     if (this.intentPending || this.queuedEntryIds.size > 0 || !this.endTurnLabel.visible) {
       return;
     }
-    this.submitIntent({ kind: "endTurn", sourceId: null, targetId: null, sequence: this.currentSequence });
+    this.submitIntent({ kind: "endTurn", sourceId: null, targetId: null, sequence: this.currentSequence, sceneId: encounterSceneId });
   }
   focusEntry(direction) {
     const entryIds = [...this.selectableEntries.values()].filter((entry2) => entry2.isDraggable && !this.queuedEntryIds.has(entry2.id) && !this.isAnimationLockedForEntry(entry2)).map((entry2) => entry2.id);
