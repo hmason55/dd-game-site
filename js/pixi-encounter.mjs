@@ -48701,12 +48701,16 @@ var RunAssetBundleManager = class {
   getDiagnostics() {
     let ownerCount = 0;
     let loadedAssetCount = 0;
+    let failedAssetCount = 0;
     let pendingLoadCount = 0;
     let pendingUnloadCount = 0;
     for (const record of this.records.values()) {
       ownerCount += record.owners.size;
       if (record.loaded && !record.unloadTask) {
         loadedAssetCount++;
+      }
+      if (record.failed) {
+        failedAssetCount++;
       }
       if (record.loadTask) {
         pendingLoadCount++;
@@ -48720,6 +48724,7 @@ var RunAssetBundleManager = class {
       activeLeaseCount: this.leases.size,
       ownerCount,
       loadedAssetCount,
+      failedAssetCount,
       pendingLoadCount,
       pendingUnloadCount,
       sharedLoadRequestCount: this.sharedLoadRequestCount,
@@ -48790,7 +48795,7 @@ var RunAssetBundleManager = class {
     if (existing) {
       return existing;
     }
-    const record = { owners: /* @__PURE__ */ new Set(), loadTask: void 0, unloadTask: void 0, loaded: false };
+    const record = { owners: /* @__PURE__ */ new Set(), loadTask: void 0, unloadTask: void 0, loaded: false, failed: false };
     this.records.set(url, record);
     return record;
   }
@@ -48802,9 +48807,16 @@ var RunAssetBundleManager = class {
       return;
     }
     if (!record.loadTask) {
-      const loadTask = this.loader.load(url).then(() => {
-        record.loaded = true;
-      });
+      const loadTask = this.loader.load(url).then(
+        () => {
+          record.loaded = true;
+          record.failed = false;
+        },
+        (error) => {
+          record.failed = true;
+          throw error;
+        }
+      );
       record.loadTask = loadTask;
       try {
         await loadTask;
@@ -48859,6 +48871,7 @@ var RunAssetPreloadOrchestrator = class {
   async preloadSceneAssets(definitions, signal) {
     this.throwIfDisposed();
     const assets = this.openSceneAssets(definitions);
+    const preloader = this;
     let disposal;
     const dispose = () => {
       if (!disposal) {
@@ -48875,9 +48888,21 @@ var RunAssetPreloadOrchestrator = class {
       cancel();
     }
     try {
-      const result = await this.trackPreload(() => assets.preload());
+      let result = await this.trackPreload(() => assets.preload());
       await disposal;
-      return { result, dispose };
+      return {
+        get result() {
+          return result;
+        },
+        async retry() {
+          if (disposal) {
+            return { loadedUrls: [], failedUrls: [], canceled: true };
+          }
+          result = await preloader.trackPreload(() => assets.preload());
+          return result;
+        },
+        dispose
+      };
     } catch (error) {
       await dispose();
       throw error;
@@ -48891,7 +48916,7 @@ var RunAssetPreloadOrchestrator = class {
       return { phase: "disposed", pendingRequestCount: 0 };
     }
     const state = {
-      phase: this.pendingRequestCount > 0 ? "loading" : this.latestResult ? "ready" : "idle",
+      phase: this.pendingRequestCount > 0 ? "loading" : this.latestResult?.failedUrls.length ? "failed" : this.latestResult ? "ready" : "idle",
       pendingRequestCount: this.pendingRequestCount
     };
     return this.latestResult ? { ...state, latestResult: this.latestResult } : state;
@@ -49034,13 +49059,26 @@ var EncounterAssetLoader = class {
   async preloadSceneAssets(definitions, signal) {
     const assets = await this.preloader.preloadSceneAssets(definitions, signal);
     const urls = assets.result.loadedUrls.map(normalizeAssetUrl).filter((url) => url !== void 0);
-    this.retainSceneAssets(urls);
+    const retainedUrls = new Set(urls);
+    this.retainSceneAssets([...retainedUrls]);
     let disposal;
     return {
-      result: assets.result,
+      get result() {
+        return assets.result;
+      },
+      retry: async () => {
+        const result = await assets.retry();
+        const retriedUrls = result.loadedUrls.map(normalizeAssetUrl).filter((url) => url !== void 0);
+        const newlyRetainedUrls = retriedUrls.filter((url) => !retainedUrls.has(url));
+        for (const url of newlyRetainedUrls) {
+          retainedUrls.add(url);
+        }
+        this.retainSceneAssets(newlyRetainedUrls);
+        return result;
+      },
       dispose: () => {
         if (!disposal) {
-          disposal = assets.dispose().finally(() => this.releaseSceneAssets(urls));
+          disposal = assets.dispose().finally(() => this.releaseSceneAssets([...retainedUrls]));
         }
         return disposal;
       }
@@ -49051,6 +49089,12 @@ var EncounterAssetLoader = class {
    */
   getLoadState() {
     return this.preloader.getLoadState();
+  }
+  /**
+   * Gets compact run-scoped asset ownership and request diagnostics.
+   */
+  getDiagnostics() {
+    return this.bundles.getDiagnostics();
   }
   getOrCreateLease(url) {
     const existing = this.leases.get(url);
@@ -50111,6 +50155,98 @@ var cardDescriptionTokens = {
   unplayable: "Unplayable"
 };
 
+// src/run-asset-manifests.ts
+var runAssetBundleManifest = {
+  "core-ui": {
+    id: "core-ui",
+    residency: "run",
+    urls: [
+      "/img/Icons/Health.png",
+      "/img/Icons/Stamina.png",
+      "/img/Icons/Status.png"
+    ]
+  },
+  cards: {
+    id: "cards",
+    residency: "scene",
+    urls: [
+      "/img/Cards/Dredgecaller/Defend.png",
+      "/img/Cards/Dredgecaller/SpiralInsight.png",
+      "/img/Cards/Dredgecaller/Strike.png",
+      "/img/Cards/Gravetender/Defend.png",
+      "/img/Cards/Gravetender/LastRites.png",
+      "/img/Cards/Gravetender/Strike.png",
+      "/img/Cards/Hollowblade/Defend.png",
+      "/img/Cards/Hollowblade/PreciseStrike.png",
+      "/img/Cards/Hollowblade/Strike.png",
+      "/img/Cards/Oathbound/Defend.png",
+      "/img/Cards/Oathbound/Steadfast.png",
+      "/img/Cards/Oathbound/Strike.png"
+    ]
+  },
+  effects: {
+    id: "effects",
+    residency: "scene",
+    urls: [
+      "/img/Icons/Attack.png",
+      "/img/Icons/Bleed.png",
+      "/img/Icons/Block.png",
+      "/img/Icons/Damage.png"
+    ]
+  },
+  encounter: {
+    id: "encounter",
+    residency: "scene",
+    urls: [
+      "/img/Icons/Attack.png",
+      "/img/Icons/Block.png",
+      "/img/Icons/Bleed.png",
+      "/img/Icons/Health.png",
+      "/img/Icons/Skill.png",
+      "/img/Icons/Spell.png",
+      "/img/Icons/Status.png"
+    ]
+  },
+  map: {
+    id: "map",
+    residency: "scene",
+    urls: []
+  },
+  events: {
+    id: "events",
+    residency: "scene",
+    urls: []
+  },
+  shop: {
+    id: "shop",
+    residency: "scene",
+    urls: [
+      "/img/Equipment/FragmentedOrb.png",
+      "/img/Equipment/QuickflintBundle.png",
+      "/img/Equipment/WeightOfRitual.png",
+      "/img/Equipment/WornSignet.png"
+    ]
+  },
+  reward: {
+    id: "reward",
+    residency: "scene",
+    urls: [
+      "/img/Equipment/FragmentedOrb.png",
+      "/img/Equipment/QuickflintBundle.png",
+      "/img/Equipment/WeightOfRitual.png",
+      "/img/Equipment/WornSignet.png"
+    ]
+  },
+  rest: {
+    id: "rest",
+    residency: "scene",
+    urls: []
+  }
+};
+function getRunAssetBundle(name) {
+  return runAssetBundleManifest[name];
+}
+
 // src/run-runtime.ts
 var RunPresentationRuntime = class {
   /**
@@ -50143,6 +50279,10 @@ var RunPresentationRuntime = class {
   pendingLifecycleOperationCount = 0;
   systemsDisposed = false;
   systems;
+  frameTimeSampleCount = 0;
+  frameTimeTotalMs = 0;
+  maximumFrameTimeMs = 0;
+  longFrameCount = 0;
   /**
    * Gets the persistent ordered layers shared by all scenes.
    */
@@ -50282,6 +50422,10 @@ var RunPresentationRuntime = class {
     return {
       activeSceneId: this.activeScene?.scene.id,
       activeTickerCount: this.destroyed || !this.application.ticker.started ? 0 : 1,
+      frameTimeSampleCount: this.frameTimeSampleCount,
+      averageFrameTimeMs: this.frameTimeSampleCount === 0 ? 0 : this.frameTimeTotalMs / this.frameTimeSampleCount,
+      maximumFrameTimeMs: this.maximumFrameTimeMs,
+      longFrameCount: this.longFrameCount,
       destroyed: this.destroyed,
       layerChildCounts: {
         scene: this.layers.scene.children.length,
@@ -50300,12 +50444,24 @@ var RunPresentationRuntime = class {
   }
   advance = (deltaMs) => {
     if (!this.suspended && !this.destroyed) {
+      this.recordFrameTime(deltaMs);
       for (const system of this.systems) {
         system.tick(deltaMs);
       }
       this.activeScene?.scene.tick?.(deltaMs);
     }
   };
+  recordFrameTime(deltaMs) {
+    if (!Number.isFinite(deltaMs) || deltaMs < 0) {
+      return;
+    }
+    this.frameTimeSampleCount++;
+    this.frameTimeTotalMs += deltaMs;
+    this.maximumFrameTimeMs = Math.max(this.maximumFrameTimeMs, deltaMs);
+    if (deltaMs >= 33.4) {
+      this.longFrameCount++;
+    }
+  }
   enqueue(operation) {
     this.pendingLifecycleOperationCount++;
     const scheduled = this.operation.then(operation);
@@ -50402,9 +50558,30 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   canvas.tabIndex = 0;
   application.renderer.events.features.globalMove = true;
   const assetLoader = new EncounterAssetLoader();
+  let encounterAssets;
+  try {
+    const coreAssets = requireLoadedResult(assetLoader.preloadRunAssets([getRunAssetBundle("core-ui")]), "core UI");
+    const sceneAssets = requireLoadedSceneAssets(assetLoader.preloadSceneAssets([
+      getRunAssetBundle("cards"),
+      getRunAssetBundle("effects"),
+      getRunAssetBundle("encounter")
+    ]), "encounter");
+    [, encounterAssets] = await Promise.all([coreAssets, sceneAssets]);
+  } catch (error) {
+    try {
+      await assetLoader.dispose();
+    } finally {
+      application.destroy({ removeView: false }, { children: true });
+    }
+    throw error;
+  }
   const accessibilityOverlay = createEncounterAccessibilityOverlay(canvas);
+  let semanticInteropCount = 0;
   const scene = new EncounterScene(
-    (intent) => intentSink.invokeMethodAsync("HandleIntentAsync", intent),
+    (intent) => {
+      semanticInteropCount++;
+      return intentSink.invokeMethodAsync("HandleIntentAsync", intent);
+    },
     assetLoader,
     accessibilityOverlay.announce
   );
@@ -50558,12 +50735,17 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
       const animationDiagnostics = animationDirector.getDiagnostics();
       const particleDiagnostics = particleEffects.getDiagnostics();
       const runtimeDiagnostics = runtime.getDiagnostics();
+      const assetDiagnostics = assetLoader.getDiagnostics();
       if (disposed) {
         return {
           initialized: false,
           canvasCount: 0,
           activeTickerCount: 0,
           activeSceneId: runtimeDiagnostics.activeSceneId,
+          frameTimeSampleCount: runtimeDiagnostics.frameTimeSampleCount,
+          averageFrameTimeMs: runtimeDiagnostics.averageFrameTimeMs,
+          maximumFrameTimeMs: runtimeDiagnostics.maximumFrameTimeMs,
+          longFrameCount: runtimeDiagnostics.longFrameCount,
           listenerCount: 0,
           appliedSequence,
           rendererType,
@@ -50577,6 +50759,16 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
           pendingLifecycleOperationCount: runtimeDiagnostics.pendingLifecycleOperationCount,
           tickerCallbackCount: runtimeDiagnostics.tickerCallbackCount,
           transitionCount: runtimeDiagnostics.transitionCount,
+          assetRecordCount: assetDiagnostics.assetRecordCount,
+          activeAssetLeaseCount: assetDiagnostics.activeLeaseCount,
+          assetOwnerCount: assetDiagnostics.ownerCount,
+          loadedAssetCount: assetDiagnostics.loadedAssetCount,
+          failedAssetCount: assetDiagnostics.failedAssetCount,
+          pendingAssetLoadCount: assetDiagnostics.pendingLoadCount,
+          pendingAssetUnloadCount: assetDiagnostics.pendingUnloadCount,
+          sharedAssetLoadRequestCount: assetDiagnostics.sharedLoadRequestCount,
+          semanticInteropCount,
+          pointerOrFrameInteropCount: 0,
           ...animationDiagnostics,
           ...particleDiagnostics
         };
@@ -50586,6 +50778,10 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
         canvasCount: canvas.isConnected ? 1 : 0,
         activeTickerCount: runtimeDiagnostics.activeTickerCount,
         activeSceneId: runtimeDiagnostics.activeSceneId,
+        frameTimeSampleCount: runtimeDiagnostics.frameTimeSampleCount,
+        averageFrameTimeMs: runtimeDiagnostics.averageFrameTimeMs,
+        maximumFrameTimeMs: runtimeDiagnostics.maximumFrameTimeMs,
+        longFrameCount: runtimeDiagnostics.longFrameCount,
         listenerCount: 11,
         appliedSequence,
         rendererType,
@@ -50599,6 +50795,16 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
         pendingLifecycleOperationCount: runtimeDiagnostics.pendingLifecycleOperationCount,
         tickerCallbackCount: runtimeDiagnostics.tickerCallbackCount,
         transitionCount: runtimeDiagnostics.transitionCount,
+        assetRecordCount: assetDiagnostics.assetRecordCount,
+        activeAssetLeaseCount: assetDiagnostics.activeLeaseCount,
+        assetOwnerCount: assetDiagnostics.ownerCount,
+        loadedAssetCount: assetDiagnostics.loadedAssetCount,
+        failedAssetCount: assetDiagnostics.failedAssetCount,
+        pendingAssetLoadCount: assetDiagnostics.pendingLoadCount,
+        pendingAssetUnloadCount: assetDiagnostics.pendingUnloadCount,
+        sharedAssetLoadRequestCount: assetDiagnostics.sharedLoadRequestCount,
+        semanticInteropCount,
+        pointerOrFrameInteropCount: 0,
         ...animationDiagnostics,
         ...particleDiagnostics
       };
@@ -50636,11 +50842,29 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
         try {
           accessibilityOverlay.dispose();
         } finally {
-          await assetLoader.dispose();
+          try {
+            await encounterAssets.dispose();
+          } finally {
+            await assetLoader.dispose();
+          }
         }
       }
     }
   }
+}
+async function requireLoadedResult(preload, bundleName) {
+  const result = await preload;
+  if (result.canceled || result.failedUrls.length > 0) {
+    throw new Error(`Unable to preload ${bundleName} assets.`);
+  }
+}
+async function requireLoadedSceneAssets(preload, bundleName) {
+  const assets = await preload;
+  if (assets.result.canceled || assets.result.failedUrls.length > 0) {
+    await assets.dispose();
+    throw new Error(`Unable to preload ${bundleName} assets.`);
+  }
+  return assets;
 }
 var EncounterRuntimeScene = class {
   /**
