@@ -49238,28 +49238,442 @@ var noOpAccessibilityOverlay = {
   }
 };
 
+// src/ui-component-contract.ts
+function normalizeUiComponentSize(size) {
+  return {
+    width: normalizeDimension(size.width),
+    height: normalizeDimension(size.height)
+  };
+}
+function createUiComponentPresentationState(options) {
+  const enabled = options.enabled ?? true;
+  return {
+    size: normalizeUiComponentSize(options.size),
+    interaction: {
+      enabled,
+      focused: enabled && (options.focused ?? false),
+      selected: enabled && (options.selected ?? false)
+    },
+    reducedMotion: options.reducedMotion ?? false
+  };
+}
+function transitionUiComponentLifecycle(state, event) {
+  if (state === "disposed" || event === "dispose") {
+    return "disposed";
+  }
+  if (event === "suspend") {
+    return "suspended";
+  }
+  return "active";
+}
+function normalizeDimension(value) {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+// src/ui-primitives.ts
+var uiTokens = {
+  color: {
+    panelFill: 1450552,
+    panelStroke: 6262197,
+    buttonFocus: 8047615,
+    buttonSelected: 16769155,
+    progressFill: 8047477,
+    progressBackground: 2504267,
+    buttonText: 16120063,
+    panelTitleText: 16769155,
+    bodyText: 14016750
+  },
+  typography: {
+    button: { fill: 16120063, fontFamily: "Arial", fontSize: 16, fontWeight: "bold", align: "center" },
+    panelTitle: { fill: 16769155, fontFamily: "Arial", fontSize: 18, fontWeight: "bold" },
+    body: { fill: 14016750, fontFamily: "Arial", fontSize: 14 }
+  },
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 12,
+    lg: 16
+  },
+  frame: {
+    panelCornerRadius: 10,
+    borderWidth: 2,
+    selectedInset: 2,
+    focusInset: 5,
+    selectedCornerRadius: 8,
+    focusCornerRadius: 6
+  },
+  elevation: {
+    overlayAlpha: 0.72,
+    tooltipAlpha: 0.96
+  },
+  motion: {
+    controlTransitionMs: 140,
+    tooltipDelayMs: 250,
+    reducedMotionDurationMs: 0
+  },
+  interaction: {
+    disabledAlpha: 0.5
+  }
+};
+var uiColors = {
+  panelFill: uiTokens.color.panelFill,
+  panelStroke: uiTokens.color.panelStroke,
+  buttonFocus: uiTokens.color.buttonFocus,
+  buttonSelected: uiTokens.color.buttonSelected,
+  progressFill: uiTokens.color.progressFill,
+  progressBackground: uiTokens.color.progressBackground,
+  buttonText: uiTokens.color.buttonText,
+  panelTitleText: uiTokens.color.panelTitleText,
+  bodyText: uiTokens.color.bodyText
+};
+var textStyles = /* @__PURE__ */ new Map();
+function getUiTextStyle(kind) {
+  const existing = textStyles.get(kind);
+  if (existing) {
+    return existing;
+  }
+  const style = new TextStyle(getTextStyleOptions(kind));
+  textStyles.set(kind, style);
+  return style;
+}
+function getTextStyleOptions(kind) {
+  switch (kind) {
+    case "Button":
+      return uiTokens.typography.button;
+    case "PanelTitle":
+      return uiTokens.typography.panelTitle;
+    case "Body":
+      return uiTokens.typography.body;
+  }
+}
+
+// src/card-view.ts
+var defaultCardWidth = 180;
+var defaultCardHeight = 252;
+var textPadding = uiTokens.spacing.sm;
+var CardView = class extends Container {
+  frame = new Graphics();
+  artFallback = new Graphics();
+  artMask = new Graphics();
+  artwork = new Sprite(Texture.EMPTY);
+  stateOverlay = new Graphics();
+  costStyle = new TextStyle(uiTokens.typography.button);
+  descriptionStyle = new TextStyle({ ...uiTokens.typography.body, wordWrap: true });
+  costLabel = new Text({ text: "", style: this.costStyle });
+  nameLabel = new Text({ text: "", style: getUiTextStyle("PanelTitle") });
+  typeLabel = new Text({ text: "", style: getUiTextStyle("Body") });
+  descriptionLabel = new Text({ text: "", style: this.descriptionStyle });
+  cardWidth;
+  cardHeight;
+  cardContent;
+  componentState;
+  componentLifecycleState = "active";
+  motionState;
+  playability;
+  /**
+   * Creates a stable card display tree from semantic display data.
+   */
+  constructor(options) {
+    super();
+    this.cardWidth = normalizeDimension2(options.width ?? defaultCardWidth, defaultCardWidth);
+    this.cardHeight = normalizeDimension2(options.height ?? defaultCardHeight, defaultCardHeight);
+    this.cardContent = toCardViewContent(options);
+    this.componentState = createUiComponentPresentationState({
+      size: { width: this.cardWidth, height: this.cardHeight },
+      ...options.enabled === void 0 ? {} : { enabled: options.enabled },
+      ...options.focused === void 0 ? {} : { focused: options.focused },
+      ...options.selected === void 0 ? {} : { selected: options.selected },
+      ...options.reducedMotion === void 0 ? {} : { reducedMotion: options.reducedMotion }
+    });
+    this.motionState = options.motionState ?? "idle";
+    this.playability = options.playability ?? "playable";
+    this.costLabel.anchor.set(0.5);
+    this.nameLabel.anchor.set(0.5, 0);
+    this.typeLabel.anchor.set(0.5, 0);
+    this.descriptionLabel.anchor.set(0.5, 0);
+    this.artwork.anchor.set(0.5, 0.5);
+    this.addChild(
+      this.frame,
+      this.artFallback,
+      this.artMask,
+      this.artwork,
+      this.costLabel,
+      this.nameLabel,
+      this.typeLabel,
+      this.descriptionLabel,
+      this.stateOverlay
+    );
+    this.artwork.mask = this.artMask;
+    this.redraw();
+  }
+  /**
+   * Gets the semantic display data currently rendered by the card.
+   */
+  get content() {
+    return this.cardContent;
+  }
+  /**
+   * Gets the presentation state supplied by the owning scene.
+   */
+  get presentationState() {
+    return this.componentState;
+  }
+  /**
+   * Gets the lifecycle state managed by the owning scene or runtime.
+   */
+  get lifecycleState() {
+    return this.componentLifecycleState;
+  }
+  /**
+   * Gets the card's independent motion treatment.
+   */
+  get currentMotionState() {
+    return this.motionState;
+  }
+  /**
+   * Gets the card's independent playability treatment.
+   */
+  get currentPlayability() {
+    return this.playability;
+  }
+  /**
+   * Gets whether the intentional fallback-art treatment is visible.
+   */
+  get usesFallbackArt() {
+    return this.cardContent.artTexture === void 0;
+  }
+  /**
+   * Gets the current display dimensions.
+   */
+  get size() {
+    return { width: this.cardWidth, height: this.cardHeight };
+  }
+  /**
+   * Reconciles semantic display data without recreating the card display tree.
+   */
+  setContent(content) {
+    this.cardContent = content;
+    this.redraw();
+  }
+  /**
+   * Applies the card's motion treatment without changing playability or accessibility state.
+   */
+  setMotionState(state) {
+    this.motionState = state;
+    this.redraw();
+  }
+  /**
+   * Applies playability without replacing hover, focus, selection, or motion presentation.
+   */
+  setPlayability(playability) {
+    this.playability = playability;
+    this.redraw();
+  }
+  /**
+   * Resizes the card while retaining its content, state, and display-object identity.
+   */
+  resize(size) {
+    const normalizedSize = createUiComponentPresentationState({
+      size,
+      ...this.componentState.interaction,
+      reducedMotion: this.componentState.reducedMotion
+    });
+    this.componentState = normalizedSize;
+    this.cardWidth = normalizedSize.size.width;
+    this.cardHeight = normalizedSize.size.height;
+    this.redraw();
+  }
+  /**
+   * Updates scene-owned enabled, focused, and selected state without changing playability.
+   */
+  setInteractionState(state) {
+    this.componentState = createUiComponentPresentationState({
+      size: this.componentState.size,
+      ...state,
+      reducedMotion: this.componentState.reducedMotion
+    });
+    this.redraw();
+  }
+  /**
+   * Updates reduced-motion presentation without changing card content or interaction state.
+   */
+  setReducedMotion(reducedMotion) {
+    this.componentState = createUiComponentPresentationState({
+      size: this.componentState.size,
+      ...this.componentState.interaction,
+      reducedMotion
+    });
+    this.redraw();
+  }
+  /**
+   * Suspends display while keeping the reusable card available for a later resume.
+   */
+  suspend() {
+    this.componentLifecycleState = transitionUiComponentLifecycle(this.componentLifecycleState, "suspend");
+    this.visible = this.componentLifecycleState === "active";
+  }
+  /**
+   * Resumes display unless the card has been disposed.
+   */
+  resume() {
+    this.componentLifecycleState = transitionUiComponentLifecycle(this.componentLifecycleState, "resume");
+    this.visible = this.componentLifecycleState === "active";
+  }
+  /**
+   * Disposes the component and prevents later lifecycle transitions from reviving it.
+   */
+  dispose() {
+    if (this.componentLifecycleState === "disposed") {
+      return;
+    }
+    this.componentLifecycleState = transitionUiComponentLifecycle(this.componentLifecycleState, "dispose");
+    this.visible = false;
+    super.destroy();
+  }
+  redraw() {
+    const palette = getPalette(this.cardContent.rarity);
+    const artBounds = getArtBounds(this.cardWidth, this.cardHeight);
+    this.frame.clear().roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: palette.frame }).roundRect(uiTokens.frame.borderWidth, uiTokens.frame.borderWidth, this.cardWidth - uiTokens.frame.borderWidth * 2, this.cardHeight - uiTokens.frame.borderWidth * 2, uiTokens.frame.panelCornerRadius - 1).fill({ color: uiTokens.color.panelFill });
+    this.drawFallbackArt(artBounds, palette);
+    this.updateArtwork(artBounds);
+    this.updateLabels(artBounds, palette);
+    this.drawStateOverlay(palette);
+  }
+  drawFallbackArt(artBounds, palette) {
+    this.artFallback.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.spacing.xs).fill({ color: palette.artFill }).rect(artBounds.x, artBounds.y + artBounds.height * 0.56, artBounds.width, artBounds.height * 0.44).fill({ color: palette.accent, alpha: 0.4 }).roundRect(artBounds.x + artBounds.width * 0.18, artBounds.y + artBounds.height * 0.2, artBounds.width * 0.64, artBounds.height * 0.28, uiTokens.spacing.sm).fill({ color: palette.accent, alpha: 0.55 });
+    this.artFallback.visible = this.usesFallbackArt;
+    this.artMask.clear().rect(artBounds.x, artBounds.y, artBounds.width, artBounds.height).fill({ color: 16777215 });
+  }
+  updateArtwork(artBounds) {
+    const texture = this.cardContent.artTexture;
+    this.artwork.visible = texture !== void 0;
+    if (!texture) {
+      return;
+    }
+    this.artwork.texture = texture;
+    this.artwork.position.set(artBounds.x + artBounds.width / 2, artBounds.y + artBounds.height / 2);
+    const textureAspectRatio = getTextureAspectRatio(texture);
+    const artAspectRatio = artBounds.width / Math.max(1, artBounds.height);
+    if (textureAspectRatio >= artAspectRatio) {
+      this.artwork.width = artBounds.height * textureAspectRatio;
+      this.artwork.height = artBounds.height;
+      return;
+    }
+    this.artwork.width = artBounds.width;
+    this.artwork.height = artBounds.width / textureAspectRatio;
+  }
+  updateLabels(artBounds, palette) {
+    this.costLabel.text = String(this.cardContent.cost);
+    this.costLabel.position.set(textPadding * 2, textPadding * 2);
+    this.nameLabel.text = this.cardContent.name;
+    this.nameLabel.position.set(this.cardWidth / 2, artBounds.y + artBounds.height + textPadding);
+    this.typeLabel.text = `${this.cardContent.type} \xB7 ${this.cardContent.rarity}`;
+    this.typeLabel.position.set(this.cardWidth / 2, artBounds.y + artBounds.height + textPadding + 26);
+    this.descriptionLabel.text = this.cardContent.description;
+    this.descriptionLabel.position.set(this.cardWidth / 2, artBounds.y + artBounds.height + 48);
+    this.descriptionStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
+    this.costStyle.fill = palette.accent;
+  }
+  drawStateOverlay(palette) {
+    const statePresentation = getStatePresentation(this.motionState, this.playability, this.componentState.interaction);
+    this.alpha = statePresentation.alpha;
+    this.stateOverlay.clear();
+    if (statePresentation.overlayAlpha > 0) {
+      this.stateOverlay.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: statePresentation.overlayColor, alpha: statePresentation.overlayAlpha });
+    }
+    if (this.playability === "playable") {
+      this.stateOverlay.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).stroke({ color: palette.accent, width: uiTokens.frame.borderWidth });
+    }
+    if (statePresentation.outlineColor !== void 0) {
+      this.stateOverlay.roundRect(uiTokens.frame.selectedInset, uiTokens.frame.selectedInset, this.cardWidth - uiTokens.frame.selectedInset * 2, this.cardHeight - uiTokens.frame.selectedInset * 2, uiTokens.frame.selectedCornerRadius).stroke({ color: statePresentation.outlineColor, width: uiTokens.frame.borderWidth + 1 });
+    }
+  }
+};
+function getTextureAspectRatio(texture) {
+  const width = texture.width;
+  const height = texture.height;
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return 1;
+  }
+  return width / height;
+}
+function toCardViewContent(options) {
+  return {
+    cost: options.cost,
+    name: options.name,
+    description: options.description,
+    type: options.type,
+    rarity: options.rarity,
+    ...options.artTexture === void 0 ? {} : { artTexture: options.artTexture }
+  };
+}
+function getArtBounds(width, height) {
+  const x2 = textPadding;
+  const y2 = 32;
+  const artWidth = Math.max(0, width - textPadding * 2);
+  const artHeight = Math.max(0, Math.min(height * 0.42, height - 116));
+  return { x: x2, y: y2, width: artWidth, height: artHeight };
+}
+function getPalette(rarity) {
+  switch (rarity) {
+    case "Common":
+      return { accent: 12044248, artFill: 4545394, frame: 9413302 };
+    case "Uncommon":
+      return { accent: 8115878, artFill: 3234638, frame: 5155449 };
+    case "Rare":
+      return { accent: 16765806, artFill: 6836268, frame: 14132535 };
+    case "Special":
+      return { accent: 13674495, artFill: 5060716, frame: 10318801 };
+  }
+}
+function getStatePresentation(motionState, playability, interaction) {
+  if (!interaction.enabled) {
+    return { alpha: uiTokens.interaction.disabledAlpha, overlayAlpha: 0.35, overlayColor: 1711912, outlineColor: void 0 };
+  }
+  const basePresentation = playability === "unplayable" ? { alpha: 0.65, overlayAlpha: 0.3, overlayColor: 2568253 } : { alpha: 1, overlayAlpha: 0, overlayColor: 0 };
+  const outlineColor = interaction.focused ? uiTokens.color.buttonFocus : interaction.selected ? uiTokens.color.buttonSelected : getMotionOutlineColor(motionState);
+  return { ...basePresentation, outlineColor };
+}
+function getMotionOutlineColor(state) {
+  switch (state) {
+    case "idle":
+      return void 0;
+    case "hovered":
+      return 16120063;
+    case "dragging":
+      return 16777215;
+    case "returning":
+      return 12109785;
+    case "resolving":
+      return void 0;
+  }
+}
+function normalizeDimension2(value, fallback) {
+  return Number.isFinite(value) ? Math.max(1, value) : fallback;
+}
+
 // src/viewport-layout.ts
 var emptySafeAreaInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
 var mobilePortraitMaximumWidth = 600;
 var wideMinimumWidth = 1024;
 var wideMinimumHeight = 640;
 function getViewportOrientation(viewport) {
-  const width = normalizeDimension(viewport.width);
-  const height = normalizeDimension(viewport.height);
+  const width = normalizeDimension3(viewport.width);
+  const height = normalizeDimension3(viewport.height);
   if (width === height) {
     return "Square";
   }
   return width > height ? "Landscape" : "Portrait";
 }
 function getViewportLayoutMode(viewport) {
-  const width = normalizeDimension(viewport.width);
-  const height = normalizeDimension(viewport.height);
+  const width = normalizeDimension3(viewport.width);
+  const height = normalizeDimension3(viewport.height);
   if (getViewportOrientation({ width, height }) === "Portrait" && width <= mobilePortraitMaximumWidth) {
     return "MobilePortrait";
   }
   return width < wideMinimumWidth || height < wideMinimumHeight ? "Compact" : "Wide";
 }
-function normalizeDimension(value) {
+function normalizeDimension3(value) {
   return Number.isFinite(value) ? Math.max(0, value) : 0;
 }
 
@@ -49443,6 +49857,7 @@ var supportedAnimationNames = /* @__PURE__ */ new Set([
   "fade-out"
 ]);
 var dragReturnDurationMs = 150;
+var handCardViewScale = 0.5;
 var EncounterScene = class {
   /**
    * Creates the ordered layers that belong to this scene.
@@ -49482,11 +49897,13 @@ var EncounterScene = class {
   selectableEntries = /* @__PURE__ */ new Map();
   entities = /* @__PURE__ */ new Map();
   queuedEntryIds = /* @__PURE__ */ new Set();
+  committedCardSequences = /* @__PURE__ */ new Map();
   currentSequence = -1;
   selectedEntryId;
   focusedEntryId;
   focusedEntityId;
   activeDrag;
+  ignoredPointerTapEntryId;
   releasedDragPositions = /* @__PURE__ */ new Map();
   dragReturns = /* @__PURE__ */ new Map();
   animationLockResolver = () => false;
@@ -49642,6 +50059,7 @@ var EncounterScene = class {
     this.selectableEntries.clear();
     this.entities.clear();
     this.queuedEntryIds.clear();
+    this.committedCardSequences.clear();
   }
   repaintBackground(viewport) {
     this.background.clear().rect(0, 0, viewport.width, viewport.height).fill({ color: 726562 });
@@ -49720,26 +50138,30 @@ Rituals: ${rituals}` : ""}`;
     tile.container.on("pointertap", () => this.handleEntitySelection(entity.id));
   }
   updateHandTile(id, entry, position) {
-    const tile = this.getOrCreateTile(this.handTiles, id, this.handLayer);
     const isCard = isCardPresentationState2(entry);
+    const tile = isCard ? this.getOrCreateCardTile(id, entry) : this.getOrCreateTile(this.handTiles, id, this.handLayer);
     const color = isCard ? getCardTypeColor(entry.cardType) : 4156503;
     const isQueued = isCard && (entry.isQueued || this.queuedEntryIds.has(entry.id));
     const secondaryText = isCard ? `${entry.cardType}  ${entry.energyCost}E ${entry.manaCost}M${isQueued ? "\nQueued" : ""}` : `${entry.uses} uses`;
-    tile.background.clear().roundRect(-54, -64, 108, 128, 8).fill({ color }).stroke({ color: isCard ? getRarityColor(entry.rarity) : 12179646, width: 3 });
-    tile.accent.clear().roundRect(-51, -61, 102, 7, 4).fill({ color: isCard ? getCharacterColor(entry.character) : 9425057 });
-    this.updateArtwork(tile, entry.image, 102, 116);
-    tile.title.text = entry.name;
-    tile.description.text = formatCardDescription(entry.description);
-    tile.detail.text = secondaryText;
-    tile.title.position.set(0, -35);
-    tile.description.position.set(0, 0);
-    tile.detail.position.set(0, 42);
+    if (isCard && tile.cardView) {
+      this.updateCardView(tile, entry, isQueued);
+    } else {
+      tile.background.clear().roundRect(-54, -64, 108, 128, 8).fill({ color }).stroke({ color: isCard ? getRarityColor(entry.rarity) : 12179646, width: 3 });
+      tile.accent.clear().roundRect(-51, -61, 102, 7, 4).fill({ color: isCard ? getCharacterColor(entry.character) : 9425057 });
+      this.updateArtwork(tile, entry.image, 102, 116);
+      tile.title.text = entry.name;
+      tile.description.text = formatCardDescription(entry.description);
+      tile.detail.text = secondaryText;
+      tile.title.position.set(0, -35);
+      tile.description.position.set(0, 0);
+      tile.detail.position.set(0, 42);
+    }
     tile.container.alpha = entry.isDraggable ? 1 : isQueued ? 0.72 : 0.52;
     if (!this.isDragPositionManaged(id)) {
       tile.container.position.set(position.x, position.y);
       tile.container.scale.set(position.scale ?? 1);
     }
-    const isInteractive = entry.isDraggable && !this.intentPending && !this.isAnimationLocked(id);
+    const isInteractive = this.isEntryInteractive(id, entry);
     tile.container.eventMode = isInteractive ? "static" : "none";
     tile.container.cursor = isInteractive ? "pointer" : "default";
     tile.container.removeAllListeners("pointertap");
@@ -49792,7 +50214,11 @@ Rituals: ${rituals}` : ""}`;
     }
   }
   handleEntrySelection(entry) {
-    if (!entry.isDraggable || this.intentPending || this.queuedEntryIds.has(entry.id) || this.isAnimationLockedForEntry(entry)) {
+    if (!this.isEntryInteractive(getEntrySceneId(entry), entry)) {
+      return;
+    }
+    if (this.ignoredPointerTapEntryId === entry.id) {
+      this.ignoredPointerTapEntryId = void 0;
       return;
     }
     if (entry.targetMode === "none") {
@@ -49803,7 +50229,7 @@ Rituals: ${rituals}` : ""}`;
     this.refreshSelectionHighlights();
   }
   beginDrag(entry, tile, event) {
-    if (!entry.isDraggable || this.intentPending || this.activeDrag || this.isAnimationLockedForEntry(entry)) {
+    if (!entry.isDraggable || this.intentPending || this.activeDrag || this.isEntryInputLocked(getEntrySceneId(entry), entry.id) || isCardPresentationState2(entry) && entry.isInteractionLocked || this.isAnimationLockedForEntry(entry)) {
       return;
     }
     const tileId = getEntrySceneId(entry);
@@ -49816,6 +50242,7 @@ Rituals: ${rituals}` : ""}`;
       pointerId: event.pointerId,
       pointerOrigin,
       tile,
+      selectionWasActive: this.selectedEntryId === entry.id,
       state: "tracking"
     };
     this.dragLayer.addChild(tile.container);
@@ -49886,6 +50313,102 @@ Rituals: ${rituals}` : ""}`;
       }
     }
   }
+  /**
+   * Creates one reusable designed card view for a stable card identifier.
+   */
+  getOrCreateCardTile(id, entry) {
+    const existing = this.handTiles.get(id);
+    if (existing) {
+      return existing;
+    }
+    const tile = this.getOrCreateTile(this.handTiles, id, this.handLayer);
+    const cardView = new CardView({
+      cost: formatCardCost(entry),
+      name: entry.name,
+      description: formatCardDescription(entry.description),
+      type: entry.cardType,
+      rarity: toCardViewRarity(entry.rarity)
+    });
+    cardView.position.set(-45, -63);
+    cardView.scale.set(handCardViewScale);
+    tile.container.removeAllListeners();
+    tile.container.removeChild(tile.background, tile.accent, tile.artwork, tile.title, tile.description, tile.detail);
+    tile.artwork.destroy();
+    tile.title.destroy();
+    tile.description.destroy();
+    tile.detail.destroy();
+    tile.container.addChild(tile.background, tile.accent, cardView);
+    const cardTile = { ...tile, cardView };
+    this.handTiles.set(id, cardTile);
+    return cardTile;
+  }
+  /**
+   * Reconciles a CardView from semantic presentation data while retaining its display identity.
+   */
+  updateCardView(tile, entry, isQueued) {
+    const cardView = tile.cardView;
+    if (!cardView) {
+      return;
+    }
+    cardView.setContent({
+      cost: formatCardCost(entry),
+      name: entry.name,
+      description: formatCardDescription(entry.description),
+      type: entry.cardType,
+      rarity: toCardViewRarity(entry.rarity),
+      ...tile.cardArtwork === void 0 ? {} : { artTexture: tile.cardArtwork }
+    });
+    cardView.setPlayability(this.isEntryInteractive(getEntrySceneId(entry), entry) && !isQueued ? "playable" : "unplayable");
+    cardView.setMotionState(this.getCardMotionState(getEntrySceneId(entry), entry.id));
+    cardView.setInteractionState({
+      enabled: this.isEntryInteractive(getEntrySceneId(entry), entry),
+      focused: entry.id === this.focusedEntryId,
+      selected: entry.id === this.selectedEntryId
+    });
+    this.updateCardArtwork(tile, entry.image);
+  }
+  /**
+   * Loads semantic artwork into a reusable card view without changing its display tree.
+   */
+  updateCardArtwork(tile, image) {
+    const cardView = tile.cardView;
+    if (!image || !cardView || !this.assetLoader) {
+      return;
+    }
+    if (tile.cardImage !== image) {
+      tile.cardImage = image;
+      delete tile.cardArtwork;
+    }
+    if (tile.cardArtwork || tile.cardArtworkRequestImage === image) {
+      return;
+    }
+    tile.cardArtworkRequestImage = image;
+    void this.assetLoader.load(image).then((texture) => {
+      if (tile.cardArtworkRequestImage === image) {
+        delete tile.cardArtworkRequestImage;
+      }
+      if (!texture || tile.container.destroyed || tile.cardImage !== image) {
+        return;
+      }
+      tile.cardArtwork = texture;
+      cardView.setContent({ ...cardView.content, artTexture: texture });
+    });
+  }
+  /**
+   * Maps interaction ownership to the reusable card presentation motion vocabulary.
+   */
+  getCardMotionState(tileId, entryId) {
+    if (this.dragReturns.has(tileId)) {
+      return "returning";
+    }
+    if (this.activeDrag && getEntrySceneId(this.activeDrag.entry) === tileId) {
+      return this.activeDrag.state === "dragging" ? "dragging" : "hovered";
+    }
+    if (this.releasedDragPositions.has(tileId) || this.committedCardSequences.has(entryId)) {
+      return "resolving";
+    }
+    return "idle";
+  }
   completeDrag(event) {
     const drag = this.activeDrag;
     this.moveDrag(event);
@@ -49904,6 +50427,14 @@ Rituals: ${rituals}` : ""}`;
   releaseDrag(event) {
     const drag = this.activeDrag;
     if (!drag || drag.pointerId !== event.pointerId || this.completeDrag(event)) {
+      return;
+    }
+    if (drag.state === "tracking") {
+      this.handLayer.addChild(drag.tile.container);
+      if (!drag.selectionWasActive) {
+        this.ignoredPointerTapEntryId = drag.entry.id;
+      }
+      this.releaseActiveDrag(false);
       return;
     }
     this.returnActiveDrag();
@@ -49940,9 +50471,29 @@ Rituals: ${rituals}` : ""}`;
     applyTransform(dragReturn.tile.container, dragReturn.origin);
     this.handLayer.addChild(dragReturn.tile.container);
     this.dragReturns.delete(tileId);
+    this.refreshInteractionState();
+    this.refreshSelectionHighlights();
   }
   isDragPositionManaged(tileId) {
     return this.activeDrag !== void 0 && getEntrySceneId(this.activeDrag.entry) === tileId || this.releasedDragPositions.has(tileId) || this.dragReturns.has(tileId);
+  }
+  /**
+   * Determines whether a hand entry is controlled by an in-progress interaction instead of layout.
+   */
+  isEntryInteractionOwned(tileId, entryId) {
+    return this.isDragPositionManaged(tileId) || this.committedCardSequences.has(entryId);
+  }
+  /**
+   * Determines whether an entry must reject a new pointer press until its pending ownership ends.
+   */
+  isEntryInputLocked(tileId, entryId) {
+    return this.activeDrag !== void 0 && getEntrySceneId(this.activeDrag.entry) === tileId || this.releasedDragPositions.has(tileId) || this.committedCardSequences.has(entryId);
+  }
+  /**
+   * Determines whether an entry can accept input and should be presented as enabled.
+   */
+  isEntryInteractive(tileId, entry) {
+    return entry.isDraggable && !(isCardPresentationState2(entry) && entry.isInteractionLocked) && !this.intentPending && !this.queuedEntryIds.has(entry.id) && !this.isEntryInteractionOwned(tileId, entry.id) && !this.isAnimationLocked(tileId);
   }
   clearDragMotion(tileId) {
     this.releasedDragPositions.delete(tileId);
@@ -50096,6 +50647,15 @@ Rituals: ${rituals}` : ""}`;
     for (const [id, tile] of this.handTiles) {
       const entryId = id.substring(id.indexOf(":") + 1);
       tile.background.tint = entryId === this.focusedEntryId ? 10476287 : entryId === this.selectedEntryId ? 16769155 : 16777215;
+      const entry = this.selectableEntries.get(entryId);
+      if (entry && isCardPresentationState2(entry) && tile.cardView) {
+        tile.cardView.setInteractionState({
+          enabled: this.isEntryInteractive(id, entry),
+          focused: entryId === this.focusedEntryId,
+          selected: entryId === this.selectedEntryId
+        });
+        tile.cardView.setMotionState(this.getCardMotionState(id, entryId));
+      }
     }
     for (const [id, tile] of this.entityTiles) {
       const entityId = id.substring(id.indexOf(":") + 1);
@@ -50107,7 +50667,7 @@ Rituals: ${rituals}` : ""}`;
     for (const [tileId, tile] of this.handTiles) {
       const entryId = tileId.substring(tileId.indexOf(":") + 1);
       const entry = this.selectableEntries.get(entryId);
-      const isInteractive = entry?.isDraggable === true && !this.intentPending && !this.queuedEntryIds.has(entryId) && !this.isAnimationLocked(tileId);
+      const isInteractive = entry !== void 0 && this.isEntryInteractive(tileId, entry);
       tile.container.eventMode = isInteractive ? "static" : "none";
       tile.container.cursor = isInteractive ? "pointer" : "default";
     }
@@ -50137,7 +50697,7 @@ Rituals: ${rituals}` : ""}`;
     this.submitIntent({ kind: "endTurn", sourceId: null, targetId: null, sequence: this.currentSequence, sceneId: encounterSceneId });
   }
   focusEntry(direction) {
-    const entryIds = [...this.selectableEntries.values()].filter((entry2) => entry2.isDraggable && !this.queuedEntryIds.has(entry2.id) && !this.isAnimationLockedForEntry(entry2)).map((entry2) => entry2.id);
+    const entryIds = [...this.selectableEntries.values()].filter((entry2) => entry2.isDraggable && !this.queuedEntryIds.has(entry2.id) && !this.isEntryInteractionOwned(getEntrySceneId(entry2), entry2.id) && !this.isAnimationLockedForEntry(entry2)).map((entry2) => entry2.id);
     if (entryIds.length === 0) {
       return;
     }
@@ -50222,20 +50782,25 @@ Rituals: ${rituals}` : ""}`;
       return;
     }
     this.queuedEntryIds.add(sourceId);
+    this.committedCardSequences.set(sourceId, intent.sequence);
     this.selectedEntryId = void 0;
     this.focusedEntityId = void 0;
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
     void this.emitIntent(intent).then((result) => {
       if (!result.accepted) {
-        this.rejectQueuedEntry(sourceId);
+        this.rejectQueuedEntry(sourceId, intent.sequence);
       }
     }).catch(() => {
-      this.rejectQueuedEntry(sourceId);
+      this.rejectQueuedEntry(sourceId, intent.sequence);
     });
   }
-  rejectQueuedEntry(sourceId) {
+  rejectQueuedEntry(sourceId, sequence) {
+    if (this.committedCardSequences.get(sourceId) !== sequence) {
+      return;
+    }
     this.queuedEntryIds.delete(sourceId);
+    this.committedCardSequences.delete(sourceId);
     this.returnReleasedEntry("playCard", sourceId);
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
@@ -50273,6 +50838,15 @@ Rituals: ${rituals}` : ""}`;
     }
     for (const entryId of authoritativeQueuedEntryIds) {
       this.queuedEntryIds.add(entryId);
+    }
+    for (const [entryId, sequence] of this.committedCardSequences) {
+      if (snapshot.sequence <= sequence) {
+        continue;
+      }
+      this.committedCardSequences.delete(entryId);
+      if (visibleHandEntryIds.has(entryId) && !authoritativeQueuedEntryIds.has(entryId)) {
+        this.returnReleasedEntry("playCard", entryId);
+      }
     }
     for (const tileId of [...this.releasedDragPositions.keys()]) {
       const separator = tileId.indexOf(":");
@@ -50319,6 +50893,12 @@ function getRarityColor(rarity) {
 }
 function getCharacterColor(character) {
   return character === "Hollowblade" ? 11623797 : character === "Gravetender" ? 7518106 : character === "Dredgecaller" ? 8745910 : character === "Oathbound" ? 13935439 : 8623272;
+}
+function formatCardCost(card) {
+  return card.manaCost > 0 ? `${card.energyCost}E ${card.manaCost}M` : `${card.energyCost}E`;
+}
+function toCardViewRarity(rarity) {
+  return rarity === "Uncommon" || rarity === "Rare" || rarity === "Special" ? rarity : "Common";
 }
 function formatCardDescription(description) {
   return description.replace(/\{([a-z0-9]+)\}/gi, (token, tokenName) => {
