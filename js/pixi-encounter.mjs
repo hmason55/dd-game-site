@@ -50437,6 +50437,9 @@ var EncounterScene = class {
    * Reconciles all visible encounter state with a stable set of display objects.
    */
   reconcile(snapshot, viewport) {
+    if (snapshot.sequence < this.currentSequence) {
+      return;
+    }
     const shouldReleasePendingIntent = this.intentPending && this.pendingIntentSequence !== void 0 && snapshot.sequence > this.pendingIntentSequence;
     if (this.hasViewportChanged(viewport)) {
       this.resetTransientLayoutState();
@@ -50468,12 +50471,32 @@ var EncounterScene = class {
     this.refreshSelectionHighlights();
   }
   /**
+   * Settles active pointer-owned card motion before an interruption stops scene ticks.
+   *
+   * Resize reconciliation performs this work as part of layout. Scene suspension and
+   * replacement cannot wait for the return animation because their ticker may be stopped
+   * or their display tree may be removed immediately.
+   */
+  settleTransientDragOwnership() {
+    if (this.activeDrag) {
+      this.restoreTileToHand(this.activeDrag.tile, this.activeDrag.origin);
+      this.activeDrag = void 0;
+    }
+    for (const dragReturn of this.dragReturns.values()) {
+      this.restoreTileToHand(dragReturn.tile, dragReturn.origin);
+    }
+    this.cancelDragReturns();
+    this.selectedEntryId = void 0;
+    this.focusedEntityId = void 0;
+    this.refreshInteractionState();
+    this.refreshSelectionHighlights();
+  }
+  /**
    * Releases every display object created by the scene.
    */
   dispose() {
-    this.activeDrag = void 0;
+    this.settleTransientDragOwnership();
     this.releasedDragPositions.clear();
-    this.cancelDragReturns();
     this.root.destroy({ children: true });
     this.entityTiles.clear();
     this.handTiles.clear();
@@ -50892,11 +50915,17 @@ Rituals: ${rituals}` : ""}`;
     this.refreshSelectionHighlights();
   }
   finishDragReturn(tileId, dragReturn) {
-    applyTransform(dragReturn.tile.container, dragReturn.origin);
-    this.handLayer.addChild(dragReturn.tile.container);
+    this.restoreTileToHand(dragReturn.tile, dragReturn.origin);
     this.dragReturns.delete(tileId);
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
+  }
+  /**
+   * Restores a card to its logical hand transform and hand-layout ownership.
+   */
+  restoreTileToHand(tile, transform) {
+    applyTransform(tile.container, transform);
+    this.handLayer.addChild(tile.container);
   }
   isDragPositionManaged(tileId) {
     return this.activeDrag !== void 0 && getEntrySceneId(this.activeDrag.entry) === tileId || this.releasedDragPositions.has(tileId) || this.dragReturns.has(tileId);
@@ -52195,6 +52224,11 @@ var EncounterRuntimeScene = class {
   /** Cancels scene-local timelines before the runtime replaces or disposes this scene. */
   exit() {
     this.cancelAnimations();
+    this.scene.settleTransientDragOwnership();
+  }
+  /** Settles pointer-owned motion before visibility suspension stops the primary ticker. */
+  suspend() {
+    this.scene.settleTransientDragOwnership();
   }
   /** Releases encounter-owned renderer resources once the run scene is disposed. */
   destroy() {
