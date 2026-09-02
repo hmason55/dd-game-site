@@ -48170,7 +48170,9 @@ var ParticleEffectManager = class {
     return {
       activeEmitterCount: this.emitters.size,
       liveParticleCount: this.getLiveParticleCount(),
-      pooledParticleCount: [...this.pools.values()].reduce((total, pool) => total + pool.length, 0)
+      pooledParticleCount: [...this.pools.values()].reduce((total, pool) => total + pool.length, 0),
+      cachedTextureCount: this.textureCache.size,
+      cachedTextureByteEstimate: getTextureByteEstimate(this.textureCache.values())
     };
   }
   /**
@@ -48387,6 +48389,15 @@ var ParticleEffectManager = class {
     }
   }
 };
+function getTextureByteEstimate(textures) {
+  let bytes = 0;
+  for (const texture of textures) {
+    const width = Number.isFinite(texture.width) ? Math.max(0, texture.width) : 0;
+    const height = Number.isFinite(texture.height) ? Math.max(0, texture.height) : 0;
+    bytes += width * height * 4;
+  }
+  return bytes;
+}
 function parseOptions(value, maxParticlesPerEmitter, reducedMotion) {
   if (!isObject(value) || typeof value.id !== "string" || value.id.length === 0) {
     return void 0;
@@ -49112,6 +49123,7 @@ var EncounterAssetLoader = class {
       ...bundles,
       bundles,
       textureCount: this.textures.size,
+      textureByteEstimate: getTextureByteEstimate2(this.textures.values()),
       sceneAssetReferenceUrlCount: this.sceneAssetReferences.size,
       sceneAssetReferenceCount,
       sceneAssetReferences,
@@ -49156,6 +49168,18 @@ var EncounterAssetLoader = class {
     }
   }
 };
+function getTextureByteEstimate2(textures) {
+  let bytes = 0;
+  for (const texture of textures) {
+    if (!texture) {
+      continue;
+    }
+    const width = Number.isFinite(texture.width) ? Math.max(0, texture.width) : 0;
+    const height = Number.isFinite(texture.height) ? Math.max(0, texture.height) : 0;
+    bytes += width * height * 4;
+  }
+  return bytes;
+}
 async function preloadFonts() {
   if (typeof document === "undefined" || !document.fonts) {
     return;
@@ -49335,6 +49359,9 @@ function getUiTextStyle(kind) {
   const style = new TextStyle(getTextStyleOptions(kind));
   textStyles.set(kind, style);
   return style;
+}
+function getUiPrimitiveDiagnostics() {
+  return { textStyleCacheCount: textStyles.size };
 }
 var GamePanel = class extends Container {
   background = new Graphics();
@@ -49915,6 +49942,21 @@ var emptySafeAreaInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 }
 var mobilePortraitMaximumWidth = 600;
 var wideMinimumWidth = 1024;
 var wideMinimumHeight = 640;
+function describeViewport(viewport, options = {}) {
+  const normalizedViewport = normalizeViewport(viewport);
+  const safeArea = normalizeSafeArea(options.safeArea ?? emptySafeAreaInsets, normalizedViewport);
+  const contentBounds = calculateContentBounds(normalizedViewport, safeArea);
+  const orientation = getViewportOrientation(contentBounds);
+  return Object.freeze({
+    ...normalizedViewport,
+    aspectRatio: calculateAspectRatio(contentBounds),
+    orientation,
+    devicePixelRatio: normalizeDevicePixelRatio(options.devicePixelRatio),
+    density: getViewportDensity(options.devicePixelRatio),
+    safeArea,
+    contentBounds
+  });
+}
 function getViewportOrientation(viewport) {
   const width = normalizeDimension3(viewport.width);
   const height = normalizeDimension3(viewport.height);
@@ -49923,6 +49965,9 @@ function getViewportOrientation(viewport) {
   }
   return width > height ? "Landscape" : "Portrait";
 }
+function getViewportDensity(devicePixelRatio) {
+  return normalizeDevicePixelRatio(devicePixelRatio) > 1 ? "High" : "Standard";
+}
 function getViewportLayoutMode(viewport) {
   const width = normalizeDimension3(viewport.width);
   const height = normalizeDimension3(viewport.height);
@@ -49930,6 +49975,50 @@ function getViewportLayoutMode(viewport) {
     return "MobilePortrait";
   }
   return width < wideMinimumWidth || height < wideMinimumHeight ? "Compact" : "Wide";
+}
+function calculateViewportLayout(viewport, options = {}) {
+  const descriptor = describeViewport(viewport, options);
+  const designSize = normalizeViewport(options.designSize ?? descriptor);
+  const contentScale = Math.min(
+    descriptor.contentBounds.width / Math.max(1, designSize.width),
+    descriptor.contentBounds.height / Math.max(1, designSize.height)
+  );
+  return {
+    mode: getViewportLayoutMode(descriptor.contentBounds),
+    viewport: { width: descriptor.width, height: descriptor.height },
+    safeArea: descriptor.safeArea,
+    contentBounds: descriptor.contentBounds,
+    contentScale
+  };
+}
+function normalizeViewport(viewport) {
+  return {
+    width: normalizeDimension3(viewport.width),
+    height: normalizeDimension3(viewport.height)
+  };
+}
+function normalizeSafeArea(safeArea, viewport) {
+  const top = Math.min(normalizeDimension3(safeArea.top), viewport.height);
+  const bottom = Math.min(normalizeDimension3(safeArea.bottom), Math.max(0, viewport.height - top));
+  const left = Math.min(normalizeDimension3(safeArea.left), viewport.width);
+  const right = Math.min(normalizeDimension3(safeArea.right), Math.max(0, viewport.width - left));
+  return { top, right, bottom, left };
+}
+function calculateContentBounds(viewport, safeArea) {
+  return {
+    x: safeArea.left,
+    y: safeArea.top,
+    width: Math.max(0, viewport.width - safeArea.left - safeArea.right),
+    height: Math.max(0, viewport.height - safeArea.top - safeArea.bottom)
+  };
+}
+function calculateAspectRatio(viewport) {
+  const width = normalizeDimension3(viewport.width);
+  const height = normalizeDimension3(viewport.height);
+  return height === 0 ? 0 : width / height;
+}
+function normalizeDevicePixelRatio(value) {
+  return value !== void 0 && Number.isFinite(value) && value > 0 ? value : 1;
 }
 function normalizeDimension3(value) {
   return Number.isFinite(value) ? Math.max(0, value) : 0;
@@ -51731,6 +51820,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   const accessibilityOverlay = createEncounterAccessibilityOverlay(canvas);
   let semanticInteropCount = 0;
   let viewport = encounterDesignViewport;
+  let safeArea = emptySafeAreaInsets;
   const scene = new EncounterScene(
     (intent) => {
       semanticInteropCount++;
@@ -51757,8 +51847,11 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   let hasActiveScene = false;
   const rendererType = application.renderer.type.toString();
   const applyViewportLayout = () => {
+    const layout = calculateViewportLayout(viewport, { safeArea, devicePixelRatio: window.devicePixelRatio });
     scene.displayObject.scale.set(1);
-    scene.displayObject.position.set(0, 0);
+    scene.displayObject.position.set(layout.contentBounds.x, layout.contentBounds.y);
+    runtime.renderLayers.effect.position.set(layout.contentBounds.x, layout.contentBounds.y);
+    viewport = { width: layout.contentBounds.width, height: layout.contentBounds.height };
   };
   const reconcileScene = () => {
     if (!hasActiveScene) {
@@ -51775,6 +51868,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     const width = host?.clientWidth ?? window.innerWidth;
     const height = host?.clientHeight ?? window.innerHeight;
     viewport = { width, height };
+    safeArea = readBrowserSafeAreaInsets(canvas);
     application.renderer.resolution = window.devicePixelRatio;
     application.renderer.resize(width, height);
     applyViewportLayout();
@@ -51893,6 +51987,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
       const particleDiagnostics = particleEffects.getDiagnostics();
       const runtimeDiagnostics = runtime.getDiagnostics();
       const assetDiagnostics = assetLoader.getDiagnostics();
+      const uiDiagnostics = getUiPrimitiveDiagnostics();
       if (disposed) {
         return {
           initialized: false,
@@ -51917,6 +52012,8 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
           tickerCallbackCount: runtimeDiagnostics.tickerCallbackCount,
           transitionCount: runtimeDiagnostics.transitionCount,
           ...createAssetDiagnostics(assetDiagnostics),
+          ...createTextureDiagnostics(assetDiagnostics, particleDiagnostics),
+          ...uiDiagnostics,
           semanticInteropCount,
           pointerOrFrameInteropCount: 0,
           ...animationDiagnostics,
@@ -51946,6 +52043,8 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
         tickerCallbackCount: runtimeDiagnostics.tickerCallbackCount,
         transitionCount: runtimeDiagnostics.transitionCount,
         ...createAssetDiagnostics(assetDiagnostics),
+        ...createTextureDiagnostics(assetDiagnostics, particleDiagnostics),
+        ...uiDiagnostics,
         semanticInteropCount,
         pointerOrFrameInteropCount: 0,
         ...animationDiagnostics,
@@ -51995,6 +52094,12 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     }
   }
 }
+function createTextureDiagnostics(assetDiagnostics, particleDiagnostics) {
+  return {
+    textureCount: assetDiagnostics.textureCount + particleDiagnostics.cachedTextureCount,
+    textureByteEstimate: assetDiagnostics.textureByteEstimate + particleDiagnostics.cachedTextureByteEstimate
+  };
+}
 function createAssetDiagnostics(assetDiagnostics) {
   return {
     assetRecordCount: assetDiagnostics.assetRecordCount,
@@ -52007,11 +52112,37 @@ function createAssetDiagnostics(assetDiagnostics) {
     assetLoadRequestCount: assetDiagnostics.loadRequestCount,
     sharedAssetLoadRequestCount: assetDiagnostics.sharedLoadRequestCount,
     textureCount: assetDiagnostics.textureCount,
+    textureByteEstimate: assetDiagnostics.textureByteEstimate,
     sceneAssetReferenceUrlCount: assetDiagnostics.sceneAssetReferenceUrlCount,
     sceneAssetReferenceCount: assetDiagnostics.sceneAssetReferenceCount,
     assets: assetDiagnostics.assets,
     sceneAssetReferences: assetDiagnostics.sceneAssetReferences
   };
+}
+function readBrowserSafeAreaInsets(canvas) {
+  const ownerDocument = canvas.ownerDocument;
+  const host = canvas.parentElement;
+  if (!ownerDocument || !host || typeof ownerDocument.createElement !== "function" || typeof getComputedStyle !== "function") {
+    return emptySafeAreaInsets;
+  }
+  const probe = ownerDocument.createElement("div");
+  probe.style.cssText = "position:absolute;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);";
+  host.appendChild(probe);
+  try {
+    const style = getComputedStyle(probe);
+    return {
+      top: parseCssPixel(style.paddingTop),
+      right: parseCssPixel(style.paddingRight),
+      bottom: parseCssPixel(style.paddingBottom),
+      left: parseCssPixel(style.paddingLeft)
+    };
+  } finally {
+    probe.remove();
+  }
+}
+function parseCssPixel(value) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 async function requireLoadedResult(preload, bundleName) {
   const result = await preload;
