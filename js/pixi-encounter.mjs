@@ -50226,6 +50226,7 @@ Rituals: ${rituals}` : ""}`;
       return;
     }
     this.selectedEntryId = this.selectedEntryId === entry.id ? void 0 : entry.id;
+    this.refreshInteractionState();
     this.refreshSelectionHighlights();
   }
   beginDrag(entry, tile, event) {
@@ -50247,6 +50248,7 @@ Rituals: ${rituals}` : ""}`;
     };
     this.dragLayer.addChild(tile.container);
     this.selectedEntryId = entry.id;
+    this.refreshInteractionState();
     this.refreshSelectionHighlights();
   }
   moveDrag(event) {
@@ -50465,6 +50467,7 @@ Rituals: ${rituals}` : ""}`;
     if (clearSelection) {
       this.selectedEntryId = void 0;
     }
+    this.refreshInteractionState();
     this.refreshSelectionHighlights();
   }
   finishDragReturn(tileId, dragReturn) {
@@ -50660,7 +50663,30 @@ Rituals: ${rituals}` : ""}`;
     for (const [id, tile] of this.entityTiles) {
       const entityId = id.substring(id.indexOf(":") + 1);
       const entity = this.entities.get(entityId);
-      tile.background.tint = entityId === this.focusedEntityId ? 16769155 : entity && this.canSelectEntity(entity) ? 13891495 : 16777215;
+      this.refreshTargetPresentation(tile, entityId, entity);
+    }
+  }
+  /**
+   * Gives targetable entities a clear, low-obstruction visual treatment while an action is selected.
+   */
+  refreshTargetPresentation(tile, entityId, entity) {
+    const selectedEntry = this.selectedEntryId ? this.selectableEntries.get(this.selectedEntryId) : void 0;
+    const isTargeting = selectedEntry !== void 0 && selectedEntry.targetMode !== "none";
+    const isValidTarget = entity !== void 0 && this.canSelectEntity(entity);
+    const isFocused = entityId === this.focusedEntityId;
+    tile.background.tint = isFocused ? 16769155 : isValidTarget ? 13891495 : isTargeting ? 10187635 : 16777215;
+    tile.accent.alpha = 1;
+    tile.accent.clear();
+    if (isFocused) {
+      tile.accent.roundRect(-93, -63, 186, 126, 12).stroke({ color: 16769155, width: 4 });
+      return;
+    }
+    if (isValidTarget) {
+      tile.accent.roundRect(-93, -63, 186, 126, 12).stroke({ color: 11141006, width: 4 });
+      return;
+    }
+    if (isTargeting) {
+      tile.accent.roundRect(-91, -61, 182, 122, 11).stroke({ color: 14912909, width: 2 });
     }
   }
   refreshInteractionState() {
@@ -50755,6 +50781,7 @@ Rituals: ${rituals}` : ""}`;
     this.selectedEntryId = void 0;
     this.focusedEntityId = void 0;
     this.announceInteraction?.("Encounter selection cancelled.");
+    this.refreshInteractionState();
     this.refreshSelectionHighlights();
   }
   submitIntent(intent) {
