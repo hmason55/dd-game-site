@@ -48563,16 +48563,6 @@ function prefersReducedMotion() {
 
 // src/design-space.ts
 var encounterDesignViewport = Object.freeze({ width: 960, height: 540 });
-function calculateEncounterSceneTransform(viewport) {
-  const availableWidth = Math.max(1, viewport.width);
-  const availableHeight = Math.max(1, viewport.height);
-  const scale = Math.min(availableWidth / encounterDesignViewport.width, availableHeight / encounterDesignViewport.height);
-  return {
-    scale,
-    x: (availableWidth - encounterDesignViewport.width * scale) / 2,
-    y: (availableHeight - encounterDesignViewport.height * scale) / 2
-  };
-}
 
 // src/asset-bundles.ts
 var AssetBundleLeaseGroup = class {
@@ -49043,9 +49033,9 @@ var EncounterAssetLoader = class {
     if (!normalizedUrl || this.disposed) {
       return void 0;
     }
-    const sceneTexture = this.textures.get(normalizedUrl);
-    if (sceneTexture && this.sceneAssetReferences.has(normalizedUrl)) {
-      return sceneTexture;
+    const retainedTexture = this.textures.get(normalizedUrl);
+    if (retainedTexture) {
+      return retainedTexture;
     }
     const lease = this.getOrCreateLease(normalizedUrl);
     const result = await lease.preload();
@@ -49248,10 +49238,38 @@ var noOpAccessibilityOverlay = {
   }
 };
 
+// src/viewport-layout.ts
+var emptySafeAreaInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
+var mobilePortraitMaximumWidth = 600;
+var wideMinimumWidth = 1024;
+var wideMinimumHeight = 640;
+function getViewportOrientation(viewport) {
+  const width = normalizeDimension(viewport.width);
+  const height = normalizeDimension(viewport.height);
+  if (width === height) {
+    return "Square";
+  }
+  return width > height ? "Landscape" : "Portrait";
+}
+function getViewportLayoutMode(viewport) {
+  const width = normalizeDimension(viewport.width);
+  const height = normalizeDimension(viewport.height);
+  if (getViewportOrientation({ width, height }) === "Portrait" && width <= mobilePortraitMaximumWidth) {
+    return "MobilePortrait";
+  }
+  return width < wideMinimumWidth || height < wideMinimumHeight ? "Compact" : "Wide";
+}
+function normalizeDimension(value) {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
 // src/layout.ts
 function layoutEnemies(count2, viewport) {
   if (count2 === 0) {
     return [];
+  }
+  if (getEncounterLayoutMode(viewport) !== "Wide") {
+    return layoutNarrowEnemies(count2, viewport);
   }
   const horizontalPadding = 24;
   const verticalPadding = 24;
@@ -49281,6 +49299,23 @@ function layoutEnemies(count2, viewport) {
   });
 }
 function layoutPlayer(viewport) {
+  const layoutMode = getEncounterLayoutMode(viewport);
+  if (layoutMode === "MobilePortrait") {
+    const scale = getMobileEntityScale(viewport);
+    return {
+      x: viewport.width / 2,
+      y: Math.min(Math.max(128, viewport.height * 0.42), viewport.height - 176),
+      scale
+    };
+  }
+  if (layoutMode === "Compact") {
+    const scale = getCompactEntityScale(viewport);
+    return {
+      x: viewport.width / 2,
+      y: Math.min(Math.max(128, viewport.height * 0.55), viewport.height - 150),
+      scale
+    };
+  }
   return {
     x: viewport.width / 2,
     y: Math.min(Math.max(136, viewport.height * 0.58), viewport.height - 210)
@@ -49289,6 +49324,9 @@ function layoutPlayer(viewport) {
 function layoutHand(count2, viewport) {
   if (count2 === 0) {
     return [];
+  }
+  if (getEncounterLayoutMode(viewport) !== "Wide") {
+    return layoutNarrowHand(count2, viewport);
   }
   const cardWidth = 108;
   const horizontalPadding = 24;
@@ -49300,6 +49338,88 @@ function layoutHand(count2, viewport) {
     return {
       x: (viewport.width - rowWidth) / 2 + cardWidth / 2 + index * step,
       y: bottomRowY
+    };
+  });
+}
+function layoutNarrowEnemies(count2, viewport) {
+  const horizontalPadding = 16;
+  const verticalPadding = 16;
+  const entityWidth = 176;
+  const entityHeight = 116;
+  const entityGap = 8;
+  const columns = Math.min(count2, 2);
+  const rows = Math.ceil(count2 / columns);
+  const player = layoutPlayer(viewport);
+  const playerScale = player.scale ?? 1;
+  const availableWidth = Math.max(0, viewport.width - horizontalPadding * 2);
+  const availableHeight = Math.max(0, player.y - entityHeight * playerScale / 2 - entityGap - verticalPadding);
+  const horizontalScale = columns === 1 ? Math.min(0.72, availableWidth / entityWidth) : Math.min(0.72, (availableWidth - entityGap) / (columns * entityWidth));
+  const verticalScale = (availableHeight - (rows - 1) * entityGap) / (rows * entityHeight);
+  const scale = Math.max(0, Math.min(horizontalScale, verticalScale));
+  const tileWidth = entityWidth * scale;
+  const tileHeight = entityHeight * scale;
+  const rowStep = tileHeight + entityGap;
+  return Array.from({ length: count2 }, (_, index) => {
+    const row = Math.floor(index / columns);
+    const column = index % columns;
+    const entriesInRow = Math.min(columns, count2 - row * columns);
+    const horizontalStep = entriesInRow === 1 ? 0 : (availableWidth - tileWidth) / (entriesInRow - 1);
+    return {
+      x: entriesInRow === 1 ? viewport.width / 2 : horizontalPadding + tileWidth / 2 + column * horizontalStep,
+      y: verticalPadding + tileHeight / 2 + row * rowStep,
+      scale
+    };
+  });
+}
+function getEncounterLayoutMode(viewport) {
+  const layoutMode = getViewportLayoutMode(viewport);
+  return layoutMode === "Compact" && viewport.width >= 960 && viewport.height >= 540 ? "Wide" : layoutMode;
+}
+function getMobileEntityScale(viewport) {
+  const horizontalPadding = 16;
+  const entityGap = 8;
+  const entityWidth = 176;
+  const availableWidth = Math.max(0, viewport.width - horizontalPadding * 2);
+  return Math.max(0, Math.min(0.72, (availableWidth - entityGap) / (entityWidth * 2)));
+}
+function getCompactEntityScale(viewport) {
+  const horizontalPadding = 16;
+  const entityGap = 8;
+  const entityWidth = 176;
+  const availableWidth = Math.max(0, viewport.width - horizontalPadding * 2);
+  return Math.max(0, Math.min(0.82, (availableWidth - entityGap) / (entityWidth * 2)));
+}
+function layoutNarrowHand(count2, viewport) {
+  const cardWidth = 108;
+  const cardHeight = 128;
+  const horizontalPadding = 16;
+  const bottomPadding = 16;
+  const cardGap = 8;
+  const player = layoutPlayer(viewport);
+  const playerBottom = player.y + (player.scale ?? 1) * 58;
+  const availableWidth = Math.max(0, viewport.width - horizontalPadding * 2);
+  const maximumCardScale = Math.min(0.76, (availableWidth - cardGap * 2) / (cardWidth * 3));
+  const initialScale = Math.max(0, maximumCardScale);
+  const initialCardHeight = cardHeight * initialScale;
+  const availableHeight = Math.max(0, viewport.height - bottomPadding - playerBottom - 16);
+  const maximumRows = Math.max(1, Math.floor((availableHeight + cardGap) / (initialCardHeight + cardGap)));
+  const maximumColumns = Math.max(1, Math.floor((availableWidth + cardGap) / (cardWidth * initialScale + cardGap)));
+  const rows = Math.min(Math.ceil(count2 / maximumColumns), maximumRows);
+  const columns = Math.ceil(count2 / rows);
+  const scale = Math.max(0, Math.min(initialScale, (availableWidth - (columns - 1) * cardGap) / (columns * cardWidth)));
+  const tileWidth = cardWidth * scale;
+  const tileHeight = cardHeight * scale;
+  const bottomRowY = viewport.height - bottomPadding - tileHeight / 2;
+  const firstRowY = bottomRowY - (rows - 1) * (tileHeight + cardGap);
+  return Array.from({ length: count2 }, (_, index) => {
+    const row = Math.floor(index / columns);
+    const column = index % columns;
+    const entriesInRow = Math.min(columns, count2 - row * columns);
+    const rowWidth = entriesInRow * tileWidth + (entriesInRow - 1) * cardGap;
+    return {
+      x: (viewport.width - rowWidth) / 2 + tileWidth / 2 + column * (tileWidth + cardGap),
+      y: firstRowY + row * (tileHeight + cardGap),
+      scale
     };
   });
 }
@@ -49372,20 +49492,25 @@ var EncounterScene = class {
   animationLockResolver = () => false;
   intentPending = false;
   pendingIntentSequence;
+  viewport;
   animationStarts = /* @__PURE__ */ new Map();
   animationCommandHandlers = /* @__PURE__ */ new Map([
     ["card-play-to-target", (source3, target, _tile, start, progress) => this.moveTo(source3, target, start, progress)],
-    ["card-play-to-corner", (_source, _target, tile, start, progress) => tile.container.position.set(interpolate(start.x, 880, progress), interpolate(start.y, 36, progress))],
+    ["card-play-to-corner", (_source, _target, tile, start, progress) => {
+      const anchors = this.getCardAnimationAnchors();
+      tile.container.position.set(interpolate(start.x, anchors.corner.x, progress), interpolate(start.y, anchors.corner.y, progress));
+    }],
     ["draw-to-hand", (_source, _target, tile, start, progress) => {
-      tile.container.position.set(interpolate(880, start.x, progress), interpolate(500, start.y, progress));
+      const anchors = this.getCardAnimationAnchors();
+      tile.container.position.set(interpolate(anchors.draw.x, start.x, progress), interpolate(anchors.draw.y, start.y, progress));
       tile.container.alpha = Math.min(1, start.alpha * (0.25 + progress));
       tile.container.scale.set(interpolate(start.scale * 0.7, start.scale, progress));
     }],
     ["hand-to-discard", (_source, _target, tile, start, progress) => {
-      this.removeCardToBottom(tile, start, 860, progress);
+      this.removeCardToBottom(tile, start, this.getCardAnimationAnchors().discard, progress);
     }],
     ["exhaust", (_source, _target, tile, start, progress) => {
-      this.removeCardToBottom(tile, start, 920, progress);
+      this.removeCardToBottom(tile, start, this.getCardAnimationAnchors().exhaust, progress);
     }],
     ["hand-reflow", (_source, _target, tile, start, progress) => tile.container.scale.set(start.scale * (1 + Math.sin(progress * Math.PI) * 0.08))],
     ["lunge", (source3, target, _tile, start, progress) => this.lunge(source3, target, start, progress)],
@@ -49485,6 +49610,10 @@ var EncounterScene = class {
    */
   reconcile(snapshot, viewport) {
     const shouldReleasePendingIntent = this.intentPending && this.pendingIntentSequence !== void 0 && snapshot.sequence > this.pendingIntentSequence;
+    if (this.hasViewportChanged(viewport)) {
+      this.resetTransientLayoutState();
+    }
+    this.viewport = { width: viewport.width, height: viewport.height };
     this.currentSequence = snapshot.sequence;
     this.repaintBackground(viewport);
     this.phaseLabel.text = snapshot.phase;
@@ -49706,6 +49835,33 @@ Rituals: ${rituals}` : ""}`;
     drag.tile.container.position.set(position.x, position.y);
   }
   /**
+   * Clears position-dependent interaction and animation state before applying a new viewport layout.
+   */
+  resetTransientLayoutState() {
+    if (this.activeDrag) {
+      this.handLayer.addChild(this.activeDrag.tile.container);
+    }
+    for (const dragReturn of this.dragReturns.values()) {
+      this.handLayer.addChild(dragReturn.tile.container);
+    }
+    for (const tileId of this.releasedDragPositions.keys()) {
+      const tile = this.handTiles.get(tileId);
+      if (tile) {
+        this.handLayer.addChild(tile.container);
+      }
+    }
+    this.activeDrag = void 0;
+    this.releasedDragPositions.clear();
+    this.cancelDragReturns();
+    this.animationStarts.clear();
+  }
+  /**
+   * Determines whether the next layout uses different scene coordinates.
+   */
+  hasViewportChanged(viewport) {
+    return this.viewport !== void 0 && (this.viewport.width !== viewport.width || this.viewport.height !== viewport.height);
+  }
+  /**
    * Advances scene-owned drag-return motion from the shared Pixi ticker.
    *
    * @param deltaMs - Elapsed time supplied by the renderer ticker.
@@ -49888,10 +50044,22 @@ Rituals: ${rituals}` : ""}`;
   /**
    * Moves a card below the encounter while shrinking and fading it so it is gone at the destination.
    */
-  removeCardToBottom(tile, start, destinationX, progress) {
-    tile.container.position.set(interpolate(start.x, destinationX, progress), interpolate(start.y, 570, progress));
+  removeCardToBottom(tile, start, destination, progress) {
+    tile.container.position.set(interpolate(start.x, destination.x, progress), interpolate(start.y, destination.y, progress));
     tile.container.alpha = start.alpha * (1 - progress);
     tile.container.scale.set(start.scale * (1 - progress));
+  }
+  /**
+   * Calculates animation origins and destinations inside the current scene viewport.
+   */
+  getCardAnimationAnchors() {
+    const viewport = this.viewport ?? { width: 960, height: 540 };
+    return {
+      corner: { x: Math.max(0, viewport.width - 80), y: 36 },
+      draw: { x: Math.max(0, viewport.width - 80), y: Math.max(0, viewport.height - 40) },
+      discard: { x: Math.max(0, viewport.width - 100), y: viewport.height + 30 },
+      exhaust: { x: Math.max(0, viewport.width - 40), y: viewport.height + 30 }
+    };
   }
   lunge(source3, target, start, progress) {
     if (!target) {
@@ -50609,6 +50777,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   }
   const accessibilityOverlay = createEncounterAccessibilityOverlay(canvas);
   let semanticInteropCount = 0;
+  let viewport = encounterDesignViewport;
   const scene = new EncounterScene(
     (intent) => {
       semanticInteropCount++;
@@ -50624,7 +50793,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     animationDirector.cancelAll();
     particleEffects.clear();
     scene.refreshAnimationLocks();
-  });
+  }, () => viewport);
   runtime.addSystem(animationDirector);
   runtime.addSystem(particleEffects);
   scene.setAnimationLockResolver((id) => animationDirector.isObjectLocked(id));
@@ -50632,14 +50801,16 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   let disposed = false;
   let disposal;
   let suspended = document.hidden;
+  let hasActiveScene = false;
   const rendererType = application.renderer.type.toString();
-  let viewport = encounterDesignViewport;
-  const applyDesignTransform = () => {
-    const transform = calculateEncounterSceneTransform(viewport);
-    scene.displayObject.scale.set(transform.scale);
-    scene.displayObject.position.set(transform.x, transform.y);
+  const applyViewportLayout = () => {
+    scene.displayObject.scale.set(1);
+    scene.displayObject.position.set(0, 0);
   };
   const reconcileScene = () => {
+    if (!hasActiveScene) {
+      return;
+    }
     void runtime.resize(viewport.width, viewport.height).catch(() => void 0);
   };
   application.renderer.on("resize", reconcileScene);
@@ -50653,7 +50824,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     viewport = { width, height };
     application.renderer.resolution = window.devicePixelRatio;
     application.renderer.resize(width, height);
-    applyDesignTransform();
+    applyViewportLayout();
   };
   const resizeObserver = new ResizeObserver(resizeRenderer);
   resizeObserver.observe(canvas.parentElement ?? canvas);
@@ -50733,6 +50904,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
       }
       accessibilityOverlay.update(snapshot);
       await runtime.show(runtimeScene, snapshot);
+      hasActiveScene = true;
       return true;
     },
     runAnimation(request) {
@@ -50906,12 +51078,14 @@ var EncounterRuntimeScene = class {
   /**
    * Creates a lifecycle owner for the existing encounter presentation objects.
    */
-  constructor(scene, cancelAnimations) {
+  constructor(scene, cancelAnimations, getViewport) {
     this.scene = scene;
     this.cancelAnimations = cancelAnimations;
+    this.getViewport = getViewport;
   }
   scene;
   cancelAnimations;
+  getViewport;
   latestSnapshot;
   disposed = false;
   /** Gets the stable runtime scene identity. */
@@ -50931,7 +51105,7 @@ var EncounterRuntimeScene = class {
   /** Reapplies encounter layout after the renderer viewport changes. */
   resize() {
     if (this.latestSnapshot) {
-      this.scene.reconcile(this.latestSnapshot, encounterDesignViewport);
+      this.scene.reconcile(this.latestSnapshot, this.getViewport());
     }
   }
   /** Cancels scene-local timelines before the runtime replaces or disposes this scene. */
@@ -50952,7 +51126,7 @@ var EncounterRuntimeScene = class {
   }
   reconcileSnapshot(snapshot) {
     this.latestSnapshot = snapshot;
-    this.scene.reconcile(snapshot, encounterDesignViewport);
+    this.scene.reconcile(snapshot, this.getViewport());
   }
 };
 function createRunRuntimeApplication(application) {
