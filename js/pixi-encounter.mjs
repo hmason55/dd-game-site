@@ -47777,10 +47777,10 @@ init_eventemitter3();
 extensions.add(browserExt, webworkerExt);
 
 // src/protocol.ts
-var encounterRendererProtocolVersion = 2;
+var encounterRendererProtocolVersion = 3;
 var encounterSceneId = "encounter";
 function isEncounterPresentationSnapshot(value) {
-  if (!isRecord(value) || value.protocolVersion !== encounterRendererProtocolVersion || value.sceneId !== encounterSceneId || !isFiniteNumber(value.sequence) || !isString(value.phase) || typeof value.inventoryMode !== "boolean" || !isEntityPresentationState(value.player) || !isArrayOf(value.enemies, isEntityPresentationState) || !isArrayOf(value.hand, isCardPresentationState) || !isArrayOf(value.items, isItemPresentationState)) {
+  if (!isRecord(value) || value.protocolVersion !== encounterRendererProtocolVersion || value.sceneId !== encounterSceneId || !isFiniteNumber(value.sequence) || !isString(value.phase) || typeof value.inventoryMode !== "boolean" || !isEntityPresentationState(value.player) || !isArrayOf(value.enemies, isEntityPresentationState) || !isArrayOf(value.hand, isCardPresentationState) || !isArrayOf(value.items, isItemPresentationState) || !isFiniteNumber(value.currency) || !isFiniteNumber(value.deckCount) || !isFiniteNumber(value.relicCount)) {
     return false;
   }
   return true;
@@ -49336,6 +49336,261 @@ function getUiTextStyle(kind) {
   textStyles.set(kind, style);
   return style;
 }
+var GamePanel = class extends Container {
+  background = new Graphics();
+  panelContent = new Container();
+  fill;
+  stroke;
+  cornerRadius;
+  panelWidth;
+  panelHeight;
+  /**
+   * Creates a panel and its dedicated content layer.
+   */
+  constructor(options) {
+    super();
+    this.fill = options.fill ?? uiColors.panelFill;
+    this.stroke = options.stroke ?? uiColors.panelStroke;
+    this.cornerRadius = Math.max(0, options.cornerRadius ?? uiTokens.frame.panelCornerRadius);
+    this.panelWidth = normalizeSize(options.width);
+    this.panelHeight = normalizeSize(options.height);
+    this.addChild(this.background, this.panelContent);
+    this.redraw();
+  }
+  /**
+   * Gets the layer intended for content placed inside this panel.
+   */
+  get content() {
+    return this.panelContent;
+  }
+  /**
+   * Gets the current panel width.
+   */
+  get panelSize() {
+    return { width: this.panelWidth, height: this.panelHeight };
+  }
+  /**
+   * Updates panel dimensions and redraws the panel chrome.
+   */
+  resize(width, height) {
+    this.panelWidth = normalizeSize(width);
+    this.panelHeight = normalizeSize(height);
+    this.redraw();
+  }
+  redraw() {
+    this.background.clear().roundRect(0, 0, this.panelWidth, this.panelHeight, this.cornerRadius).fill({ color: this.fill }).stroke({ color: this.stroke, width: uiTokens.frame.borderWidth });
+  }
+};
+var GameButton = class extends GamePanel {
+  labelText;
+  onPress;
+  stateOutline = new Graphics();
+  isEnabled;
+  isFocused;
+  isSelected;
+  /**
+   * Creates an interactive button.
+   */
+  constructor(options) {
+    super(options);
+    this.onPress = options.onPress;
+    this.isEnabled = options.enabled ?? true;
+    this.isFocused = this.isEnabled && (options.focused ?? false);
+    this.isSelected = this.isEnabled && (options.selected ?? false);
+    this.labelText = new Text({ text: options.label, style: getUiTextStyle("Button") });
+    this.labelText.anchor.set(0.5);
+    this.labelText.position.set(this.panelSize.width / 2, this.panelSize.height / 2);
+    this.content.addChild(this.labelText, this.stateOutline);
+    this.on("pointertap", () => this.press());
+    this.updatePresentation();
+  }
+  /**
+   * Gets the current button label.
+   */
+  get label() {
+    return this.labelText.text;
+  }
+  /**
+   * Updates the visible button label.
+   */
+  set label(value) {
+    this.labelText.text = value;
+  }
+  /**
+   * Gets whether pointer input can activate the button.
+   */
+  get enabled() {
+    return this.isEnabled;
+  }
+  /**
+   * Gets whether the button is the current keyboard-focus target.
+   */
+  get focused() {
+    return this.isFocused;
+  }
+  /**
+   * Gets whether the button represents the current selection.
+   */
+  get selected() {
+    return this.isSelected;
+  }
+  /**
+   * Gets the highest-priority visual interaction state for this button.
+   */
+  get controlState() {
+    if (!this.isEnabled) {
+      return "disabled";
+    }
+    if (this.isFocused) {
+      return "focused";
+    }
+    return this.isSelected ? "selected" : "default";
+  }
+  /**
+   * Enables or disables pointer interaction while retaining the button's visual position.
+   */
+  setEnabled(enabled) {
+    this.isEnabled = enabled;
+    if (!enabled) {
+      this.isFocused = false;
+      this.isSelected = false;
+    }
+    this.updatePresentation();
+  }
+  /**
+   * Sets whether the button should display keyboard focus.
+   *
+   * Disabled buttons cannot receive focus.
+   */
+  setFocused(focused) {
+    this.isFocused = this.isEnabled && focused;
+    this.updatePresentation();
+  }
+  /**
+   * Sets whether the button should display selection.
+   *
+   * Disabled buttons cannot remain selected.
+   */
+  setSelected(selected) {
+    this.isSelected = this.isEnabled && selected;
+    this.updatePresentation();
+  }
+  /**
+   * Activates the button when enabled.
+   */
+  press() {
+    if (this.isEnabled) {
+      this.onPress?.();
+    }
+  }
+  /**
+   * Keeps the cached label centered when this button changes size.
+   */
+  resize(width, height) {
+    super.resize(width, height);
+    this.labelText.position.set(this.panelSize.width / 2, this.panelSize.height / 2);
+    this.updatePresentation();
+  }
+  updatePresentation() {
+    this.eventMode = this.isEnabled ? "static" : "none";
+    this.cursor = this.isEnabled ? "pointer" : "default";
+    this.alpha = this.isEnabled ? 1 : uiTokens.interaction.disabledAlpha;
+    this.redrawStateOutline();
+  }
+  redrawStateOutline() {
+    const { width, height } = this.panelSize;
+    const outlineWidth = Math.max(0, width - 4);
+    const outlineHeight = Math.max(0, height - 4);
+    this.stateOutline.clear();
+    if (!this.isEnabled) {
+      return;
+    }
+    if (this.isSelected) {
+      this.stateOutline.roundRect(uiTokens.frame.selectedInset, uiTokens.frame.selectedInset, outlineWidth, outlineHeight, uiTokens.frame.selectedCornerRadius).stroke({ color: uiColors.buttonSelected, width: uiTokens.frame.borderWidth });
+    }
+    if (this.isFocused) {
+      this.stateOutline.roundRect(uiTokens.frame.focusInset, uiTokens.frame.focusInset, Math.max(0, width - uiTokens.frame.focusInset * 2), Math.max(0, height - uiTokens.frame.focusInset * 2), uiTokens.frame.focusCornerRadius).stroke({ color: uiColors.buttonFocus, width: uiTokens.frame.borderWidth });
+    }
+  }
+};
+var ResourceCounter = class extends Container {
+  valueText;
+  resourceValue;
+  /**
+   * Creates a resource counter.
+   */
+  constructor(options) {
+    super();
+    this.resourceValue = options.value;
+    let offsetX = 0;
+    if (options.icon !== void 0) {
+      const iconText = new Text({ text: options.icon, style: getUiTextStyle("Button") });
+      this.addChild(iconText);
+      offsetX = 22;
+    }
+    const labelText = new Text({ text: options.label, style: getUiTextStyle("Body") });
+    labelText.position.set(offsetX, 0);
+    this.valueText = new Text({ text: String(options.value), style: getUiTextStyle("Button") });
+    this.valueText.position.set(offsetX, 18);
+    this.addChild(labelText, this.valueText);
+  }
+  /**
+   * Gets the resource value displayed by this counter.
+   */
+  get value() {
+    return this.resourceValue;
+  }
+  /**
+   * Updates the resource value displayed by this counter.
+   */
+  setValue(value) {
+    this.resourceValue = value;
+    this.valueText.text = String(value);
+  }
+};
+var ContextPanel = class extends GamePanel {
+  collapsedHeight;
+  expandedHeight;
+  expanded = true;
+  /**
+   * Creates an expanded contextual panel.
+   */
+  constructor(options) {
+    super(options);
+    this.expandedHeight = this.panelSize.height;
+    this.collapsedHeight = Math.min(this.expandedHeight, normalizeSize(options.collapsedHeight ?? 48));
+  }
+  /**
+   * Gets whether the full contextual content is currently visible.
+   */
+  get trayOpen() {
+    return this.expanded;
+  }
+  /**
+   * Opens or collapses the panel's content tray.
+   */
+  setTrayOpen(open) {
+    if (this.expanded === open) {
+      return;
+    }
+    this.expanded = open;
+    this.content.visible = open;
+    super.resize(this.panelSize.width, open ? this.expandedHeight : Math.min(this.expandedHeight, this.collapsedHeight));
+  }
+  /**
+   * Updates the expanded dimensions while preserving the current tray state.
+   */
+  resize(width, height) {
+    this.expandedHeight = normalizeSize(height);
+    super.resize(width, this.expanded ? this.expandedHeight : Math.min(this.expandedHeight, this.collapsedHeight));
+  }
+  /**
+   * Switches between the open and collapsed tray states.
+   */
+  toggleTray() {
+    this.setTrayOpen(!this.expanded);
+  }
+};
 function getTextStyleOptions(kind) {
   switch (kind) {
     case "Button":
@@ -49345,6 +49600,9 @@ function getTextStyleOptions(kind) {
     case "Body":
       return uiTokens.typography.body;
   }
+}
+function normalizeSize(value) {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
 }
 
 // src/card-view.ts
@@ -49838,6 +50096,58 @@ function layoutNarrowHand(count2, viewport) {
   });
 }
 
+// src/run-hud.ts
+var RunHud = class extends Container {
+  constructor(actions) {
+    super();
+    this.actions = actions;
+    this.context.content.addChild(this.contextBody);
+    this.contextBody.position.set(uiTokens.spacing.sm, uiTokens.spacing.sm);
+    this.addChild(this.health, this.currency, this.deck, this.relics, this.context);
+  }
+  actions;
+  health = new ResourceCounter({ icon: "\u2665", label: "HP", value: "0/0" });
+  currency = new ResourceCounter({ icon: "\u25C6", label: "Vein", value: 0 });
+  deck = new GameButton({ width: 92, height: 44, label: "Deck 0", onPress: () => this.actions.previewDeck() });
+  relics = new GameButton({ width: 92, height: 44, label: "Relics 0", onPress: () => this.actions.toggleContext() });
+  context = new ContextPanel({ width: 220, height: 116, collapsedHeight: 44 });
+  contextBody = new Text({ text: "", style: getUiTextStyle("Body") });
+  contextOpen = true;
+  /** Updates values without rebuilding unchanged controls. */
+  reconcile(state, viewport) {
+    this.health.setValue(`${state.health}/${state.maximumHealth}`);
+    this.currency.setValue(state.currency);
+    this.deck.label = `${state.inventoryOpen ? "Hand" : "Deck"} ${state.deckCount}`;
+    this.relics.label = `Relics ${state.relicCount}`;
+    this.contextBody.text = `${state.phase}
+${state.inventoryOpen ? "Inventory open" : "Hand open"}
+H: deck  C: context`;
+    const padding = uiTokens.spacing.sm;
+    this.health.position.set(padding, padding);
+    this.currency.position.set(78, padding);
+    if (getViewportLayoutMode(viewport) === "MobilePortrait") {
+      this.deck.position.set(padding, 50);
+      this.relics.position.set(100, 50);
+      this.context.resize(Math.max(0, viewport.width - padding * 2), 116);
+      this.context.position.set(padding, viewport.height - this.context.panelSize.height - padding);
+    } else {
+      this.deck.position.set(viewport.width - 310, padding);
+      this.relics.position.set(viewport.width - 210, padding);
+      this.context.resize(220, 116);
+      this.context.position.set(viewport.width - 220 - padding, 64);
+    }
+  }
+  /** Toggles the contextual information tray without hover input. */
+  toggleContext() {
+    this.contextOpen = !this.contextOpen;
+    this.context.setTrayOpen(this.contextOpen);
+  }
+  /** Reserves the mobile tray region so encounter controls remain reachable. */
+  getReservedBottomSpace(viewport) {
+    return getViewportLayoutMode(viewport) === "MobilePortrait" ? this.context.panelSize.height + uiTokens.spacing.sm * 2 : 0;
+  }
+};
+
 // src/encounter-scene.ts
 var supportedAnimationNames = /* @__PURE__ */ new Set([
   "wait",
@@ -49875,7 +50185,7 @@ var EncounterScene = class {
     this.endTurnLabel.eventMode = "static";
     this.endTurnLabel.cursor = "pointer";
     this.endTurnLabel.on("pointertap", () => this.submitEndTurn());
-    this.overlayLayer.addChild(this.phaseLabel, this.endTurnLabel);
+    this.overlayLayer.addChild(this.phaseLabel, this.endTurnLabel, this.runHud);
     this.root.addChild(this.backgroundLayer, this.enemyLayer, this.playerLayer, this.handLayer, this.effectsLayer, this.overlayLayer, this.dragLayer);
   }
   emitIntent;
@@ -49889,6 +50199,10 @@ var EncounterScene = class {
   dragLayer = new Container();
   effectsLayer = new Container();
   overlayLayer = new Container();
+  runHud = new RunHud({
+    previewDeck: () => this.submitDeckPreview(),
+    toggleContext: () => this.toggleContext()
+  });
   background = new Graphics();
   phaseLabel = new Text({ text: "", style: { fill: 12109785, fontFamily: "Arial", fontSize: 14 } });
   endTurnLabel = new Text({ text: "End Turn", style: { fill: 16769155, fontFamily: "Arial", fontSize: 14 } });
@@ -50004,6 +50318,14 @@ var EncounterScene = class {
     if (this.intentPending) {
       return false;
     }
+    if (isUnmodifiedShortcut(event, "h")) {
+      this.submitDeckPreview();
+      return true;
+    }
+    if (isUnmodifiedShortcut(event, "c")) {
+      this.toggleContext();
+      return true;
+    }
     if (event.key === "Tab") {
       this.focusEntry(1);
       return true;
@@ -50034,12 +50356,22 @@ var EncounterScene = class {
     this.currentSequence = snapshot.sequence;
     this.repaintBackground(viewport);
     this.phaseLabel.text = snapshot.phase;
-    this.phaseLabel.position.set(16, 12);
+    this.phaseLabel.position.set(Math.min(180, viewport.width * 0.45), 12);
     this.endTurnLabel.visible = snapshot.phase === "WaitingForInput";
     this.endTurnLabel.position.set(viewport.width - 80, 12);
+    this.runHud.reconcile({
+      health: snapshot.player.health,
+      maximumHealth: snapshot.player.maxHealth,
+      currency: snapshot.currency,
+      deckCount: snapshot.deckCount,
+      relicCount: snapshot.relicCount,
+      phase: snapshot.phase,
+      inventoryOpen: snapshot.inventoryMode
+    }, viewport);
     this.reconcileQueuedEntries(snapshot);
-    this.reconcileEntities(snapshot.player, snapshot.enemies, viewport);
-    this.reconcileHand(snapshot, viewport);
+    const contentViewport = this.getContentViewport(viewport);
+    this.reconcileEntities(snapshot.player, snapshot.enemies, contentViewport);
+    this.reconcileHand(snapshot, contentViewport);
     if (shouldReleasePendingIntent) {
       this.releasePendingIntent();
     }
@@ -50722,6 +51054,17 @@ Rituals: ${rituals}` : ""}`;
     }
     this.submitIntent({ kind: "endTurn", sourceId: null, targetId: null, sequence: this.currentSequence, sceneId: encounterSceneId });
   }
+  submitDeckPreview() {
+    if (!this.intentPending) {
+      this.submitIntent({ kind: "previewDeck", sourceId: null, targetId: null, sequence: this.currentSequence, sceneId: encounterSceneId });
+    }
+  }
+  toggleContext() {
+    this.runHud.toggleContext();
+  }
+  getContentViewport(viewport) {
+    return { width: viewport.width, height: Math.max(0, viewport.height - this.runHud.getReservedBottomSpace(viewport)) };
+  }
   focusEntry(direction) {
     const entryIds = [...this.selectableEntries.values()].filter((entry2) => entry2.isDraggable && !this.queuedEntryIds.has(entry2.id) && !this.isEntryInteractionOwned(getEntrySceneId(entry2), entry2.id) && !this.isAnimationLockedForEntry(entry2)).map((entry2) => entry2.id);
     if (entryIds.length === 0) {
@@ -50920,6 +51263,9 @@ function getRarityColor(rarity) {
 }
 function getCharacterColor(character) {
   return character === "Hollowblade" ? 11623797 : character === "Gravetender" ? 7518106 : character === "Dredgecaller" ? 8745910 : character === "Oathbound" ? 13935439 : 8623272;
+}
+function isUnmodifiedShortcut(event, key) {
+  return !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === key;
 }
 function formatCardCost(card) {
   return card.manaCost > 0 ? `${card.energyCost}E ${card.manaCost}M` : `${card.energyCost}E`;
