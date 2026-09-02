@@ -50715,7 +50715,7 @@ Rituals: ${rituals}` : ""}`;
     drag.state = "dragging";
     drag.tile.container.position.set(position.x, position.y);
     const target = this.findDropTarget(position);
-    this.entryInteractionStates.set(getEntrySceneId(drag.entry), target && !this.isAnimationLockedForEntity(target) && this.isValidTarget(drag.entry.targetMode, target) ? "valid-drop" : "invalid-drop");
+    this.entryInteractionStates.set(getEntrySceneId(drag.entry), this.isValidDrop(drag.entry, target) ? "valid-drop" : "invalid-drop");
     this.refreshSelectionHighlights();
   }
   /**
@@ -50877,7 +50877,7 @@ Rituals: ${rituals}` : ""}`;
     const drag = this.activeDrag;
     this.moveDrag(event);
     const entity = drag ? this.findDropTarget(event.getLocalPosition(this.root)) : void 0;
-    if (!drag || !entity || drag.pointerId !== event.pointerId || drag.state !== "dragging" || this.isAnimationLockedForEntry(drag.entry) || this.isAnimationLockedForEntity(entity) || !this.isValidTarget(drag.entry.targetMode, entity)) {
+    if (!drag || drag.pointerId !== event.pointerId || drag.state !== "dragging" || this.isAnimationLockedForEntry(drag.entry) || !this.isValidDrop(drag.entry, entity)) {
       return false;
     }
     this.releasedDragPositions.set(getEntrySceneId(drag.entry), {
@@ -50886,7 +50886,7 @@ Rituals: ${rituals}` : ""}`;
     });
     this.entryInteractionStates.set(getEntrySceneId(drag.entry), "committing");
     this.releaseActiveDrag();
-    this.submitEntryIntent(drag.entry, entity.id);
+    this.submitEntryIntent(drag.entry, drag.entry.targetMode === "none" ? null : entity?.id ?? null);
     return true;
   }
   releaseDrag(event) {
@@ -51139,6 +51139,15 @@ Rituals: ${rituals}` : ""}`;
       const entity = this.entities.get(entityId);
       this.refreshTargetPresentation(tile, entityId, entity);
     }
+  }
+  /**
+   * Determines whether a pointer release can commit an entry without treating untargeted cards as failed drops.
+   */
+  isValidDrop(entry, entity) {
+    if (entry.targetMode === "none") {
+      return true;
+    }
+    return entity !== void 0 && !this.isAnimationLockedForEntity(entity) && this.isValidTarget(entry.targetMode, entity);
   }
   /**
    * Gives targetable entities a clear, low-obstruction visual treatment while an action is selected.
