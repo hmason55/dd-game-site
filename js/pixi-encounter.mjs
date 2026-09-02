@@ -49912,11 +49912,9 @@ function getPalette(rarity) {
   }
 }
 function getStatePresentation(motionState, playability, interaction) {
-  if (!interaction.enabled) {
-    return { alpha: uiTokens.interaction.disabledAlpha, overlayAlpha: 0.35, overlayColor: 1711912, outlineColor: void 0 };
-  }
-  const basePresentation = playability === "unplayable" ? { alpha: 0.65, overlayAlpha: 0.3, overlayColor: 2568253 } : { alpha: 1, overlayAlpha: 0, overlayColor: 0 };
-  const outlineColor = interaction.focused ? uiTokens.color.buttonFocus : interaction.selected ? uiTokens.color.buttonSelected : getMotionOutlineColor(motionState);
+  const basePresentation = !interaction.enabled ? { alpha: uiTokens.interaction.disabledAlpha, overlayAlpha: 0.35, overlayColor: 1711912 } : playability === "unplayable" ? { alpha: 0.65, overlayAlpha: 0.3, overlayColor: 2568253 } : { alpha: 1, overlayAlpha: 0, overlayColor: 0 };
+  const dropOutlineColor = motionState === "valid-drop" || motionState === "invalid-drop" ? getMotionOutlineColor(motionState) : void 0;
+  const outlineColor = dropOutlineColor ?? (interaction.focused ? uiTokens.color.buttonFocus : interaction.selected ? uiTokens.color.buttonSelected : getMotionOutlineColor(motionState));
   return { ...basePresentation, outlineColor };
 }
 function getMotionOutlineColor(state) {
@@ -49927,6 +49925,10 @@ function getMotionOutlineColor(state) {
       return 16120063;
     case "dragging":
       return 16777215;
+    case "valid-drop":
+      return 11141006;
+    case "invalid-drop":
+      return 14912909;
     case "returning":
       return 12109785;
     case "resolving":
@@ -50301,6 +50303,7 @@ var EncounterScene = class {
   entities = /* @__PURE__ */ new Map();
   queuedEntryIds = /* @__PURE__ */ new Set();
   committedCardSequences = /* @__PURE__ */ new Map();
+  entryInteractionStates = /* @__PURE__ */ new Map();
   currentSequence = -1;
   selectedEntryId;
   focusedEntryId;
@@ -50361,6 +50364,10 @@ var EncounterScene = class {
    */
   hasSceneObject(id) {
     return this.entityTiles.has(id) || this.handTiles.has(id);
+  }
+  /** Gets an entry's current presentation ownership state. */
+  getEntryInteractionState(entryId) {
+    return this.entryInteractionStates.get(`card:${entryId}`) ?? this.entryInteractionStates.get(`item:${entryId}`) ?? "idle";
   }
   /**
    * Resolves a persisted entity or scene identifier to its current design-space position.
@@ -50690,6 +50697,7 @@ Rituals: ${rituals}` : ""}`;
       selectionWasActive: this.selectedEntryId === entry.id,
       state: "tracking"
     };
+    this.entryInteractionStates.set(tileId, "pressed");
     this.dragLayer.addChild(tile.container);
     this.selectedEntryId = entry.id;
     this.refreshInteractionState();
@@ -50706,6 +50714,9 @@ Rituals: ${rituals}` : ""}`;
     }
     drag.state = "dragging";
     drag.tile.container.position.set(position.x, position.y);
+    const target = this.findDropTarget(position);
+    this.entryInteractionStates.set(getEntrySceneId(drag.entry), target && !this.isAnimationLockedForEntity(target) && this.isValidTarget(drag.entry.targetMode, target) ? "valid-drop" : "invalid-drop");
+    this.refreshSelectionHighlights();
   }
   /**
    * Clears position-dependent interaction and animation state before applying a new viewport layout.
@@ -50844,6 +50855,13 @@ Rituals: ${rituals}` : ""}`;
    * Maps interaction ownership to the reusable card presentation motion vocabulary.
    */
   getCardMotionState(tileId, entryId) {
+    const state = this.entryInteractionStates.get(tileId);
+    if (state === "pressed") return "hovered";
+    if (state === "dragging") return "dragging";
+    if (state === "valid-drop") return "valid-drop";
+    if (state === "invalid-drop") return "invalid-drop";
+    if (state === "returning") return "returning";
+    if (state === "committing" || state === "resolved") return "resolving";
     if (this.dragReturns.has(tileId)) {
       return "returning";
     }
@@ -50866,6 +50884,7 @@ Rituals: ${rituals}` : ""}`;
       origin: drag.origin,
       position: captureTransform(drag.tile.container)
     });
+    this.entryInteractionStates.set(getEntrySceneId(drag.entry), "committing");
     this.releaseActiveDrag();
     this.submitEntryIntent(drag.entry, entity.id);
     return true;
@@ -50904,6 +50923,7 @@ Rituals: ${rituals}` : ""}`;
       tile: drag.tile,
       elapsedMs: 0
     });
+    this.entryInteractionStates.set(tileId, "returning");
     this.releaseActiveDrag(drag.state === "dragging");
   }
   releaseActiveDrag(clearSelection = true) {
@@ -50917,6 +50937,7 @@ Rituals: ${rituals}` : ""}`;
   finishDragReturn(tileId, dragReturn) {
     this.restoreTileToHand(dragReturn.tile, dragReturn.origin);
     this.dragReturns.delete(tileId);
+    this.entryInteractionStates.delete(tileId);
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
   }
@@ -50951,6 +50972,9 @@ Rituals: ${rituals}` : ""}`;
   clearDragMotion(tileId) {
     this.releasedDragPositions.delete(tileId);
     this.cancelDragReturn(tileId);
+    if (this.entryInteractionStates.has(tileId)) {
+      this.entryInteractionStates.set(tileId, "resolved");
+    }
   }
   cancelDragReturn(tileId) {
     this.dragReturns.delete(tileId);
@@ -51308,6 +51332,7 @@ Rituals: ${rituals}` : ""}`;
         tile,
         elapsedMs: 0
       });
+      this.entryInteractionStates.set(tileId, "returning");
     }
   }
   releasePendingIntent() {
