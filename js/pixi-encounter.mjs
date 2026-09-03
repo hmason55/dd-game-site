@@ -50281,7 +50281,8 @@ var EncounterScene = class {
     this.endTurnLabel.eventMode = "static";
     this.endTurnLabel.cursor = "pointer";
     this.endTurnLabel.on("pointertap", () => this.submitEndTurn());
-    this.overlayLayer.addChild(this.phaseLabel, this.endTurnLabel, this.runHud);
+    this.intentStatusLabel.anchor.set(0.5, 0.5);
+    this.overlayLayer.addChild(this.phaseLabel, this.endTurnLabel, this.runHud, this.intentStatusBackground, this.intentStatusLabel);
     this.root.addChild(this.backgroundLayer, this.enemyLayer, this.playerLayer, this.handLayer, this.effectsLayer, this.overlayLayer, this.dragLayer);
   }
   emitIntent;
@@ -50300,6 +50301,8 @@ var EncounterScene = class {
     toggleContext: () => this.toggleContext()
   });
   background = new Graphics();
+  intentStatusBackground = new Graphics();
+  intentStatusLabel = new Text({ text: "", style: { fill: 15856888, fontFamily: "Arial", fontSize: 13 } });
   phaseLabel = new Text({ text: "", style: { fill: 12109785, fontFamily: "Arial", fontSize: 14 } });
   endTurnLabel = new Text({ text: "End Turn", style: { fill: 16769155, fontFamily: "Arial", fontSize: 14 } });
   entityTiles = /* @__PURE__ */ new Map();
@@ -50321,6 +50324,7 @@ var EncounterScene = class {
   animationLockResolver = () => false;
   intentPending = false;
   pendingIntentSequence;
+  pendingIntentMessage;
   viewport;
   animationStarts = /* @__PURE__ */ new Map();
   animationCommandHandlers = /* @__PURE__ */ new Map([
@@ -50374,6 +50378,12 @@ var EncounterScene = class {
   /** Gets an entry's current presentation ownership state. */
   getEntryInteractionState(entryId) {
     return this.entryInteractionStates.get(`card:${entryId}`) ?? this.entryInteractionStates.get(`item:${entryId}`) ?? "idle";
+  }
+  /**
+   * Gets the visible explanation for a scene-wide pending action, when input is locked.
+   */
+  getInputLockMessage() {
+    return this.pendingIntentMessage;
   }
   /**
    * Resolves a persisted entity or scene identifier to its current design-space position.
@@ -50464,6 +50474,7 @@ var EncounterScene = class {
     this.phaseLabel.position.set(Math.min(180, viewport.width * 0.45), 12);
     this.endTurnLabel.visible = snapshot.phase === "WaitingForInput";
     this.endTurnLabel.position.set(viewport.width - 80, 12);
+    this.layoutInputLockFeedback(viewport);
     this.runHud.reconcile({
       health: snapshot.player.health,
       maximumHealth: snapshot.player.maxHealth,
@@ -50520,6 +50531,17 @@ var EncounterScene = class {
   }
   repaintBackground(viewport) {
     this.background.clear().rect(0, 0, viewport.width, viewport.height).fill({ color: 726562 });
+  }
+  /**
+   * Positions the scene-owned pending-action feedback without participating in gameplay layout.
+   */
+  layoutInputLockFeedback(viewport) {
+    const width = Math.min(240, Math.max(160, viewport.width - 32));
+    const x2 = viewport.width / 2;
+    const y2 = getViewportLayoutMode(viewport) === "MobilePortrait" ? 102 : 31;
+    this.intentStatusBackground.clear().roundRect(x2 - width / 2, y2, width, 28, 8).fill({ color: 1452091, alpha: 0.94 }).stroke({ color: 8299977, width: 1 });
+    this.intentStatusBackground.visible = this.intentPending;
+    this.intentStatusLabel.position.set(x2, y2 + 14);
   }
   reconcileEntities(player, enemies, viewport) {
     const expectedIds = /* @__PURE__ */ new Set();
@@ -51344,6 +51366,10 @@ Rituals: ${rituals}` : ""}`;
     if (this.activeDrag) {
       this.returnActiveDrag();
     }
+    if (this.intentPending) {
+      this.announceInteraction?.(this.pendingIntentMessage ?? "An encounter action is still being processed.");
+      return;
+    }
     this.selectedEntryId = void 0;
     this.focusedEntityId = void 0;
     this.announceInteraction?.("Encounter selection cancelled.");
@@ -51355,13 +51381,14 @@ Rituals: ${rituals}` : ""}`;
       this.queueCardIntent(intent);
       return;
     }
-    this.intentPending = true;
-    this.pendingIntentSequence = intent.sequence;
+    this.beginPendingIntent(intent);
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
     void this.emitIntent(intent).then((result) => {
       if (!result.accepted) {
         this.returnReleasedEntry(intent.kind, intent.sourceId);
+        this.releasePendingIntent();
+      } else if (intent.kind === "previewDeck") {
         this.releasePendingIntent();
       }
     }).catch(() => {
@@ -51420,8 +51447,23 @@ Rituals: ${rituals}` : ""}`;
   releasePendingIntent() {
     this.intentPending = false;
     this.pendingIntentSequence = void 0;
+    this.pendingIntentMessage = void 0;
+    this.intentStatusBackground.visible = false;
+    this.intentStatusLabel.visible = false;
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
+  }
+  /**
+   * Locks scene-wide input while a non-queued semantic action awaits its authoritative outcome.
+   */
+  beginPendingIntent(intent) {
+    this.intentPending = true;
+    this.pendingIntentSequence = intent.sequence;
+    this.pendingIntentMessage = getPendingIntentMessage(intent.kind);
+    this.intentStatusLabel.text = this.pendingIntentMessage;
+    this.intentStatusBackground.visible = true;
+    this.intentStatusLabel.visible = true;
+    this.announceInteraction?.(this.pendingIntentMessage);
   }
   reconcileQueuedEntries(snapshot) {
     const authoritativeQueuedEntryIds = new Set(snapshot.hand.filter((card) => card.isQueued).map((card) => card.id));
@@ -51457,6 +51499,18 @@ function isCardPresentationState2(entry) {
 }
 function getEntrySceneId(entry) {
   return `${isCardPresentationState2(entry) ? "card" : "item"}:${entry.id}`;
+}
+function getPendingIntentMessage(kind) {
+  switch (kind) {
+    case "endTurn":
+      return "Ending turn\u2026";
+    case "previewDeck":
+      return "Opening deck\u2026";
+    case "useItem":
+      return "Using item\u2026";
+    default:
+      return "Processing encounter action\u2026";
+  }
 }
 function interpolate(start, end, progress) {
   return start + (end - start) * progress;
