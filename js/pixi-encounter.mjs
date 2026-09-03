@@ -50073,9 +50073,10 @@ function layoutEnemies(count2, viewport) {
   const entityWidth = 176;
   const entityHeight = 116;
   const entityGap = 12;
-  const columns = Math.min(count2, Math.max(1, Math.floor((viewport.width - horizontalPadding * 2) / 120)));
+  const maximumCombatWidth = Math.min(680, viewport.width - horizontalPadding * 2);
+  const columns = Math.min(count2, 4);
   const rows = Math.ceil(count2 / columns);
-  const availableWidth = viewport.width - horizontalPadding * 2;
+  const availableWidth = Math.max(0, maximumCombatWidth);
   const availableHeight = Math.max(entityHeight, layoutPlayer(viewport).y - 58 - verticalPadding - entityGap);
   const horizontalScale = availableWidth / (columns * entityWidth);
   const verticalScale = availableHeight / (rows * entityHeight + (rows - 1) * entityGap);
@@ -50089,7 +50090,7 @@ function layoutEnemies(count2, viewport) {
     const entriesInRow = Math.min(columns, count2 - row * columns);
     const horizontalStep = entriesInRow === 1 ? 0 : (availableWidth - tileWidth) / (entriesInRow - 1);
     return {
-      x: entriesInRow === 1 ? viewport.width / 2 : horizontalPadding + tileWidth / 2 + column * horizontalStep,
+      x: entriesInRow === 1 ? viewport.width / 2 : (viewport.width - availableWidth) / 2 + tileWidth / 2 + column * horizontalStep,
       y: verticalPadding + tileHeight / 2 + row * rowStep,
       scale
     };
@@ -50410,7 +50411,7 @@ var EncounterScene = class {
     ["lunge", (source3, target, _tile, start, progress) => this.lunge(source3, target, start, progress)],
     ["nudge", (source3, target, tile, start, progress) => this.nudge(source3, target, tile, start, progress)],
     ["shake", (_source, _target, tile, start, progress) => tile.container.position.set(start.x + Math.sin(progress * Math.PI * 8) * (1 - progress) * (this.reducedMotion ? 3 : 14), start.y)],
-    ["hit-flash", (_source, _target, tile, start, progress) => tile.background.tint = progress === 1 ? start.tint : this.reducedMotion ? 14477298 : 16777215],
+    ["hit-flash", (_source, _target, tile, _start, progress) => this.flashArtwork(tile, progress)],
     ["status-change", (_source, _target, tile, _start, progress) => tile.accent.alpha = 0.4 + Math.sin(progress * Math.PI) * 0.6],
     ["resource-change", (_source, _target, tile, _start, progress) => tile.detail.scale.set(1 + Math.sin(progress * Math.PI) * 0.15)],
     ["death-removal", (_source, _target, tile, start, progress) => tile.container.alpha = start.alpha * (1 - progress)],
@@ -50660,6 +50661,7 @@ var EncounterScene = class {
     const rituals = entity.rituals.map((ritual) => ritual.name).join(", ");
     const color = entity.isPlayer ? 2645391 : entity.isTargetable ? 9124667 : 4410713;
     tile.background.clear().roundRect(-88, -58, 176, 116, 10).fill({ color });
+    tile.background.tint = 16777215;
     tile.accent.clear();
     this.updateArtwork(tile, entity.image, 164, 104);
     tile.title.text = entity.name;
@@ -50721,8 +50723,11 @@ Rituals: ${rituals}` : ""}`;
     }
     const background = new Graphics();
     const accent = new Graphics();
+    const targetHighlight = new Sprite(Texture.EMPTY);
+    targetHighlight.anchor.set(0.5, 0.5);
+    targetHighlight.visible = false;
     const artwork = new Sprite(Texture.EMPTY);
-    artwork.alpha = 0.28;
+    artwork.anchor.set(0.5, 0.5);
     const title = new Text({ text: "", style: { align: "center", fill: 16777215, fontFamily: "Arial, system-ui", fontSize: 16, wordWrap: true, wordWrapWidth: 104 } });
     const description = new Text({ text: "", style: { align: "center", fill: 15856888, fontFamily: "Arial, system-ui", fontSize: 12, wordWrap: true, wordWrapWidth: 104 } });
     const detail = new Text({ text: "", style: { align: "center", fill: 14148078, fontFamily: "Arial, system-ui", fontSize: 12, wordWrap: true, wordWrapWidth: 104 } });
@@ -50733,9 +50738,9 @@ Rituals: ${rituals}` : ""}`;
     title.position.set(0, -35);
     description.position.set(0, 0);
     detail.position.set(0, 42);
-    container.addChild(background, artwork, accent, title, description, detail);
+    container.addChild(background, targetHighlight, artwork, accent, title, description, detail);
     layer.addChild(container);
-    const tile = { container, background, accent, artwork, title, description, detail };
+    const tile = { container, background, accent, targetHighlight, artwork, title, description, detail };
     tiles.set(id, tile);
     return tile;
   }
@@ -50881,7 +50886,7 @@ Rituals: ${rituals}` : ""}`;
     cardView.position.set(-45, -63);
     cardView.scale.set(handCardViewScale);
     tile.container.removeAllListeners();
-    tile.container.removeChild(tile.background, tile.accent, tile.artwork, tile.title, tile.description, tile.detail);
+    tile.container.removeChild(tile.background, tile.accent, tile.targetHighlight, tile.artwork, tile.title, tile.description, tile.detail);
     tile.artwork.destroy();
     tile.title.destroy();
     tile.description.destroy();
@@ -51095,19 +51100,37 @@ Rituals: ${rituals}` : ""}`;
     return void 0;
   }
   updateArtwork(tile, image, width, height) {
-    tile.artwork.visible = false;
     if (!image || !this.assetLoader) {
+      delete tile.artworkImage;
+      delete tile.artworkRequestImage;
+      tile.artwork.visible = false;
+      tile.targetHighlight.visible = false;
       return;
     }
+    if (tile.artworkImage !== image) {
+      tile.artworkImage = image;
+      tile.artwork.visible = false;
+      tile.targetHighlight.visible = false;
+    }
+    if (tile.artwork.visible || tile.artworkRequestImage === image) {
+      return;
+    }
+    tile.artworkRequestImage = image;
     void this.assetLoader.load(image).then((texture) => {
-      if (!texture || tile.container.destroyed) {
+      if (tile.artworkRequestImage === image) {
+        delete tile.artworkRequestImage;
+      }
+      if (!texture || tile.container.destroyed || tile.artworkImage !== image) {
         return;
       }
       tile.artwork.texture = texture;
       tile.artwork.width = width;
       tile.artwork.height = height;
-      tile.artwork.anchor.set(0.5, 0.5);
+      tile.targetHighlight.texture = texture;
+      tile.targetHighlight.width = width + 10;
+      tile.targetHighlight.height = height + 10;
       tile.artwork.visible = true;
+      this.refreshSelectionHighlights();
     });
   }
   handleEntitySelection(entityId) {
@@ -51160,7 +51183,7 @@ Rituals: ${rituals}` : ""}`;
       tile.container.alpha = start.alpha;
       tile.container.rotation = start.rotation;
       tile.container.scale.set(start.scale);
-      tile.background.tint = start.tint;
+      tile.artwork.alpha = start.artworkAlpha;
     }
     this.animationStarts.delete(command.id);
   }
@@ -51209,12 +51232,24 @@ Rituals: ${rituals}` : ""}`;
     source3.container.position.set(start.x + direction.x * distance, start.y + direction.y * distance);
   }
   /**
-   * Combines a short positional impact with a readable white flash.
+   * Combines a short positional impact with artwork emphasis without recoloring the entity tile.
    */
   hit(tile, start, progress) {
     const offset = Math.sin(progress * Math.PI * 6) * (1 - progress) * 8;
     tile.container.position.set(start.x + offset, start.y);
-    tile.background.tint = progress === 1 ? start.tint : 16777215;
+    tile.artwork.alpha = progress === 1 ? start.artworkAlpha : this.reducedMotion ? 0.86 : 1;
+  }
+  /**
+   * Flashes a loaded entity silhouette without replaying the positional hit shake.
+   */
+  flashArtwork(tile, progress) {
+    tile.targetHighlight.visible = tile.artwork.visible && progress < 1;
+    if (tile.targetHighlight.visible) {
+      tile.targetHighlight.tint = 16777215;
+      tile.targetHighlight.alpha = Math.sin(progress * Math.PI) * (this.reducedMotion ? 0.35 : 0.75);
+      return;
+    }
+    this.refreshSelectionHighlights();
   }
   /**
    * Enlarges a tile briefly while restoring its base scale at completion.
@@ -51264,7 +51299,7 @@ Rituals: ${rituals}` : ""}`;
     if (existing) {
       return existing;
     }
-    const start = { x: tile.container.x, y: tile.container.y, alpha: tile.container.alpha, tint: tile.background.tint, rotation: tile.container.rotation, scale: tile.container.scale.x };
+    const start = { x: tile.container.x, y: tile.container.y, alpha: tile.container.alpha, artworkAlpha: tile.artwork.alpha, rotation: tile.container.rotation, scale: tile.container.scale.x };
     this.animationStarts.set(id, start);
     return start;
   }
@@ -51274,8 +51309,8 @@ Rituals: ${rituals}` : ""}`;
   refreshSelectionHighlights() {
     for (const [id, tile] of this.handTiles) {
       const entryId = id.substring(id.indexOf(":") + 1);
-      tile.background.tint = entryId === this.focusedEntryId ? 10476287 : entryId === this.selectedEntryId ? 16769155 : 16777215;
       const entry = this.selectableEntries.get(entryId);
+      tile.background.tint = entry && !isCardPresentationState2(entry) ? entryId === this.focusedEntryId ? 10476287 : entryId === this.selectedEntryId ? 16769155 : 16777215 : 16777215;
       if (entry && isCardPresentationState2(entry) && tile.cardView) {
         tile.cardView.setInteractionState({
           enabled: this.isEntryInteractive(id, entry),
@@ -51309,20 +51344,22 @@ Rituals: ${rituals}` : ""}`;
     const isTargeting = selectedEntry !== void 0 && selectedEntry.targetMode !== "none";
     const isValidTarget = entity !== void 0 && this.canSelectEntity(entity);
     const isFocused = entityId === this.focusedEntityId;
-    tile.background.tint = isFocused ? 16769155 : isValidTarget ? 13891495 : isTargeting ? 10187635 : 16777215;
-    tile.accent.alpha = 1;
+    tile.background.tint = 16777215;
     tile.accent.clear();
-    if (isFocused) {
-      tile.accent.roundRect(-93, -63, 186, 126, 12).stroke({ color: 16769155, width: 4 });
+    tile.targetHighlight.visible = isTargeting && tile.artwork.visible;
+    if (!tile.targetHighlight.visible) {
+      tile.accent.alpha = isTargeting ? 1 : 0;
+      if (isTargeting) {
+        tile.accent.roundRect(-91, -61, 182, 122, 11).stroke({
+          color: isFocused ? 16769155 : isValidTarget ? 11141006 : 14912909,
+          width: isFocused || isValidTarget ? 4 : 2
+        });
+      }
       return;
     }
-    if (isValidTarget) {
-      tile.accent.roundRect(-93, -63, 186, 126, 12).stroke({ color: 11141006, width: 4 });
-      return;
-    }
-    if (isTargeting) {
-      tile.accent.roundRect(-91, -61, 182, 122, 11).stroke({ color: 14912909, width: 2 });
-    }
+    tile.accent.alpha = 0;
+    tile.targetHighlight.tint = isFocused ? 16769155 : isValidTarget ? 11141006 : 14912909;
+    tile.targetHighlight.alpha = isFocused ? 0.95 : isValidTarget ? 0.8 : 0.5;
   }
   refreshInteractionState() {
     for (const [tileId, tile] of this.handTiles) {
