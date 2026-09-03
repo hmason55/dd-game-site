@@ -48333,7 +48333,12 @@ var ParticleEffectManager = class {
     particle.display.blendMode = toPixiBlendMode(options.blendMode);
     if (particle.mode === "default" && particle.display instanceof Graphics) {
       particle.display.tint = 16777215;
-      particle.display.clear().circle(0, 0, particle.size).fill({ color: toHexColor(color) });
+      particle.display.clear();
+      if (options.glowIntensity > 0) {
+        const glowAlpha = Math.min(0.38, options.glowIntensity / 40) * (1 - progress);
+        particle.display.circle(0, 0, particle.size * (1 + options.glowIntensity / 12)).fill({ color: toHexColor(options.glowColor), alpha: glowAlpha });
+      }
+      particle.display.circle(0, 0, particle.size).fill({ color: toHexColor(color) });
       particle.display.scale.set(1);
     } else {
       particle.display.tint = toHexColor(color);
@@ -48402,9 +48407,6 @@ function parseOptions(value, maxParticlesPerEmitter, reducedMotion) {
   if (!isObject(value) || typeof value.id !== "string" || value.id.length === 0) {
     return void 0;
   }
-  if (finiteNumber(value.glowIntensity, 0) > 0) {
-    return void 0;
-  }
   const requestedQuality = finiteNumber(value.qualityFactor, 1);
   const quality = reducedMotion ? 0 : Math.min(1, Math.max(0.1, requestedQuality));
   const imageSrc = optionalString(value.imageSrc);
@@ -48441,6 +48443,8 @@ function parseOptions(value, maxParticlesPerEmitter, reducedMotion) {
     rotation: readRange(value.rotation, 0, 0),
     rotationSpeed: readRange(value.rotationSpeed, 0, 0),
     blendMode: optionalString(value.blendMode) ?? "source-over",
+    glowIntensity: Math.min(16, Math.max(0, finiteNumber(value.glowIntensity, 0))),
+    glowColor: readCssColor(optionalString(value.glowColor)),
     quality,
     maxParticles: Math.max(1, Math.min(maxParticlesPerEmitter, Math.floor(finiteNumber(value.maxParticles, maxParticlesPerEmitter))))
   };
@@ -48476,6 +48480,26 @@ function readColorRange(value) {
 }
 function readColor(value) {
   return isObject(value) ? { r: clampUnit(finiteNumber(value.r, 1)), g: clampUnit(finiteNumber(value.g, 1)), b: clampUnit(finiteNumber(value.b, 1)), a: clampUnit(finiteNumber(value.a, 1)) } : { r: 1, g: 1, b: 1, a: 1 };
+}
+function readCssColor(value) {
+  if (!value) {
+    return { r: 1, g: 1, b: 1, a: 1 };
+  }
+  const hexadecimal = value.trim().match(/^#([0-9a-f]{6})$/i);
+  if (hexadecimal?.[1]) {
+    const packed = Number.parseInt(hexadecimal[1], 16);
+    return { r: (packed >> 16 & 255) / 255, g: (packed >> 8 & 255) / 255, b: (packed & 255) / 255, a: 1 };
+  }
+  const rgba = value.trim().match(/^rgba?\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)(?:\s*,\s*(\d*(?:\.\d+)?))?\s*\)$/i);
+  if (!rgba) {
+    return { r: 1, g: 1, b: 1, a: 1 };
+  }
+  return {
+    r: clampUnit(Number.parseFloat(rgba[1] ?? "255") / 255),
+    g: clampUnit(Number.parseFloat(rgba[2] ?? "255") / 255),
+    b: clampUnit(Number.parseFloat(rgba[3] ?? "255") / 255),
+    a: clampUnit(Number.parseFloat(rgba[4] ?? "1"))
+  };
 }
 function readRenderMode(value) {
   return value === "Text" || value === "text" ? "text" : value === "Image" || value === "image" ? "image" : "default";
@@ -49993,6 +50017,16 @@ function calculateViewportLayout(viewport, options = {}) {
     contentScale
   };
 }
+function planViewportUpdate(previous, viewport, options = {}) {
+  const descriptor = describeViewport(viewport, options);
+  const layout = calculateViewportLayout(viewport, options);
+  return Object.freeze({
+    descriptor,
+    layout,
+    rendererMetricsChanged: previous === void 0 || previous.width !== descriptor.width || previous.height !== descriptor.height || previous.devicePixelRatio !== descriptor.devicePixelRatio,
+    contentSizeChanged: previous === void 0 || previous.contentBounds.width !== descriptor.contentBounds.width || previous.contentBounds.height !== descriptor.contentBounds.height
+  });
+}
 function normalizeViewport(viewport) {
   return {
     width: normalizeDimension3(viewport.width),
@@ -50245,6 +50279,17 @@ H: deck  C: context`;
 // src/encounter-scene.ts
 var supportedAnimationNames = /* @__PURE__ */ new Set([
   "wait",
+  "idle",
+  "enter",
+  "prepare-attack",
+  "attack",
+  "hit",
+  "block",
+  "buff",
+  "debuff",
+  "stagger",
+  "death",
+  "exit",
   "card-play-to-target",
   "card-play-to-corner",
   "draw-to-hand",
@@ -50268,10 +50313,11 @@ var EncounterScene = class {
   /**
    * Creates the ordered layers that belong to this scene.
    */
-  constructor(emitIntent, assetLoader, announceInteraction) {
+  constructor(emitIntent, assetLoader, announceInteraction, reducedMotion = false) {
     this.emitIntent = emitIntent;
     this.assetLoader = assetLoader;
     this.announceInteraction = announceInteraction;
+    this.reducedMotion = reducedMotion;
     this.root.eventMode = "static";
     this.root.on("globalpointermove", (event) => this.moveDrag(event));
     this.root.on("pointerup", (event) => this.releaseDrag(event));
@@ -50288,6 +50334,7 @@ var EncounterScene = class {
   emitIntent;
   assetLoader;
   announceInteraction;
+  reducedMotion;
   root = new Container();
   backgroundLayer = new Container();
   enemyLayer = new Container();
@@ -50328,6 +50375,20 @@ var EncounterScene = class {
   viewport;
   animationStarts = /* @__PURE__ */ new Map();
   animationCommandHandlers = /* @__PURE__ */ new Map([
+    ["idle", (_source, _target, tile, start, progress) => tile.container.scale.set(start.scale * (1 + Math.sin(progress * Math.PI * 2) * 0.015))],
+    ["enter", (_source, _target, tile, start, progress) => {
+      tile.container.alpha = interpolate(0, start.alpha, progress);
+      tile.container.scale.set(interpolate(start.scale * 0.88, start.scale, progress));
+    }],
+    ["prepare-attack", (source3, target, _tile, start, progress) => this.prepareAttack(source3, target, start, progress)],
+    ["attack", (source3, target, _tile, start, progress) => this.lunge(source3, target, start, progress)],
+    ["hit", (_source, _target, tile, start, progress) => this.hit(tile, start, progress)],
+    ["block", (_source, _target, tile, start, progress) => this.pulseScale(tile, start, progress, 0.12)],
+    ["buff", (_source, _target, tile, _start, progress) => this.pulseAccent(tile, progress, 7657120)],
+    ["debuff", (_source, _target, tile, _start, progress) => this.pulseAccent(tile, progress, 14709105)],
+    ["stagger", (_source, _target, tile, start, progress) => this.stagger(tile, start, progress)],
+    ["death", (_source, _target, tile, start, progress) => this.exit(tile, start, progress)],
+    ["exit", (_source, _target, tile, start, progress) => this.exit(tile, start, progress)],
     ["card-play-to-target", (source3, target, _tile, start, progress) => this.moveTo(source3, target, start, progress)],
     ["card-play-to-corner", (_source, _target, tile, start, progress) => {
       const anchors = this.getCardAnimationAnchors();
@@ -50348,8 +50409,8 @@ var EncounterScene = class {
     ["hand-reflow", (_source, _target, tile, start, progress) => tile.container.scale.set(start.scale * (1 + Math.sin(progress * Math.PI) * 0.08))],
     ["lunge", (source3, target, _tile, start, progress) => this.lunge(source3, target, start, progress)],
     ["nudge", (source3, target, tile, start, progress) => this.nudge(source3, target, tile, start, progress)],
-    ["shake", (_source, _target, tile, start, progress) => tile.container.position.set(start.x + Math.sin(progress * Math.PI * 8) * (1 - progress) * 14, start.y)],
-    ["hit-flash", (_source, _target, tile, start, progress) => tile.background.tint = progress === 1 ? start.tint : 16777215],
+    ["shake", (_source, _target, tile, start, progress) => tile.container.position.set(start.x + Math.sin(progress * Math.PI * 8) * (1 - progress) * (this.reducedMotion ? 3 : 14), start.y)],
+    ["hit-flash", (_source, _target, tile, start, progress) => tile.background.tint = progress === 1 ? start.tint : this.reducedMotion ? 14477298 : 16777215],
     ["status-change", (_source, _target, tile, _start, progress) => tile.accent.alpha = 0.4 + Math.sin(progress * Math.PI) * 0.6],
     ["resource-change", (_source, _target, tile, _start, progress) => tile.detail.scale.set(1 + Math.sin(progress * Math.PI) * 0.15)],
     ["death-removal", (_source, _target, tile, start, progress) => tile.container.alpha = start.alpha * (1 - progress)],
@@ -51136,6 +51197,57 @@ Rituals: ${rituals}` : ""}`;
     const direction = getDirection(start.x, start.y, target.container.x, target.container.y);
     source3.container.position.set(start.x + direction.x * distance, start.y + direction.y * distance);
   }
+  /**
+   * Pulls an attacker slightly away from its target before the attack lunge begins.
+   */
+  prepareAttack(source3, target, start, progress) {
+    if (!target) {
+      return;
+    }
+    const distance = Math.sin(progress * Math.PI) * -9;
+    const direction = getDirection(start.x, start.y, target.container.x, target.container.y);
+    source3.container.position.set(start.x + direction.x * distance, start.y + direction.y * distance);
+  }
+  /**
+   * Combines a short positional impact with a readable white flash.
+   */
+  hit(tile, start, progress) {
+    const offset = Math.sin(progress * Math.PI * 6) * (1 - progress) * 8;
+    tile.container.position.set(start.x + offset, start.y);
+    tile.background.tint = progress === 1 ? start.tint : 16777215;
+  }
+  /**
+   * Enlarges a tile briefly while restoring its base scale at completion.
+   */
+  pulseScale(tile, start, progress, intensity) {
+    tile.container.scale.set(start.scale * (1 + Math.sin(progress * Math.PI) * intensity));
+  }
+  /**
+   * Draws and pulses a temporary colored frame around a tile.
+   */
+  pulseAccent(tile, progress, color) {
+    tile.accent.clear();
+    if (progress >= 1) {
+      tile.accent.alpha = 0;
+      return;
+    }
+    tile.accent.roundRect(-94, -64, 188, 128, 13).stroke({ color, width: 3 });
+    tile.accent.alpha = 0.25 + Math.sin(progress * Math.PI) * 0.75;
+  }
+  /**
+   * Applies a short rotation and scale loss to communicate a stagger.
+   */
+  stagger(tile, start, progress) {
+    tile.container.rotation = start.rotation + Math.sin(progress * Math.PI * 3) * (1 - progress) * 0.09;
+    tile.container.scale.set(start.scale * (1 - Math.sin(progress * Math.PI) * 0.05));
+  }
+  /**
+   * Fades an entity from the scene while shrinking it toward a stable terminal state.
+   */
+  exit(tile, start, progress) {
+    tile.container.alpha = start.alpha * (1 - progress);
+    tile.container.scale.set(start.scale * (1 - progress * 0.15));
+  }
   nudge(source3, target, tile, start, progress) {
     if (!target) {
       return;
@@ -51702,6 +51814,7 @@ var RunPresentationRuntime = class {
   root = new Container();
   layers;
   activeScene;
+  nextScenePreload;
   operation = Promise.resolve();
   transitionCount = 0;
   suspended = false;
@@ -51729,14 +51842,47 @@ var RunPresentationRuntime = class {
     this.systems.push(system);
   }
   /**
+   * Starts loading a future scene's presentation bundle without queueing a lifecycle transition.
+   *
+   * The active scene remains interactive while preload work is pending. Calling {@link show} for
+   * this same scene waits for the work before it begins teardown of the active scene.
+   */
+  preloadNextScene(scene, state) {
+    return this.beginScenePreload(scene, state)?.task ?? Promise.resolve();
+  }
+  beginScenePreload(scene, state) {
+    this.throwIfDisposing();
+    if (this.activeScene?.scene.id === scene.id) {
+      return void 0;
+    }
+    if (!scene.preload) {
+      this.abandonScenePreload(this.nextScenePreload);
+      return void 0;
+    }
+    const existing = this.nextScenePreload;
+    if (existing?.scene === scene && existing.state === state) {
+      return existing;
+    }
+    this.abandonScenePreload(existing);
+    const controller = new AbortController();
+    const task = Promise.resolve(scene.preload(state, { signal: controller.signal }));
+    const pending = { scene, state, controller, task, discarded: false };
+    this.nextScenePreload = pending;
+    void task.catch(() => {
+      if (this.nextScenePreload === pending) {
+        this.nextScenePreload = void 0;
+        this.discardScenePreload(pending);
+      }
+    });
+    return pending;
+  }
+  /**
    * Replaces the current scene or reconciles state when the stable scene identity is unchanged.
    */
   show(scene, state) {
     this.throwIfDisposing();
-    const activeScene = this.activeScene;
-    if (activeScene && activeScene.scene.id !== scene.id) {
-      activeScene.controller.abort();
-    }
+    const preload = this.beginScenePreload(scene, state);
+    this.cancelActiveSceneAfterPreload(scene, preload);
     return this.enqueue(async () => {
       this.throwIfDisposing();
       const mountedScene = this.activeScene;
@@ -51744,11 +51890,25 @@ var RunPresentationRuntime = class {
         await mountedScene.scene.reconcile?.(state, this.createContext(mountedScene.controller));
         return;
       }
+      try {
+        await preload?.task;
+      } catch (error) {
+        if (preload && this.isPreloadSuperseded(preload)) {
+          return;
+        }
+        throw error;
+      }
+      if (preload && this.isPreloadSuperseded(preload)) {
+        return;
+      }
+      if (preload) {
+        this.consumeScenePreload(preload.task);
+      }
       await this.removeActiveScene();
       const controller = new AbortController();
-      const activeScene2 = { scene, controller };
+      const activeScene = { scene, controller };
       this.layers.scene.addChild(scene.displayObject);
-      this.activeScene = activeScene2;
+      this.activeScene = activeScene;
       this.transitionCount++;
       try {
         await scene.enter(state, this.createContext(controller));
@@ -51756,7 +51916,7 @@ var RunPresentationRuntime = class {
           await scene.suspend?.(this.createContext(controller));
         }
       } catch (error) {
-        if (this.activeScene === activeScene2) {
+        if (this.activeScene === activeScene) {
           await this.removeActiveScene();
         }
         throw error;
@@ -51830,6 +51990,7 @@ var RunPresentationRuntime = class {
       return this.disposal;
     }
     this.activeScene?.controller.abort();
+    this.abandonScenePreload(this.nextScenePreload);
     this.disposal = this.enqueue(async () => {
       if (this.destroyed) {
         return;
@@ -51911,6 +52072,49 @@ var RunPresentationRuntime = class {
   createContext(controller) {
     return { layers: this.layers, signal: controller.signal };
   }
+  consumeScenePreload(preload) {
+    if (this.nextScenePreload?.task === preload) {
+      this.nextScenePreload = void 0;
+    }
+  }
+  isPreloadSuperseded(preload) {
+    return preload.controller.signal.aborted;
+  }
+  cancelActiveSceneAfterPreload(scene, preload) {
+    const activeScene = this.activeScene;
+    if (!activeScene || activeScene.scene.id === scene.id) {
+      return;
+    }
+    if (!preload) {
+      activeScene.controller.abort();
+      return;
+    }
+    void preload.task.then(() => {
+      if (!this.isPreloadSuperseded(preload) && this.activeScene === activeScene) {
+        activeScene.controller.abort();
+      }
+    }, () => void 0);
+  }
+  abandonScenePreload(preload) {
+    if (!preload) {
+      return;
+    }
+    preload.controller.abort();
+    if (this.nextScenePreload === preload) {
+      this.nextScenePreload = void 0;
+    }
+    this.discardScenePreload(preload);
+  }
+  discardScenePreload(preload) {
+    if (preload.discarded) {
+      return;
+    }
+    preload.discarded = true;
+    void preload.task.then(
+      () => preload.scene.discardPreload?.(preload.state, { signal: preload.controller.signal }),
+      () => preload.scene.discardPreload?.(preload.state, { signal: preload.controller.signal })
+    ).catch(() => void 0);
+  }
   async removeActiveScene(beforeDestroy) {
     const activeScene = this.activeScene;
     if (!activeScene) {
@@ -51983,7 +52187,8 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   await application.init({
     antialias: true,
     autoDensity: true,
-    backgroundAlpha: 0,
+    background: 726562,
+    backgroundAlpha: 1,
     canvas,
     preference: "webgl"
   });
@@ -52011,17 +52216,22 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   let semanticInteropCount = 0;
   let viewport = encounterDesignViewport;
   let safeArea = emptySafeAreaInsets;
+  let viewportDescriptor;
   const scene = new EncounterScene(
     (intent) => {
       semanticInteropCount++;
       return intentSink.invokeMethodAsync("HandleIntentAsync", intent);
     },
     assetLoader,
-    accessibilityOverlay.announce
+    accessibilityOverlay.announce,
+    prefersReducedMotion2()
   );
   const runtime = new RunPresentationRuntime(createRunRuntimeApplication(application));
   const animationDirector = new AnimationDirector(scene.createAnimationCommandExecutor());
-  const particleEffects = new ParticleEffectManager(runtime.renderLayers.effect, { resolveAnchor: (id) => scene.getEffectAnchor(id) });
+  const particleEffects = new ParticleEffectManager(runtime.renderLayers.effect, {
+    reducedMotion: prefersReducedMotion2(),
+    resolveAnchor: (id) => scene.getEffectAnchor(id)
+  });
   const runtimeScene = new EncounterRuntimeScene(scene, () => {
     animationDirector.cancelAll();
     particleEffects.clear();
@@ -52036,8 +52246,10 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   let suspended = document.hidden;
   let hasActiveScene = false;
   const rendererType = application.renderer.type.toString();
-  const applyViewportLayout = () => {
-    const layout = calculateViewportLayout(viewport, { safeArea, devicePixelRatio: window.devicePixelRatio });
+  const visualViewport = window.visualViewport;
+  const applyViewportLayout = (viewportUpdate) => {
+    viewportDescriptor = viewportUpdate.descriptor;
+    const layout = viewportUpdate.layout;
     scene.displayObject.scale.set(1);
     scene.displayObject.position.set(layout.contentBounds.x, layout.contentBounds.y);
     runtime.renderLayers.effect.position.set(layout.contentBounds.x, layout.contentBounds.y);
@@ -52049,21 +52261,31 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     }
     void runtime.resize(viewport.width, viewport.height).catch(() => void 0);
   };
-  application.renderer.on("resize", reconcileScene);
-  const resizeRenderer = () => {
+  const resizeRenderer = (forceRendererResize = false, viewportOverride) => {
     if (disposed) {
       return;
     }
-    const host = canvas.parentElement;
-    const width = host?.clientWidth ?? window.innerWidth;
-    const height = host?.clientHeight ?? window.innerHeight;
-    viewport = { width, height };
     safeArea = readBrowserSafeAreaInsets(canvas);
-    application.renderer.resolution = window.devicePixelRatio;
-    application.renderer.resize(width, height);
-    applyViewportLayout();
+    const viewportUpdate = planViewportUpdate(viewportDescriptor, viewportOverride ?? getBrowserViewport(canvas), {
+      safeArea,
+      devicePixelRatio: window.devicePixelRatio
+    });
+    applyViewportLayout(viewportUpdate);
+    application.renderer.resolution = viewportUpdate.descriptor.devicePixelRatio;
+    if (forceRendererResize || viewportUpdate.rendererMetricsChanged) {
+      application.renderer.resize(viewportUpdate.descriptor.width, viewportUpdate.descriptor.height);
+    }
+    if (viewportUpdate.contentSizeChanged) {
+      reconcileScene();
+    }
   };
-  const resizeObserver = new ResizeObserver(resizeRenderer);
+  const handleViewportChange = () => {
+    resizeRenderer();
+  };
+  const handleVisualViewportChange = () => {
+    resizeRenderer(false, getVisualViewport(canvas, visualViewport));
+  };
+  const resizeObserver = new ResizeObserver(handleViewportChange);
   resizeObserver.observe(canvas.parentElement ?? canvas);
   const suspendWhenHidden = () => {
     suspended = document.hidden;
@@ -52080,7 +52302,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     event.preventDefault();
   };
   const reconcileAfterContextRestore = () => {
-    resizeRenderer();
+    resizeRenderer(true);
     reconcileScene();
   };
   const handleKeyboardEvent = (event) => {
@@ -52114,8 +52336,10 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     }
     canvasHadKeyboardFocus = false;
   };
-  window.addEventListener("resize", resizeRenderer);
-  window.addEventListener("orientationchange", resizeRenderer);
+  window.addEventListener("resize", handleViewportChange);
+  window.addEventListener("orientationchange", handleViewportChange);
+  const devicePixelRatioWatcher = createDevicePixelRatioWatcher(handleViewportChange);
+  visualViewport?.addEventListener("resize", handleVisualViewportChange);
   document.addEventListener("visibilitychange", suspendWhenHidden);
   document.addEventListener("focusin", trackDialogFocus);
   canvas.addEventListener("focus", trackCanvasFocus);
@@ -52254,10 +52478,11 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     }
   };
   async function disposeEncounterRenderer() {
-    application.renderer.off("resize", reconcileScene);
     resizeObserver.disconnect();
-    window.removeEventListener("resize", resizeRenderer);
-    window.removeEventListener("orientationchange", resizeRenderer);
+    window.removeEventListener("resize", handleViewportChange);
+    window.removeEventListener("orientationchange", handleViewportChange);
+    devicePixelRatioWatcher.dispose();
+    visualViewport?.removeEventListener("resize", handleVisualViewportChange);
     document.removeEventListener("visibilitychange", suspendWhenHidden);
     document.removeEventListener("focusin", trackDialogFocus);
     canvas.removeEventListener("focus", trackCanvasFocus);
@@ -52330,9 +52555,50 @@ function readBrowserSafeAreaInsets(canvas) {
     probe.remove();
   }
 }
+function getBrowserViewport(canvas) {
+  const host = canvas.parentElement;
+  return {
+    width: host?.clientWidth ?? window.innerWidth,
+    height: host?.clientHeight ?? window.innerHeight
+  };
+}
+function getVisualViewport(canvas, visualViewport) {
+  if (!visualViewport || !Number.isFinite(visualViewport.width) || !Number.isFinite(visualViewport.height)) {
+    return getBrowserViewport(canvas);
+  }
+  return {
+    width: Math.max(1, visualViewport.width),
+    height: Math.max(1, visualViewport.height)
+  };
+}
+function createDevicePixelRatioWatcher(onChange) {
+  if (typeof window.matchMedia !== "function") {
+    return { dispose: () => {
+    } };
+  }
+  let query;
+  const handleChange = () => {
+    subscribe();
+    onChange();
+  };
+  const subscribe = () => {
+    query?.removeEventListener("change", handleChange);
+    query = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+    query.addEventListener("change", handleChange);
+  };
+  subscribe();
+  return {
+    dispose() {
+      query?.removeEventListener("change", handleChange);
+    }
+  };
+}
 function parseCssPixel(value) {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
+function prefersReducedMotion2() {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 async function requireLoadedResult(preload, bundleName) {
   const result = await preload;
