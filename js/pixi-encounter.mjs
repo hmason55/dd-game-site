@@ -49035,6 +49035,8 @@ var EncounterAssetLoader = class {
   textures = /* @__PURE__ */ new Map();
   leases = /* @__PURE__ */ new Map();
   sceneAssetReferences = /* @__PURE__ */ new Map();
+  loadedFontFamilies = /* @__PURE__ */ new Set();
+  failedFontFamilies = /* @__PURE__ */ new Set();
   bundles = new RunAssetBundleManager({
     load: async (url) => {
       const texture = await Assets.load(url);
@@ -49057,8 +49059,11 @@ var EncounterAssetLoader = class {
    * Preloads all currently referenced card, item, player, and enemy images.
    */
   async preload(snapshot) {
+    if (this.disposed) {
+      return;
+    }
     const urls = [.../* @__PURE__ */ new Set([...encounterAssetManifest.textures, ...getEncounterAssetUrls(snapshot)])];
-    await Promise.all([preloadFonts(), ...urls.map((url) => this.load(url))]);
+    await Promise.all([this.preloadFonts(), ...urls.map((url) => this.load(url))]);
   }
   /**
    * Loads one image and returns its texture when available.
@@ -49146,6 +49151,8 @@ var EncounterAssetLoader = class {
     return {
       ...bundles,
       bundles,
+      loadedFontFamilies: [...this.loadedFontFamilies].sort(compareAssetUrls),
+      failedFontFamilies: [...this.failedFontFamilies].sort(compareAssetUrls),
       textureCount: this.textures.size,
       textureByteEstimate: getTextureByteEstimate2(this.textures.values()),
       sceneAssetReferenceUrlCount: this.sceneAssetReferences.size,
@@ -49172,6 +49179,8 @@ var EncounterAssetLoader = class {
       } finally {
         this.leases.clear();
         this.sceneAssetReferences.clear();
+        this.loadedFontFamilies.clear();
+        this.failedFontFamilies.clear();
         this.textures.clear();
       }
     }
@@ -49191,6 +49200,18 @@ var EncounterAssetLoader = class {
       this.sceneAssetReferences.set(url, count2 - 1);
     }
   }
+  async preloadFonts() {
+    const result = await preloadFonts(encounterAssetManifest.fonts);
+    for (const font of result.loadedFontFamilies) {
+      this.loadedFontFamilies.add(font);
+      this.failedFontFamilies.delete(font);
+    }
+    for (const font of result.failedFontFamilies) {
+      if (!this.loadedFontFamilies.has(font)) {
+        this.failedFontFamilies.add(font);
+      }
+    }
+  }
 };
 function getTextureByteEstimate2(textures) {
   let bytes = 0;
@@ -49204,11 +49225,22 @@ function getTextureByteEstimate2(textures) {
   }
   return bytes;
 }
-async function preloadFonts() {
+async function preloadFonts(fonts) {
   if (typeof document === "undefined" || !document.fonts) {
-    return;
+    return { loadedFontFamilies: [], failedFontFamilies: [] };
   }
-  await Promise.all(encounterAssetManifest.fonts.map((font) => document.fonts.load(`12px ${font}`)));
+  const results = await Promise.all(fonts.map(async (font) => {
+    try {
+      await document.fonts.load(`12px ${font}`);
+      return { font, loaded: true };
+    } catch {
+      return { font, loaded: false };
+    }
+  }));
+  return {
+    loadedFontFamilies: results.filter((result) => result.loaded).map((result) => result.font),
+    failedFontFamilies: results.filter((result) => !result.loaded).map((result) => result.font)
+  };
 }
 function getEncounterAssetUrls(snapshot) {
   return [...new Set([
@@ -51865,6 +51897,8 @@ var RunPresentationRuntime = class {
   frameTimeTotalMs = 0;
   maximumFrameTimeMs = 0;
   longFrameCount = 0;
+  pendingPreloadCleanups = /* @__PURE__ */ new Set();
+  preloadCleanupError;
   /**
    * Gets the persistent ordered layers shared by all scenes.
    */
@@ -51919,7 +51953,7 @@ var RunPresentationRuntime = class {
   show(scene, state) {
     this.throwIfDisposing();
     const preload = this.beginScenePreload(scene, state);
-    this.cancelActiveSceneAfterPreload(scene, preload);
+    this.cancelActiveSceneForImmediateReplacement(scene, preload);
     return this.enqueue(async () => {
       this.throwIfDisposing();
       const mountedScene = this.activeScene;
@@ -51932,6 +51966,18 @@ var RunPresentationRuntime = class {
       } catch (error) {
         if (preload && this.isPreloadSuperseded(preload)) {
           return;
+        }
+        throw error;
+      }
+      if (preload && this.isPreloadSuperseded(preload)) {
+        return;
+      }
+      try {
+        await this.waitForPendingPreloadCleanups();
+      } catch (error) {
+        if (preload && !this.isPreloadSuperseded(preload)) {
+          this.abandonScenePreload(preload);
+          await this.waitForPendingPreloadCleanups().catch(() => void 0);
         }
         throw error;
       }
@@ -52037,7 +52083,11 @@ var RunPresentationRuntime = class {
         await this.removeActiveScene(() => this.disposeSystems());
       } finally {
         try {
-          this.disposeSystems();
+          try {
+            this.disposeSystems();
+          } finally {
+            await this.waitForPendingPreloadCleanups();
+          }
         } finally {
           this.releaseApplication();
         }
@@ -52117,20 +52167,21 @@ var RunPresentationRuntime = class {
   isPreloadSuperseded(preload) {
     return preload.controller.signal.aborted;
   }
-  cancelActiveSceneAfterPreload(scene, preload) {
-    const activeScene = this.activeScene;
-    if (!activeScene || activeScene.scene.id === scene.id) {
+  /**
+   * Cancels a blocking active scene only when replacement can begin without waiting for preload cleanup.
+   */
+  cancelActiveSceneForImmediateReplacement(scene, preload) {
+    if (preload) {
+      void preload.task.then(() => {
+        if (!this.isPreloadSuperseded(preload) && this.pendingPreloadCleanups.size === 0 && this.activeScene?.scene.id !== scene.id) {
+          this.activeScene?.controller.abort();
+        }
+      }, () => void 0);
       return;
     }
-    if (!preload) {
-      activeScene.controller.abort();
-      return;
+    if (this.pendingPreloadCleanups.size === 0 && this.activeScene?.scene.id !== scene.id) {
+      this.activeScene?.controller.abort();
     }
-    void preload.task.then(() => {
-      if (!this.isPreloadSuperseded(preload) && this.activeScene === activeScene) {
-        activeScene.controller.abort();
-      }
-    }, () => void 0);
   }
   abandonScenePreload(preload) {
     if (!preload) {
@@ -52147,10 +52198,31 @@ var RunPresentationRuntime = class {
       return;
     }
     preload.discarded = true;
-    void preload.task.then(
+    const cleanup = preload.task.then(
       () => preload.scene.discardPreload?.(preload.state, { signal: preload.controller.signal }),
       () => preload.scene.discardPreload?.(preload.state, { signal: preload.controller.signal })
-    ).catch(() => void 0);
+    ).then(() => void 0);
+    this.pendingPreloadCleanups.add(cleanup);
+    void cleanup.then(
+      () => this.pendingPreloadCleanups.delete(cleanup),
+      (error) => {
+        this.pendingPreloadCleanups.delete(cleanup);
+        this.preloadCleanupError ??= error;
+      }
+    );
+  }
+  /**
+   * Waits for abandoned preload cleanup before a replacement can use the shared application.
+   */
+  async waitForPendingPreloadCleanups() {
+    while (this.pendingPreloadCleanups.size > 0) {
+      await Promise.allSettled([...this.pendingPreloadCleanups]);
+    }
+    if (this.preloadCleanupError) {
+      const error = this.preloadCleanupError;
+      this.preloadCleanupError = void 0;
+      throw error;
+    }
   }
   async removeActiveScene(beforeDestroy) {
     const activeScene = this.activeScene;
@@ -52563,6 +52635,8 @@ function createAssetDiagnostics(assetDiagnostics) {
     pendingAssetUnloadCount: assetDiagnostics.pendingUnloadCount,
     assetLoadRequestCount: assetDiagnostics.loadRequestCount,
     sharedAssetLoadRequestCount: assetDiagnostics.sharedLoadRequestCount,
+    loadedFontFamilies: assetDiagnostics.loadedFontFamilies,
+    failedFontFamilies: assetDiagnostics.failedFontFamilies,
     textureCount: assetDiagnostics.textureCount,
     textureByteEstimate: assetDiagnostics.textureByteEstimate,
     sceneAssetReferenceUrlCount: assetDiagnostics.sceneAssetReferenceUrlCount,
