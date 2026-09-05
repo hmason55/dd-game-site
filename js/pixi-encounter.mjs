@@ -48636,10 +48636,10 @@ var AssetBundleLease = class {
    */
   constructor(manager, definition) {
     this.manager = manager;
-    this.urls = normalizeUrls(definition.urls);
+    this.resources = getBundleResources(definition);
   }
   manager;
-  urls;
+  resources;
   ownedUrls = /* @__PURE__ */ new Set();
   canceled = false;
   disposed = false;
@@ -48649,7 +48649,8 @@ var AssetBundleLease = class {
   async preload() {
     const loadedUrls = [];
     const failedUrls = [];
-    for (const url of this.urls) {
+    for (const resource of this.resources) {
+      const { url } = resource;
       if (this.canceled || this.disposed) {
         break;
       }
@@ -48660,7 +48661,9 @@ var AssetBundleLease = class {
           loadedUrls.push(url);
         }
       } catch {
-        failedUrls.push(url);
+        if (!resource.optional) {
+          failedUrls.push(url);
+        }
       }
     }
     return { loadedUrls, failedUrls, canceled: this.canceled || this.disposed };
@@ -48749,6 +48752,7 @@ var RunAssetBundleManager = class {
         url,
         ownerCount: record.owners.size,
         loaded: record.loaded,
+        failed: record.failed,
         loadPending: record.loadTask !== void 0,
         unloadPending: record.unloadTask !== void 0
       });
@@ -48874,6 +48878,24 @@ function compareAssetUrls(left, right) {
     return -1;
   }
   return left > right ? 1 : 0;
+}
+function toFontAssetUrl(fontFamily) {
+  return `font://${encodeURIComponent(fontFamily.trim())}`;
+}
+function getFontFamilyFromAssetUrl(url) {
+  if (!url.startsWith("font://")) {
+    return void 0;
+  }
+  const encodedFamily = url.slice("font://".length);
+  if (encodedFamily.length === 0) {
+    return void 0;
+  }
+  try {
+    const family = decodeURIComponent(encodedFamily).trim();
+    return family.length > 0 ? family : void 0;
+  } catch {
+    return void 0;
+  }
 }
 var RunAssetPreloadOrchestrator = class {
   /**
@@ -49001,6 +49023,19 @@ var RunAssetPreloadOrchestrator = class {
     }
   }
 };
+function getBundleResources(definition) {
+  const resources = /* @__PURE__ */ new Map();
+  for (const url of normalizeUrls(definition.urls)) {
+    resources.set(url, false);
+  }
+  for (const fontFamily of definition.optionalFontFamilies ?? []) {
+    const fontUrl = toFontAssetUrl(fontFamily);
+    if (fontUrl !== "font://") {
+      resources.set(fontUrl, resources.get(fontUrl) ?? true);
+    }
+  }
+  return [...resources].map(([url, optional]) => ({ url, optional }));
+}
 function normalizeUrls(urls) {
   return [...new Set(urls.map((url) => url.trim().replace(/^\.\//, "/")).filter((url) => url.length > 0))];
 }
@@ -49018,9 +49053,101 @@ function assertResidency(definitions, expectedResidency) {
   }
 }
 
+// src/run-asset-manifests.ts
+var runAssetBundleManifest = {
+  "core-ui": {
+    id: "core-ui",
+    residency: "run",
+    optionalFontFamilies: ["Arial", "system-ui"],
+    urls: [
+      "/img/Icons/Health.png",
+      "/img/Icons/Stamina.png",
+      "/img/Icons/Status.png"
+    ]
+  },
+  cards: {
+    id: "cards",
+    residency: "scene",
+    urls: [
+      "/img/Cards/Dredgecaller/Defend.png",
+      "/img/Cards/Dredgecaller/SpiralInsight.png",
+      "/img/Cards/Dredgecaller/Strike.png",
+      "/img/Cards/Gravetender/Defend.png",
+      "/img/Cards/Gravetender/LastRites.png",
+      "/img/Cards/Gravetender/Strike.png",
+      "/img/Cards/Hollowblade/Defend.png",
+      "/img/Cards/Hollowblade/PreciseStrike.png",
+      "/img/Cards/Hollowblade/Strike.png",
+      "/img/Cards/Oathbound/Defend.png",
+      "/img/Cards/Oathbound/Steadfast.png",
+      "/img/Cards/Oathbound/Strike.png"
+    ]
+  },
+  effects: {
+    id: "effects",
+    residency: "scene",
+    urls: [
+      "/img/Icons/Attack.png",
+      "/img/Icons/Bleed.png",
+      "/img/Icons/Block.png",
+      "/img/Icons/Damage.png"
+    ]
+  },
+  encounter: {
+    id: "encounter",
+    residency: "scene",
+    urls: [
+      "/img/Icons/Attack.png",
+      "/img/Icons/Block.png",
+      "/img/Icons/Bleed.png",
+      "/img/Icons/Health.png",
+      "/img/Icons/Skill.png",
+      "/img/Icons/Spell.png",
+      "/img/Icons/Status.png"
+    ]
+  },
+  map: {
+    id: "map",
+    residency: "scene",
+    urls: []
+  },
+  events: {
+    id: "events",
+    residency: "scene",
+    urls: []
+  },
+  shop: {
+    id: "shop",
+    residency: "scene",
+    urls: [
+      "/img/Equipment/FragmentedOrb.png",
+      "/img/Equipment/QuickflintBundle.png",
+      "/img/Equipment/WeightOfRitual.png",
+      "/img/Equipment/WornSignet.png"
+    ]
+  },
+  reward: {
+    id: "reward",
+    residency: "scene",
+    urls: [
+      "/img/Equipment/FragmentedOrb.png",
+      "/img/Equipment/QuickflintBundle.png",
+      "/img/Equipment/WeightOfRitual.png",
+      "/img/Equipment/WornSignet.png"
+    ]
+  },
+  rest: {
+    id: "rest",
+    residency: "scene",
+    urls: []
+  }
+};
+function getRunAssetBundle(name) {
+  return runAssetBundleManifest[name];
+}
+
 // src/encounter-assets.ts
 var encounterAssetManifest = {
-  fonts: ["Arial", "system-ui"],
   textures: [
     "/img/Icons/Attack.png",
     "/img/Icons/Block.png",
@@ -49035,16 +49162,22 @@ var EncounterAssetLoader = class {
   textures = /* @__PURE__ */ new Map();
   leases = /* @__PURE__ */ new Map();
   sceneAssetReferences = /* @__PURE__ */ new Map();
-  loadedFontFamilies = /* @__PURE__ */ new Set();
-  failedFontFamilies = /* @__PURE__ */ new Set();
   bundles = new RunAssetBundleManager({
     load: async (url) => {
+      const fontFamily = getFontFamilyFromAssetUrl(url);
+      if (fontFamily) {
+        await loadFont(fontFamily);
+        return;
+      }
       const texture = await Assets.load(url);
       if (!this.disposed) {
         this.textures.set(url, texture);
       }
     },
     unload: async (url) => {
+      if (getFontFamilyFromAssetUrl(url)) {
+        return;
+      }
       try {
         await Assets.unload(url);
       } finally {
@@ -49063,7 +49196,10 @@ var EncounterAssetLoader = class {
       return;
     }
     const urls = [.../* @__PURE__ */ new Set([...encounterAssetManifest.textures, ...getEncounterAssetUrls(snapshot)])];
-    await Promise.all([this.preloadFonts(), ...urls.map((url) => this.load(url))]);
+    await Promise.all([
+      this.preloadRunAssets([getRunAssetBundle("core-ui")]),
+      ...urls.map((url) => this.load(url))
+    ]);
   }
   /**
    * Loads one image and returns its texture when available.
@@ -49148,11 +49284,12 @@ var EncounterAssetLoader = class {
     );
     const sceneAssetReferenceCount = [...this.sceneAssetReferences.values()].reduce((total, count2) => total + count2, 0);
     const bundles = this.bundles.getDiagnostics();
+    const fontAssets = bundles.assets.map((asset) => ({ asset, fontFamily: getFontFamilyFromAssetUrl(asset.url) })).filter((entry) => entry.fontFamily !== void 0);
     return {
       ...bundles,
       bundles,
-      loadedFontFamilies: [...this.loadedFontFamilies].sort(compareAssetUrls),
-      failedFontFamilies: [...this.failedFontFamilies].sort(compareAssetUrls),
+      loadedFontFamilies: fontAssets.filter((entry) => entry.asset.loaded).map((entry) => entry.fontFamily).sort(compareAssetUrls),
+      failedFontFamilies: fontAssets.filter((entry) => entry.asset.failed).map((entry) => entry.fontFamily).sort(compareAssetUrls),
       textureCount: this.textures.size,
       textureByteEstimate: getTextureByteEstimate2(this.textures.values()),
       sceneAssetReferenceUrlCount: this.sceneAssetReferences.size,
@@ -49179,8 +49316,6 @@ var EncounterAssetLoader = class {
       } finally {
         this.leases.clear();
         this.sceneAssetReferences.clear();
-        this.loadedFontFamilies.clear();
-        this.failedFontFamilies.clear();
         this.textures.clear();
       }
     }
@@ -49200,18 +49335,6 @@ var EncounterAssetLoader = class {
       this.sceneAssetReferences.set(url, count2 - 1);
     }
   }
-  async preloadFonts() {
-    const result = await preloadFonts(encounterAssetManifest.fonts);
-    for (const font of result.loadedFontFamilies) {
-      this.loadedFontFamilies.add(font);
-      this.failedFontFamilies.delete(font);
-    }
-    for (const font of result.failedFontFamilies) {
-      if (!this.loadedFontFamilies.has(font)) {
-        this.failedFontFamilies.add(font);
-      }
-    }
-  }
 };
 function getTextureByteEstimate2(textures) {
   let bytes = 0;
@@ -49225,22 +49348,11 @@ function getTextureByteEstimate2(textures) {
   }
   return bytes;
 }
-async function preloadFonts(fonts) {
+async function loadFont(font) {
   if (typeof document === "undefined" || !document.fonts) {
-    return { loadedFontFamilies: [], failedFontFamilies: [] };
+    return;
   }
-  const results = await Promise.all(fonts.map(async (font) => {
-    try {
-      await document.fonts.load(`12px ${font}`);
-      return { font, loaded: true };
-    } catch {
-      return { font, loaded: false };
-    }
-  }));
-  return {
-    loadedFontFamilies: results.filter((result) => result.loaded).map((result) => result.font),
-    failedFontFamilies: results.filter((result) => !result.loaded).map((result) => result.font)
-  };
+  await document.fonts.load(`12px ${font}`);
 }
 function getEncounterAssetUrls(snapshot) {
   return [...new Set([
@@ -51767,98 +51879,6 @@ var cardDescriptionTokens = {
   strength: "Strength",
   unplayable: "Unplayable"
 };
-
-// src/run-asset-manifests.ts
-var runAssetBundleManifest = {
-  "core-ui": {
-    id: "core-ui",
-    residency: "run",
-    urls: [
-      "/img/Icons/Health.png",
-      "/img/Icons/Stamina.png",
-      "/img/Icons/Status.png"
-    ]
-  },
-  cards: {
-    id: "cards",
-    residency: "scene",
-    urls: [
-      "/img/Cards/Dredgecaller/Defend.png",
-      "/img/Cards/Dredgecaller/SpiralInsight.png",
-      "/img/Cards/Dredgecaller/Strike.png",
-      "/img/Cards/Gravetender/Defend.png",
-      "/img/Cards/Gravetender/LastRites.png",
-      "/img/Cards/Gravetender/Strike.png",
-      "/img/Cards/Hollowblade/Defend.png",
-      "/img/Cards/Hollowblade/PreciseStrike.png",
-      "/img/Cards/Hollowblade/Strike.png",
-      "/img/Cards/Oathbound/Defend.png",
-      "/img/Cards/Oathbound/Steadfast.png",
-      "/img/Cards/Oathbound/Strike.png"
-    ]
-  },
-  effects: {
-    id: "effects",
-    residency: "scene",
-    urls: [
-      "/img/Icons/Attack.png",
-      "/img/Icons/Bleed.png",
-      "/img/Icons/Block.png",
-      "/img/Icons/Damage.png"
-    ]
-  },
-  encounter: {
-    id: "encounter",
-    residency: "scene",
-    urls: [
-      "/img/Icons/Attack.png",
-      "/img/Icons/Block.png",
-      "/img/Icons/Bleed.png",
-      "/img/Icons/Health.png",
-      "/img/Icons/Skill.png",
-      "/img/Icons/Spell.png",
-      "/img/Icons/Status.png"
-    ]
-  },
-  map: {
-    id: "map",
-    residency: "scene",
-    urls: []
-  },
-  events: {
-    id: "events",
-    residency: "scene",
-    urls: []
-  },
-  shop: {
-    id: "shop",
-    residency: "scene",
-    urls: [
-      "/img/Equipment/FragmentedOrb.png",
-      "/img/Equipment/QuickflintBundle.png",
-      "/img/Equipment/WeightOfRitual.png",
-      "/img/Equipment/WornSignet.png"
-    ]
-  },
-  reward: {
-    id: "reward",
-    residency: "scene",
-    urls: [
-      "/img/Equipment/FragmentedOrb.png",
-      "/img/Equipment/QuickflintBundle.png",
-      "/img/Equipment/WeightOfRitual.png",
-      "/img/Equipment/WornSignet.png"
-    ]
-  },
-  rest: {
-    id: "rest",
-    residency: "scene",
-    urls: []
-  }
-};
-function getRunAssetBundle(name) {
-  return runAssetBundleManifest[name];
-}
 
 // src/run-runtime.ts
 var RunPresentationRuntime = class {
