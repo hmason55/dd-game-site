@@ -52370,9 +52370,13 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   runtime.addSystem(particleEffects);
   scene.setAnimationLockResolver((id) => animationDirector.isObjectLocked(id));
   let appliedSequence = -1;
+  let latestSnapshot;
   let disposed = false;
   let disposal;
   let suspended = document.hidden;
+  let contextLost = false;
+  let contextRestorationPending = false;
+  let contextRecoveryPending = false;
   let hasActiveScene = false;
   const rendererType = application.renderer.type.toString();
   const visualViewport = window.visualViewport;
@@ -52416,23 +52420,35 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   };
   const resizeObserver = new ResizeObserver(handleViewportChange);
   resizeObserver.observe(canvas.parentElement ?? canvas);
-  const suspendWhenHidden = () => {
-    suspended = document.hidden;
+  const updateRuntimeSuspension = () => {
+    suspended = document.hidden || contextLost;
     if (suspended) {
       void runtime.suspend().catch(() => void 0);
       return;
     }
-    void runtime.resume().then(() => {
-      resizeRenderer();
+    const forceRendererResize = contextRestorationPending;
+    contextRestorationPending = false;
+    void runtime.resume().then(async () => {
+      resizeRenderer(forceRendererResize);
+      if (contextRecoveryPending) {
+        await recoverAfterContextRestoration();
+      }
       reconcileScene();
     }).catch(() => void 0);
   };
+  const suspendWhenHidden = () => {
+    updateRuntimeSuspension();
+  };
   const preventContextLoss = (event) => {
     event.preventDefault();
+    contextLost = true;
+    updateRuntimeSuspension();
   };
   const reconcileAfterContextRestore = () => {
-    resizeRenderer(true);
-    reconcileScene();
+    contextLost = false;
+    contextRestorationPending = true;
+    contextRecoveryPending = true;
+    updateRuntimeSuspension();
   };
   const handleKeyboardEvent = (event) => {
     if (scene.handleKeyboardEvent(event)) {
@@ -52487,6 +52503,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
         return false;
       }
       appliedSequence = snapshot.sequence;
+      latestSnapshot = snapshot;
       animationDirector.cancelAll();
       await assetLoader.preload(snapshot);
       if (disposed || appliedSequence !== snapshot.sequence) {
@@ -52635,6 +52652,33 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
           }
         }
       }
+    }
+  }
+  async function recoverAfterContextRestoration() {
+    while (!disposed && !contextLost && contextRecoveryPending) {
+      const snapshot = latestSnapshot;
+      if (!snapshot) {
+        contextRecoveryPending = false;
+        return;
+      }
+      await assetLoader.preload(snapshot);
+      if (disposed || contextLost) {
+        return;
+      }
+      if (snapshot !== latestSnapshot) {
+        continue;
+      }
+      if (assetLoader.getDiagnostics().failedAssetCount > 0) {
+        await assetLoader.preload(snapshot);
+        if (disposed || contextLost) {
+          return;
+        }
+        if (snapshot !== latestSnapshot) {
+          continue;
+        }
+      }
+      contextRecoveryPending = false;
+      await runtime.reconcile(snapshot);
     }
   }
 }
