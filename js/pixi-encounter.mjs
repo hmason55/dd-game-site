@@ -47767,6 +47767,7 @@ var Text = class extends AbstractText {
 };
 
 // node_modules/pixi.js/lib/index.mjs
+init_Rectangle();
 init_Texture();
 init_textureFrom();
 init_Container();
@@ -48303,7 +48304,9 @@ var ParticleEffectManager = class {
   }
   createDisplay(options) {
     if (options.renderMode === "text") {
-      return new Text({ text: options.text, style: createTextStyle(options) });
+      const text = new Text({ text: options.text, style: createTextStyle(options) });
+      text.resolution = 2;
+      return text;
     }
     if (options.renderMode === "image" && options.imageSrc) {
       return new Sprite(this.getTexture(options.imageSrc));
@@ -49862,6 +49865,9 @@ var CardView = class extends Container {
     this.typeLabel.anchor.set(0.5, 0);
     this.descriptionLabel.anchor.set(0.5, 0);
     this.artwork.anchor.set(0.5, 0.5);
+    for (const label of [this.costLabel, this.nameLabel, this.typeLabel, this.descriptionLabel]) {
+      label.resolution = 2;
+    }
     this.addChild(
       this.frame,
       this.artFallback,
@@ -49922,6 +49928,9 @@ var CardView = class extends Container {
    * Reconciles semantic display data without recreating the card display tree.
    */
   setContent(content) {
+    if (areCardContentsEqual(this.cardContent, content)) {
+      return;
+    }
     this.cardContent = content;
     this.redraw();
   }
@@ -49929,15 +49938,21 @@ var CardView = class extends Container {
    * Applies the card's motion treatment without changing playability or accessibility state.
    */
   setMotionState(state) {
+    if (this.motionState === state) {
+      return;
+    }
     this.motionState = state;
-    this.redraw();
+    this.drawStateOverlay(getPalette(this.cardContent.rarity));
   }
   /**
    * Applies playability without replacing hover, focus, selection, or motion presentation.
    */
   setPlayability(playability) {
+    if (this.playability === playability) {
+      return;
+    }
     this.playability = playability;
-    this.redraw();
+    this.drawStateOverlay(getPalette(this.cardContent.rarity));
   }
   /**
    * Resizes the card while retaining its content, state, and display-object identity.
@@ -49957,12 +49972,15 @@ var CardView = class extends Container {
    * Updates scene-owned enabled, focused, and selected state without changing playability.
    */
   setInteractionState(state) {
+    if (areInteractionStatesEqual(this.componentState.interaction, state)) {
+      return;
+    }
     this.componentState = createUiComponentPresentationState({
       size: this.componentState.size,
       ...state,
       reducedMotion: this.componentState.reducedMotion
     });
-    this.redraw();
+    this.drawStateOverlay(getPalette(this.cardContent.rarity));
   }
   /**
    * Updates reduced-motion presentation without changing card content or interaction state.
@@ -50078,6 +50096,12 @@ function toCardViewContent(options) {
     rarity: options.rarity,
     ...options.artTexture === void 0 ? {} : { artTexture: options.artTexture }
   };
+}
+function areCardContentsEqual(left, right) {
+  return left.cost === right.cost && left.name === right.name && left.description === right.description && left.type === right.type && left.rarity === right.rarity && left.artTexture === right.artTexture;
+}
+function areInteractionStatesEqual(left, right) {
+  return left.enabled === right.enabled && left.focused === right.focused && left.selected === right.selected;
 }
 function getArtBounds(width, height) {
   const x2 = uiTokens.frame.borderWidth;
@@ -50296,18 +50320,41 @@ function layoutHand(count2, viewport) {
   const availableWidth = viewport.width - horizontalPadding * 2 - cardWidth;
   const step = count2 === 1 ? 0 : Math.min(cardWidth * 0.88, availableWidth / (count2 - 1));
   const rowWidth = cardWidth + step * (count2 - 1);
-  const maximumRotation = Math.min(0.2, 0.07 + count2 * 0.014);
-  const fanDepth = Math.min(24, 8 + count2 * 1.5);
-  const rotatedHalfHeight = Math.abs(Math.sin(maximumRotation)) * (cardVisualWidth / 2) + Math.cos(maximumRotation) * (cardVisualHeight / 2);
-  const bottomRowY = Math.min(viewport.height - 76, viewport.height - 2 - fanDepth / 2 - rotatedHalfHeight);
+  const maximumRotation = Math.min(0.28, 0.1 + count2 * 0.02);
+  const player = layoutPlayer(viewport);
+  const playerBottom = player.y + 58 * (player.scale ?? 1);
+  const handClearance = 4;
+  let fanDepth = Math.min(38, 12 + count2 * 2.2);
+  let centerBounds = getWideHandCenterBounds(count2, maximumRotation, fanDepth, cardVisualWidth, cardVisualHeight, playerBottom, handClearance, viewport.height);
+  for (let attempt = 0; attempt < 6 && centerBounds.minimum > centerBounds.maximum; attempt += 1) {
+    fanDepth *= 0.8;
+    centerBounds = getWideHandCenterBounds(count2, maximumRotation, fanDepth, cardVisualWidth, cardVisualHeight, playerBottom, handClearance, viewport.height);
+  }
+  const bottomRowY = Math.min(centerBounds.maximum, Math.max(centerBounds.minimum, viewport.height - 76));
   return Array.from({ length: count2 }, (_, index) => {
     const progress = count2 === 1 ? 0 : index / (count2 - 1) - 0.5;
     return {
       x: (viewport.width - rowWidth) / 2 + cardWidth / 2 + index * step,
-      y: bottomRowY + Math.abs(progress) * fanDepth,
+      y: bottomRowY + progress * progress * fanDepth * 4,
       rotation: progress * maximumRotation * 2
     };
   });
+}
+function getWideHandCenterBounds(count2, maximumRotation, fanDepth, cardWidth, cardHeight, playerBottom, handClearance, viewportHeight) {
+  let topExtent = 0;
+  let bottomExtent = 0;
+  for (let index = 0; index < count2; index += 1) {
+    const progress = count2 === 1 ? 0 : index / (count2 - 1) - 0.5;
+    const curveOffset = progress * progress * fanDepth * 4;
+    const rotation = progress * maximumRotation * 2;
+    const halfHeight = Math.abs(Math.sin(rotation)) * (cardWidth / 2) + Math.cos(rotation) * (cardHeight / 2);
+    topExtent = Math.max(topExtent, halfHeight - curveOffset);
+    bottomExtent = Math.max(bottomExtent, halfHeight + curveOffset);
+  }
+  return {
+    minimum: playerBottom + handClearance + topExtent,
+    maximum: viewportHeight - 2 - bottomExtent
+  };
 }
 function layoutNarrowEnemies(count2, viewport) {
   const horizontalPadding = 16;
@@ -50480,6 +50527,8 @@ var focusedHandScale = 1.32;
 var focusedHandLift = 34;
 var draggedCardLift = 48;
 var playedCardLift = 84;
+var entityHitHalfWidth = 94;
+var entityHitHalfHeight = 64;
 var EncounterScene = class {
   /**
    * Creates the ordered layers that belong to this scene.
@@ -50833,9 +50882,8 @@ var EncounterScene = class {
     const health = `HP ${entity.health}/${entity.maxHealth} \xB7 B ${entity.block}`;
     const resources = entity.isPlayer ? `E ${entity.energy} \xB7 M ${entity.mana}` : `P ${entity.posture}/${entity.maxPosture}`;
     const telegraph = formatEntityTelegraph(entity.telegraph);
-    const color = entity.isPlayer ? 2645391 : entity.isTargetable ? 9124667 : 4410713;
-    tile.background.clear().roundRect(-88, -58, 176, 116, 10).fill({ color });
-    tile.background.tint = 16777215;
+    tile.background.clear();
+    tile.container.hitArea = new Rectangle(-entityHitHalfWidth, -entityHitHalfHeight, entityHitHalfWidth * 2, entityHitHalfHeight * 2);
     tile.accent.clear();
     this.updateArtwork(tile, entity.image, 164, 104);
     tile.title.text = entity.name;
@@ -50843,8 +50891,8 @@ var EncounterScene = class {
     tile.detail.text = `${health}
 ${resources}`;
     tile.effects.text = formatEntityEffects(entity);
-    tile.title.position.set(0, -42);
-    tile.description.position.set(0, -23);
+    tile.title.position.set(0, -44);
+    tile.description.position.set(0, -24);
     tile.detail.position.set(0, 7);
     tile.effects.position.set(0, 38);
     if (!this.isDragPositionManaged(id)) {
@@ -50881,15 +50929,18 @@ ${resources}`;
       this.applyHandLayoutTransform(id, tile, position);
     }
     const isInteractive = this.isEntryInteractive(id, entry);
-    tile.container.eventMode = isInteractive ? "static" : "none";
+    const isHoverable = this.isEntryHoverable(id, entry);
+    tile.container.eventMode = isInteractive || isHoverable ? "static" : "none";
     tile.container.cursor = isInteractive ? "pointer" : "default";
     tile.container.removeAllListeners("pointertap");
     tile.container.removeAllListeners("pointerdown");
     tile.container.removeAllListeners("pointerover");
     tile.container.removeAllListeners("pointerout");
-    if (entry.isDraggable) {
+    if (isInteractive) {
       tile.container.on("pointertap", () => this.handleEntrySelection(entry));
       tile.container.on("pointerdown", (event) => this.beginDrag(entry, tile, event));
+    }
+    if (isHoverable) {
       tile.container.on("pointerover", () => this.handleEntryHover(entry));
       tile.container.on("pointerout", () => this.handleEntryHoverEnd(entry));
     }
@@ -50901,20 +50952,22 @@ ${resources}`;
     }
     const background = new Graphics();
     const accent = new Graphics();
-    const targetHighlight = new Sprite(Texture.EMPTY);
-    targetHighlight.anchor.set(0.5, 0.5);
+    const targetHighlight = new Graphics();
     targetHighlight.visible = false;
     const artwork = new Sprite(Texture.EMPTY);
     artwork.anchor.set(0.5, 0.5);
-    const title = new Text({ text: "", style: { align: "center", fill: 16777215, fontFamily: "Arial, system-ui", fontSize: 16, stroke: { color: 463132, width: 3 }, wordWrap: true, wordWrapWidth: 156 } });
-    const description = new Text({ text: "", style: { align: "center", fill: 15856888, fontFamily: "Arial, system-ui", fontSize: 11, stroke: { color: 463132, width: 2 } } });
-    const detail = new Text({ text: "", style: { align: "center", fill: 14148078, fontFamily: "Arial, system-ui", fontSize: 11, stroke: { color: 463132, width: 2 } } });
-    const effects = new Text({ text: "", style: { align: "center", fill: 16769155, fontFamily: "Arial, system-ui", fontSize: 10, stroke: { color: 463132, width: 2 }, wordWrap: true, wordWrapWidth: 156 } });
+    const title = new Text({ text: "", style: { align: "center", fill: 16777215, fontFamily: "Arial, system-ui", fontSize: 18, stroke: { color: 463132, width: 3 }, wordWrap: true, wordWrapWidth: 156 } });
+    const description = new Text({ text: "", style: { align: "center", fill: 15856888, fontFamily: "Arial, system-ui", fontSize: 13, stroke: { color: 463132, width: 3 } } });
+    const detail = new Text({ text: "", style: { align: "center", fill: 14148078, fontFamily: "Arial, system-ui", fontSize: 13, stroke: { color: 463132, width: 3 } } });
+    const effects = new Text({ text: "", style: { align: "center", fill: 16769155, fontFamily: "Arial, system-ui", fontSize: 12, stroke: { color: 463132, width: 3 }, wordWrap: true, wordWrapWidth: 156 } });
     const container = new Container();
     title.anchor.set(0.5, 0.5);
     description.anchor.set(0.5, 0.5);
     detail.anchor.set(0.5, 0.5);
     effects.anchor.set(0.5, 0.5);
+    for (const label of [title, description, detail, effects]) {
+      label.resolution = 2;
+    }
     title.position.set(0, -42);
     description.position.set(0, -23);
     detail.position.set(0, 7);
@@ -51231,29 +51284,51 @@ ${resources}`;
       this.releaseActiveDrag(false);
       return;
     }
-    this.returnActiveDrag();
+    this.returnActiveDrag(event.getLocalPosition(this.root));
   }
   cancelDrag(event) {
     const drag = this.activeDrag;
     if (!drag || drag.pointerId !== event.pointerId) {
       return;
     }
-    this.returnActiveDrag();
+    this.returnActiveDrag(event.getLocalPosition(this.root));
   }
-  returnActiveDrag() {
+  returnActiveDrag(pointerPosition) {
     const drag = this.activeDrag;
     if (!drag) {
       return;
     }
     const tileId = getEntrySceneId(drag.entry);
+    const destination = this.getCurrentHandDestination(tileId, drag.origin);
     this.dragReturns.set(tileId, {
-      destination: this.getCurrentHandDestination(tileId, drag.origin),
+      destination,
       start: captureTransform(drag.tile.container),
       tile: drag.tile,
       elapsedMs: 0
     });
     this.entryInteractionStates.set(tileId, "returning");
-    this.releaseActiveDrag(drag.state === "dragging");
+    const shouldKeepInspection = pointerPosition !== void 0 && this.isPointerOverHandSlot(drag.entry, destination, pointerPosition);
+    if (!shouldKeepInspection) {
+      if (this.hoveredEntryId === drag.entry.id) {
+        this.hoveredEntryId = void 0;
+      }
+      if (this.selectedEntryId === drag.entry.id) {
+        this.selectedEntryId = void 0;
+      }
+    }
+    this.releaseActiveDrag(false);
+  }
+  /** Determines whether a cancellation pointer is still over the card's settled hand slot. */
+  isPointerOverHandSlot(entry, transform, pointer) {
+    const horizontalOffset = pointer.x - transform.x;
+    const verticalOffset = pointer.y - transform.y;
+    const cosine = Math.cos(transform.rotation);
+    const sine = Math.sin(transform.rotation);
+    const localX = horizontalOffset * cosine + verticalOffset * sine;
+    const localY = -horizontalOffset * sine + verticalOffset * cosine;
+    const halfWidth = (isCardPresentationState2(entry) ? 45 : 54) * transform.scale;
+    const halfHeight = (isCardPresentationState2(entry) ? 63 : 64) * transform.scale;
+    return Math.abs(localX) <= halfWidth && Math.abs(localY) <= halfHeight;
   }
   releaseActiveDrag(clearSelection = true) {
     this.activeDrag = void 0;
@@ -51305,6 +51380,10 @@ ${resources}`;
    */
   isEntryInteractive(tileId, entry) {
     return entry.isDraggable && !(isCardPresentationState2(entry) && entry.isInteractionLocked) && !this.intentPending && !this.queuedEntryIds.has(entry.id) && !this.isEntryInteractionOwned(tileId, entry.id) && !this.isAnimationLocked(tileId);
+  }
+  /** Determines whether a card may be visually inspected without accepting gameplay input. */
+  isEntryHoverable(tileId, entry) {
+    return isCardPresentationState2(entry) && !this.isEntryInteractionOwned(tileId, entry.id) && !this.isAnimationLocked(tileId);
   }
   clearDragMotion(tileId) {
     this.releasedDragPositions.delete(tileId);
@@ -51391,7 +51470,7 @@ ${resources}`;
     for (const entity of this.entities.values()) {
       const tile = this.entityTiles.get(`${entity.isPlayer ? "player" : "enemy"}:${entity.id}`);
       const scale = tile?.container.scale.x ?? 1;
-      if (tile && Math.abs(position.x - tile.container.x) <= 88 * scale && Math.abs(position.y - tile.container.y) <= 58 * scale) {
+      if (tile && Math.abs(position.x - tile.container.x) <= entityHitHalfWidth * scale && Math.abs(position.y - tile.container.y) <= entityHitHalfHeight * scale) {
         return entity;
       }
     }
@@ -51402,13 +51481,11 @@ ${resources}`;
       delete tile.artworkImage;
       delete tile.artworkRequestImage;
       tile.artwork.visible = false;
-      tile.targetHighlight.visible = false;
       return;
     }
     if (tile.artworkImage !== image) {
       tile.artworkImage = image;
       tile.artwork.visible = false;
-      tile.targetHighlight.visible = false;
     }
     if (tile.artwork.visible || tile.artworkRequestImage === image) {
       return;
@@ -51422,11 +51499,9 @@ ${resources}`;
         return;
       }
       tile.artwork.texture = texture;
-      tile.artwork.width = width;
-      tile.artwork.height = height;
-      tile.targetHighlight.texture = texture;
-      tile.targetHighlight.width = width + 10;
-      tile.targetHighlight.height = height + 10;
+      const scale = Math.min(width / Math.max(1, texture.width), height / Math.max(1, texture.height));
+      tile.artwork.width = texture.width * scale;
+      tile.artwork.height = texture.height * scale;
       tile.artwork.visible = true;
       this.refreshSelectionHighlights();
     });
@@ -51491,6 +51566,17 @@ ${resources}`;
     tile.container.position.set(start.x, start.y - playedCardLift * liftedProgress);
     tile.container.scale.set(start.scale * (1 + Math.sin(progress * Math.PI) * 0.08));
   }
+  /** Gets the card or item whose target options should be visible to the player. */
+  getTargetingEntry() {
+    if (this.activeDrag) {
+      return this.activeDrag.entry;
+    }
+    if (this.hoveredEntryId) {
+      const hoveredEntry = this.selectableEntries.get(this.hoveredEntryId);
+      return hoveredEntry && this.isEntryInteractive(getEntrySceneId(hoveredEntry), hoveredEntry) ? hoveredEntry : void 0;
+    }
+    return this.selectedEntryId ? this.selectableEntries.get(this.selectedEntryId) : void 0;
+  }
   /**
    * Moves a card below the encounter while shrinking and fading it so it is gone at the destination.
    */
@@ -51544,8 +51630,11 @@ ${resources}`;
   flashArtwork(tile, progress) {
     tile.targetHighlight.visible = tile.artwork.visible && progress < 1;
     if (tile.targetHighlight.visible) {
-      tile.targetHighlight.tint = 16777215;
-      tile.targetHighlight.alpha = Math.sin(progress * Math.PI) * (this.reducedMotion ? 0.35 : 0.75);
+      tile.targetHighlight.clear().roundRect(-94, -64, 188, 128, 12).stroke({
+        color: 16777215,
+        width: 4,
+        alpha: Math.sin(progress * Math.PI) * (this.reducedMotion ? 0.35 : 0.75)
+      });
       return;
     }
     this.refreshSelectionHighlights();
@@ -51639,33 +51728,30 @@ ${resources}`;
    * Gives targetable entities a clear, low-obstruction visual treatment while an action is selected.
    */
   refreshTargetPresentation(tile, entityId, entity) {
-    const selectedEntry = this.selectedEntryId ? this.selectableEntries.get(this.selectedEntryId) : void 0;
-    const isTargeting = selectedEntry !== void 0 && selectedEntry.targetMode !== "none";
-    const isValidTarget = entity !== void 0 && this.canSelectEntity(entity);
+    const targetingEntry = this.getTargetingEntry();
+    const isTargeting = targetingEntry !== void 0 && targetingEntry.targetMode !== "none";
+    const isValidTarget = entity !== void 0 && targetingEntry !== void 0 && !this.intentPending && !this.isAnimationLockedForEntry(targetingEntry) && !this.isAnimationLockedForEntity(entity) && this.isValidTarget(targetingEntry.targetMode, entity);
     const isFocused = entityId === this.focusedEntityId;
     tile.background.tint = 16777215;
     tile.accent.clear();
-    tile.targetHighlight.visible = isTargeting && tile.artwork.visible;
-    if (!tile.targetHighlight.visible) {
-      tile.accent.alpha = isTargeting ? 1 : 0;
-      if (isTargeting) {
-        tile.accent.roundRect(-91, -61, 182, 122, 11).stroke({
-          color: isFocused ? 16769155 : isValidTarget ? 11141006 : 14912909,
-          width: isFocused || isValidTarget ? 4 : 2
-        });
-      }
-      return;
-    }
     tile.accent.alpha = 0;
-    tile.targetHighlight.tint = isFocused ? 16769155 : isValidTarget ? 11141006 : 14912909;
-    tile.targetHighlight.alpha = isFocused ? 0.95 : isValidTarget ? 0.8 : 0.5;
+    tile.targetHighlight.clear();
+    tile.targetHighlight.visible = isTargeting;
+    if (isTargeting) {
+      tile.targetHighlight.roundRect(-entityHitHalfWidth, -entityHitHalfHeight, entityHitHalfWidth * 2, entityHitHalfHeight * 2, 12).stroke({
+        color: isFocused ? 16769155 : isValidTarget ? 11141006 : 14912909,
+        width: isFocused || isValidTarget ? 4 : 2,
+        alpha: isFocused ? 0.95 : isValidTarget ? 0.9 : 0.55
+      });
+    }
   }
   refreshInteractionState() {
     for (const [tileId, tile] of this.handTiles) {
       const entryId = tileId.substring(tileId.indexOf(":") + 1);
       const entry = this.selectableEntries.get(entryId);
       const isInteractive = entry !== void 0 && this.isEntryInteractive(tileId, entry);
-      tile.container.eventMode = isInteractive ? "static" : "none";
+      const isHoverable = entry !== void 0 && this.isEntryHoverable(tileId, entry);
+      tile.container.eventMode = isInteractive || isHoverable ? "static" : "none";
       tile.container.cursor = isInteractive ? "pointer" : "default";
     }
     for (const [tileId, tile] of this.entityTiles) {
