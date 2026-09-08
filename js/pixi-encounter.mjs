@@ -49161,6 +49161,7 @@ var encounterAssetManifest = {
 var EncounterAssetLoader = class {
   textures = /* @__PURE__ */ new Map();
   leases = /* @__PURE__ */ new Map();
+  releasedTextureUrls = /* @__PURE__ */ new Set();
   sceneAssetReferences = /* @__PURE__ */ new Map();
   bundles = new RunAssetBundleManager({
     load: async (url) => {
@@ -49178,11 +49179,8 @@ var EncounterAssetLoader = class {
       if (getFontFamilyFromAssetUrl(url)) {
         return;
       }
-      try {
-        await Assets.unload(url);
-      } finally {
-        this.textures.delete(url);
-      }
+      this.textures.delete(url);
+      this.releasedTextureUrls.add(url);
     }
   });
   preloader = new RunAssetPreloadOrchestrator(this.bundles);
@@ -49314,11 +49312,25 @@ var EncounterAssetLoader = class {
       try {
         await this.bundles.dispose();
       } finally {
-        this.leases.clear();
-        this.sceneAssetReferences.clear();
-        this.textures.clear();
+        try {
+          await this.unloadReleasedTextures();
+        } finally {
+          this.leases.clear();
+          this.sceneAssetReferences.clear();
+          this.textures.clear();
+        }
       }
     }
+  }
+  async unloadReleasedTextures() {
+    const urls = [...this.releasedTextureUrls];
+    this.releasedTextureUrls.clear();
+    await Promise.all(urls.map(async (url) => {
+      try {
+        await Assets.unload(url);
+      } catch {
+      }
+    }));
   }
   retainSceneAssets(urls) {
     for (const url of urls) {
@@ -50713,7 +50725,7 @@ var EncounterScene = class {
       this.activeDrag = void 0;
     }
     for (const dragReturn of this.dragReturns.values()) {
-      this.restoreTileToHand(dragReturn.tile, dragReturn.origin);
+      this.restoreTileToHand(dragReturn.tile, dragReturn.destination);
     }
     this.cancelDragReturns();
     this.selectedEntryId = void 0;
@@ -50786,6 +50798,7 @@ var EncounterScene = class {
       this.updateHandTile(id, entry, position);
       this.selectableEntries.set(entry.id, entry);
     });
+    this.retargetDragReturns();
     this.removeMissingTiles(this.handTiles, expectedIds);
     this.restoreHandLayerOrder();
     if (this.selectedEntryId && !this.selectableEntries.has(this.selectedEntryId)) {
@@ -50931,7 +50944,7 @@ Rituals: ${rituals}` : ""}`;
     const pointerOrigin = event.getLocalPosition(this.root);
     this.activeDrag = {
       entry,
-      origin: returningDrag?.origin ?? captureTransform(tile.container),
+      origin: returningDrag?.destination ?? captureTransform(tile.container),
       pointerId: event.pointerId,
       pointerOrigin,
       tile,
@@ -51001,10 +51014,10 @@ Rituals: ${rituals}` : ""}`;
       const progress = Math.min(1, dragReturn.elapsedMs / dragReturnDurationMs);
       const easedProgress = 1 - Math.pow(1 - progress, 3);
       applyTransform(dragReturn.tile.container, {
-        x: interpolate(dragReturn.start.x, dragReturn.origin.x, easedProgress),
-        y: interpolate(dragReturn.start.y, dragReturn.origin.y, easedProgress),
-        rotation: interpolate(dragReturn.start.rotation, dragReturn.origin.rotation, easedProgress),
-        scale: interpolate(dragReturn.start.scale, dragReturn.origin.scale, easedProgress)
+        x: interpolate(dragReturn.start.x, dragReturn.destination.x, easedProgress),
+        y: interpolate(dragReturn.start.y, dragReturn.destination.y, easedProgress),
+        rotation: interpolate(dragReturn.start.rotation, dragReturn.destination.rotation, easedProgress),
+        scale: interpolate(dragReturn.start.scale, dragReturn.destination.scale, easedProgress)
       });
       if (progress === 1) {
         this.finishDragReturn(tileId, dragReturn);
@@ -51159,10 +51172,9 @@ Rituals: ${rituals}` : ""}`;
     }
     const tileId = getEntrySceneId(drag.entry);
     this.dragReturns.set(tileId, {
-      origin: drag.origin,
+      destination: this.getCurrentHandDestination(tileId, drag.origin),
       start: captureTransform(drag.tile.container),
       tile: drag.tile,
-      wasFocused: tileId === this.getFocusedHandTileId(),
       elapsedMs: 0
     });
     this.entryInteractionStates.set(tileId, "returning");
@@ -51177,13 +51189,11 @@ Rituals: ${rituals}` : ""}`;
     this.refreshSelectionHighlights();
   }
   finishDragReturn(tileId, dragReturn) {
-    this.restoreTileToHand(dragReturn.tile, dragReturn.origin);
+    this.restoreTileToHand(dragReturn.tile, dragReturn.destination);
     this.dragReturns.delete(tileId);
-    if (dragReturn.wasFocused !== (tileId === this.getFocusedHandTileId())) {
-      const position = this.handLayoutPositions.get(tileId);
-      if (position) {
-        this.applyHandLayoutTransform(tileId, dragReturn.tile, position);
-      }
+    const position = this.handLayoutPositions.get(tileId);
+    if (position) {
+      this.applyHandLayoutTransform(tileId, dragReturn.tile, position);
     }
     this.restoreHandLayerOrder();
     this.entryInteractionStates.delete(tileId);
@@ -51232,6 +51242,35 @@ Rituals: ${rituals}` : ""}`;
     for (const tileId of [...this.dragReturns.keys()]) {
       this.cancelDragReturn(tileId);
     }
+  }
+  /**
+   * Retargets active return motion to the current hand slots after snapshot reconciliation.
+   */
+  retargetDragReturns() {
+    for (const [tileId, dragReturn] of this.dragReturns) {
+      const destination = this.getCurrentHandDestination(tileId, dragReturn.destination);
+      if (areTransformsEqual(destination, dragReturn.destination)) {
+        continue;
+      }
+      dragReturn.start = captureTransform(dragReturn.tile.container);
+      dragReturn.destination = destination;
+      dragReturn.elapsedMs = 0;
+    }
+  }
+  /**
+   * Converts the latest logical hand position into a complete return transform.
+   */
+  getCurrentHandDestination(tileId, fallback) {
+    const position = this.handLayoutPositions.get(tileId);
+    if (!position) {
+      return fallback;
+    }
+    return {
+      x: position.x,
+      y: position.y,
+      rotation: position.rotation ?? 0,
+      scale: position.scale ?? 1
+    };
   }
   findDropTarget(position) {
     for (const entity of this.entities.values()) {
@@ -51728,10 +51767,9 @@ Rituals: ${rituals}` : ""}`;
     if (releasedDrag && tile) {
       this.releasedDragPositions.delete(tileId);
       this.dragReturns.set(tileId, {
-        origin: releasedDrag.origin,
+        destination: this.getCurrentHandDestination(tileId, releasedDrag.origin),
         start: releasedDrag.position,
         tile,
-        wasFocused: tileId === this.getFocusedHandTileId(),
         elapsedMs: 0
       });
       this.entryInteractionStates.set(tileId, "returning");
@@ -51815,6 +51853,9 @@ function captureTransform(container) {
     rotation: container.rotation,
     scale: container.scale.x
   };
+}
+function areTransformsEqual(left, right) {
+  return left.x === right.x && left.y === right.y && left.rotation === right.rotation && left.scale === right.scale;
 }
 function applyTransform(container, transform) {
   container.position.set(transform.x, transform.y);
@@ -52092,6 +52133,7 @@ var RunPresentationRuntime = class {
     if (this.disposal) {
       return this.disposal;
     }
+    this.stopTicker();
     this.activeScene?.controller.abort();
     this.abandonScenePreload(this.nextScenePreload);
     this.disposal = this.enqueue(async () => {
@@ -52286,7 +52328,7 @@ var RunPresentationRuntime = class {
       this.tickerCallbackAttached = false;
     } finally {
       try {
-        this.application.ticker.stop();
+        this.stopTicker();
       } finally {
         try {
           this.application.stage.removeChild(this.root);
@@ -52298,6 +52340,12 @@ var RunPresentationRuntime = class {
           }
         }
       }
+    }
+  }
+  /** Stops the primary ticker once, without changing lifecycle state. */
+  stopTicker() {
+    if (this.application.ticker.started) {
+      this.application.ticker.stop();
     }
   }
   throwIfDisposing() {
@@ -52378,7 +52426,34 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   let contextRestorationPending = false;
   let contextRecoveryPending = false;
   let hasActiveScene = false;
+  const pendingAnimations = [];
   const rendererType = application.renderer.type.toString();
+  const scheduleAnimation = (request) => {
+    const result = animationDirector.schedule(request, (id) => scene.hasSceneObject(id));
+    scene.refreshAnimationLocks();
+    void result.finally(() => scene.refreshAnimationLocks());
+    return result;
+  };
+  const areAnimationObjectsAvailable = (request) => {
+    const commands = "commands" in request ? request.commands : [request];
+    return commands.every((command) => (!command.requiresSource || command.sourceId !== void 0 && command.sourceId !== null && scene.hasSceneObject(command.sourceId)) && (!command.requiresTarget || command.targetId !== void 0 && command.targetId !== null && scene.hasSceneObject(command.targetId)));
+  };
+  const deferAnimationUntilReconciled = (request) => new Promise((resolve) => pendingAnimations.push({ request, resolve }));
+  const flushPendingAnimations = () => {
+    const queuedAnimations = pendingAnimations.splice(0, pendingAnimations.length);
+    for (const pendingAnimation of queuedAnimations) {
+      if (!areAnimationObjectsAvailable(pendingAnimation.request)) {
+        pendingAnimations.push(pendingAnimation);
+        continue;
+      }
+      void scheduleAnimation(pendingAnimation.request).then(pendingAnimation.resolve);
+    }
+  };
+  const cancelPendingAnimations = (message) => {
+    for (const pendingAnimation of pendingAnimations.splice(0, pendingAnimations.length)) {
+      pendingAnimation.resolve({ id: pendingAnimation.request.id, state: "cancelled", message });
+    }
+  };
   const visualViewport = window.visualViewport;
   const applyViewportLayout = (viewportUpdate) => {
     viewportDescriptor = viewportUpdate.descriptor;
@@ -52512,20 +52587,24 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
       accessibilityOverlay.update(snapshot);
       await runtime.show(runtimeScene, snapshot);
       hasActiveScene = true;
+      flushPendingAnimations();
       return true;
     },
     runAnimation(request) {
       if (!isVisualAnimationRequest(request)) {
         return Promise.resolve({ id: "", state: "failed", message: "The animation request is invalid." });
       }
-      const result = animationDirector.schedule(request, (id) => scene.hasSceneObject(id));
-      scene.refreshAnimationLocks();
-      void result.finally(() => scene.refreshAnimationLocks());
-      return result;
+      return areAnimationObjectsAvailable(request) ? scheduleAnimation(request) : deferAnimationUntilReconciled(request);
     },
     cancelAnimation(request) {
       if (!isCancellationRequest(request)) {
         return false;
+      }
+      const pendingIndex = pendingAnimations.findIndex((pendingAnimation) => pendingAnimation.request.id === request.id);
+      if (pendingIndex >= 0) {
+        const [pendingAnimation] = pendingAnimations.splice(pendingIndex, 1);
+        pendingAnimation?.resolve({ id: request.id, state: "cancelled", message: "The animation was cancelled." });
+        return true;
       }
       const cancelled = animationDirector.cancel(request.id);
       scene.refreshAnimationLocks();
@@ -52624,6 +52703,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     }
   };
   async function disposeEncounterRenderer() {
+    cancelPendingAnimations("The encounter scene has been disposed.");
     resizeObserver.disconnect();
     window.removeEventListener("resize", handleViewportChange);
     window.removeEventListener("orientationchange", handleViewportChange);
