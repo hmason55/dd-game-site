@@ -50290,17 +50290,21 @@ function layoutHand(count2, viewport) {
     return layoutNarrowHand(count2, viewport);
   }
   const cardWidth = 108;
+  const cardVisualWidth = 90;
+  const cardVisualHeight = 126;
   const horizontalPadding = 24;
-  const bottomRowY = viewport.height - 76;
   const availableWidth = viewport.width - horizontalPadding * 2 - cardWidth;
   const step = count2 === 1 ? 0 : Math.min(cardWidth * 0.88, availableWidth / (count2 - 1));
   const rowWidth = cardWidth + step * (count2 - 1);
-  const maximumRotation = Math.min(0.16, 0.06 + count2 * 0.012);
+  const maximumRotation = Math.min(0.2, 0.07 + count2 * 0.014);
+  const fanDepth = Math.min(24, 8 + count2 * 1.5);
+  const rotatedHalfHeight = Math.abs(Math.sin(maximumRotation)) * (cardVisualWidth / 2) + Math.cos(maximumRotation) * (cardVisualHeight / 2);
+  const bottomRowY = Math.min(viewport.height - 76, viewport.height - 2 - fanDepth / 2 - rotatedHalfHeight);
   return Array.from({ length: count2 }, (_, index) => {
     const progress = count2 === 1 ? 0 : index / (count2 - 1) - 0.5;
     return {
       x: (viewport.width - rowWidth) / 2 + cardWidth / 2 + index * step,
-      y: bottomRowY,
+      y: bottomRowY + Math.abs(progress) * fanDepth,
       rotation: progress * maximumRotation * 2
     };
   });
@@ -50470,9 +50474,12 @@ var supportedAnimationNames = /* @__PURE__ */ new Set([
   "fade-out"
 ]);
 var dragReturnDurationMs = 150;
+var handInspectionSettleDurationMs = 100;
 var handCardViewScale = 0.5;
-var focusedHandScale = 1.12;
-var focusedHandLift = 18;
+var focusedHandScale = 1.32;
+var focusedHandLift = 34;
+var draggedCardLift = 48;
+var playedCardLift = 84;
 var EncounterScene = class {
   /**
    * Creates the ordered layers that belong to this scene.
@@ -50488,6 +50495,7 @@ var EncounterScene = class {
     this.root.on("pointerupoutside", (event) => this.cancelDrag(event));
     this.root.on("pointercancel", (event) => this.cancelDrag(event));
     this.backgroundLayer.addChild(this.background);
+    this.effectsLayer.addChild(this.dragAimArrow);
     this.endTurnLabel.eventMode = "static";
     this.endTurnLabel.cursor = "pointer";
     this.endTurnLabel.on("pointertap", () => this.submitEndTurn());
@@ -50512,6 +50520,7 @@ var EncounterScene = class {
     toggleContext: () => this.toggleContext()
   });
   background = new Graphics();
+  dragAimArrow = new Graphics();
   intentStatusBackground = new Graphics();
   intentStatusLabel = new Text({ text: "", style: { fill: 15856888, fontFamily: "Arial", fontSize: 13 } });
   phaseLabel = new Text({ text: "", style: { fill: 12109785, fontFamily: "Arial", fontSize: 14 } });
@@ -50526,12 +50535,14 @@ var EncounterScene = class {
   entryInteractionStates = /* @__PURE__ */ new Map();
   currentSequence = -1;
   selectedEntryId;
+  hoveredEntryId;
   focusedEntryId;
   focusedEntityId;
   activeDrag;
   ignoredPointerTapEntryId;
   releasedDragPositions = /* @__PURE__ */ new Map();
   dragReturns = /* @__PURE__ */ new Map();
+  handLayoutTransitions = /* @__PURE__ */ new Map();
   animationLockResolver = () => false;
   intentPending = false;
   pendingIntentSequence;
@@ -50553,11 +50564,8 @@ var EncounterScene = class {
     ["stagger", (_source, _target, tile, start, progress) => this.stagger(tile, start, progress)],
     ["death", (_source, _target, tile, start, progress) => this.exit(tile, start, progress)],
     ["exit", (_source, _target, tile, start, progress) => this.exit(tile, start, progress)],
-    ["card-play-to-target", (source3, target, _tile, start, progress) => this.moveTo(source3, target, start, progress)],
-    ["card-play-to-corner", (_source, _target, tile, start, progress) => {
-      const anchors = this.getCardAnimationAnchors();
-      tile.container.position.set(interpolate(start.x, anchors.corner.x, progress), interpolate(start.y, anchors.corner.y, progress));
-    }],
+    ["card-play-to-target", (_source, _target, tile, start, progress) => this.liftPlayedCard(tile, start, progress)],
+    ["card-play-to-corner", (_source, _target, tile, start, progress) => this.liftPlayedCard(tile, start, progress)],
     ["draw-to-hand", (_source, _target, tile, start, progress) => {
       const anchors = this.getCardAnimationAnchors();
       tile.container.position.set(interpolate(anchors.draw.x, start.x, progress), interpolate(anchors.draw.y, start.y, progress));
@@ -50735,6 +50743,7 @@ var EncounterScene = class {
       this.restoreTileToHand(dragReturn.tile, dragReturn.destination);
     }
     this.cancelDragReturns();
+    this.hideDragAimArrow();
     this.selectedEntryId = void 0;
     this.focusedEntityId = void 0;
     this.refreshInteractionState();
@@ -50814,7 +50823,10 @@ var EncounterScene = class {
     if (this.focusedEntryId && !this.selectableEntries.has(this.focusedEntryId)) {
       this.focusedEntryId = void 0;
     }
-    this.prioritizeFocusedHandTile();
+    if (this.hoveredEntryId && !this.selectableEntries.has(this.hoveredEntryId)) {
+      this.hoveredEntryId = void 0;
+    }
+    this.prioritizeInspectedHandTile();
   }
   updateEntityTile(id, entity, layer, position) {
     const tile = this.getOrCreateTile(this.entityTiles, id, layer);
@@ -50873,9 +50885,13 @@ ${resources}`;
     tile.container.cursor = isInteractive ? "pointer" : "default";
     tile.container.removeAllListeners("pointertap");
     tile.container.removeAllListeners("pointerdown");
+    tile.container.removeAllListeners("pointerover");
+    tile.container.removeAllListeners("pointerout");
     if (entry.isDraggable) {
       tile.container.on("pointertap", () => this.handleEntrySelection(entry));
       tile.container.on("pointerdown", (event) => this.beginDrag(entry, tile, event));
+      tile.container.on("pointerover", () => this.handleEntryHover(entry));
+      tile.container.on("pointerout", () => this.handleEntryHoverEnd(entry));
     }
   }
   getOrCreateTile(tiles, id, layer) {
@@ -50938,8 +50954,27 @@ ${resources}`;
       this.submitEntryIntent(entry, null);
       return;
     }
+    const previousSelectedTileId = this.getSelectedHandTileId();
     this.selectedEntryId = this.selectedEntryId === entry.id ? void 0 : entry.id;
+    this.refreshHandInspection(previousSelectedTileId);
     this.refreshInteractionState();
+    this.refreshSelectionHighlights();
+  }
+  /** Enlarges an entry while a pointer is over it without changing semantic selection. */
+  handleEntryHover(entry) {
+    const previousHoveredTileId = this.getHoveredHandTileId();
+    this.hoveredEntryId = entry.id;
+    this.refreshHandInspection(previousHoveredTileId);
+    this.refreshSelectionHighlights();
+  }
+  /** Starts the brief shrink-to-hand treatment once the pointer leaves an entry. */
+  handleEntryHoverEnd(entry) {
+    if (this.hoveredEntryId !== entry.id) {
+      return;
+    }
+    const previousHoveredTileId = this.getHoveredHandTileId();
+    this.hoveredEntryId = void 0;
+    this.refreshHandInspection(previousHoveredTileId);
     this.refreshSelectionHighlights();
   }
   beginDrag(entry, tile, event) {
@@ -50952,7 +50987,7 @@ ${resources}`;
     const pointerOrigin = event.getLocalPosition(this.root);
     this.activeDrag = {
       entry,
-      origin: returningDrag?.destination ?? captureTransform(tile.container),
+      origin: returningDrag?.destination ?? this.getCurrentHandDestination(tileId, captureTransform(tile.container)),
       pointerId: event.pointerId,
       pointerOrigin,
       tile,
@@ -50961,7 +50996,9 @@ ${resources}`;
     };
     this.entryInteractionStates.set(tileId, "pressed");
     this.dragLayer.addChild(tile.container);
+    const previousSelectedTileId = this.getSelectedHandTileId();
     this.selectedEntryId = entry.id;
+    this.refreshHandInspection(previousSelectedTileId);
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
   }
@@ -50975,8 +51012,13 @@ ${resources}`;
       return;
     }
     drag.state = "dragging";
-    drag.tile.container.position.set(position.x, position.y);
     const target = this.findDropTarget(position);
+    if (isCardPresentationState2(drag.entry)) {
+      applyTransform(drag.tile.container, this.getDraggedCardTransform(drag));
+      this.drawDragAimArrow(drag, position, target);
+    } else {
+      drag.tile.container.position.set(position.x, position.y);
+    }
     this.entryInteractionStates.set(getEntrySceneId(drag.entry), this.isValidDrop(drag.entry, target) ? "valid-drop" : "invalid-drop");
     this.refreshSelectionHighlights();
   }
@@ -50999,6 +51041,8 @@ ${resources}`;
     this.activeDrag = void 0;
     this.releasedDragPositions.clear();
     this.cancelDragReturns();
+    this.handLayoutTransitions.clear();
+    this.hideDragAimArrow();
     this.animationStarts.clear();
   }
   /**
@@ -51029,6 +51073,25 @@ ${resources}`;
       });
       if (progress === 1) {
         this.finishDragReturn(tileId, dragReturn);
+      }
+    }
+    for (const [tileId, transition] of this.handLayoutTransitions) {
+      if (transition.tile.container.destroyed) {
+        this.handLayoutTransitions.delete(tileId);
+        continue;
+      }
+      transition.elapsedMs += Math.max(0, deltaMs);
+      const progress = Math.min(1, transition.elapsedMs / handInspectionSettleDurationMs);
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      applyTransform(transition.tile.container, {
+        x: interpolate(transition.start.x, transition.destination.x, easedProgress),
+        y: interpolate(transition.start.y, transition.destination.y, easedProgress),
+        rotation: interpolate(transition.start.rotation, transition.destination.rotation, easedProgress),
+        scale: interpolate(transition.start.scale, transition.destination.scale, easedProgress)
+      });
+      if (progress === 1) {
+        this.handLayoutTransitions.delete(tileId);
+        this.applyHandLayoutTransform(tileId, transition.tile, this.handLayoutPositions.get(tileId));
       }
     }
   }
@@ -51131,6 +51194,9 @@ ${resources}`;
     if (this.activeDrag && getEntrySceneId(this.activeDrag.entry) === tileId) {
       return this.activeDrag.state === "dragging" ? "dragging" : "hovered";
     }
+    if (entryId === this.hoveredEntryId) {
+      return "hovered";
+    }
     if (this.releasedDragPositions.has(tileId) || this.committedCardSequences.has(entryId)) {
       return "resolving";
     }
@@ -51191,9 +51257,12 @@ ${resources}`;
   }
   releaseActiveDrag(clearSelection = true) {
     this.activeDrag = void 0;
+    this.hideDragAimArrow();
+    const previousSelectedTileId = clearSelection ? this.getSelectedHandTileId() : void 0;
     if (clearSelection) {
       this.selectedEntryId = void 0;
     }
+    this.refreshHandInspection(previousSelectedTileId);
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
   }
@@ -51240,6 +51309,7 @@ ${resources}`;
   clearDragMotion(tileId) {
     this.releasedDragPositions.delete(tileId);
     this.cancelDragReturn(tileId);
+    this.handLayoutTransitions.delete(tileId);
     if (this.entryInteractionStates.has(tileId)) {
       this.entryInteractionStates.set(tileId, "resolved");
     }
@@ -51280,6 +51350,42 @@ ${resources}`;
       rotation: position.rotation ?? 0,
       scale: position.scale ?? 1
     };
+  }
+  /** Keeps a dragged card readable above its original hand slot instead of following the pointer. */
+  getDraggedCardTransform(drag) {
+    return {
+      x: drag.origin.x,
+      y: drag.origin.y - draggedCardLift,
+      rotation: drag.origin.rotation,
+      scale: drag.origin.scale * focusedHandScale
+    };
+  }
+  /** Draws an aim arrow from the held card toward the valid target or current pointer position. */
+  drawDragAimArrow(drag, pointerPosition, target) {
+    const isValidDrop = this.isValidDrop(drag.entry, target);
+    const targetTile = target ? this.entityTiles.get(`${target.isPlayer ? "player" : "enemy"}:${target.id}`) : void 0;
+    const end = drag.entry.targetMode !== "none" && isValidDrop && targetTile ? { x: targetTile.container.x, y: targetTile.container.y } : pointerPosition;
+    const start = {
+      x: drag.tile.container.x,
+      y: drag.tile.container.y - 74 * drag.tile.container.scale.x
+    };
+    const direction = getDirection(start.x, start.y, end.x, end.y);
+    const distance = Math.hypot(end.x - start.x, end.y - start.y);
+    this.dragAimArrow.clear();
+    this.dragAimArrow.visible = distance >= 8;
+    if (!this.dragAimArrow.visible) {
+      return;
+    }
+    const color = isValidDrop ? 11141006 : 14912909;
+    const perpendicular = { x: -direction.y, y: direction.x };
+    const headLength = 15;
+    const headWidth = 8;
+    this.dragAimArrow.moveTo(start.x, start.y).lineTo(end.x, end.y).stroke({ color, width: 3, alpha: 0.9 }).moveTo(end.x, end.y).lineTo(end.x - direction.x * headLength + perpendicular.x * headWidth, end.y - direction.y * headLength + perpendicular.y * headWidth).moveTo(end.x, end.y).lineTo(end.x - direction.x * headLength - perpendicular.x * headWidth, end.y - direction.y * headLength - perpendicular.y * headWidth).stroke({ color, width: 3, alpha: 0.9 });
+  }
+  /** Hides transient targeting feedback as soon as drag ownership ends. */
+  hideDragAimArrow() {
+    this.dragAimArrow.clear();
+    this.dragAimArrow.visible = false;
   }
   findDropTarget(position) {
     for (const entity of this.entities.values()) {
@@ -51379,10 +51485,11 @@ ${resources}`;
     }
     this.animationStarts.delete(command.id);
   }
-  moveTo(source3, target, start, progress) {
-    if (target) {
-      source3.container.position.set(interpolate(start.x, target.container.x, progress), interpolate(start.y, target.container.y, progress));
-    }
+  /** Lifts a played card above its hand slot before its discard or exhaust transition. */
+  liftPlayedCard(tile, start, progress) {
+    const liftedProgress = 1 - Math.pow(1 - progress, 2);
+    tile.container.position.set(start.x, start.y - playedCardLift * liftedProgress);
+    tile.container.scale.set(start.scale * (1 + Math.sin(progress * Math.PI) * 0.08));
   }
   /**
    * Moves a card below the encounter while shrinking and fading it so it is gone at the destination.
@@ -51512,7 +51619,7 @@ ${resources}`;
         tile.cardView.setMotionState(this.getCardMotionState(id, entryId));
       }
     }
-    this.prioritizeFocusedHandTile();
+    this.prioritizeInspectedHandTile();
     for (const [id, tile] of this.entityTiles) {
       const entityId = id.substring(id.indexOf(":") + 1);
       const entity = this.entities.get(entityId);
@@ -51586,15 +51693,59 @@ ${resources}`;
     }
     this.submitIntent({ kind: "endTurn", sourceId: null, targetId: null, sequence: this.currentSequence, sceneId: encounterSceneId });
   }
-  /**
-   * Applies the current hand layout while lifting the focused card above its neighbors for inspection.
-   */
+  /** Applies the current hand layout and inspection treatment for a card. */
   applyHandLayoutTransform(tileId, tile, position) {
-    const isFocused = tileId === this.getFocusedHandTileId() && position.scale === void 0;
-    const scale = (position.scale ?? 1) * (isFocused ? focusedHandScale : 1);
-    tile.container.position.set(position.x, position.y - (isFocused ? focusedHandLift : 0));
-    tile.container.rotation = position.rotation ?? 0;
-    tile.container.scale.set(scale);
+    if (!position) {
+      return;
+    }
+    applyTransform(tile.container, this.getHandLayoutTransform(tileId, position));
+  }
+  /** Builds the final hand transform for either a resting or inspected entry. */
+  getHandLayoutTransform(tileId, position) {
+    const isInspected = this.isHandEntryInspected(tileId);
+    return {
+      x: position.x,
+      y: position.y - (isInspected && position.scale === void 0 ? focusedHandLift : 0),
+      rotation: position.rotation ?? 0,
+      scale: (position.scale ?? 1) * (isInspected ? this.getHandInspectionScale(position) : 1)
+    };
+  }
+  /** Scales constrained layouts modestly so inspection remains readable without crowding combat space. */
+  getHandInspectionScale(position) {
+    return position.scale === void 0 ? focusedHandScale : 1.15;
+  }
+  /** Determines whether an entry should remain enlarged for hover, selection, or keyboard inspection. */
+  isHandEntryInspected(tileId) {
+    return tileId === this.getFocusedHandTileId() || tileId === this.getSelectedHandTileId() || tileId === this.getHoveredHandTileId();
+  }
+  /** Starts a short return to the resting hand transform after inspection ends. */
+  startHandLayoutTransition(tileId) {
+    const tile = this.handTiles.get(tileId);
+    const position = this.handLayoutPositions.get(tileId);
+    if (!tile || !position || this.isDragPositionManaged(tileId) || this.isHandEntryInspected(tileId)) {
+      return;
+    }
+    this.handLayoutTransitions.set(tileId, {
+      destination: this.getHandLayoutTransform(tileId, position),
+      start: captureTransform(tile.container),
+      tile,
+      elapsedMs: 0
+    });
+  }
+  /** Reconciles hand inspection transforms while preserving the short unhover settle animation. */
+  refreshHandInspection(previousTileId) {
+    if (previousTileId) {
+      this.startHandLayoutTransition(previousTileId);
+    }
+    const inspectedTileIds = [this.getFocusedHandTileId(), this.getSelectedHandTileId(), this.getHoveredHandTileId()];
+    for (const tileId of inspectedTileIds) {
+      if (!tileId) {
+        continue;
+      }
+      this.handLayoutTransitions.delete(tileId);
+    }
+    this.refreshHandLayoutTransforms();
+    this.prioritizeInspectedHandTile();
   }
   /**
    * Reapplies focus-aware hand transforms without disturbing cards owned by drag or animation motion.
@@ -51602,13 +51753,13 @@ ${resources}`;
   refreshHandLayoutTransforms() {
     for (const [tileId, position] of this.handLayoutPositions) {
       const tile = this.handTiles.get(tileId);
-      if (tile && !this.isDragPositionManaged(tileId)) {
+      if (tile && !this.isDragPositionManaged(tileId) && !this.handLayoutTransitions.has(tileId)) {
         this.applyHandLayoutTransform(tileId, tile, position);
       }
     }
   }
   /**
-   * Restores snapshot order for non-owned hand cards before promoting the focused card above its neighbors.
+   * Restores snapshot order for non-owned hand cards before promoting the inspected card above its neighbors.
    */
   restoreHandLayerOrder() {
     for (const tileId of this.handLayoutPositions.keys()) {
@@ -51628,16 +51779,32 @@ ${resources}`;
     const cardId = `card:${this.focusedEntryId}`;
     return this.handTiles.has(cardId) ? cardId : `item:${this.focusedEntryId}`;
   }
+  /** Gets the stable tile ID belonging to the currently selected hand entry. */
+  getSelectedHandTileId() {
+    if (!this.selectedEntryId) {
+      return void 0;
+    }
+    const cardId = `card:${this.selectedEntryId}`;
+    return this.handTiles.has(cardId) ? cardId : `item:${this.selectedEntryId}`;
+  }
+  /** Gets the stable tile ID belonging to the entry currently under the pointer. */
+  getHoveredHandTileId() {
+    if (!this.hoveredEntryId) {
+      return void 0;
+    }
+    const cardId = `card:${this.hoveredEntryId}`;
+    return this.handTiles.has(cardId) ? cardId : `item:${this.hoveredEntryId}`;
+  }
   /**
-   * Keeps the focused card at the front of the hand stack so its enlarged inspection state remains unobscured.
+   * Keeps the highest-priority inspected card at the front of the hand stack so it remains unobscured.
    */
-  prioritizeFocusedHandTile() {
-    const focusedTileId = this.getFocusedHandTileId();
-    const focusedTile = focusedTileId ? this.handTiles.get(focusedTileId) : void 0;
-    if (!focusedTileId || !focusedTile || this.isDragPositionManaged(focusedTileId)) {
+  prioritizeInspectedHandTile() {
+    const inspectedTileId = this.getHoveredHandTileId() ?? this.getSelectedHandTileId() ?? this.getFocusedHandTileId();
+    const inspectedTile = inspectedTileId ? this.handTiles.get(inspectedTileId) : void 0;
+    if (!inspectedTileId || !inspectedTile || this.isDragPositionManaged(inspectedTileId)) {
       return;
     }
-    this.handLayer.addChild(focusedTile.container);
+    this.handLayer.addChild(inspectedTile.container);
   }
   submitDeckPreview() {
     if (!this.intentPending) {
@@ -51661,11 +51828,12 @@ ${resources}`;
     if (!focusedEntryId) {
       return;
     }
+    const previousFocusedTileId = this.getFocusedHandTileId();
     this.focusedEntryId = focusedEntryId;
     this.focusedEntityId = void 0;
     const entry = this.selectableEntries.get(this.focusedEntryId);
     this.announceInteraction?.(`Focused ${entry?.name ?? "card"}. Press Enter to select it.`);
-    this.refreshHandLayoutTransforms();
+    this.refreshHandInspection(previousFocusedTileId);
     this.refreshSelectionHighlights();
   }
   focusTarget(direction) {
@@ -51711,7 +51879,9 @@ ${resources}`;
       this.announceInteraction?.(this.pendingIntentMessage ?? "An encounter action is still being processed.");
       return;
     }
+    const previousSelectedTileId = this.getSelectedHandTileId();
     this.selectedEntryId = void 0;
+    this.refreshHandInspection(previousSelectedTileId);
     this.focusedEntityId = void 0;
     this.announceInteraction?.("Encounter selection cancelled.");
     this.refreshInteractionState();
@@ -51744,7 +51914,9 @@ ${resources}`;
     }
     this.queuedEntryIds.add(sourceId);
     this.committedCardSequences.set(sourceId, intent.sequence);
+    const previousSelectedTileId = this.getSelectedHandTileId();
     this.selectedEntryId = void 0;
+    this.refreshHandInspection(previousSelectedTileId);
     this.focusedEntityId = void 0;
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
