@@ -49738,8 +49738,11 @@ var ResourceCounter = class extends Container {
     const labelText = new Text({ text: options.label, style: getUiTextStyle("Body") });
     labelText.position.set(offsetX, 0);
     this.valueText = new Text({ text: String(options.value), style: getUiTextStyle("Button") });
-    this.valueText.position.set(offsetX, 18);
-    this.addChild(labelText, this.valueText);
+    this.valueText.position.set(offsetX, options.valueLayout === "inline" ? 0 : 18);
+    if (options.label) {
+      this.addChild(labelText);
+    }
+    this.addChild(this.valueText);
   }
   /**
    * Gets the resource value displayed by this counter.
@@ -49822,11 +49825,13 @@ var CardView = class extends Container {
   artMask = new Graphics();
   artwork = new Sprite(Texture.EMPTY);
   stateOverlay = new Graphics();
-  costStyle = new TextStyle(uiTokens.typography.button);
-  descriptionStyle = new TextStyle({ ...uiTokens.typography.body, wordWrap: true });
+  costStyle = new TextStyle({ ...uiTokens.typography.button, stroke: { color: 463132, width: 3 } });
+  nameStyle = new TextStyle({ ...uiTokens.typography.panelTitle, align: "center", fontSize: 20, stroke: { color: 463132, width: 4 }, wordWrap: true });
+  typeStyle = new TextStyle({ ...uiTokens.typography.body, align: "center", fontSize: 13, stroke: { color: 463132, width: 3 }, wordWrap: true });
+  descriptionStyle = new TextStyle({ ...uiTokens.typography.body, align: "center", fontSize: 15, stroke: { color: 463132, width: 3 }, wordWrap: true });
   costLabel = new Text({ text: "", style: this.costStyle });
-  nameLabel = new Text({ text: "", style: getUiTextStyle("PanelTitle") });
-  typeLabel = new Text({ text: "", style: getUiTextStyle("Body") });
+  nameLabel = new Text({ text: "", style: this.nameStyle });
+  typeLabel = new Text({ text: "", style: this.typeStyle });
   descriptionLabel = new Text({ text: "", style: this.descriptionStyle });
   cardWidth;
   cardHeight;
@@ -50001,13 +50006,13 @@ var CardView = class extends Container {
     this.frame.clear().roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: palette.frame }).roundRect(uiTokens.frame.borderWidth, uiTokens.frame.borderWidth, this.cardWidth - uiTokens.frame.borderWidth * 2, this.cardHeight - uiTokens.frame.borderWidth * 2, uiTokens.frame.panelCornerRadius - 1).fill({ color: uiTokens.color.panelFill });
     this.drawFallbackArt(artBounds, palette);
     this.updateArtwork(artBounds);
-    this.updateLabels(artBounds, palette);
+    this.updateLabels(palette);
     this.drawStateOverlay(palette);
   }
   drawFallbackArt(artBounds, palette) {
     this.artFallback.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.spacing.xs).fill({ color: palette.artFill }).rect(artBounds.x, artBounds.y + artBounds.height * 0.56, artBounds.width, artBounds.height * 0.44).fill({ color: palette.accent, alpha: 0.4 }).roundRect(artBounds.x + artBounds.width * 0.18, artBounds.y + artBounds.height * 0.2, artBounds.width * 0.64, artBounds.height * 0.28, uiTokens.spacing.sm).fill({ color: palette.accent, alpha: 0.55 });
     this.artFallback.visible = this.usesFallbackArt;
-    this.artMask.clear().rect(artBounds.x, artBounds.y, artBounds.width, artBounds.height).fill({ color: 16777215 });
+    this.artMask.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.frame.panelCornerRadius - uiTokens.frame.borderWidth).fill({ color: 16777215 });
   }
   updateArtwork(artBounds) {
     const texture = this.cardContent.artTexture;
@@ -50027,15 +50032,17 @@ var CardView = class extends Container {
     this.artwork.width = artBounds.width;
     this.artwork.height = artBounds.width / textureAspectRatio;
   }
-  updateLabels(artBounds, palette) {
+  updateLabels(palette) {
     this.costLabel.text = String(this.cardContent.cost);
     this.costLabel.position.set(textPadding * 2, textPadding * 2);
     this.nameLabel.text = this.cardContent.name;
-    this.nameLabel.position.set(this.cardWidth / 2, artBounds.y + artBounds.height + textPadding);
+    this.nameLabel.position.set(this.cardWidth / 2, this.cardHeight * 0.5);
     this.typeLabel.text = `${this.cardContent.type} \xB7 ${this.cardContent.rarity}`;
-    this.typeLabel.position.set(this.cardWidth / 2, artBounds.y + artBounds.height + textPadding + 26);
+    this.typeLabel.position.set(this.cardWidth / 2, this.cardHeight * 0.61);
     this.descriptionLabel.text = this.cardContent.description;
-    this.descriptionLabel.position.set(this.cardWidth / 2, artBounds.y + artBounds.height + 48);
+    this.descriptionLabel.position.set(this.cardWidth / 2, this.cardHeight * 0.7);
+    this.nameStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
+    this.typeStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
     this.descriptionStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
     this.costStyle.fill = palette.accent;
   }
@@ -50073,10 +50080,10 @@ function toCardViewContent(options) {
   };
 }
 function getArtBounds(width, height) {
-  const x2 = textPadding;
-  const y2 = 32;
-  const artWidth = Math.max(0, width - textPadding * 2);
-  const artHeight = Math.max(0, Math.min(height * 0.42, height - 116));
+  const x2 = uiTokens.frame.borderWidth;
+  const y2 = uiTokens.frame.borderWidth;
+  const artWidth = Math.max(0, width - uiTokens.frame.borderWidth * 2);
+  const artHeight = Math.max(0, height - uiTokens.frame.borderWidth * 2);
   return { x: x2, y: y2, width: artWidth, height: artHeight };
 }
 function getPalette(rarity) {
@@ -50391,7 +50398,7 @@ var RunHud = class extends Container {
     this.addChild(this.health, this.currency, this.deck, this.relics, this.context);
   }
   actions;
-  health = new ResourceCounter({ icon: "\u2665", label: "HP", value: "0/0" });
+  health = new ResourceCounter({ icon: "\u2665", label: "", value: "0/0", valueLayout: "inline" });
   currency = new ResourceCounter({ icon: "\u25C6", label: "Vein", value: 0 });
   deck = new GameButton({ width: 92, height: 44, label: "Deck 0", onPress: () => this.actions.previewDeck() });
   relics = new GameButton({ width: 92, height: 44, label: "Relics 0", onPress: () => this.actions.toggleContext() });
@@ -50811,11 +50818,9 @@ var EncounterScene = class {
   }
   updateEntityTile(id, entity, layer, position) {
     const tile = this.getOrCreateTile(this.entityTiles, id, layer);
-    const health = `${entity.health}/${entity.maxHealth} HP  ${entity.block} Block`;
-    const resources = entity.isPlayer ? `${entity.energy} Energy  ${entity.mana} Mana` : `${entity.posture}/${entity.maxPosture} Posture`;
-    const telegraph = entity.telegraph ? `Intent: ${entity.telegraph}` : "";
-    const statuses = entity.statuses.map((status) => `${status.name} ${status.stacks}`).join("  ");
-    const rituals = entity.rituals.map((ritual) => ritual.name).join(", ");
+    const health = `HP ${entity.health}/${entity.maxHealth} \xB7 B ${entity.block}`;
+    const resources = entity.isPlayer ? `E ${entity.energy} \xB7 M ${entity.mana}` : `P ${entity.posture}/${entity.maxPosture}`;
+    const telegraph = formatEntityTelegraph(entity.telegraph);
     const color = entity.isPlayer ? 2645391 : entity.isTargetable ? 9124667 : 4410713;
     tile.background.clear().roundRect(-88, -58, 176, 116, 10).fill({ color });
     tile.background.tint = 16777215;
@@ -50824,12 +50829,12 @@ var EncounterScene = class {
     tile.title.text = entity.name;
     tile.description.text = telegraph;
     tile.detail.text = `${health}
-${resources}${statuses ? `
-${statuses}` : ""}${rituals ? `
-Rituals: ${rituals}` : ""}`;
-    tile.title.position.set(0, -38);
-    tile.description.position.set(0, -18);
-    tile.detail.position.set(0, 20);
+${resources}`;
+    tile.effects.text = formatEntityEffects(entity);
+    tile.title.position.set(0, -42);
+    tile.description.position.set(0, -23);
+    tile.detail.position.set(0, 7);
+    tile.effects.position.set(0, 38);
     if (!this.isDragPositionManaged(id)) {
       tile.container.position.set(position.x, position.y);
     }
@@ -50885,19 +50890,22 @@ Rituals: ${rituals}` : ""}`;
     targetHighlight.visible = false;
     const artwork = new Sprite(Texture.EMPTY);
     artwork.anchor.set(0.5, 0.5);
-    const title = new Text({ text: "", style: { align: "center", fill: 16777215, fontFamily: "Arial, system-ui", fontSize: 16, wordWrap: true, wordWrapWidth: 104 } });
-    const description = new Text({ text: "", style: { align: "center", fill: 15856888, fontFamily: "Arial, system-ui", fontSize: 12, wordWrap: true, wordWrapWidth: 104 } });
-    const detail = new Text({ text: "", style: { align: "center", fill: 14148078, fontFamily: "Arial, system-ui", fontSize: 12, wordWrap: true, wordWrapWidth: 104 } });
+    const title = new Text({ text: "", style: { align: "center", fill: 16777215, fontFamily: "Arial, system-ui", fontSize: 16, stroke: { color: 463132, width: 3 }, wordWrap: true, wordWrapWidth: 156 } });
+    const description = new Text({ text: "", style: { align: "center", fill: 15856888, fontFamily: "Arial, system-ui", fontSize: 11, stroke: { color: 463132, width: 2 } } });
+    const detail = new Text({ text: "", style: { align: "center", fill: 14148078, fontFamily: "Arial, system-ui", fontSize: 11, stroke: { color: 463132, width: 2 } } });
+    const effects = new Text({ text: "", style: { align: "center", fill: 16769155, fontFamily: "Arial, system-ui", fontSize: 10, stroke: { color: 463132, width: 2 }, wordWrap: true, wordWrapWidth: 156 } });
     const container = new Container();
     title.anchor.set(0.5, 0.5);
     description.anchor.set(0.5, 0.5);
     detail.anchor.set(0.5, 0.5);
-    title.position.set(0, -35);
-    description.position.set(0, 0);
-    detail.position.set(0, 42);
-    container.addChild(background, targetHighlight, artwork, accent, title, description, detail);
+    effects.anchor.set(0.5, 0.5);
+    title.position.set(0, -42);
+    description.position.set(0, -23);
+    detail.position.set(0, 7);
+    effects.position.set(0, 38);
+    container.addChild(background, targetHighlight, artwork, accent, title, description, detail, effects);
     layer.addChild(container);
-    const tile = { container, background, accent, targetHighlight, artwork, title, description, detail };
+    const tile = { container, background, accent, targetHighlight, artwork, title, description, detail, effects };
     tiles.set(id, tile);
     return tile;
   }
@@ -51043,11 +51051,12 @@ Rituals: ${rituals}` : ""}`;
     cardView.position.set(-45, -63);
     cardView.scale.set(handCardViewScale);
     tile.container.removeAllListeners();
-    tile.container.removeChild(tile.background, tile.accent, tile.targetHighlight, tile.artwork, tile.title, tile.description, tile.detail);
+    tile.container.removeChild(tile.background, tile.accent, tile.targetHighlight, tile.artwork, tile.title, tile.description, tile.detail, tile.effects);
     tile.artwork.destroy();
     tile.title.destroy();
     tile.description.destroy();
     tile.detail.destroy();
+    tile.effects.destroy();
     tile.container.addChild(tile.background, tile.accent, cardView);
     const cardTile = { ...tile, cardView };
     this.handTiles.set(id, cardTile);
@@ -51882,6 +51891,17 @@ function isUnmodifiedShortcut(event, key) {
 }
 function formatCardCost(card) {
   return card.manaCost > 0 ? `${card.energyCost}E ${card.manaCost}M` : `${card.energyCost}E`;
+}
+function formatEntityTelegraph(telegraph) {
+  if (!telegraph) {
+    return "";
+  }
+  return telegraph.replace(/^Intent:\s*/i, "").replace(/\s+damage\b/i, "").trim();
+}
+function formatEntityEffects(entity) {
+  const statuses = entity.statuses.map((status) => `${status.name} ${status.stacks}`);
+  const rituals = entity.rituals.map((ritual) => `Ritual: ${ritual.name}`);
+  return [...statuses, ...rituals].join(" \xB7 ");
 }
 function toCardViewRarity(rarity) {
   return rarity === "Uncommon" || rarity === "Rare" || rarity === "Special" ? rarity : "Common";
@@ -52818,12 +52838,13 @@ function getBrowserViewport(canvas) {
   };
 }
 function getVisualViewport(canvas, visualViewport) {
+  const hostViewport = getBrowserViewport(canvas);
   if (!visualViewport || !Number.isFinite(visualViewport.width) || !Number.isFinite(visualViewport.height)) {
-    return getBrowserViewport(canvas);
+    return hostViewport;
   }
   return {
-    width: Math.max(1, visualViewport.width),
-    height: Math.max(1, visualViewport.height)
+    width: Math.min(hostViewport.width, Math.max(1, visualViewport.width)),
+    height: Math.min(hostViewport.height, Math.max(1, visualViewport.height))
   };
 }
 function createDevicePixelRatioWatcher(onChange) {

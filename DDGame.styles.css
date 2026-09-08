@@ -1,8 +1,11 @@
 /* /Components/Rooms/PixiEncounterSurface.razor.rz.scp.css */
 .pixi-encounter-surface[b-9jzg35z109] {
     position: relative;
-    height: clamp(24rem, 42vw, 32rem);
-    margin-bottom: 1rem;
+    --encounter-available-height: calc(100dvh - 8rem);
+    width: min(100%, calc(var(--encounter-available-height) * 16 / 9));
+    min-height: min(24rem, var(--encounter-available-height));
+    aspect-ratio: 16 / 9;
+    margin: 0 auto 1rem;
     overflow: hidden;
     overscroll-behavior: contain;
     touch-action: none;
@@ -11,6 +14,14 @@
     background: #0b1622;
     border: 1px solid var(--mud-palette-lines-default);
     border-radius: var(--mud-default-borderradius);
+}
+
+@media (max-width: 600px) {
+    .pixi-encounter-surface[b-9jzg35z109] {
+        min-height: 0;
+        aspect-ratio: auto;
+        height: min(72vh, 42rem);
+    }
 }
 
 .pixi-encounter-surface canvas[b-9jzg35z109] {
