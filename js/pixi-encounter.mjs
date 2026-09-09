@@ -49825,9 +49825,10 @@ var textPadding = uiTokens.spacing.sm;
 var CardView = class extends Container {
   frame = new Graphics();
   artFallback = new Graphics();
-  artMask = new Graphics();
   artwork = new Sprite(Texture.EMPTY);
   stateOverlay = new Graphics();
+  playabilityOutline = new Graphics();
+  stateOutline = new Graphics();
   costStyle = new TextStyle({ ...uiTokens.typography.button, stroke: { color: 463132, width: 3 } });
   nameStyle = new TextStyle({ ...uiTokens.typography.panelTitle, align: "center", fontSize: 20, stroke: { color: 463132, width: 4 }, wordWrap: true });
   typeStyle = new TextStyle({ ...uiTokens.typography.body, align: "center", fontSize: 13, stroke: { color: 463132, width: 3 }, wordWrap: true });
@@ -49843,6 +49844,7 @@ var CardView = class extends Container {
   componentLifecycleState = "active";
   motionState;
   playability;
+  statePresentationKey = "";
   /**
    * Creates a stable card display tree from semantic display data.
    */
@@ -49871,15 +49873,15 @@ var CardView = class extends Container {
     this.addChild(
       this.frame,
       this.artFallback,
-      this.artMask,
       this.artwork,
       this.costLabel,
       this.nameLabel,
       this.typeLabel,
       this.descriptionLabel,
-      this.stateOverlay
+      this.stateOverlay,
+      this.playabilityOutline,
+      this.stateOutline
     );
-    this.artwork.mask = this.artMask;
     this.redraw();
   }
   /**
@@ -49942,7 +49944,7 @@ var CardView = class extends Container {
       return;
     }
     this.motionState = state;
-    this.drawStateOverlay(getPalette(this.cardContent.rarity));
+    this.applyStatePresentation(getPalette(this.cardContent.rarity));
   }
   /**
    * Applies playability without replacing hover, focus, selection, or motion presentation.
@@ -49952,7 +49954,7 @@ var CardView = class extends Container {
       return;
     }
     this.playability = playability;
-    this.drawStateOverlay(getPalette(this.cardContent.rarity));
+    this.applyStatePresentation(getPalette(this.cardContent.rarity));
   }
   /**
    * Resizes the card while retaining its content, state, and display-object identity.
@@ -49980,7 +49982,7 @@ var CardView = class extends Container {
       ...state,
       reducedMotion: this.componentState.reducedMotion
     });
-    this.drawStateOverlay(getPalette(this.cardContent.rarity));
+    this.applyStatePresentation(getPalette(this.cardContent.rarity));
   }
   /**
    * Updates reduced-motion presentation without changing card content or interaction state.
@@ -50025,12 +50027,12 @@ var CardView = class extends Container {
     this.drawFallbackArt(artBounds, palette);
     this.updateArtwork(artBounds);
     this.updateLabels(palette);
-    this.drawStateOverlay(palette);
+    this.statePresentationKey = "";
+    this.applyStatePresentation(palette);
   }
   drawFallbackArt(artBounds, palette) {
     this.artFallback.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.spacing.xs).fill({ color: palette.artFill }).rect(artBounds.x, artBounds.y + artBounds.height * 0.56, artBounds.width, artBounds.height * 0.44).fill({ color: palette.accent, alpha: 0.4 }).roundRect(artBounds.x + artBounds.width * 0.18, artBounds.y + artBounds.height * 0.2, artBounds.width * 0.64, artBounds.height * 0.28, uiTokens.spacing.sm).fill({ color: palette.accent, alpha: 0.55 });
     this.artFallback.visible = this.usesFallbackArt;
-    this.artMask.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.frame.panelCornerRadius - uiTokens.frame.borderWidth).fill({ color: 16777215 });
   }
   updateArtwork(artBounds) {
     const texture = this.cardContent.artTexture;
@@ -50043,12 +50045,12 @@ var CardView = class extends Container {
     const textureAspectRatio = getTextureAspectRatio(texture);
     const artAspectRatio = artBounds.width / Math.max(1, artBounds.height);
     if (textureAspectRatio >= artAspectRatio) {
-      this.artwork.width = artBounds.height * textureAspectRatio;
-      this.artwork.height = artBounds.height;
+      this.artwork.width = artBounds.width;
+      this.artwork.height = artBounds.width / textureAspectRatio;
       return;
     }
-    this.artwork.width = artBounds.width;
-    this.artwork.height = artBounds.width / textureAspectRatio;
+    this.artwork.width = artBounds.height * textureAspectRatio;
+    this.artwork.height = artBounds.height;
   }
   updateLabels(palette) {
     this.costLabel.text = String(this.cardContent.cost);
@@ -50064,18 +50066,34 @@ var CardView = class extends Container {
     this.descriptionStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
     this.costStyle.fill = palette.accent;
   }
-  drawStateOverlay(palette) {
+  /** Applies mutable interaction state while caching the state graphics between semantic changes. */
+  applyStatePresentation(palette) {
     const statePresentation = getStatePresentation(this.motionState, this.playability, this.componentState.interaction);
     this.alpha = statePresentation.alpha;
+    const presentationKey = [
+      this.cardWidth,
+      this.cardHeight,
+      statePresentation.overlayAlpha,
+      statePresentation.overlayColor,
+      statePresentation.outlineColor ?? "",
+      this.playability,
+      palette.accent
+    ].join(":");
+    if (this.statePresentationKey === presentationKey) {
+      return;
+    }
+    this.statePresentationKey = presentationKey;
     this.stateOverlay.clear();
+    this.playabilityOutline.clear();
+    this.stateOutline.clear();
     if (statePresentation.overlayAlpha > 0) {
       this.stateOverlay.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: statePresentation.overlayColor, alpha: statePresentation.overlayAlpha });
     }
     if (this.playability === "playable") {
-      this.stateOverlay.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).stroke({ color: palette.accent, width: uiTokens.frame.borderWidth });
+      this.playabilityOutline.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).stroke({ color: palette.accent, width: uiTokens.frame.borderWidth });
     }
     if (statePresentation.outlineColor !== void 0) {
-      this.stateOverlay.roundRect(uiTokens.frame.selectedInset, uiTokens.frame.selectedInset, this.cardWidth - uiTokens.frame.selectedInset * 2, this.cardHeight - uiTokens.frame.selectedInset * 2, uiTokens.frame.selectedCornerRadius).stroke({ color: statePresentation.outlineColor, width: uiTokens.frame.borderWidth + 1 });
+      this.stateOutline.roundRect(uiTokens.frame.selectedInset, uiTokens.frame.selectedInset, this.cardWidth - uiTokens.frame.selectedInset * 2, this.cardHeight - uiTokens.frame.selectedInset * 2, uiTokens.frame.selectedCornerRadius).stroke({ color: statePresentation.outlineColor, width: uiTokens.frame.borderWidth + 1 });
     }
   }
 };
@@ -50526,7 +50544,8 @@ var handCardViewScale = 0.5;
 var focusedHandScale = 1.32;
 var focusedHandLift = 34;
 var draggedCardLift = 48;
-var playedCardLift = 84;
+var draggedCardScale = 1.32;
+var playedCardScale = 1.48;
 var entityHitHalfWidth = 94;
 var entityHitHalfHeight = 64;
 var EncounterScene = class {
@@ -50613,13 +50632,14 @@ var EncounterScene = class {
     ["stagger", (_source, _target, tile, start, progress) => this.stagger(tile, start, progress)],
     ["death", (_source, _target, tile, start, progress) => this.exit(tile, start, progress)],
     ["exit", (_source, _target, tile, start, progress) => this.exit(tile, start, progress)],
-    ["card-play-to-target", (_source, _target, tile, start, progress) => this.liftPlayedCard(tile, start, progress)],
-    ["card-play-to-corner", (_source, _target, tile, start, progress) => this.liftPlayedCard(tile, start, progress)],
+    ["card-play-to-target", (_source, _target, tile, start, progress) => this.movePlayedCardToCenter(tile, start, progress)],
+    ["card-play-to-corner", (_source, _target, tile, start, progress) => this.movePlayedCardToCenter(tile, start, progress)],
     ["draw-to-hand", (_source, _target, tile, start, progress) => {
       const anchors = this.getCardAnimationAnchors();
-      tile.container.position.set(interpolate(anchors.draw.x, start.x, progress), interpolate(anchors.draw.y, start.y, progress));
-      tile.container.alpha = Math.min(1, start.alpha * (0.25 + progress));
-      tile.container.scale.set(interpolate(start.scale * 0.7, start.scale, progress));
+      const easedProgress = easeOutCubic(progress);
+      tile.container.position.set(interpolate(anchors.draw.x, start.x, easedProgress), interpolate(anchors.draw.y, start.y, easedProgress));
+      tile.container.alpha = Math.min(1, start.alpha * (0.25 + easedProgress));
+      tile.container.scale.set(interpolate(start.scale * 0.7, start.scale, easedProgress));
     }],
     ["hand-to-discard", (_source, _target, tile, start, progress) => {
       this.removeCardToBottom(tile, start, this.getCardAnimationAnchors().discard, progress);
@@ -51048,7 +51068,9 @@ ${resources}`;
       state: "tracking"
     };
     this.entryInteractionStates.set(tileId, "pressed");
-    this.dragLayer.addChild(tile.container);
+    if (tile.container.parent !== this.dragLayer) {
+      this.dragLayer.addChild(tile.container);
+    }
     const previousSelectedTileId = this.getSelectedHandTileId();
     this.selectedEntryId = entry.id;
     this.refreshHandInspection(previousSelectedTileId);
@@ -51430,13 +51452,13 @@ ${resources}`;
       scale: position.scale ?? 1
     };
   }
-  /** Keeps a dragged card readable above its original hand slot instead of following the pointer. */
+  /** Keeps a dragged card readable at its hand position while the pointer drives the target arrow. */
   getDraggedCardTransform(drag) {
     return {
       x: drag.origin.x,
       y: drag.origin.y - draggedCardLift,
       rotation: drag.origin.rotation,
-      scale: drag.origin.scale * focusedHandScale
+      scale: drag.origin.scale * draggedCardScale
     };
   }
   /** Draws an aim arrow from the held card toward the valid target or current pointer position. */
@@ -51560,11 +51582,14 @@ ${resources}`;
     }
     this.animationStarts.delete(command.id);
   }
-  /** Lifts a played card above its hand slot before its discard or exhaust transition. */
-  liftPlayedCard(tile, start, progress) {
-    const liftedProgress = 1 - Math.pow(1 - progress, 2);
-    tile.container.position.set(start.x, start.y - playedCardLift * liftedProgress);
-    tile.container.scale.set(start.scale * (1 + Math.sin(progress * Math.PI) * 0.08));
+  /** Moves a committed card to a readable, upright center stage before its zone transition. */
+  movePlayedCardToCenter(tile, start, progress) {
+    const destination = this.getCardAnimationAnchors().center;
+    const easedProgress = easeInOutCubic(progress);
+    this.dragLayer.addChild(tile.container);
+    tile.container.position.set(interpolate(start.x, destination.x, easedProgress), interpolate(start.y, destination.y, easedProgress));
+    tile.container.rotation = interpolate(start.rotation, 0, easedProgress);
+    tile.container.scale.set(interpolate(start.scale, playedCardScale, easedProgress));
   }
   /** Gets the card or item whose target options should be visible to the player. */
   getTargetingEntry() {
@@ -51581,9 +51606,10 @@ ${resources}`;
    * Moves a card below the encounter while shrinking and fading it so it is gone at the destination.
    */
   removeCardToBottom(tile, start, destination, progress) {
-    tile.container.position.set(interpolate(start.x, destination.x, progress), interpolate(start.y, destination.y, progress));
-    tile.container.alpha = start.alpha * (1 - progress);
-    tile.container.scale.set(start.scale * (1 - progress));
+    const easedProgress = easeInCubic(progress);
+    tile.container.position.set(interpolate(start.x, destination.x, easedProgress), interpolate(start.y, destination.y, easedProgress));
+    tile.container.alpha = start.alpha * (1 - easedProgress);
+    tile.container.scale.set(start.scale * (1 - easedProgress));
   }
   /**
    * Calculates animation origins and destinations inside the current scene viewport.
@@ -51591,7 +51617,7 @@ ${resources}`;
   getCardAnimationAnchors() {
     const viewport = this.viewport ?? { width: 960, height: 540 };
     return {
-      corner: { x: Math.max(0, viewport.width - 80), y: 36 },
+      center: { x: viewport.width / 2, y: viewport.height / 2 },
       draw: { x: Math.max(0, viewport.width - 80), y: Math.max(0, viewport.height - 40) },
       discard: { x: Math.max(0, viewport.width - 100), y: viewport.height + 30 },
       exhaust: { x: Math.max(0, viewport.width - 40), y: viewport.height + 30 }
@@ -51628,6 +51654,7 @@ ${resources}`;
    * Flashes a loaded entity silhouette without replaying the positional hit shake.
    */
   flashArtwork(tile, progress) {
+    delete tile.targetPresentationKey;
     tile.targetHighlight.visible = tile.artwork.visible && progress < 1;
     if (tile.targetHighlight.visible) {
       tile.targetHighlight.clear().roundRect(-94, -64, 188, 128, 12).stroke({
@@ -51732,6 +51759,11 @@ ${resources}`;
     const isTargeting = targetingEntry !== void 0 && targetingEntry.targetMode !== "none";
     const isValidTarget = entity !== void 0 && targetingEntry !== void 0 && !this.intentPending && !this.isAnimationLockedForEntry(targetingEntry) && !this.isAnimationLockedForEntity(entity) && this.isValidTarget(targetingEntry.targetMode, entity);
     const isFocused = entityId === this.focusedEntityId;
+    const presentationKey = `${isTargeting}:${isValidTarget}:${isFocused}`;
+    if (tile.targetPresentationKey === presentationKey) {
+      return;
+    }
+    tile.targetPresentationKey = presentationKey;
     tile.background.tint = 16777215;
     tile.accent.clear();
     tile.accent.alpha = 0;
@@ -51792,7 +51824,7 @@ ${resources}`;
     return {
       x: position.x,
       y: position.y - (isInspected && position.scale === void 0 ? focusedHandLift : 0),
-      rotation: position.rotation ?? 0,
+      rotation: isInspected ? 0 : position.rotation ?? 0,
       scale: (position.scale ?? 1) * (isInspected ? this.getHandInspectionScale(position) : 1)
     };
   }
@@ -51890,7 +51922,9 @@ ${resources}`;
     if (!inspectedTileId || !inspectedTile || this.isDragPositionManaged(inspectedTileId)) {
       return;
     }
-    this.handLayer.addChild(inspectedTile.container);
+    if (this.handLayer.children.at(-1) !== inspectedTile.container) {
+      this.handLayer.addChild(inspectedTile.container);
+    }
   }
   submitDeckPreview() {
     if (!this.intentPending) {
@@ -52112,6 +52146,15 @@ function getPendingIntentMessage(kind) {
 }
 function interpolate(start, end, progress) {
   return start + (end - start) * progress;
+}
+function easeInOutCubic(progress) {
+  return progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+}
+function easeOutCubic(progress) {
+  return 1 - Math.pow(1 - progress, 3);
+}
+function easeInCubic(progress) {
+  return progress * progress * progress;
 }
 function captureTransform(container) {
   return {
