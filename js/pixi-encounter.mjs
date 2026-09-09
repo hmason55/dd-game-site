@@ -50563,7 +50563,7 @@ var EncounterScene = class {
     this.root.on("pointerupoutside", (event) => this.cancelDrag(event));
     this.root.on("pointercancel", (event) => this.cancelDrag(event));
     this.backgroundLayer.addChild(this.background);
-    this.effectsLayer.addChild(this.dragAimArrow);
+    this.effectsLayer.addChild(this.dragAimArrow, this.attackTrail);
     this.endTurnLabel.eventMode = "static";
     this.endTurnLabel.cursor = "pointer";
     this.endTurnLabel.on("pointertap", () => this.submitEndTurn());
@@ -50589,6 +50589,7 @@ var EncounterScene = class {
   });
   background = new Graphics();
   dragAimArrow = new Graphics();
+  attackTrail = new Graphics();
   intentStatusBackground = new Graphics();
   intentStatusLabel = new Text({ text: "", style: { fill: 15856888, fontFamily: "Arial", fontSize: 13 } });
   phaseLabel = new Text({ text: "", style: { fill: 12109785, fontFamily: "Arial", fontSize: 14 } });
@@ -50624,7 +50625,7 @@ var EncounterScene = class {
       tile.container.scale.set(interpolate(start.scale * 0.88, start.scale, progress));
     }],
     ["prepare-attack", (source3, target, _tile, start, progress) => this.prepareAttack(source3, target, start, progress)],
-    ["attack", (source3, target, _tile, start, progress) => this.lunge(source3, target, start, progress)],
+    ["attack", (source3, target, _tile, start, progress) => this.attack(source3, target, start, progress)],
     ["hit", (_source, _target, tile, start, progress) => this.hit(tile, start, progress)],
     ["block", (_source, _target, tile, start, progress) => this.pulseScale(tile, start, progress, 0.12)],
     ["buff", (_source, _target, tile, _start, progress) => this.pulseAccent(tile, progress, 7657120)],
@@ -51580,6 +51581,9 @@ ${resources}`;
       tile.container.scale.set(start.scale);
       tile.artwork.alpha = start.artworkAlpha;
     }
+    if (command.name === "attack") {
+      this.attackTrail.clear();
+    }
     this.animationStarts.delete(command.id);
   }
   /** Moves a committed card to a readable, upright center stage before its zone transition. */
@@ -51632,6 +51636,23 @@ ${resources}`;
     source3.container.position.set(start.x + direction.x * distance, start.y + direction.y * distance);
   }
   /**
+   * Executes the decisive part of a targeted attack with a small squash-and-stretch at impact.
+   */
+  attack(source3, target, start, progress) {
+    this.lunge(source3, target, start, progress);
+    const impact = Math.sin(progress * Math.PI);
+    source3.container.scale.set(start.scale * (1 + impact * (this.reducedMotion ? 0.02 : 0.06)));
+    this.drawAttackTrail(source3, start, progress);
+  }
+  /** Draws a renderer-owned trail for the outward portion of a targeted attack. */
+  drawAttackTrail(source3, start, progress) {
+    this.attackTrail.clear();
+    if (progress >= 1 || this.reducedMotion) {
+      return;
+    }
+    this.attackTrail.moveTo(start.x, start.y).lineTo(source3.container.x, source3.container.y).stroke({ color: 16769155, width: 3, alpha: Math.sin(progress * Math.PI) * 0.55 });
+  }
+  /**
    * Pulls an attacker slightly away from its target before the attack lunge begins.
    */
   prepareAttack(source3, target, start, progress) {
@@ -51643,11 +51664,12 @@ ${resources}`;
     source3.container.position.set(start.x + direction.x * distance, start.y + direction.y * distance);
   }
   /**
-   * Combines a short positional impact with artwork emphasis without recoloring the entity tile.
+   * Combines a short positional impact, shake, and artwork emphasis without recoloring the entity tile.
    */
   hit(tile, start, progress) {
-    const offset = Math.sin(progress * Math.PI * 6) * (1 - progress) * 8;
-    tile.container.position.set(start.x + offset, start.y);
+    const impactOffset = Math.sin(progress * Math.PI * 6) * (1 - progress) * 8;
+    const shakeOffset = Math.sin(progress * Math.PI * 8) * (1 - progress) * (this.reducedMotion ? 3 : 14);
+    tile.container.position.set(start.x + impactOffset + shakeOffset, start.y);
     tile.artwork.alpha = progress === 1 ? start.artworkAlpha : this.reducedMotion ? 0.86 : 1;
   }
   /**
