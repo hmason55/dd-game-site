@@ -14,7 +14,14 @@ html, body, #app {
     outline-offset: -3px;
 }
 
-.pixi-encounter-keyboard-help {
+.pixi-reward-surface canvas:focus-visible {
+    outline: 3px solid var(--mud-palette-secondary);
+    outline-offset: -3px;
+}
+
+.pixi-encounter-keyboard-help,
+.pixi-reward-keyboard-help,
+.pixi-reward-accessibility-overlay {
     position: absolute;
     width: 1px;
     height: 1px;

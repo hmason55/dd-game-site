@@ -1,3 +1,33 @@
+/* /Components/Dialogs/PixiRewardSurface.razor.rz.scp.css */
+.pixi-reward-surface[b-lxd0nfvn0m] {
+    width: min(100%, 68rem);
+    min-height: min(34rem, calc(95dvh - 8rem));
+    aspect-ratio: 16 / 9;
+    margin: 0 auto;
+    overflow: hidden;
+    overscroll-behavior: contain;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    background: #0b1622;
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: var(--mud-default-borderradius);
+}
+
+.pixi-reward-surface canvas[b-lxd0nfvn0m] {
+    display: block;
+    width: 100%;
+    height: 100%;
+    -webkit-user-drag: none;
+}
+
+@media (max-width: 600px) {
+    .pixi-reward-surface[b-lxd0nfvn0m] {
+        min-height: min(40rem, calc(95dvh - 8rem));
+        aspect-ratio: auto;
+        height: calc(95dvh - 8rem);
+    }
+}
 /* /Components/Rooms/PixiEncounterSurface.razor.rz.scp.css */
 .pixi-encounter-surface[b-9jzg35z109] {
     position: relative;
