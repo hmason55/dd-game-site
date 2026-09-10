@@ -60,6 +60,10 @@
     height: 100%;
     -webkit-user-drag: none;
 }
+/* /Components/Rooms/PixiEventSurface.razor.rz.scp.css */
+.pixi-event-surface[b-999uhjpgcf] { height: min(76vh, 640px); min-height: 360px; position: relative; width: 100%; }
+.pixi-event-surface canvas[b-999uhjpgcf] { height: 100%; outline: none; width: 100%; }
+.pixi-event-accessibility-controls[b-999uhjpgcf], .pixi-event-keyboard-help[b-999uhjpgcf] { position: absolute; height: 1px; overflow: hidden; width: 1px; clip: rect(0 0 0 0); white-space: nowrap; }
 /* /Components/Rooms/PixiRestSurface.razor.rz.scp.css */
 .pixi-rest-surface[b-her48madf3] { min-height: min(68vh, 560px); position: relative; width: 100%; }
 .pixi-rest-surface canvas[b-her48madf3] { height: 100%; min-height: min(68vh, 560px); width: 100%; }

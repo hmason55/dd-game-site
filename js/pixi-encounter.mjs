@@ -52749,6 +52749,68 @@ var RunPresentationRuntime = class {
   }
 };
 
+// src/relic-view.ts
+var defaultHeight = 92;
+var defaultWidth = 184;
+var RelicView = class extends GamePanel {
+  descriptionTextStyle = new TextStyle({ ...uiTokens.typography.body, breakWords: true, wordWrap: true });
+  descriptionLabel = new Text({ text: "", style: this.descriptionTextStyle });
+  iconLabel = new Text({ text: "", style: getUiTextStyle("PanelTitle") });
+  nameTextStyle = new TextStyle({ ...uiTokens.typography.panelTitle, breakWords: true, wordWrap: true });
+  nameLabel = new Text({ text: "", style: this.nameTextStyle });
+  relicContent;
+  /**
+   * Creates a reusable relic presentation surface.
+   */
+  constructor(options) {
+    super({ width: options.width ?? defaultWidth, height: options.height ?? defaultHeight });
+    this.relicContent = toContent(options);
+    this.iconLabel.anchor.set(0.5);
+    this.content.addChild(this.iconLabel, this.nameLabel, this.descriptionLabel);
+    this.redrawContent();
+  }
+  /**
+   * Gets the semantic relic data currently shown by the view.
+   */
+  get value() {
+    return this.relicContent;
+  }
+  /**
+   * Reconciles relic data without recreating the component's display objects.
+   */
+  setValue(content) {
+    this.relicContent = toContent(content);
+    this.redrawContent();
+  }
+  /**
+   * Resizes the surface while retaining its existing labels and semantic data.
+   */
+  resize(width, height) {
+    super.resize(width, height);
+    this.redrawContent();
+  }
+  redrawContent() {
+    const size = this.panelSize;
+    const textOffsetX = uiTokens.spacing.lg * 2 + 18;
+    const textWidth = Math.max(0, size.width - textOffsetX - uiTokens.spacing.sm);
+    this.nameTextStyle.wordWrapWidth = textWidth;
+    this.descriptionTextStyle.wordWrapWidth = textWidth;
+    this.iconLabel.text = this.relicContent.icon;
+    this.iconLabel.position.set(uiTokens.spacing.lg, size.height / 2);
+    this.nameLabel.text = this.relicContent.name;
+    this.nameLabel.position.set(textOffsetX, uiTokens.spacing.sm);
+    this.descriptionLabel.text = this.relicContent.description;
+    this.descriptionLabel.position.set(textOffsetX, uiTokens.spacing.lg * 2 + 4);
+  }
+};
+function toContent(content) {
+  return {
+    description: content.description,
+    icon: content.icon,
+    name: content.name
+  };
+}
+
 // src/reward-protocol.ts
 var rewardRendererProtocolVersion = 2;
 var rewardSceneId = "reward";
@@ -52789,10 +52851,11 @@ var RewardScene = class {
       this.currency,
       this.inventoryDestination,
       this.choiceLayer,
+      this.optionLayer,
       this.inspectionPanel,
       this.inspectionTitle,
       this.inspectionDescription,
-      this.collectButton,
+      this.backButton,
       this.skipButton,
       this.feedback
     );
@@ -52806,14 +52869,15 @@ var RewardScene = class {
   currency = new ResourceCounter({ label: "Gold", value: 0, icon: "\xA4" });
   inventoryDestination = new Text({ text: "Deck \xB7 Relics \xB7 Items", style: inventoryStyle });
   choiceLayer = new Container();
+  optionLayer = new Container();
   inspectionPanel = new Graphics();
   inspectionTitle = new Text({ text: "Select a reward", style: inspectionTitleStyle });
   inspectionDescription = new Text({ text: "Choose an available reward to inspect it.", style: inspectionBodyStyle });
   feedback = new Text({ text: "", style: feedbackStyle });
-  optionButtons = [];
-  collectButton = new GameButton({ label: "Collect", width: 140, height: 42, enabled: false, onPress: () => this.collectSelection() });
+  backButton = new GameButton({ label: "Back", width: 92, height: 38, enabled: false, onPress: () => this.returnToRewards() });
   skipButton = new GameButton({ label: "Skip", width: 110, height: 42, enabled: false, onPress: () => this.skipRewards() });
   choiceViews = /* @__PURE__ */ new Map();
+  optionViews = /* @__PURE__ */ new Map();
   snapshot;
   selectedReward;
   selectedOption;
@@ -52890,7 +52954,11 @@ var RewardScene = class {
       return true;
     }
     if (event.key === "Enter" || event.key === " ") {
-      void this.collectSelection();
+      if (this.selectedOption !== void 0) {
+        void this.collectSelection();
+      } else if (this.selectedReward !== void 0) {
+        this.activateReward(this.selectedReward);
+      }
       return true;
     }
     if (!event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "s") {
@@ -52948,7 +53016,7 @@ var RewardScene = class {
     choices.forEach((choice, index) => {
       let view = this.choiceViews.get(choice.id);
       if (view === void 0) {
-        view = new RewardChoiceView(choice, () => this.inspectReward(choice.id));
+        view = new RewardChoiceView(choice, () => this.activateReward(choice));
         this.choiceViews.set(choice.id, view);
         this.choiceLayer.addChild(view);
       } else {
@@ -52963,6 +53031,28 @@ var RewardScene = class {
     this.selectedOption = selected?.options?.find((option) => option.id === this.selectedOption?.id && option.isAvailable) ?? selected?.options?.find((option) => option.isAvailable);
     this.refreshInspection();
   }
+  reconcileOptions() {
+    const options = this.selectedReward?.options ?? [];
+    const optionIds = new Set(options.map((option) => option.id));
+    for (const [id, view] of this.optionViews) {
+      if (!optionIds.has(id)) {
+        this.optionLayer.removeChild(view);
+        view.destroy();
+        this.optionViews.delete(id);
+      }
+    }
+    for (const option of options) {
+      let view = this.optionViews.get(option.id);
+      if (view === void 0) {
+        view = new RewardOptionView(option, () => this.activateOption(option));
+        this.optionViews.set(option.id, view);
+        this.optionLayer.addChild(view);
+      } else {
+        view.setChoice(option);
+      }
+      view.setEnabled(!this.pendingAction && option.isAvailable);
+    }
+  }
   layout() {
     const { width, height } = this.viewport;
     const mobile = height > width;
@@ -52973,24 +53063,21 @@ var RewardScene = class {
     this.currency.position.set(Math.max(16, width - 132), 18);
     this.inventoryDestination.position.set(Math.max(16, width - 150), 72);
     const hasOptions = (this.selectedReward?.options?.length ?? 0) > 0;
-    const requestedInspectionHeight = hasOptions ? mobile ? 214 : 168 : mobile ? 160 : 126;
+    const requestedInspectionHeight = mobile ? 132 : 108;
     const inspectionHeight = Math.min(requestedInspectionHeight, Math.max(1, height - 168));
     const inspectionY = height - inspectionHeight - 16;
     const inspectionWidth = Math.max(1, width - 32);
     this.inspectionPanel.clear().roundRect(16, inspectionY, inspectionWidth, inspectionHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
     this.inspectionTitle.position.set(32, inspectionY + 16);
     this.inspectionDescription.position.set(32, inspectionY + 48);
-    this.inspectionDescription.style.wordWrapWidth = Math.max(1, inspectionWidth - 220);
-    this.collectButton.position.set(width - 172, inspectionY + 18);
+    this.inspectionDescription.style.wordWrapWidth = Math.max(1, inspectionWidth - 172);
+    this.backButton.position.set(32, inspectionY + inspectionHeight - 54);
     this.skipButton.position.set(width - 142, inspectionY + inspectionHeight - 58);
-    this.optionButtons.forEach((button, index) => {
-      const optionWidth = Math.min(130, Math.max(92, (inspectionWidth - 212) / this.optionButtons.length - 8));
-      button.resize(optionWidth, 38);
-      button.position.set(32 + index * (optionWidth + 8), inspectionY + inspectionHeight - 54);
-    });
     this.feedback.position.set(width / 2, inspectionY - 12);
     const choiceArea = { x: 24, y: 88, width: Math.max(1, width - 48), height: Math.max(1, inspectionY - 104) };
     const choices = this.snapshot?.choices ?? [];
+    this.choiceLayer.visible = !hasOptions;
+    this.optionLayer.visible = hasOptions;
     const columns = getChoiceColumns(choices.length, choiceArea, mobile);
     const rows = Math.max(1, Math.ceil(choices.length / columns));
     const gap = 12;
@@ -53006,30 +53093,27 @@ var RewardScene = class {
       view.resize(choiceWidth, choiceHeight);
       view.position.set(choiceArea.x + column * (choiceWidth + gap), choiceArea.y + row * (choiceHeight + gap));
     });
+    if (hasOptions) {
+      const options = this.selectedReward?.options ?? [];
+      const optionColumns = getChoiceColumns(options.length, choiceArea, mobile);
+      const optionRows = Math.max(1, Math.ceil(options.length / optionColumns));
+      const optionWidth = Math.max(1, Math.min(190, (choiceArea.width - (optionColumns - 1) * gap) / optionColumns));
+      const optionHeight = Math.max(1, Math.min(252, (choiceArea.height - (optionRows - 1) * gap) / optionRows));
+      options.forEach((option, index) => {
+        const view = this.optionViews.get(option.id);
+        if (view === void 0) {
+          return;
+        }
+        view.resize(optionWidth, optionHeight);
+        view.position.set(choiceArea.x + index % optionColumns * (optionWidth + gap), choiceArea.y + Math.floor(index / optionColumns) * (optionHeight + gap));
+      });
+    }
   }
   refreshInspection() {
     const target = this.selectedOption ?? this.selectedReward;
     this.inspectionTitle.text = target?.name ?? "Select a reward";
     this.inspectionDescription.text = target?.description ?? "Choose an available reward to inspect it.";
-    this.rebuildOptionButtons();
-  }
-  rebuildOptionButtons() {
-    for (const button of this.optionButtons.splice(0)) {
-      this.displayObject.removeChild(button);
-      button.destroy();
-    }
-    for (const option of this.selectedReward?.options ?? []) {
-      const button = new GameButton({
-        label: option.name,
-        width: 92,
-        height: 38,
-        enabled: option.isAvailable && !this.pendingAction,
-        selected: option.id === this.selectedOption?.id,
-        onPress: () => this.inspectOption(option.id)
-      });
-      this.optionButtons.push(button);
-      this.displayObject.addChild(button);
-    }
+    this.reconcileOptions();
   }
   updateInteractivity() {
     const selectedId = this.selectedReward?.id;
@@ -53037,14 +53121,37 @@ var RewardScene = class {
       view.setSelected(id === selectedId);
       view.setEnabled(!this.pendingAction && (this.snapshot?.choices.find((choice) => choice.id === id)?.isAvailable ?? false));
     }
-    const canCollect = !this.pendingAction && this.selectedReward !== void 0 && ((this.selectedReward.options?.length ?? 0) === 0 || this.selectedOption !== void 0);
-    this.collectButton.setEnabled(canCollect);
     this.skipButton.setEnabled(!this.pendingAction && (this.snapshot?.canSkip ?? false));
-    this.optionButtons.forEach((button, index) => {
-      const option = this.selectedReward?.options?.[index];
-      button.setEnabled(!this.pendingAction && (option?.isAvailable ?? false));
-      button.setSelected(option?.id === this.selectedOption?.id);
-    });
+    this.backButton.setEnabled(!this.pendingAction && (this.selectedReward?.options?.length ?? 0) > 0);
+    this.optionViews.forEach((view, id) => view.setSelected(id === this.selectedOption?.id));
+  }
+  activateReward(reward) {
+    if ((reward.options?.length ?? 0) > 0) {
+      this.inspectReward(reward.id);
+      return;
+    }
+    this.selectedReward = reward;
+    this.selectedOption = void 0;
+    void this.collectSelection();
+  }
+  activateOption(option) {
+    if (this.selectedReward === void 0 || this.pendingAction || !option.isAvailable) {
+      return;
+    }
+    this.selectedOption = option;
+    void this.collectSelection();
+  }
+  returnToRewards() {
+    if (this.pendingAction || (this.selectedReward?.options?.length ?? 0) === 0) {
+      return;
+    }
+    this.selectedReward = void 0;
+    this.selectedOption = void 0;
+    this.feedback.text = "";
+    this.refreshInspection();
+    this.layout();
+    this.updateInteractivity();
+    this.onAccessibleStateChanged();
   }
   async collectSelection() {
     if (this.snapshot === void 0 || this.selectedReward === void 0 || this.pendingAction) {
@@ -53097,7 +53204,7 @@ var RewardScene = class {
   }
   async resolveCollection(choiceId) {
     const choice = this.choiceViews.get(choiceId);
-    if (choice === void 0) {
+    if (choice === void 0 || choice.destroyed || choice.parent === null) {
       return;
     }
     const start = { x: choice.x, y: choice.y };
@@ -53256,6 +53363,67 @@ var RewardChoiceView = class extends Container {
     this.description.style.wordWrapWidth = Math.max(1, this.choiceWidth - 24);
   }
 };
+var RewardOptionView = class extends Container {
+  constructor(choice, onSelect) {
+    super();
+    this.onSelect = onSelect;
+    this.choice = choice;
+    if (choice.kind === "card") {
+      this.card = new CardView({
+        cost: "",
+        name: choice.name,
+        description: choice.description,
+        type: "Reward",
+        rarity: toCardRarity(choice.rarity),
+        enabled: choice.isAvailable,
+        width: 180,
+        height: 252
+      });
+      this.addChild(this.card);
+    } else {
+      this.relic = new RelicView({
+        icon: choice.kind === "relic" ? "\u25C6" : "\u2022",
+        name: choice.name,
+        description: choice.description,
+        width: 184,
+        height: 120
+      });
+      this.addChild(this.relic);
+    }
+    this.on("pointertap", () => this.onSelect());
+  }
+  onSelect;
+  choice;
+  card;
+  relic;
+  selected = false;
+  setChoice(choice) {
+    this.choice = choice;
+    if (this.card !== void 0) {
+      this.card.setContent({ cost: "", name: choice.name, description: choice.description, type: "Reward", rarity: toCardRarity(choice.rarity) });
+    }
+    if (this.relic !== void 0) {
+      this.relic.setValue({ icon: choice.kind === "relic" ? "\u25C6" : "\u2022", name: choice.name, description: choice.description });
+    }
+  }
+  setEnabled(enabled) {
+    this.eventMode = enabled ? "static" : "none";
+    this.cursor = enabled ? "pointer" : "default";
+    this.alpha = enabled ? 1 : uiTokens.interaction.disabledAlpha;
+    this.card?.setInteractionState({ enabled, focused: false, selected: this.selected });
+  }
+  setSelected(selected) {
+    this.selected = selected;
+    this.card?.setInteractionState({ enabled: this.choice.isAvailable, focused: false, selected });
+  }
+  resize(width, height) {
+    if (this.card !== void 0) {
+      this.card.resize({ width, height });
+      return;
+    }
+    this.relic?.resize(width, height);
+  }
+};
 var inspectionTitleStyle = new TextStyle({ ...uiTokens.typography.panelTitle, fontSize: 18 });
 var inspectionBodyStyle = new TextStyle({ ...uiTokens.typography.body, wordWrap: true });
 var feedbackStyle = new TextStyle({ ...uiTokens.typography.body, fill: 16113563 });
@@ -53296,6 +53464,16 @@ function getRarityColor2(rarity) {
       return 10318801;
     default:
       return 9413302;
+  }
+}
+function toCardRarity(rarity) {
+  switch (rarity) {
+    case "Uncommon":
+    case "Rare":
+    case "Special":
+      return rarity;
+    default:
+      return "Common";
   }
 }
 function interpolate2(start, end, progress) {
@@ -53396,6 +53574,164 @@ function prefersReducedMotion2() {
   return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+// src/pixi-event.ts
+async function createEventRenderer(canvas, sink) {
+  const app = new Application();
+  await app.init({ antialias: true, autoDensity: true, background: 529183, backgroundAlpha: 1, canvas, preference: "canvas" });
+  canvas.tabIndex = 0;
+  const root = new Container();
+  const background = new Graphics();
+  const focal = new Graphics();
+  const title = new Text({ text: "Event", style: titleStyle });
+  const narrative = new Text({ text: "", style: narrativeStyle });
+  const choiceLayer = new Container();
+  const feedback = new Text({ text: "", style: bodyStyle });
+  root.addChild(background, focal, title, narrative, choiceLayer, feedback);
+  app.stage.addChild(root);
+  let state;
+  let sequence = 0;
+  let selected = 0;
+  let pending = false;
+  let narrativeProgress = 0;
+  const resize = () => {
+    app.renderer.resize(Math.max(1, canvas.clientWidth || canvas.width || 960), Math.max(1, canvas.clientHeight || canvas.height || 540));
+    layout();
+  };
+  const submit = async (name, choiceId) => {
+    if (pending) return;
+    pending = true;
+    try {
+      const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: 1, sceneId: "event", name, sequence, sourceId: null, targetId: null, optionIndex: null, choiceId });
+      feedback.text = result.accepted ? "Resolved." : "That choice is no longer available.";
+    } catch {
+      feedback.text = "The choice could not be completed. Please try again.";
+    } finally {
+      pending = false;
+      layout();
+    }
+  };
+  const activate = () => {
+    if (!state || pending || narrativeProgress < toPlainNarrative(state.narrative).length) return;
+    if (state.isComplete) {
+      void submit("leave", null);
+      return;
+    }
+    const option = state.options.filter((entry) => entry.isAvailable)[selected];
+    if (option) void submit("chooseOption", option.id);
+  };
+  const keydown = (event) => {
+    const options = state?.options.filter((option) => option.isAvailable) ?? [];
+    if (event.key === "Escape") {
+      selected = -1;
+      layout();
+      event.preventDefault();
+      return;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      activate();
+      event.preventDefault();
+      return;
+    }
+    if (options.length && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Tab"].includes(event.key)) {
+      selected = (selected + (event.key === "ArrowLeft" || event.key === "ArrowUp" || event.key === "Tab" && event.shiftKey ? -1 : 1) + options.length) % options.length;
+      layout();
+      event.preventDefault();
+    }
+  };
+  const tick = () => {
+    const narrativeLength = state ? toPlainNarrative(state.narrative).length : 0;
+    if (!state || narrativeProgress >= narrativeLength) return;
+    narrativeProgress = Math.min(narrativeLength, narrativeProgress + Math.max(1, Math.ceil(app.ticker.deltaMS / 20)));
+    layout();
+  };
+  canvas.addEventListener("keydown", keydown);
+  window.addEventListener("resize", resize);
+  app.ticker.add(tick);
+  function layout() {
+    const width = app.renderer.width;
+    const height = app.renderer.height;
+    const mobile = height > width;
+    background.clear().rect(0, 0, width, height).fill(529183);
+    focal.clear().circle(mobile ? width / 2 : width * 0.28, mobile ? height * 0.24 : height * 0.46, Math.min(width, height) * 0.2).fill({ color: 3631734, alpha: 0.45 }).circle(mobile ? width / 2 : width * 0.28, mobile ? height * 0.24 : height * 0.46, Math.min(width, height) * 0.1).fill({ color: 14069334, alpha: 0.72 });
+    title.text = state?.title ?? "Event";
+    title.position.set(28, 24);
+    narrative.text = toPlainNarrative(state?.narrative ?? "Loading event\u2026").slice(0, narrativeProgress);
+    narrative.style.wordWrapWidth = mobile ? width - 48 : Math.max(260, width * 0.48);
+    narrative.position.set(mobile ? 24 : width * 0.48, mobile ? height * 0.47 : 70);
+    feedback.position.set(width / 2, height - 26);
+    feedback.anchor.set(0.5);
+    choiceLayer.removeChildren();
+    const options = state?.options ?? [];
+    const choiceWidth = mobile ? width - 48 : Math.max(260, width * 0.48);
+    const choiceX = mobile ? 24 : width * 0.48;
+    const choiceY = mobile ? height * 0.62 : Math.min(height - 180, 250);
+    const choiceGap = mobile ? 8 : 12;
+    const choiceHeight = mobile ? Math.max(42, Math.min(64, (height - choiceY - 44 - Math.max(0, options.length - 1) * choiceGap) / Math.max(1, options.length))) : 64;
+    if (state?.isComplete) {
+      const leave = new EventChoice("Leave", "Return to the map", true, true, activate);
+      leave.resize(choiceWidth, 68);
+      leave.position.set(choiceX, choiceY);
+      choiceLayer.addChild(leave);
+      return;
+    }
+    options.forEach((option, index) => {
+      const availableIndex = options.filter((entry) => entry.isAvailable).indexOf(option);
+      const choice = new EventChoice(option.text, [option.hint, option.details].filter(Boolean).join(" \xB7 "), option.isAvailable && narrativeProgress >= toPlainNarrative(state?.narrative ?? "").length && !pending, availableIndex === selected, () => void submit("chooseOption", option.id));
+      choice.resize(choiceWidth, choiceHeight);
+      choice.position.set(choiceX, choiceY + index * (choiceHeight + choiceGap));
+      choiceLayer.addChild(choice);
+    });
+  }
+  resize();
+  return { reconcile(nextSequence, candidate) {
+    if (!isEventState(candidate) || nextSequence <= sequence) return false;
+    sequence = nextSequence;
+    state = candidate;
+    selected = 0;
+    narrativeProgress = 0;
+    feedback.text = "";
+    layout();
+    return true;
+  }, dispose() {
+    canvas.removeEventListener("keydown", keydown);
+    window.removeEventListener("resize", resize);
+    app.ticker.remove(tick);
+    app.destroy({ removeView: false }, { children: true });
+  } };
+}
+var EventChoice = class extends Container {
+  frame = new Graphics();
+  heading = new Text({ text: "", style: choiceHeadingStyle });
+  hint = new Text({ text: "", style: choiceHintStyle });
+  constructor(text, hint, enabled, selected, onPress) {
+    super();
+    this.heading.text = text;
+    this.hint.text = hint;
+    this.addChild(this.frame, this.heading, this.hint);
+    this.eventMode = enabled ? "static" : "none";
+    this.cursor = enabled ? "pointer" : "default";
+    this.alpha = enabled ? 1 : 0.45;
+    this.frame.tint = selected ? 16240238 : 16777215;
+    if (enabled) this.on("pointertap", onPress);
+  }
+  resize(width, height) {
+    this.frame.clear().roundRect(0, 0, width, height, 12).fill({ color: 1520456, alpha: 0.96 }).stroke({ color: 9549506, width: 2 });
+    this.heading.position.set(16, 10);
+    this.hint.position.set(16, 37);
+  }
+};
+var titleStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 34, fontWeight: "bold" });
+var narrativeStyle = new TextStyle({ fill: 14412542, fontFamily: "Arial", fontSize: 19, lineHeight: 28, wordWrap: true });
+var bodyStyle = new TextStyle({ fill: 16113563, fontFamily: "Arial", fontSize: 15, align: "center" });
+var choiceHeadingStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 19, fontWeight: "bold", wordWrap: true });
+var choiceHintStyle = new TextStyle({ fill: 12375521, fontFamily: "Arial", fontSize: 13, wordWrap: true });
+function toPlainNarrative(narrative) {
+  return narrative.replaceAll(/\[(?:\/?)[^\]]+\]/g, "");
+}
+function isEventState(value) {
+  return typeof value === "object" && value !== null && typeof value.narrative === "string" && Array.isArray(value.options);
+}
+
 // src/pixi-rest.ts
 async function createRestRenderer(canvas, sink) {
   const app = new Application();
@@ -53403,9 +53739,9 @@ async function createRestRenderer(canvas, sink) {
   canvas.tabIndex = 0;
   const root = new Container();
   const background = new Graphics();
-  const title = new Text({ text: "Camp", style: titleStyle });
-  const summary = new Text({ text: "", style: bodyStyle });
-  const feedback = new Text({ text: "", style: bodyStyle });
+  const title = new Text({ text: "Camp", style: titleStyle2 });
+  const summary = new Text({ text: "", style: bodyStyle2 });
+  const feedback = new Text({ text: "", style: bodyStyle2 });
   const actionLayer = new Container();
   root.addChild(background, title, summary, actionLayer, feedback);
   app.stage.addChild(root);
@@ -53467,15 +53803,18 @@ Health: ${state.health} / ${state.maximumHealth}` : "Loading camp\u2026";
     actionLayer.removeChildren();
     buttons.length = 0;
     const actions = state?.actions ?? [];
-    const buttonWidth = Math.min(300, width - 48);
-    const buttonHeight = 76;
+    const compact = height > width || width < 760;
     const gap = 16;
-    const start = Math.max(180, height * 0.38);
+    const buttonWidth = compact ? Math.min(300, width - 48) : Math.min(250, (width - 64 - gap * 2) / 3);
+    const buttonHeight = compact ? 76 : 128;
+    const start = compact ? Math.max(180, height * 0.38) : Math.max(190, height * 0.52);
     actions.forEach((action, index) => {
       const availableIndex = actions.filter((entry) => entry.isAvailable).indexOf(action);
       const actionRequest = getActionRequest(action.id);
       const button = new RestButton(action.name, action.description, action.isAvailable, availableIndex === selected, () => void submit(actionRequest.name, actionRequest.choiceId));
-      button.position.set((width - buttonWidth) / 2, start + index * (buttonHeight + gap));
+      const x2 = compact ? (width - buttonWidth) / 2 : 32 + index * (buttonWidth + gap);
+      const y2 = compact ? start + index * (buttonHeight + gap) : start;
+      button.position.set(x2, y2);
       button.resize(buttonWidth, buttonHeight);
       actionLayer.addChild(button);
       buttons.push(button);
@@ -53520,11 +53859,12 @@ var RestButton = class extends Container {
   resize(width, height) {
     this.background.clear().roundRect(0, 0, width, height, 12).fill({ color: 2110536, alpha: 0.96 }).stroke({ color: 9216952, width: 2 });
     this.heading.position.set(18, 12);
+    this.description.style.wordWrapWidth = Math.max(1, width - 36);
     this.description.position.set(18, 40);
   }
 };
-var titleStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 34, fontWeight: "bold" });
-var bodyStyle = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 17, align: "center", wordWrap: true, wordWrapWidth: 540 });
+var titleStyle2 = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 34, fontWeight: "bold" });
+var bodyStyle2 = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 17, align: "center", wordWrap: true, wordWrapWidth: 540 });
 var buttonHeadingStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 22, fontWeight: "bold" });
 var buttonBodyStyle = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 14, wordWrap: true, wordWrapWidth: 260 });
 function isRestState(value) {
@@ -54162,6 +54502,7 @@ function isElement(value) {
 }
 export {
   createEncounterRenderer,
+  createEventRenderer,
   createRestRenderer,
   createRewardRenderer
 };
