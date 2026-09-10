@@ -51112,7 +51112,7 @@ ${resources}`;
     const pointerOrigin = event.getLocalPosition(this.root);
     this.activeDrag = {
       entry,
-      origin: returningDrag?.destination ?? this.getCurrentHandDestination(tileId, captureTransform(tile.container)),
+      origin: returningDrag?.destination ?? captureTransform(tile.container),
       pointerId: event.pointerId,
       pointerOrigin,
       tile,
@@ -51510,7 +51510,7 @@ ${resources}`;
       x: drag.origin.x,
       y: drag.origin.y - draggedCardLift,
       rotation: drag.origin.rotation,
-      scale: drag.origin.scale * draggedCardScale
+      scale: Math.max(drag.origin.scale, draggedCardScale)
     };
   }
   /** Draws an aim arrow from the held card toward the valid target or current pointer position. */
@@ -53396,6 +53396,141 @@ function prefersReducedMotion2() {
   return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+// src/pixi-rest.ts
+async function createRestRenderer(canvas, sink) {
+  const app = new Application();
+  await app.init({ antialias: true, autoDensity: true, background: 726562, backgroundAlpha: 1, canvas, preference: "canvas" });
+  canvas.tabIndex = 0;
+  const root = new Container();
+  const background = new Graphics();
+  const title = new Text({ text: "Camp", style: titleStyle });
+  const summary = new Text({ text: "", style: bodyStyle });
+  const feedback = new Text({ text: "", style: bodyStyle });
+  const actionLayer = new Container();
+  root.addChild(background, title, summary, actionLayer, feedback);
+  app.stage.addChild(root);
+  let sequence = 0;
+  let state;
+  let selected = 0;
+  let pending = false;
+  const buttons = [];
+  const resize = () => {
+    app.renderer.resize(Math.max(1, canvas.clientWidth || canvas.width || 960), Math.max(1, canvas.clientHeight || canvas.height || 540));
+    layout();
+  };
+  const submit = async (name, choiceId = null) => {
+    if (pending) return;
+    pending = true;
+    try {
+      const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: 1, sceneId: "rest", name, sequence, sourceId: null, targetId: null, optionIndex: null, choiceId });
+      feedback.text = result.accepted ? "Action accepted." : "That action is no longer available.";
+    } catch {
+      feedback.text = "The action could not be completed. Please try again.";
+    } finally {
+      pending = false;
+      layout();
+    }
+  };
+  const activate = () => {
+    const action = state?.actions.filter((entry) => entry.isAvailable)[selected];
+    if (action) {
+      const request = getActionRequest(action.id);
+      void submit(request.name, request.choiceId);
+    }
+  };
+  const keydown = (event) => {
+    const available = state?.actions.filter((action) => action.isAvailable) ?? [];
+    if (event.key === "Enter" || event.key === " ") {
+      activate();
+      event.preventDefault();
+    }
+    if (available.length && (event.key === "ArrowLeft" || event.key === "ArrowUp" || event.key === "ArrowRight" || event.key === "ArrowDown")) {
+      selected = (selected + (event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1) + available.length) % available.length;
+      layout();
+      event.preventDefault();
+    }
+  };
+  canvas.addEventListener("keydown", keydown);
+  window.addEventListener("resize", resize);
+  function layout() {
+    const width = app.renderer.width;
+    const height = app.renderer.height;
+    background.clear().rect(0, 0, width, height).fill(726562).circle(width * 0.5, height * 0.26, Math.min(width, height) * 0.2).fill({ color: 16096779, alpha: 0.2 });
+    title.position.set(width * 0.5, 36);
+    title.anchor.set(0.5, 0);
+    summary.text = state ? `${state.description}
+Health: ${state.health} / ${state.maximumHealth}` : "Loading camp\u2026";
+    summary.position.set(width * 0.5, 105);
+    summary.anchor.set(0.5, 0);
+    feedback.position.set(width * 0.5, height - 52);
+    feedback.anchor.set(0.5, 0);
+    actionLayer.removeChildren();
+    buttons.length = 0;
+    const actions = state?.actions ?? [];
+    const buttonWidth = Math.min(300, width - 48);
+    const buttonHeight = 76;
+    const gap = 16;
+    const start = Math.max(180, height * 0.38);
+    actions.forEach((action, index) => {
+      const availableIndex = actions.filter((entry) => entry.isAvailable).indexOf(action);
+      const actionRequest = getActionRequest(action.id);
+      const button = new RestButton(action.name, action.description, action.isAvailable, availableIndex === selected, () => void submit(actionRequest.name, actionRequest.choiceId));
+      button.position.set((width - buttonWidth) / 2, start + index * (buttonHeight + gap));
+      button.resize(buttonWidth, buttonHeight);
+      actionLayer.addChild(button);
+      buttons.push(button);
+    });
+  }
+  resize();
+  return { reconcile(nextSequence, candidate) {
+    if (!isRestState(candidate) || nextSequence <= sequence) return false;
+    sequence = nextSequence;
+    state = candidate;
+    selected = 0;
+    layout();
+    return true;
+  }, dispose() {
+    window.removeEventListener("resize", resize);
+    canvas.removeEventListener("keydown", keydown);
+    app.destroy({ removeView: false }, { children: true });
+  } };
+}
+function getActionRequest(id) {
+  if (id === "rest") return { name: "rest", choiceId: null };
+  if (id === "leave") return { name: "leave", choiceId: null };
+  return { name: "chooseRestAction", choiceId: id };
+}
+var RestButton = class extends Container {
+  background = new Graphics();
+  heading = new Text({ text: "", style: buttonHeadingStyle });
+  description = new Text({ text: "", style: buttonBodyStyle });
+  constructor(name, description, enabled, selected, onPress) {
+    super();
+    this.heading.text = name;
+    this.description.text = description;
+    this.addChild(this.background, this.heading, this.description);
+    this.eventMode = enabled ? "static" : "none";
+    this.alpha = enabled ? 1 : 0.4;
+    if (enabled) this.on("pointertap", onPress);
+    this.selected = selected;
+  }
+  set selected(value) {
+    this.background.tint = value ? 16498468 : 16777215;
+  }
+  resize(width, height) {
+    this.background.clear().roundRect(0, 0, width, height, 12).fill({ color: 2110536, alpha: 0.96 }).stroke({ color: 9216952, width: 2 });
+    this.heading.position.set(18, 12);
+    this.description.position.set(18, 40);
+  }
+};
+var titleStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 34, fontWeight: "bold" });
+var bodyStyle = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 17, align: "center", wordWrap: true, wordWrapWidth: 540 });
+var buttonHeadingStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 22, fontWeight: "bold" });
+var buttonBodyStyle = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 14, wordWrap: true, wordWrapWidth: 260 });
+function isRestState(value) {
+  return typeof value === "object" && value !== null && Array.isArray(value.actions);
+}
+
 // src/pixi-encounter.ts
 async function createEncounterRenderer(canvas, intentSink, initialization) {
   if (!isVersionedOperation(initialization)) {
@@ -54027,6 +54162,7 @@ function isElement(value) {
 }
 export {
   createEncounterRenderer,
+  createRestRenderer,
   createRewardRenderer
 };
 /*! Bundled license information:
