@@ -21,7 +21,9 @@ html, body, #app {
 
 .pixi-encounter-keyboard-help,
 .pixi-reward-keyboard-help,
-.pixi-reward-accessibility-overlay {
+.pixi-reward-accessibility-overlay,
+.pixi-event-accessibility-overlay,
+.pixi-rest-accessibility-overlay {
     position: absolute;
     width: 1px;
     height: 1px;

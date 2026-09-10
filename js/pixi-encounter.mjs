@@ -53576,25 +53576,44 @@ function prefersReducedMotion2() {
 
 // src/pixi-event.ts
 async function createEventRenderer(canvas, sink) {
-  const app = new Application();
-  await app.init({ antialias: true, autoDensity: true, background: 529183, backgroundAlpha: 1, canvas, preference: "canvas" });
+  const application = new Application();
+  await application.init({ antialias: true, autoDensity: true, background: 529183, backgroundAlpha: 1, canvas, preference: "canvas" });
   canvas.tabIndex = 0;
+  const accessibility = createEventAccessibilityOverlay(canvas);
   const root = new Container();
   const background = new Graphics();
   const focal = new Graphics();
+  const contextPanel = new Graphics();
   const title = new Text({ text: "Event", style: titleStyle });
   const narrative = new Text({ text: "", style: narrativeStyle });
+  const contextTitle = new Text({ text: "Choose an option", style: contextTitleStyle });
+  const contextDetails = new Text({ text: "Select a choice to inspect its outcome.", style: contextBodyStyle });
+  const feedback = new Text({ text: "", style: feedbackStyle2 });
   const choiceLayer = new Container();
-  const feedback = new Text({ text: "", style: bodyStyle });
-  root.addChild(background, focal, title, narrative, choiceLayer, feedback);
-  app.stage.addChild(root);
+  const controlLayer = new Container();
+  root.addChild(background, focal, title, narrative, choiceLayer, contextPanel, contextTitle, contextDetails, controlLayer, feedback);
+  application.stage.addChild(root);
   let state;
   let sequence = 0;
-  let selected = 0;
+  let selectedIndex = 0;
+  let selectedOptionId;
   let pending = false;
+  let acceptedActionAwaitingReconcile = false;
   let narrativeProgress = 0;
+  let effectName;
+  let effectElapsedMs = 0;
+  const availableOptions = () => state?.options.filter((option) => option.isAvailable) ?? [];
+  const isNarrativeComplete = () => state !== void 0 && narrativeProgress >= toPlainNarrative(state.narrative).length;
+  const playEffect = (name) => {
+    effectName = name;
+    effectElapsedMs = 0;
+  };
+  const announce = (message) => {
+    feedback.text = message;
+    accessibility.update(message);
+  };
   const resize = () => {
-    app.renderer.resize(Math.max(1, canvas.clientWidth || canvas.width || 960), Math.max(1, canvas.clientHeight || canvas.height || 540));
+    application.renderer.resize(Math.max(1, canvas.clientWidth || canvas.width || 960), Math.max(1, canvas.clientHeight || canvas.height || 540));
     layout();
   };
   const submit = async (name, choiceId) => {
@@ -53602,102 +53621,168 @@ async function createEventRenderer(canvas, sink) {
     pending = true;
     try {
       const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: 1, sceneId: "event", name, sequence, sourceId: null, targetId: null, optionIndex: null, choiceId });
-      feedback.text = result.accepted ? "Resolved." : "That choice is no longer available.";
+      announce(result.accepted ? "Resolved." : "That choice is no longer available.");
+      playEffect(result.accepted ? "choice-confirmed" : "choice-rejected");
+      if (result.accepted) acceptedActionAwaitingReconcile = true;
+      else pending = false;
     } catch {
-      feedback.text = "The choice could not be completed. Please try again.";
-    } finally {
+      announce("The choice could not be completed. Please try again.");
       pending = false;
+      playEffect("choice-rejected");
+    } finally {
       layout();
     }
   };
-  const activate = () => {
-    if (!state || pending || narrativeProgress < toPlainNarrative(state.narrative).length) return;
-    if (state.isComplete) {
+  const selectOption = (option) => {
+    if (pending || !option.isAvailable || !isNarrativeComplete()) return;
+    selectedOptionId = option.id;
+    selectedIndex = availableOptions().findIndex((entry) => entry.id === option.id);
+    announce(`Selected ${option.text}. ${getOptionSummary(option)} Review the outcome, then confirm or cancel.`);
+    layout();
+  };
+  const confirmSelection = () => {
+    if (state?.isComplete) {
       void submit("leave", null);
       return;
     }
-    const option = state.options.filter((entry) => entry.isAvailable)[selected];
+    const option = state?.options.find((entry) => entry.id === selectedOptionId && entry.isAvailable);
     if (option) void submit("chooseOption", option.id);
   };
+  const cancelSelection = () => {
+    if (pending) return;
+    selectedOptionId = void 0;
+    announce("Choice cancelled.");
+    layout();
+  };
   const keydown = (event) => {
-    const options = state?.options.filter((option) => option.isAvailable) ?? [];
+    const options = availableOptions();
     if (event.key === "Escape") {
-      selected = -1;
-      layout();
+      cancelSelection();
       event.preventDefault();
       return;
     }
     if (event.key === "Enter" || event.key === " ") {
-      activate();
+      if (state?.isComplete || selectedOptionId !== void 0) confirmSelection();
+      else {
+        const option = options[selectedIndex];
+        if (option) selectOption(option);
+      }
       event.preventDefault();
       return;
     }
-    if (options.length && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Tab"].includes(event.key)) {
-      selected = (selected + (event.key === "ArrowLeft" || event.key === "ArrowUp" || event.key === "Tab" && event.shiftKey ? -1 : 1) + options.length) % options.length;
+    if (options.length > 0 && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+      const direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+      selectedIndex = (selectedIndex + direction + options.length) % options.length;
+      selectedOptionId = options[selectedIndex]?.id;
       layout();
       event.preventDefault();
     }
   };
   const tick = () => {
     const narrativeLength = state ? toPlainNarrative(state.narrative).length : 0;
-    if (!state || narrativeProgress >= narrativeLength) return;
-    narrativeProgress = Math.min(narrativeLength, narrativeProgress + Math.max(1, Math.ceil(app.ticker.deltaMS / 20)));
-    layout();
+    if (state && narrativeProgress < narrativeLength) {
+      narrativeProgress = Math.min(narrativeLength, narrativeProgress + Math.max(1, Math.ceil(application.ticker.deltaMS / 20)));
+      if (narrativeProgress === narrativeLength) playEffect("narrative-complete");
+      layout();
+    }
+    if (effectName !== void 0) {
+      effectElapsedMs += Math.max(0, application.ticker.deltaMS);
+      if (effectElapsedMs >= 320) effectName = void 0;
+      layout();
+    }
   };
   canvas.addEventListener("keydown", keydown);
   window.addEventListener("resize", resize);
-  app.ticker.add(tick);
+  application.ticker.add(tick);
   function layout() {
-    const width = app.renderer.width;
-    const height = app.renderer.height;
+    const width = application.renderer.width;
+    const height = application.renderer.height;
     const mobile = height > width;
-    background.clear().rect(0, 0, width, height).fill(529183);
-    focal.clear().circle(mobile ? width / 2 : width * 0.28, mobile ? height * 0.24 : height * 0.46, Math.min(width, height) * 0.2).fill({ color: 3631734, alpha: 0.45 }).circle(mobile ? width / 2 : width * 0.28, mobile ? height * 0.24 : height * 0.46, Math.min(width, height) * 0.1).fill({ color: 14069334, alpha: 0.72 });
+    const choices = state?.isComplete ? [] : state?.options ?? [];
+    const selected = choices.find((option) => option.id === selectedOptionId);
     title.text = state?.title ?? "Event";
-    title.position.set(28, 24);
     narrative.text = toPlainNarrative(state?.narrative ?? "Loading event\u2026").slice(0, narrativeProgress);
-    narrative.style.wordWrapWidth = mobile ? width - 48 : Math.max(260, width * 0.48);
-    narrative.position.set(mobile ? 24 : width * 0.48, mobile ? height * 0.47 : 70);
-    feedback.position.set(width / 2, height - 26);
-    feedback.anchor.set(0.5);
-    choiceLayer.removeChildren();
-    const options = state?.options ?? [];
+    const controlsBelowDetails = mobile && selected !== void 0;
     const choiceWidth = mobile ? width - 48 : Math.max(260, width * 0.48);
     const choiceX = mobile ? 24 : width * 0.48;
-    const choiceY = mobile ? height * 0.62 : Math.min(height - 180, 250);
+    const trayHeight = controlsBelowDetails ? 156 : mobile ? 126 : 118;
+    const trayY = height - trayHeight - 18;
+    const narrativeX = mobile ? 24 : width * 0.48;
+    const narrativeY = mobile ? height * 0.34 : 70;
+    narrative.style.wordWrapWidth = mobile ? width - 48 : Math.max(260, width * 0.42);
+    narrative.position.set(narrativeX, narrativeY);
+    const narrativeBottom = narrativeY + Math.max(72, Number.isFinite(narrative.height) ? narrative.height : 0);
+    const choiceTop = mobile ? Math.max(height * 0.48, narrativeBottom + 16) : Math.max(196, narrativeBottom + 18);
+    const choiceBottom = trayY - 14;
     const choiceGap = mobile ? 8 : 12;
-    const choiceHeight = mobile ? Math.max(42, Math.min(64, (height - choiceY - 44 - Math.max(0, options.length - 1) * choiceGap) / Math.max(1, options.length))) : 64;
+    const choiceHeight = Math.max(42, Math.min(68, (choiceBottom - choiceTop - Math.max(0, choices.length - 1) * choiceGap) / Math.max(1, choices.length)));
+    const focalAlpha = effectName === "choice-confirmed" ? 0.72 : effectName === "choice-rejected" ? 0.24 : 0.45;
+    background.clear().rect(0, 0, width, height).fill(529183);
+    focal.clear().circle(mobile ? width / 2 : width * 0.25, mobile ? height * 0.2 : height * 0.45, Math.min(width, height) * 0.2).fill({ color: 3631734, alpha: focalAlpha }).circle(mobile ? width / 2 : width * 0.25, mobile ? height * 0.2 : height * 0.45, Math.min(width, height) * 0.1).fill({ color: 14069334, alpha: effectName === "narrative-complete" ? 0.9 : 0.72 });
+    title.position.set(28, 24);
+    feedback.position.set(width / 2, trayY - 22);
+    feedback.anchor.set(0.5);
+    choiceLayer.removeChildren();
+    controlLayer.removeChildren();
+    contextPanel.clear().roundRect(16, trayY, width - 32, trayHeight, 12).fill({ color: 1058874, alpha: 0.98 }).stroke({ color: 9549506, width: 2 });
     if (state?.isComplete) {
-      const leave = new EventChoice("Leave", "Return to the map", true, true, activate);
-      leave.resize(choiceWidth, 68);
-      leave.position.set(choiceX, choiceY);
-      choiceLayer.addChild(leave);
-      return;
+      contextTitle.text = "Event complete";
+      contextDetails.text = "Return to the map when you are ready.";
+      addControl("Leave", "Return to map", true, width - 156, trayY + trayHeight - 54, 124, confirmSelection);
+    } else {
+      contextTitle.text = selected?.text ?? "Choose an option";
+      contextDetails.text = selected ? getOptionSummary(selected) : "Select a choice to inspect its outcome and any consequences.";
+      if (selected !== void 0) {
+        const controlY = trayY + trayHeight - 54;
+        addControl("Confirm", "Apply this choice", !pending, width - 282, controlY, 124, confirmSelection);
+        addControl("Cancel", "Return to choices", !pending, width - 148, controlY, 116, cancelSelection);
+      }
     }
-    options.forEach((option, index) => {
-      const availableIndex = options.filter((entry) => entry.isAvailable).indexOf(option);
-      const choice = new EventChoice(option.text, [option.hint, option.details].filter(Boolean).join(" \xB7 "), option.isAvailable && narrativeProgress >= toPlainNarrative(state?.narrative ?? "").length && !pending, availableIndex === selected, () => void submit("chooseOption", option.id));
+    contextTitle.position.set(32, trayY + 14);
+    contextDetails.style.wordWrapWidth = Math.max(1, width - 64 - (selectedOptionId === void 0 || controlsBelowDetails ? 0 : 270));
+    contextDetails.position.set(32, trayY + 44);
+    choices.forEach((option, index) => {
+      const availableIndex = availableOptions().findIndex((entry) => entry.id === option.id);
+      const selected2 = option.id === selectedOptionId || selectedOptionId === void 0 && availableIndex === selectedIndex;
+      const choice = new EventChoice(option.text, option.isAvailable ? [option.hint, option.details].filter(Boolean).join(" \xB7 ") : option.disabledReason ?? "Unavailable", option.isAvailable && isNarrativeComplete() && !pending, selected2, () => selectOption(option));
       choice.resize(choiceWidth, choiceHeight);
-      choice.position.set(choiceX, choiceY + index * (choiceHeight + choiceGap));
+      choice.position.set(choiceX, choiceTop + index * (choiceHeight + choiceGap));
       choiceLayer.addChild(choice);
     });
   }
+  function addControl(label, hint, enabled, x2, y2, width, onPress) {
+    const control = new EventChoice(label, hint, enabled, false, onPress);
+    control.resize(width, 42);
+    control.position.set(x2, y2);
+    controlLayer.addChild(control);
+  }
   resize();
-  return { reconcile(nextSequence, candidate) {
-    if (!isEventState(candidate) || nextSequence <= sequence) return false;
-    sequence = nextSequence;
-    state = candidate;
-    selected = 0;
-    narrativeProgress = 0;
-    feedback.text = "";
-    layout();
-    return true;
-  }, dispose() {
-    canvas.removeEventListener("keydown", keydown);
-    window.removeEventListener("resize", resize);
-    app.ticker.remove(tick);
-    app.destroy({ removeView: false }, { children: true });
-  } };
+  return {
+    reconcile(nextSequence, candidate) {
+      if (!isEventState(candidate) || nextSequence <= sequence) return false;
+      sequence = nextSequence;
+      state = candidate;
+      selectedIndex = 0;
+      selectedOptionId = void 0;
+      if (pending && acceptedActionAwaitingReconcile) {
+        pending = false;
+        acceptedActionAwaitingReconcile = false;
+      }
+      narrativeProgress = 0;
+      feedback.text = "";
+      accessibility.update(`${candidate.title}. ${toPlainNarrative(candidate.narrative)}`);
+      layout();
+      return true;
+    },
+    playEffect,
+    dispose() {
+      canvas.removeEventListener("keydown", keydown);
+      window.removeEventListener("resize", resize);
+      application.ticker.remove(tick);
+      accessibility.dispose();
+      application.destroy({ removeView: false }, { children: true });
+    }
+  };
 }
 var EventChoice = class extends Container {
   frame = new Graphics();
@@ -53716,128 +53801,252 @@ var EventChoice = class extends Container {
   }
   resize(width, height) {
     this.frame.clear().roundRect(0, 0, width, height, 12).fill({ color: 1520456, alpha: 0.96 }).stroke({ color: 9549506, width: 2 });
-    this.heading.position.set(16, 10);
-    this.hint.position.set(16, 37);
+    this.heading.position.set(16, 8);
+    this.hint.style.wordWrapWidth = Math.max(1, width - 32);
+    this.hint.position.set(16, 31);
   }
 };
 var titleStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 34, fontWeight: "bold" });
 var narrativeStyle = new TextStyle({ fill: 14412542, fontFamily: "Arial", fontSize: 19, lineHeight: 28, wordWrap: true });
-var bodyStyle = new TextStyle({ fill: 16113563, fontFamily: "Arial", fontSize: 15, align: "center" });
-var choiceHeadingStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 19, fontWeight: "bold", wordWrap: true });
+var contextTitleStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 18, fontWeight: "bold" });
+var contextBodyStyle = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 14, lineHeight: 19, wordWrap: true });
+var feedbackStyle2 = new TextStyle({ fill: 16113563, fontFamily: "Arial", fontSize: 15, align: "center" });
+var choiceHeadingStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 18, fontWeight: "bold", wordWrap: true });
 var choiceHintStyle = new TextStyle({ fill: 12375521, fontFamily: "Arial", fontSize: 13, wordWrap: true });
+function getOptionSummary(option) {
+  return [option.hint, option.details].filter(Boolean).join(" \xB7 ") || "This option has no additional preview.";
+}
 function toPlainNarrative(narrative) {
   return narrative.replaceAll(/\[(?:\/?)[^\]]+\]/g, "");
 }
 function isEventState(value) {
   return typeof value === "object" && value !== null && typeof value.narrative === "string" && Array.isArray(value.options);
 }
+function createEventAccessibilityOverlay(canvas) {
+  const parent = canvas.parentElement;
+  const ownerDocument = canvas.ownerDocument;
+  if (!parent || !ownerDocument) {
+    return noOpEventAccessibilityOverlay;
+  }
+  const summary = ownerDocument.createElement("div");
+  summary.className = "pixi-event-accessibility-overlay";
+  summary.setAttribute("aria-live", "polite");
+  summary.setAttribute("role", "status");
+  parent.appendChild(summary);
+  return {
+    update(message) {
+      summary.textContent = message;
+    },
+    dispose() {
+      summary.remove();
+    }
+  };
+}
+var noOpEventAccessibilityOverlay = {
+  update() {
+  },
+  dispose() {
+  }
+};
 
 // src/pixi-rest.ts
 async function createRestRenderer(canvas, sink) {
-  const app = new Application();
-  await app.init({ antialias: true, autoDensity: true, background: 726562, backgroundAlpha: 1, canvas, preference: "canvas" });
+  const application = new Application();
+  await application.init({ antialias: true, autoDensity: true, background: 726562, backgroundAlpha: 1, canvas, preference: "canvas" });
   canvas.tabIndex = 0;
+  const accessibility = createRestAccessibilityOverlay(canvas);
   const root = new Container();
   const background = new Graphics();
+  const contextPanel = new Graphics();
   const title = new Text({ text: "Camp", style: titleStyle2 });
-  const summary = new Text({ text: "", style: bodyStyle2 });
-  const feedback = new Text({ text: "", style: bodyStyle2 });
+  const summary = new Text({ text: "", style: bodyStyle });
+  const contextTitle = new Text({ text: "Choose a camp action", style: contextTitleStyle2 });
+  const contextDetails = new Text({ text: "Select an action to review its consequence.", style: contextBodyStyle2 });
+  const feedback = new Text({ text: "", style: feedbackStyle3 });
   const actionLayer = new Container();
-  root.addChild(background, title, summary, actionLayer, feedback);
-  app.stage.addChild(root);
+  const controlLayer = new Container();
+  root.addChild(background, title, summary, actionLayer, contextPanel, contextTitle, contextDetails, controlLayer, feedback);
+  application.stage.addChild(root);
   let sequence = 0;
   let state;
-  let selected = 0;
+  let selectedIndex = 0;
+  let selectedActionId;
   let pending = false;
-  const buttons = [];
+  let acceptedActionAwaitingReconcile = false;
+  let effectName;
+  let effectElapsedMs = 0;
+  const availableActions = () => state?.actions.filter((action) => action.isAvailable) ?? [];
+  const playEffect = (name) => {
+    effectName = name;
+    effectElapsedMs = 0;
+  };
+  const announce = (message) => {
+    feedback.text = message;
+    accessibility.update(message);
+  };
   const resize = () => {
-    app.renderer.resize(Math.max(1, canvas.clientWidth || canvas.width || 960), Math.max(1, canvas.clientHeight || canvas.height || 540));
+    application.renderer.resize(Math.max(1, canvas.clientWidth || canvas.width || 960), Math.max(1, canvas.clientHeight || canvas.height || 540));
     layout();
   };
-  const submit = async (name, choiceId = null) => {
+  const submit = async (action) => {
     if (pending) return;
     pending = true;
+    const request = getActionRequest(action.id);
     try {
-      const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: 1, sceneId: "rest", name, sequence, sourceId: null, targetId: null, optionIndex: null, choiceId });
-      feedback.text = result.accepted ? "Action accepted." : "That action is no longer available.";
+      const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: 1, sceneId: "rest", name: request.name, sequence, sourceId: null, targetId: null, optionIndex: null, choiceId: request.choiceId });
+      announce(result.accepted ? `${action.name} accepted.` : "That action is no longer available.");
+      playEffect(result.accepted ? getActionEffect(action.id) : "rejected");
+      if (result.accepted) acceptedActionAwaitingReconcile = true;
+      else pending = false;
     } catch {
-      feedback.text = "The action could not be completed. Please try again.";
-    } finally {
+      announce("The action could not be completed. Please try again.");
       pending = false;
+      playEffect("rejected");
+    } finally {
       layout();
     }
   };
-  const activate = () => {
-    const action = state?.actions.filter((entry) => entry.isAvailable)[selected];
-    if (action) {
-      const request = getActionRequest(action.id);
-      void submit(request.name, request.choiceId);
-    }
+  const selectAction = (action) => {
+    if (pending || !action.isAvailable) return;
+    selectedActionId = action.id;
+    selectedIndex = availableActions().findIndex((entry) => entry.id === action.id);
+    announce(`Selected ${action.name}. ${getActionSummary(action)} Review the consequence, then confirm or cancel.`);
+    layout();
+  };
+  const confirmSelection = () => {
+    const action = state?.actions.find((entry) => entry.id === selectedActionId && entry.isAvailable);
+    if (action) void submit(action);
+  };
+  const cancelSelection = () => {
+    if (pending) return;
+    selectedActionId = void 0;
+    announce("Action cancelled.");
+    layout();
   };
   const keydown = (event) => {
-    const available = state?.actions.filter((action) => action.isAvailable) ?? [];
-    if (event.key === "Enter" || event.key === " ") {
-      activate();
+    const available = availableActions();
+    if (event.key === "Escape") {
+      cancelSelection();
       event.preventDefault();
+      return;
     }
-    if (available.length && (event.key === "ArrowLeft" || event.key === "ArrowUp" || event.key === "ArrowRight" || event.key === "ArrowDown")) {
-      selected = (selected + (event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1) + available.length) % available.length;
+    if (event.key === "Enter" || event.key === " ") {
+      if (selectedActionId !== void 0) confirmSelection();
+      else {
+        const action = available[selectedIndex];
+        if (action) selectAction(action);
+      }
+      event.preventDefault();
+      return;
+    }
+    if (available.length > 0 && ["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].includes(event.key)) {
+      const direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+      selectedIndex = (selectedIndex + direction + available.length) % available.length;
+      selectedActionId = available[selectedIndex]?.id;
       layout();
       event.preventDefault();
     }
+  };
+  const tick = () => {
+    if (effectName === void 0) return;
+    effectElapsedMs += Math.max(0, application.ticker.deltaMS);
+    if (effectElapsedMs >= 360) effectName = void 0;
+    layout();
   };
   canvas.addEventListener("keydown", keydown);
   window.addEventListener("resize", resize);
+  application.ticker.add(tick);
   function layout() {
-    const width = app.renderer.width;
-    const height = app.renderer.height;
-    background.clear().rect(0, 0, width, height).fill(726562).circle(width * 0.5, height * 0.26, Math.min(width, height) * 0.2).fill({ color: 16096779, alpha: 0.2 });
+    const width = application.renderer.width;
+    const height = application.renderer.height;
+    const compact = height > width || width < 760;
+    const actions = state?.actions ?? [];
+    const selected = actions.find((action) => action.id === selectedActionId);
+    const controlsBelowDetails = compact && selected?.isAvailable === true;
+    const trayHeight = controlsBelowDetails ? 166 : compact ? 136 : 124;
+    const trayY = height - trayHeight - 18;
+    const actionTop = compact ? Math.max(170, height * 0.35) : Math.max(190, height * 0.5);
+    const gap = compact ? 8 : 16;
+    const buttonWidth = compact ? Math.min(300, width - 48) : Math.min(250, (width - 64 - gap * 2) / 3);
+    const actionBottom = trayY - 16;
+    const buttonHeight = compact ? Math.max(28, Math.min(76, (actionBottom - actionTop - Math.max(0, actions.length - 1) * gap) / Math.max(1, actions.length))) : 118;
+    const actionGlow = effectName === "rest-recovery" ? 0.32 : effectName === "training" ? 0.22 : effectName === "rejected" ? 0.08 : 0.16;
+    background.clear().rect(0, 0, width, height).fill(726562).circle(width * 0.5, height * 0.25, Math.min(width, height) * 0.2).fill({ color: effectName === "training" ? 6333946 : 16096779, alpha: actionGlow });
     title.position.set(width * 0.5, 36);
     title.anchor.set(0.5, 0);
     summary.text = state ? `${state.description}
 Health: ${state.health} / ${state.maximumHealth}` : "Loading camp\u2026";
     summary.position.set(width * 0.5, 105);
     summary.anchor.set(0.5, 0);
-    feedback.position.set(width * 0.5, height - 52);
+    feedback.position.set(width / 2, trayY - 22);
     feedback.anchor.set(0.5, 0);
     actionLayer.removeChildren();
-    buttons.length = 0;
-    const actions = state?.actions ?? [];
-    const compact = height > width || width < 760;
-    const gap = 16;
-    const buttonWidth = compact ? Math.min(300, width - 48) : Math.min(250, (width - 64 - gap * 2) / 3);
-    const buttonHeight = compact ? 76 : 128;
-    const start = compact ? Math.max(180, height * 0.38) : Math.max(190, height * 0.52);
+    controlLayer.removeChildren();
+    contextPanel.clear().roundRect(16, trayY, width - 32, trayHeight, 12).fill({ color: 1518395, alpha: 0.98 }).stroke({ color: 9216952, width: 2 });
+    contextTitle.text = selected?.name ?? "Choose a camp action";
+    contextDetails.text = selected ? getActionSummary(selected) : "Select an action to review its consequence, availability, and cancellation path.";
+    contextTitle.position.set(32, trayY + 14);
+    contextDetails.style.wordWrapWidth = Math.max(1, width - 64 - (selectedActionId === void 0 || controlsBelowDetails ? 0 : 270));
+    contextDetails.position.set(32, trayY + 44);
+    if (selected?.isAvailable) {
+      addControl("Confirm", "Apply this action", !pending, width - 282, trayY + trayHeight - 54, 124, confirmSelection);
+      addControl("Cancel", "Return to camp", !pending, width - 148, trayY + trayHeight - 54, 116, cancelSelection);
+    }
     actions.forEach((action, index) => {
-      const availableIndex = actions.filter((entry) => entry.isAvailable).indexOf(action);
-      const actionRequest = getActionRequest(action.id);
-      const button = new RestButton(action.name, action.description, action.isAvailable, availableIndex === selected, () => void submit(actionRequest.name, actionRequest.choiceId));
+      const availableIndex = availableActions().findIndex((entry) => entry.id === action.id);
+      const button = new RestButton(action.name, action.isAvailable ? action.description : action.disabledReason ?? "Unavailable", action.isAvailable && !pending, action.id === selectedActionId || selectedActionId === void 0 && availableIndex === selectedIndex, () => selectAction(action));
       const x2 = compact ? (width - buttonWidth) / 2 : 32 + index * (buttonWidth + gap);
-      const y2 = compact ? start + index * (buttonHeight + gap) : start;
-      button.position.set(x2, y2);
+      const y2 = compact ? actionTop + index * (buttonHeight + gap) : actionTop;
       button.resize(buttonWidth, buttonHeight);
+      button.position.set(x2, y2);
       actionLayer.addChild(button);
-      buttons.push(button);
     });
   }
+  function addControl(label, hint, enabled, x2, y2, width, onPress) {
+    const control = new RestButton(label, hint, enabled, false, onPress);
+    control.resize(width, 42);
+    control.position.set(x2, y2);
+    controlLayer.addChild(control);
+  }
   resize();
-  return { reconcile(nextSequence, candidate) {
-    if (!isRestState(candidate) || nextSequence <= sequence) return false;
-    sequence = nextSequence;
-    state = candidate;
-    selected = 0;
-    layout();
-    return true;
-  }, dispose() {
-    window.removeEventListener("resize", resize);
-    canvas.removeEventListener("keydown", keydown);
-    app.destroy({ removeView: false }, { children: true });
-  } };
+  return {
+    reconcile(nextSequence, candidate) {
+      if (!isRestState(candidate) || nextSequence <= sequence) return false;
+      sequence = nextSequence;
+      state = candidate;
+      selectedIndex = 0;
+      selectedActionId = void 0;
+      if (pending && acceptedActionAwaitingReconcile) {
+        pending = false;
+        acceptedActionAwaitingReconcile = false;
+      }
+      feedback.text = "";
+      accessibility.update(`${candidate.title}. ${candidate.description}. Health: ${candidate.health} of ${candidate.maximumHealth}.`);
+      layout();
+      return true;
+    },
+    playEffect,
+    dispose() {
+      window.removeEventListener("resize", resize);
+      canvas.removeEventListener("keydown", keydown);
+      application.ticker.remove(tick);
+      accessibility.dispose();
+      application.destroy({ removeView: false }, { children: true });
+    }
+  };
 }
 function getActionRequest(id) {
   if (id === "rest") return { name: "rest", choiceId: null };
   if (id === "leave") return { name: "leave", choiceId: null };
   return { name: "chooseRestAction", choiceId: id };
+}
+function getActionEffect(id) {
+  if (id === "rest") return "rest-recovery";
+  if (id === "train") return "training";
+  return "alternate-action";
+}
+function getActionSummary(action) {
+  return action.isAvailable ? action.description : action.disabledReason ?? "This action is unavailable.";
 }
 var RestButton = class extends Container {
   background = new Graphics();
@@ -53849,27 +54058,54 @@ var RestButton = class extends Container {
     this.description.text = description;
     this.addChild(this.background, this.heading, this.description);
     this.eventMode = enabled ? "static" : "none";
+    this.cursor = enabled ? "pointer" : "default";
     this.alpha = enabled ? 1 : 0.4;
+    this.background.tint = selected ? 16498468 : 16777215;
     if (enabled) this.on("pointertap", onPress);
-    this.selected = selected;
-  }
-  set selected(value) {
-    this.background.tint = value ? 16498468 : 16777215;
   }
   resize(width, height) {
     this.background.clear().roundRect(0, 0, width, height, 12).fill({ color: 2110536, alpha: 0.96 }).stroke({ color: 9216952, width: 2 });
-    this.heading.position.set(18, 12);
+    this.heading.position.set(18, 10);
     this.description.style.wordWrapWidth = Math.max(1, width - 36);
-    this.description.position.set(18, 40);
+    this.description.position.set(18, 36);
   }
 };
 var titleStyle2 = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 34, fontWeight: "bold" });
-var bodyStyle2 = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 17, align: "center", wordWrap: true, wordWrapWidth: 540 });
-var buttonHeadingStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 22, fontWeight: "bold" });
-var buttonBodyStyle = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 14, wordWrap: true, wordWrapWidth: 260 });
+var bodyStyle = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 17, align: "center", wordWrap: true, wordWrapWidth: 540 });
+var contextTitleStyle2 = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 18, fontWeight: "bold" });
+var contextBodyStyle2 = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 14, lineHeight: 19, wordWrap: true });
+var feedbackStyle3 = new TextStyle({ fill: 16113563, fontFamily: "Arial", fontSize: 15, align: "center" });
+var buttonHeadingStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 20, fontWeight: "bold" });
+var buttonBodyStyle = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 13, wordWrap: true });
 function isRestState(value) {
   return typeof value === "object" && value !== null && Array.isArray(value.actions);
 }
+function createRestAccessibilityOverlay(canvas) {
+  const parent = canvas.parentElement;
+  const ownerDocument = canvas.ownerDocument;
+  if (!parent || !ownerDocument) {
+    return noOpRestAccessibilityOverlay;
+  }
+  const summary = ownerDocument.createElement("div");
+  summary.className = "pixi-rest-accessibility-overlay";
+  summary.setAttribute("aria-live", "polite");
+  summary.setAttribute("role", "status");
+  parent.appendChild(summary);
+  return {
+    update(message) {
+      summary.textContent = message;
+    },
+    dispose() {
+      summary.remove();
+    }
+  };
+}
+var noOpRestAccessibilityOverlay = {
+  update() {
+  },
+  dispose() {
+  }
+};
 
 // src/pixi-encounter.ts
 async function createEncounterRenderer(canvas, intentSink, initialization) {
