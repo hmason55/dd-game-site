@@ -53965,11 +53965,13 @@ async function createRestRenderer(canvas, sink) {
     const controlsBelowDetails = compact && selected?.isAvailable === true;
     const trayHeight = controlsBelowDetails ? 166 : compact ? 136 : 124;
     const trayY = height - trayHeight - 18;
-    const actionTop = compact ? Math.max(170, height * 0.35) : Math.max(190, height * 0.5);
     const gap = compact ? 8 : 16;
     const buttonWidth = compact ? Math.min(300, width - 48) : Math.min(250, (width - 64 - gap * 2) / 3);
     const actionBottom = trayY - 16;
-    const buttonHeight = compact ? Math.max(28, Math.min(76, (actionBottom - actionTop - Math.max(0, actions.length - 1) * gap) / Math.max(1, actions.length))) : 118;
+    const minimumButtonHeight = compact ? 28 : 42;
+    const preferredActionTop = compact ? Math.max(170, height * 0.35) : Math.max(152, height * 0.36);
+    const actionTop = Math.min(preferredActionTop, actionBottom - minimumButtonHeight);
+    const buttonHeight = compact ? Math.max(minimumButtonHeight, Math.min(76, (actionBottom - actionTop - Math.max(0, actions.length - 1) * gap) / Math.max(1, actions.length))) : Math.max(minimumButtonHeight, Math.min(118, actionBottom - actionTop));
     const actionGlow = effectName === "rest-recovery" ? 0.32 : effectName === "training" ? 0.22 : effectName === "rejected" ? 0.08 : 0.16;
     background.clear().rect(0, 0, width, height).fill(726562).circle(width * 0.5, height * 0.25, Math.min(width, height) * 0.2).fill({ color: effectName === "training" ? 6333946 : 16096779, alpha: actionGlow });
     title.position.set(width * 0.5, 36);
