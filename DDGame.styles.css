@@ -70,6 +70,12 @@
 .pixi-rest-surface canvas:focus-visible[b-her48madf3] { outline: 3px solid var(--mud-palette-secondary); outline-offset: -3px; }
 .pixi-rest-keyboard-help[b-her48madf3] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
 .pixi-rest-accessibility-controls[b-her48madf3] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
+/* /Components/Rooms/PixiShopSurface.razor.rz.scp.css */
+.pixi-shop-surface[b-lr5mek7nhb] { min-height: min(76vh, 640px); position: relative; width: 100%; }
+.pixi-shop-surface canvas[b-lr5mek7nhb] { height: 100%; min-height: min(76vh, 640px); width: 100%; }
+.pixi-shop-surface canvas:focus-visible[b-lr5mek7nhb] { outline: 3px solid var(--mud-palette-secondary); outline-offset: -3px; }
+.pixi-shop-keyboard-help[b-lr5mek7nhb], .pixi-shop-accessibility-controls[b-lr5mek7nhb] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
+
 /* /Layout/MainLayout.razor.rz.scp.css */
 .page[b-f125ol7vjg] {
     position: relative;

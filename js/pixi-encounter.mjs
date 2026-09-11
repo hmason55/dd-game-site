@@ -54109,6 +54109,296 @@ var noOpRestAccessibilityOverlay = {
   }
 };
 
+// src/pixi-shop.ts
+async function createShopRenderer(canvas, sink) {
+  const application = new Application();
+  await application.init({ antialias: true, autoDensity: true, background: 726562, backgroundAlpha: 1, canvas, preference: "canvas" });
+  canvas.tabIndex = 0;
+  const accessibility = createShopAccessibilityOverlay(canvas);
+  const root = new Container();
+  const background = new Graphics();
+  const merchant = new Graphics();
+  const merchandiseLayer = new Container();
+  const contextPanel = new Graphics();
+  const title = new Text({ text: "Shop", style: titleStyle3 });
+  const currency = new Text({ text: "", style: currencyStyle });
+  const contextTitle = new Text({ text: "Browse merchandise", style: contextTitleStyle3 });
+  const contextDetails = new Text({ text: "Choose an item to inspect its price and effect.", style: contextBodyStyle3 });
+  const feedback = new Text({ text: "", style: feedbackStyle4 });
+  const controlLayer = new Container();
+  root.addChild(background, merchant, title, currency, merchandiseLayer, contextPanel, contextTitle, contextDetails, controlLayer, feedback);
+  application.stage.addChild(root);
+  let sequence = 0;
+  let state;
+  let selectedIndex = 0;
+  let selectedMerchandiseId;
+  let pending = false;
+  let acceptedActionAwaitingReconcile = false;
+  let page = 0;
+  const selectableMerchandise = () => state?.merchandise.filter((merchandise) => !merchandise.isSold) ?? [];
+  const announce = (message) => {
+    feedback.text = message;
+    accessibility.update(message);
+  };
+  const resize = () => {
+    application.renderer.resize(Math.max(1, canvas.clientWidth || canvas.width || 960), Math.max(1, canvas.clientHeight || canvas.height || 540));
+    layout();
+  };
+  const submit = async (name, sourceId) => {
+    if (pending) return;
+    pending = true;
+    const awaitReconcile = name !== "inspect";
+    if (awaitReconcile) acceptedActionAwaitingReconcile = true;
+    try {
+      const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", {
+        protocolVersion: 1,
+        sceneId: "shop",
+        name,
+        sequence,
+        sourceId,
+        targetId: null,
+        optionIndex: null,
+        choiceId: null
+      });
+      announce(result.accepted ? getAcceptedMessage(name) : name === "purchase" ? "That purchase is no longer available." : "That action is no longer available.");
+      if (!result.accepted || !awaitReconcile) {
+        pending = false;
+        acceptedActionAwaitingReconcile = false;
+      }
+    } catch {
+      announce("The shop could not complete that request. Please try again.");
+      pending = false;
+      acceptedActionAwaitingReconcile = false;
+    } finally {
+      layout();
+    }
+  };
+  const inspect = (merchandise) => {
+    if (pending || merchandise.isSold) return;
+    selectedMerchandiseId = merchandise.id;
+    selectedIndex = selectableMerchandise().findIndex((entry) => entry.id === merchandise.id);
+    page = Math.floor(selectedIndex / getPageSize());
+    announce(`Selected ${merchandise.name}. ${getMerchandiseSummary(merchandise)} Review it, then confirm or cancel.`);
+    void submit("inspect", merchandise.id);
+    layout();
+  };
+  const confirmPurchase = () => {
+    const merchandise = state?.merchandise.find((entry) => entry.id === selectedMerchandiseId);
+    if (merchandise?.isAffordable && !merchandise.isSold) void submit("purchase", merchandise.id);
+  };
+  const cancelSelection = () => {
+    if (pending) return;
+    selectedMerchandiseId = void 0;
+    announce("Merchandise selection cancelled.");
+    layout();
+  };
+  const leave = () => {
+    if (!pending) void submit("leave", null);
+  };
+  const keydown = (event) => {
+    const merchandise = selectableMerchandise();
+    if (event.key === "Escape") {
+      cancelSelection();
+      event.preventDefault();
+      return;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      if (selectedMerchandiseId !== void 0) confirmPurchase();
+      else {
+        const selected = merchandise[selectedIndex];
+        if (selected) inspect(selected);
+      }
+      event.preventDefault();
+      return;
+    }
+    if (merchandise.length > 0 && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+      const direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+      selectedIndex = (selectedIndex + direction + merchandise.length) % merchandise.length;
+      const selected = merchandise[selectedIndex];
+      if (selected) inspect(selected);
+      event.preventDefault();
+      return;
+    }
+    if (event.key === "PageUp" || event.key === "PageDown") {
+      page = event.key === "PageUp" ? Math.max(0, page - 1) : Math.min(getPageCount() - 1, page + 1);
+      selectedMerchandiseId = void 0;
+      layout();
+      event.preventDefault();
+    }
+  };
+  canvas.addEventListener("keydown", keydown);
+  window.addEventListener("resize", resize);
+  function layout() {
+    const width = application.renderer.width;
+    const height = application.renderer.height;
+    const compact = height > width || width < 760;
+    const allMerchandise = state?.merchandise ?? [];
+    const pageSize = getPageSize();
+    const pageCount = Math.max(1, Math.ceil(allMerchandise.length / pageSize));
+    page = Math.min(page, pageCount - 1);
+    const merchandise = allMerchandise.slice(page * pageSize, (page + 1) * pageSize);
+    const selected = allMerchandise.find((entry) => entry.id === selectedMerchandiseId);
+    const controlsBelowDetails = compact && selected !== void 0;
+    const trayHeight = controlsBelowDetails ? 164 : compact ? 132 : 118;
+    const trayY = height - trayHeight - 18;
+    const gridTop = compact ? 142 : 104;
+    const gridBottom = trayY - 16;
+    const columns = compact ? 2 : Math.max(3, Math.min(5, merchandise.length || 3));
+    const gap = compact ? 10 : 14;
+    const cardWidth = Math.max(104, Math.min(compact ? 180 : 190, (width - 48 - (columns - 1) * gap) / columns));
+    const rows = Math.max(1, Math.ceil(merchandise.length / columns));
+    const cardHeight = Math.max(66, Math.min(compact ? 104 : 132, (gridBottom - gridTop - (rows - 1) * gap) / rows));
+    background.clear().rect(0, 0, width, height).fill(726562).rect(0, 0, width, height * 0.22).fill({ color: 2044741, alpha: 0.94 });
+    merchant.clear().circle(compact ? width * 0.5 : width * 0.12, compact ? 90 : height * 0.48, Math.min(width, height) * (compact ? 0.08 : 0.13)).fill({ color: 12024095, alpha: 0.45 }).circle(compact ? width * 0.5 : width * 0.12, compact ? 90 : height * 0.48, Math.min(width, height) * (compact ? 0.04 : 0.065)).fill({ color: 16113563, alpha: 0.55 });
+    title.text = state?.title ?? "Shop";
+    title.position.set(28, 22);
+    currency.text = `Gold: ${state?.currency ?? 0}`;
+    currency.position.set(width - 28, 29);
+    currency.anchor.set(1, 0);
+    feedback.position.set(width / 2, trayY - 22);
+    feedback.anchor.set(0.5, 0);
+    merchandiseLayer.removeChildren();
+    controlLayer.removeChildren();
+    contextPanel.clear().roundRect(16, trayY, width - 32, trayHeight, 12).fill({ color: 1518395, alpha: 0.98 }).stroke({ color: 13280860, width: 2 });
+    contextTitle.text = selected?.name ?? "Browse merchandise";
+    contextDetails.text = selected ? getMerchandiseSummary(selected) : "Select merchandise to inspect its effect, price, and availability.";
+    contextTitle.position.set(32, trayY + 14);
+    contextDetails.style.wordWrapWidth = Math.max(1, width - 64 - (selected === void 0 || controlsBelowDetails ? 0 : 270));
+    contextDetails.position.set(32, trayY + 44);
+    if (selected !== void 0) {
+      addControl("Buy", "Confirm purchase", selected.isAffordable && !selected.isSold && !pending, width - 282, trayY + trayHeight - 54, 124, confirmPurchase);
+      addControl("Cancel", "Return to merchandise", !pending, width - 148, trayY + trayHeight - 54, 116, cancelSelection);
+    } else {
+      addControl("Leave", "Return to map", !pending, width - 148, trayY + trayHeight - 54, 116, leave);
+    }
+    if (pageCount > 1) {
+      addControl("Previous", "Previous merchandise page", !pending && page > 0, 32, trayY + trayHeight - 54, 116, () => changePage(-1));
+      addControl("Next", "Next merchandise page", !pending && page < pageCount - 1, 158, trayY + trayHeight - 54, 116, () => changePage(1));
+    }
+    merchandise.forEach((entry, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const card = new ShopMerchandiseCard(entry, entry.id === selectedMerchandiseId, !pending, () => inspect(entry));
+      card.resize(cardWidth, cardHeight);
+      card.position.set(24 + column * (cardWidth + gap), gridTop + row * (cardHeight + gap));
+      merchandiseLayer.addChild(card);
+    });
+  }
+  function addControl(label, hint, enabled, x2, y2, width, onPress) {
+    const control = new ShopMerchandiseCard({ id: label, kind: "control", name: label, description: hint, image: "", price: 0, isOnSale: false, isSold: false, isAffordable: enabled, disabledReason: null }, false, enabled, onPress);
+    control.resize(width, 42);
+    control.position.set(x2, y2);
+    controlLayer.addChild(control);
+  }
+  function getPageSize() {
+    const compact = application.renderer.height > application.renderer.width || application.renderer.width < 760;
+    const columns = compact ? 2 : Math.max(3, Math.min(5, state?.merchandise.length || 3));
+    return columns * 2;
+  }
+  function getPageCount() {
+    return Math.max(1, Math.ceil((state?.merchandise.length ?? 0) / getPageSize()));
+  }
+  function changePage(direction) {
+    page = Math.max(0, Math.min(getPageCount() - 1, page + direction));
+    selectedMerchandiseId = void 0;
+    layout();
+  }
+  resize();
+  return {
+    reconcile(nextSequence, candidate) {
+      if (!isShopState(candidate) || nextSequence <= sequence) return false;
+      sequence = nextSequence;
+      state = candidate;
+      selectedIndex = 0;
+      selectedMerchandiseId = void 0;
+      page = 0;
+      if (pending && acceptedActionAwaitingReconcile) {
+        pending = false;
+        acceptedActionAwaitingReconcile = false;
+      }
+      feedback.text = "";
+      accessibility.update(`${candidate.title}. Gold: ${candidate.currency}. ${candidate.merchandise.length} merchandise choices available.`);
+      layout();
+      return true;
+    },
+    dispose() {
+      canvas.removeEventListener("keydown", keydown);
+      window.removeEventListener("resize", resize);
+      accessibility.dispose();
+      application.destroy({ removeView: false }, { children: true });
+    }
+  };
+}
+var ShopMerchandiseCard = class extends Container {
+  frame = new Graphics();
+  heading = new Text({ text: "", style: cardHeadingStyle });
+  description = new Text({ text: "", style: cardBodyStyle });
+  constructor(merchandise, selected, interactive, onPress) {
+    super();
+    this.heading.text = merchandise.isSold ? `${merchandise.name} \u2014 Sold` : merchandise.name;
+    this.description.text = merchandise.kind === "control" ? merchandise.description : getMerchandiseCardText(merchandise);
+    this.addChild(this.frame, this.heading, this.description);
+    const enabled = interactive && !merchandise.isSold;
+    this.eventMode = enabled ? "static" : "none";
+    this.cursor = enabled ? "pointer" : "default";
+    this.alpha = merchandise.isSold ? 0.42 : merchandise.isAffordable ? 1 : 0.62;
+    this.frame.tint = selected ? 16113563 : 16777215;
+    if (enabled) this.on("pointertap", onPress);
+  }
+  resize(width, height) {
+    this.frame.clear().roundRect(0, 0, width, height, 10).fill({ color: 2110536, alpha: 0.96 }).stroke({ color: 13280860, width: 2 });
+    this.heading.position.set(14, 8);
+    this.description.style.wordWrapWidth = Math.max(1, width - 28);
+    this.description.position.set(14, 33);
+  }
+};
+function getMerchandiseCardText(merchandise) {
+  const sale = merchandise.isOnSale ? "Sale \xB7 " : "";
+  const state = merchandise.isSold ? "Sold" : merchandise.isAffordable ? `${merchandise.price} gold` : merchandise.disabledReason ?? "Unavailable";
+  return `${sale}${state}
+${merchandise.description}`;
+}
+function getMerchandiseSummary(merchandise) {
+  return `${merchandise.description} ${merchandise.isSold ? "Sold." : merchandise.isAffordable ? `Costs ${merchandise.price} gold.` : merchandise.disabledReason ?? "Unavailable."}`;
+}
+function getAcceptedMessage(name) {
+  return name === "purchase" ? "Purchase accepted." : name === "leave" ? "Leaving the shop." : "Merchandise inspected.";
+}
+function isShopState(value) {
+  return typeof value === "object" && value !== null && typeof value.currency === "number" && Array.isArray(value.merchandise);
+}
+function createShopAccessibilityOverlay(canvas) {
+  const parent = canvas.parentElement;
+  const ownerDocument = canvas.ownerDocument;
+  if (!parent || !ownerDocument) return noOpShopAccessibilityOverlay;
+  const summary = ownerDocument.createElement("div");
+  summary.className = "pixi-shop-accessibility-overlay";
+  summary.setAttribute("aria-live", "polite");
+  summary.setAttribute("role", "status");
+  parent.appendChild(summary);
+  return {
+    update(message) {
+      summary.textContent = message;
+    },
+    dispose() {
+      summary.remove();
+    }
+  };
+}
+var noOpShopAccessibilityOverlay = {
+  update() {
+  },
+  dispose() {
+  }
+};
+var titleStyle3 = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 34, fontWeight: "bold" });
+var currencyStyle = new TextStyle({ fill: 16113563, fontFamily: "Arial", fontSize: 20, fontWeight: "bold" });
+var contextTitleStyle3 = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 18, fontWeight: "bold" });
+var contextBodyStyle3 = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 14, lineHeight: 19, wordWrap: true });
+var feedbackStyle4 = new TextStyle({ fill: 16113563, fontFamily: "Arial", fontSize: 15, align: "center" });
+var cardHeadingStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 16, fontWeight: "bold", wordWrap: true });
+var cardBodyStyle = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 12, lineHeight: 16, wordWrap: true });
+
 // src/pixi-encounter.ts
 async function createEncounterRenderer(canvas, intentSink, initialization) {
   if (!isVersionedOperation(initialization)) {
@@ -54742,7 +55032,8 @@ export {
   createEncounterRenderer,
   createEventRenderer,
   createRestRenderer,
-  createRewardRenderer
+  createRewardRenderer,
+  createShopRenderer
 };
 /*! Bundled license information:
 
