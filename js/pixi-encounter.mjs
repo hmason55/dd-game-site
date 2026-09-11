@@ -53597,6 +53597,10 @@ async function createEventRenderer(canvas, sink) {
   let sequence = 0;
   let selectedIndex = 0;
   let selectedOptionId;
+  let nestedChoiceOpen = false;
+  let nestedIndex = 0;
+  const selectedNestedItemIds = /* @__PURE__ */ new Set();
+  let nestedPage = 0;
   let pending = false;
   let acceptedActionAwaitingReconcile = false;
   let narrativeProgress = 0;
@@ -53616,11 +53620,11 @@ async function createEventRenderer(canvas, sink) {
     application.renderer.resize(Math.max(1, canvas.clientWidth || canvas.width || 960), Math.max(1, canvas.clientHeight || canvas.height || 540));
     layout();
   };
-  const submit = async (name, choiceId) => {
+  const submit = async (name, choiceId, selectionIds = null) => {
     if (pending) return;
     pending = true;
     try {
-      const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: 1, sceneId: "event", name, sequence, sourceId: null, targetId: null, optionIndex: null, choiceId });
+      const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: 1, sceneId: "event", name, sequence, sourceId: null, targetId: null, optionIndex: null, choiceId, selectionIds });
       announce(result.accepted ? "Resolved." : "That choice is no longer available.");
       playEffect(result.accepted ? "choice-confirmed" : "choice-rejected");
       if (result.accepted) acceptedActionAwaitingReconcile = true;
@@ -53646,28 +53650,70 @@ async function createEventRenderer(canvas, sink) {
       return;
     }
     const option = state?.options.find((entry) => entry.id === selectedOptionId && entry.isAvailable);
-    if (option) void submit("chooseOption", option.id);
+    if (!option) return;
+    if (option.nestedChoice) {
+      if (!nestedChoiceOpen) {
+        openNestedChoice(option);
+        return;
+      }
+      if (selectedNestedItemIds.size === option.nestedChoice.requiredSelectionCount) {
+        void submit("chooseOption", option.id, [...selectedNestedItemIds]);
+      }
+      return;
+    }
+    void submit("chooseOption", option.id);
   };
   const cancelSelection = () => {
     if (pending) return;
+    if (nestedChoiceOpen) {
+      nestedChoiceOpen = false;
+      selectedNestedItemIds.clear();
+      announce("Returned to the event choice.");
+      layout();
+      return;
+    }
     selectedOptionId = void 0;
     announce("Choice cancelled.");
     layout();
   };
   const keydown = (event) => {
     const options = availableOptions();
+    const nested = getNestedChoice();
     if (event.key === "Escape") {
       cancelSelection();
       event.preventDefault();
       return;
     }
     if (event.key === "Enter" || event.key === " ") {
+      if (nested) {
+        if (selectedNestedItemIds.size === nested.requiredSelectionCount) {
+          confirmSelection();
+        } else {
+          toggleNestedItem(nested.items[nestedIndex]);
+        }
+        event.preventDefault();
+        return;
+      }
       if (state?.isComplete || selectedOptionId !== void 0) confirmSelection();
       else {
         const option = options[selectedIndex];
         if (option) selectOption(option);
       }
       event.preventDefault();
+      return;
+    }
+    if (nested && nested.items.length > 0 && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+      const direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+      nestedIndex = (nestedIndex + direction + nested.items.length) % nested.items.length;
+      nestedPage = Math.floor(nestedIndex / getNestedPageSize(application.renderer.width, application.renderer.height));
+      event.preventDefault();
+      return;
+    }
+    if (nested && (event.key === "PageUp" || event.key === "PageDown")) {
+      const pageCount = getNestedPageCount(nested, application.renderer.width, application.renderer.height);
+      nestedPage = event.key === "PageUp" ? Math.max(0, nestedPage - 1) : Math.min(pageCount - 1, nestedPage + 1);
+      event.preventDefault();
+      layout();
       return;
     }
     if (options.length > 0 && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
@@ -53700,9 +53746,10 @@ async function createEventRenderer(canvas, sink) {
     const mobile = height > width;
     const choices = state?.isComplete ? [] : state?.options ?? [];
     const selected = choices.find((option) => option.id === selectedOptionId);
+    const nested = getNestedChoice();
     title.text = state?.title ?? "Event";
     narrative.text = toPlainNarrative(state?.narrative ?? "Loading event\u2026").slice(0, narrativeProgress);
-    const controlsBelowDetails = mobile && selected !== void 0;
+    const controlsBelowDetails = mobile && (selected !== void 0 || nested !== void 0);
     const choiceWidth = mobile ? width - 48 : Math.max(260, width * 0.48);
     const choiceX = mobile ? 24 : width * 0.48;
     const trayHeight = controlsBelowDetails ? 156 : mobile ? 126 : 118;
@@ -53715,7 +53762,9 @@ async function createEventRenderer(canvas, sink) {
     const choiceTop = mobile ? Math.max(height * 0.48, narrativeBottom + 16) : Math.max(196, narrativeBottom + 18);
     const choiceBottom = trayY - 14;
     const choiceGap = mobile ? 8 : 12;
-    const choiceHeight = Math.max(42, Math.min(68, (choiceBottom - choiceTop - Math.max(0, choices.length - 1) * choiceGap) / Math.max(1, choices.length)));
+    const nestedItems = nested ? getNestedPageItems(nested, width, height) : [];
+    const displayedChoiceCount = nested ? nestedItems.length : choices.length;
+    const choiceHeight = Math.max(42, Math.min(68, (choiceBottom - choiceTop - Math.max(0, displayedChoiceCount - 1) * choiceGap) / Math.max(1, displayedChoiceCount)));
     const focalAlpha = effectName === "choice-confirmed" ? 0.72 : effectName === "choice-rejected" ? 0.24 : 0.45;
     background.clear().rect(0, 0, width, height).fill(529183);
     focal.clear().circle(mobile ? width / 2 : width * 0.25, mobile ? height * 0.2 : height * 0.45, Math.min(width, height) * 0.2).fill({ color: 3631734, alpha: focalAlpha }).circle(mobile ? width / 2 : width * 0.25, mobile ? height * 0.2 : height * 0.45, Math.min(width, height) * 0.1).fill({ color: 14069334, alpha: effectName === "narrative-complete" ? 0.9 : 0.72 });
@@ -53730,18 +53779,32 @@ async function createEventRenderer(canvas, sink) {
       contextDetails.text = "Return to the map when you are ready.";
       addControl("Leave", "Return to map", true, width - 156, trayY + trayHeight - 54, 124, confirmSelection);
     } else {
-      contextTitle.text = selected?.text ?? "Choose an option";
-      contextDetails.text = selected ? getOptionSummary(selected) : "Select a choice to inspect its outcome and any consequences.";
+      contextTitle.text = nested?.title ?? selected?.text ?? "Choose an option";
+      contextDetails.text = nested?.description ?? (selected ? getOptionSummary(selected) : "Select a choice to inspect its outcome and any consequences.");
       if (selected !== void 0) {
         const controlY = trayY + trayHeight - 54;
-        addControl("Confirm", "Apply this choice", !pending, width - 282, controlY, 124, confirmSelection);
-        addControl("Cancel", "Return to choices", !pending, width - 148, controlY, 116, cancelSelection);
+        const confirmationHint = nested ? `Select ${nested.requiredSelectionCount} card${nested.requiredSelectionCount === 1 ? "" : "s"} (${selectedNestedItemIds.size}/${nested.requiredSelectionCount})` : "Apply this choice";
+        addControl("Confirm", confirmationHint, !pending && (!nested || selectedNestedItemIds.size === nested.requiredSelectionCount), width - 282, controlY, 124, confirmSelection);
+        addControl("Cancel", nested ? "Return to event choice" : "Return to choices", !pending, width - 148, controlY, 116, cancelSelection);
+        if (nested && getNestedPageCount(nested, width, height) > 1) {
+          addControl("Previous", "Previous cards", !pending && nestedPage > 0, 32, controlY, 116, () => changeNestedPage(-1));
+          addControl("Next", "Next cards", !pending && nestedPage < getNestedPageCount(nested, width, height) - 1, 158, controlY, 116, () => changeNestedPage(1));
+        }
       }
     }
     contextTitle.position.set(32, trayY + 14);
     contextDetails.style.wordWrapWidth = Math.max(1, width - 64 - (selectedOptionId === void 0 || controlsBelowDetails ? 0 : 270));
     contextDetails.position.set(32, trayY + 44);
-    choices.forEach((option, index) => {
+    if (nested) {
+      nestedItems.forEach((item, index) => {
+        const itemIndex = nested.items.findIndex((candidate) => candidate.id === item.id);
+        const itemSelected = selectedNestedItemIds.has(item.id) || selectedNestedItemIds.size === 0 && itemIndex === nestedIndex;
+        const choice = new EventChoice(item.name, item.description, !pending, itemSelected, () => toggleNestedItem(item));
+        choice.resize(choiceWidth, choiceHeight);
+        choice.position.set(choiceX, choiceTop + index * (choiceHeight + choiceGap));
+        choiceLayer.addChild(choice);
+      });
+    } else choices.forEach((option, index) => {
       const availableIndex = availableOptions().findIndex((entry) => entry.id === option.id);
       const selected2 = option.id === selectedOptionId || selectedOptionId === void 0 && availableIndex === selectedIndex;
       const choice = new EventChoice(option.text, option.isAvailable ? [option.hint, option.details].filter(Boolean).join(" \xB7 ") : option.disabledReason ?? "Unavailable", option.isAvailable && isNarrativeComplete() && !pending, selected2, () => selectOption(option));
@@ -53749,6 +53812,56 @@ async function createEventRenderer(canvas, sink) {
       choice.position.set(choiceX, choiceTop + index * (choiceHeight + choiceGap));
       choiceLayer.addChild(choice);
     });
+  }
+  function getNestedChoice() {
+    if (!nestedChoiceOpen || selectedOptionId === void 0) return void 0;
+    return state?.options.find((option) => option.id === selectedOptionId)?.nestedChoice;
+  }
+  function openNestedChoice(option) {
+    const nested = option.nestedChoice;
+    if (!nested || nested.items.length < nested.requiredSelectionCount) {
+      announce("That choice has no available selection.");
+      return;
+    }
+    nestedChoiceOpen = true;
+    nestedIndex = 0;
+    nestedPage = 0;
+    selectedNestedItemIds.clear();
+    announce(`${nested.title}. ${nested.description}`);
+    layout();
+  }
+  function toggleNestedItem(item) {
+    if (!item || pending) return;
+    if (selectedNestedItemIds.has(item.id)) {
+      selectedNestedItemIds.delete(item.id);
+    } else if (selectedNestedItemIds.size < getNestedChoice()?.requiredSelectionCount) {
+      selectedNestedItemIds.add(item.id);
+    } else {
+      announce("Deselect a card before choosing another.");
+      return;
+    }
+    const nested = getNestedChoice();
+    nestedIndex = nested?.items.findIndex((candidate) => candidate.id === item.id) ?? 0;
+    announce(`${selectedNestedItemIds.has(item.id) ? "Selected" : "Deselected"} ${item.name}. ${selectedNestedItemIds.size} of ${nested?.requiredSelectionCount ?? 0} cards selected.`);
+    layout();
+  }
+  function getNestedPageSize(width, height) {
+    return height > width ? 4 : 5;
+  }
+  function getNestedPageItems(nested, width, height) {
+    const pageSize = getNestedPageSize(width, height);
+    const pageCount = getNestedPageCount(nested, width, height);
+    nestedPage = Math.min(nestedPage, pageCount - 1);
+    return nested.items.slice(nestedPage * pageSize, (nestedPage + 1) * pageSize);
+  }
+  function getNestedPageCount(nested, width, height) {
+    return Math.max(1, Math.ceil(nested.items.length / getNestedPageSize(width, height)));
+  }
+  function changeNestedPage(direction) {
+    const nested = getNestedChoice();
+    if (!nested) return;
+    nestedPage = Math.max(0, Math.min(getNestedPageCount(nested, application.renderer.width, application.renderer.height) - 1, nestedPage + direction));
+    layout();
   }
   function addControl(label, hint, enabled, x2, y2, width, onPress) {
     const control = new EventChoice(label, hint, enabled, false, onPress);
@@ -53764,6 +53877,8 @@ async function createEventRenderer(canvas, sink) {
       state = candidate;
       selectedIndex = 0;
       selectedOptionId = void 0;
+      nestedChoiceOpen = false;
+      selectedNestedItemIds.clear();
       if (pending && acceptedActionAwaitingReconcile) {
         pending = false;
         acceptedActionAwaitingReconcile = false;
@@ -54135,6 +54250,7 @@ async function createShopRenderer(canvas, sink) {
   let pending = false;
   let acceptedActionAwaitingReconcile = false;
   let page = 0;
+  let purchaseEffectElapsedMs = 0;
   const selectableMerchandise = () => state?.merchandise.filter((merchandise) => !merchandise.isSold) ?? [];
   const announce = (message) => {
     feedback.text = message;
@@ -54161,6 +54277,7 @@ async function createShopRenderer(canvas, sink) {
         choiceId: null
       });
       announce(result.accepted ? getAcceptedMessage(name) : name === "purchase" ? "That purchase is no longer available." : "That action is no longer available.");
+      if (result.accepted && name === "purchase") purchaseEffectElapsedMs = 1;
       if (!result.accepted || !awaitReconcile) {
         pending = false;
         acceptedActionAwaitingReconcile = false;
@@ -54228,10 +54345,18 @@ async function createShopRenderer(canvas, sink) {
   };
   canvas.addEventListener("keydown", keydown);
   window.addEventListener("resize", resize);
+  const tick = () => {
+    if (purchaseEffectElapsedMs <= 0) return;
+    purchaseEffectElapsedMs += Math.max(0, application.ticker.deltaMS);
+    if (purchaseEffectElapsedMs >= 420) purchaseEffectElapsedMs = 0;
+    layout();
+  };
+  application.ticker.add(tick);
   function layout() {
     const width = application.renderer.width;
     const height = application.renderer.height;
-    const compact = height > width || width < 760;
+    const layoutMode = getLayoutMode(width, height);
+    const compact = layoutMode !== "Wide";
     const allMerchandise = state?.merchandise ?? [];
     const pageSize = getPageSize();
     const pageCount = Math.max(1, Math.ceil(allMerchandise.length / pageSize));
@@ -54241,15 +54366,16 @@ async function createShopRenderer(canvas, sink) {
     const controlsBelowDetails = compact && selected !== void 0;
     const trayHeight = controlsBelowDetails ? 164 : compact ? 132 : 118;
     const trayY = height - trayHeight - 18;
-    const gridTop = compact ? 142 : 104;
+    const gridTop = layoutMode === "MobilePortrait" ? 142 : layoutMode === "Compact" ? 112 : 104;
     const gridBottom = trayY - 16;
-    const columns = compact ? 2 : Math.max(3, Math.min(5, merchandise.length || 3));
+    const columns = layoutMode === "MobilePortrait" ? 2 : layoutMode === "Compact" ? 3 : Math.max(3, Math.min(5, merchandise.length || 3));
     const gap = compact ? 10 : 14;
     const cardWidth = Math.max(104, Math.min(compact ? 180 : 190, (width - 48 - (columns - 1) * gap) / columns));
     const rows = Math.max(1, Math.ceil(merchandise.length / columns));
     const cardHeight = Math.max(66, Math.min(compact ? 104 : 132, (gridBottom - gridTop - (rows - 1) * gap) / rows));
+    const purchaseGlow = purchaseEffectElapsedMs > 0 ? Math.max(0, 1 - purchaseEffectElapsedMs / 420) : 0;
     background.clear().rect(0, 0, width, height).fill(726562).rect(0, 0, width, height * 0.22).fill({ color: 2044741, alpha: 0.94 });
-    merchant.clear().circle(compact ? width * 0.5 : width * 0.12, compact ? 90 : height * 0.48, Math.min(width, height) * (compact ? 0.08 : 0.13)).fill({ color: 12024095, alpha: 0.45 }).circle(compact ? width * 0.5 : width * 0.12, compact ? 90 : height * 0.48, Math.min(width, height) * (compact ? 0.04 : 0.065)).fill({ color: 16113563, alpha: 0.55 });
+    drawMerchantFixtures(merchant, width, height, layoutMode, purchaseGlow);
     title.text = state?.title ?? "Shop";
     title.position.set(28, 22);
     currency.text = `Gold: ${state?.currency ?? 0}`;
@@ -54278,21 +54404,21 @@ async function createShopRenderer(canvas, sink) {
     merchandise.forEach((entry, index) => {
       const column = index % columns;
       const row = Math.floor(index / columns);
-      const card = new ShopMerchandiseCard(entry, entry.id === selectedMerchandiseId, !pending, () => inspect(entry));
+      const card = new ShopMerchandiseCard(entry, entry.id === selectedMerchandiseId, selectedMerchandiseId !== void 0, !pending, () => inspect(entry));
       card.resize(cardWidth, cardHeight);
       card.position.set(24 + column * (cardWidth + gap), gridTop + row * (cardHeight + gap));
       merchandiseLayer.addChild(card);
     });
   }
   function addControl(label, hint, enabled, x2, y2, width, onPress) {
-    const control = new ShopMerchandiseCard({ id: label, kind: "control", name: label, description: hint, image: "", price: 0, isOnSale: false, isSold: false, isAffordable: enabled, disabledReason: null }, false, enabled, onPress);
+    const control = new ShopMerchandiseCard({ id: label, kind: "control", name: label, description: hint, image: "", price: 0, isOnSale: false, isSold: false, isAffordable: enabled, disabledReason: null }, false, false, enabled, onPress);
     control.resize(width, 42);
     control.position.set(x2, y2);
     controlLayer.addChild(control);
   }
   function getPageSize() {
-    const compact = application.renderer.height > application.renderer.width || application.renderer.width < 760;
-    const columns = compact ? 2 : Math.max(3, Math.min(5, state?.merchandise.length || 3));
+    const layoutMode = getLayoutMode(application.renderer.width, application.renderer.height);
+    const columns = layoutMode === "MobilePortrait" ? 2 : layoutMode === "Compact" ? 3 : Math.max(3, Math.min(5, state?.merchandise.length || 3));
     return columns * 2;
   }
   function getPageCount() {
@@ -54324,6 +54450,7 @@ async function createShopRenderer(canvas, sink) {
     dispose() {
       canvas.removeEventListener("keydown", keydown);
       window.removeEventListener("resize", resize);
+      application.ticker.remove(tick);
       accessibility.dispose();
       application.destroy({ removeView: false }, { children: true });
     }
@@ -54333,7 +54460,7 @@ var ShopMerchandiseCard = class extends Container {
   frame = new Graphics();
   heading = new Text({ text: "", style: cardHeadingStyle });
   description = new Text({ text: "", style: cardBodyStyle });
-  constructor(merchandise, selected, interactive, onPress) {
+  constructor(merchandise, selected, hasSelection, interactive, onPress) {
     super();
     this.heading.text = merchandise.isSold ? `${merchandise.name} \u2014 Sold` : merchandise.name;
     this.description.text = merchandise.kind === "control" ? merchandise.description : getMerchandiseCardText(merchandise);
@@ -54341,7 +54468,8 @@ var ShopMerchandiseCard = class extends Container {
     const enabled = interactive && !merchandise.isSold;
     this.eventMode = enabled ? "static" : "none";
     this.cursor = enabled ? "pointer" : "default";
-    this.alpha = merchandise.isSold ? 0.42 : merchandise.isAffordable ? 1 : 0.62;
+    const availabilityAlpha = merchandise.isSold ? 0.42 : merchandise.isAffordable ? 1 : 0.62;
+    this.alpha = availabilityAlpha * (hasSelection && !selected ? 0.45 : 1);
     this.frame.tint = selected ? 16113563 : 16777215;
     if (enabled) this.on("pointertap", onPress);
   }
@@ -54352,6 +54480,17 @@ var ShopMerchandiseCard = class extends Container {
     this.description.position.set(14, 33);
   }
 };
+function getLayoutMode(width, height) {
+  if (height > width && width < 600) return "MobilePortrait";
+  return width < 820 ? "Compact" : "Wide";
+}
+function drawMerchantFixtures(graphics, width, height, mode, purchaseGlow) {
+  const merchantX = mode === "Wide" ? width * 0.12 : width * 0.5;
+  const merchantY = mode === "Wide" ? height * 0.48 : 90;
+  const merchantRadius = Math.min(width, height) * (mode === "Wide" ? 0.13 : 0.08);
+  const shelfY = mode === "MobilePortrait" ? 130 : mode === "Compact" ? 104 : height * 0.72;
+  graphics.clear().rect(0, shelfY, width, Math.max(8, height * 0.025)).fill({ color: 6044962, alpha: 0.92 }).rect(0, shelfY + Math.max(14, height * 0.035), width, Math.max(6, height * 0.018)).fill({ color: 3416853, alpha: 0.9 }).circle(merchantX, merchantY, merchantRadius).fill({ color: 12024095, alpha: 0.45 + purchaseGlow * 0.3 }).circle(merchantX, merchantY, merchantRadius * 0.5).fill({ color: 16113563, alpha: 0.55 + purchaseGlow * 0.35 });
+}
 function getMerchandiseCardText(merchandise) {
   const sale = merchandise.isOnSale ? "Sale \xB7 " : "";
   const state = merchandise.isSold ? "Sold" : merchandise.isAffordable ? `${merchandise.price} gold` : merchandise.disabledReason ?? "Unavailable";
