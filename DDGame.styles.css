@@ -64,6 +64,11 @@
 .pixi-event-surface[b-999uhjpgcf] { height: min(76vh, 640px); min-height: 360px; position: relative; width: 100%; }
 .pixi-event-surface canvas[b-999uhjpgcf] { height: 100%; outline: none; width: 100%; }
 .pixi-event-accessibility-controls[b-999uhjpgcf], .pixi-event-keyboard-help[b-999uhjpgcf] { position: absolute; height: 1px; overflow: hidden; width: 1px; clip: rect(0 0 0 0); white-space: nowrap; }
+/* /Components/Rooms/PixiMapSurface.razor.rz.scp.css */
+.pixi-map-surface[b-1kmtvgocsf] { min-height: min(76vh, 640px); position: relative; width: 100%; }
+.pixi-map-surface canvas[b-1kmtvgocsf] { height: 100%; min-height: min(76vh, 640px); width: 100%; }
+.pixi-map-surface canvas:focus-visible[b-1kmtvgocsf] { outline: 3px solid var(--mud-palette-secondary); outline-offset: -3px; }
+.pixi-map-keyboard-help[b-1kmtvgocsf], .pixi-map-accessibility-controls[b-1kmtvgocsf] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
 /* /Components/Rooms/PixiRestSurface.razor.rz.scp.css */
 .pixi-rest-surface[b-her48madf3] { min-height: min(68vh, 560px); position: relative; width: 100%; }
 .pixi-rest-surface canvas[b-her48madf3] { height: 100%; min-height: min(68vh, 560px); width: 100%; }

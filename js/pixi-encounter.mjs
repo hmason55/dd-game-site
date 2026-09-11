@@ -54538,6 +54538,360 @@ var feedbackStyle4 = new TextStyle({ fill: 16113563, fontFamily: "Arial", fontSi
 var cardHeadingStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 16, fontWeight: "bold", wordWrap: true });
 var cardBodyStyle = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 12, lineHeight: 16, wordWrap: true });
 
+// src/pixi-map.ts
+var mapSceneProtocolVersion = 2;
+async function createMapRenderer(canvas, sink) {
+  const application = new Application();
+  await application.init({ antialias: true, autoDensity: true, background: 529183, backgroundAlpha: 1, canvas, preference: "canvas" });
+  canvas.tabIndex = 0;
+  const accessibility = createMapAccessibilityOverlay(canvas);
+  const root = new Container();
+  const background = new Graphics();
+  const graph = new Container();
+  const connectionLayer = new Container();
+  const nodeLayer = new Container();
+  const contextPanel = new Graphics();
+  const title = new Text({ text: "The Fold", style: titleStyle4 });
+  const region = new Text({ text: "", style: regionStyle });
+  const contextTitle = new Text({ text: "Inspect a location", style: contextTitleStyle4 });
+  const contextDetails = new Text({ text: "Select a node to review its route and destination.", style: contextBodyStyle4 });
+  const feedback = new Text({ text: "", style: feedbackStyle5 });
+  const controls = new Container();
+  graph.addChild(connectionLayer, nodeLayer);
+  root.addChild(background, graph, title, region, contextPanel, contextTitle, contextDetails, controls, feedback);
+  application.stage.addChild(root);
+  const nodeViews = /* @__PURE__ */ new Map();
+  const connectionViews = /* @__PURE__ */ new Map();
+  let state;
+  let sequence = 0;
+  let selectedNodeId;
+  let focusedIndex = 0;
+  let pending = false;
+  let acceptedActionAwaitingReconcile = false;
+  let panX = 0;
+  let panY = 0;
+  let pointerStart;
+  let didPan = false;
+  const announce = (message) => {
+    feedback.text = message;
+    accessibility.update(message);
+  };
+  const selectableNodes = () => state?.nodes ?? [];
+  const selectedNode = () => state?.nodes.find((node) => node.id === selectedNodeId);
+  const resize = () => {
+    application.renderer.resize(Math.max(1, canvas.clientWidth || canvas.width || 960), Math.max(1, canvas.clientHeight || canvas.height || 540));
+    layout();
+  };
+  const submit = async (name, sourceId) => {
+    if (pending) return;
+    pending = name === "commitTravel";
+    if (pending) acceptedActionAwaitingReconcile = true;
+    try {
+      const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", {
+        protocolVersion: mapSceneProtocolVersion,
+        sceneId: "map",
+        name,
+        sequence,
+        sourceId,
+        targetId: null,
+        optionIndex: null,
+        choiceId: null,
+        selectionIds: null
+      });
+      if (!result.accepted) {
+        pending = false;
+        acceptedActionAwaitingReconcile = false;
+        announce(name === "commitTravel" ? "That route is no longer available." : "That map action is no longer available.");
+      } else if (name === "selectNode") {
+        announce("Location inspected. Confirm travel when you are ready.");
+      } else if (name === "commitTravel") {
+        announce("Traveling to the selected location.");
+      }
+    } catch {
+      pending = false;
+      acceptedActionAwaitingReconcile = false;
+      announce("The map could not complete that request. Please try again.");
+    }
+    layout();
+  };
+  const inspect = (node) => {
+    if (pending || didPan) return;
+    selectedNodeId = node.id;
+    focusedIndex = selectableNodes().findIndex((candidate) => candidate.id === node.id);
+    announce(`${node.kind}. ${node.description} ${node.isReachable ? "This route is available." : node.isCurrent ? "You are here." : node.isVisited ? "Already visited." : "This route is locked."}`);
+    void submit("selectNode", node.id);
+    layout();
+  };
+  const commitTravel = () => {
+    const node = selectedNode();
+    if (node?.isReachable && state?.canTravel) void submit("commitTravel", node.id);
+  };
+  const cancel = () => {
+    if (pending) return;
+    selectedNodeId = void 0;
+    void submit("cancel", null);
+    announce("Location selection cancelled.");
+    layout();
+  };
+  const resetView = () => {
+    panX = 0;
+    panY = 0;
+    void submit("resetView", null);
+    announce("Map view reset.");
+    layout();
+  };
+  const keydown = (event) => {
+    const nodes = selectableNodes();
+    if (event.key === "Escape") {
+      cancel();
+      event.preventDefault();
+      return;
+    }
+    if (event.key.toLowerCase() === "r") {
+      resetView();
+      event.preventDefault();
+      return;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      if (selectedNodeId !== void 0) commitTravel();
+      else {
+        const node = nodes[focusedIndex];
+        if (node) inspect(node);
+      }
+      event.preventDefault();
+      return;
+    }
+    if (nodes.length > 0 && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+      const direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+      focusedIndex = (focusedIndex + direction + nodes.length) % nodes.length;
+      const node = nodes[focusedIndex];
+      if (node) inspect(node);
+      event.preventDefault();
+    }
+  };
+  const pointerdown = (event) => {
+    pointerStart = { x: event.clientX, y: event.clientY, panX, panY };
+    didPan = false;
+  };
+  const pointermove = (event) => {
+    if (!pointerStart) return;
+    const dx = event.clientX - pointerStart.x;
+    const dy = event.clientY - pointerStart.y;
+    if (Math.abs(dx) + Math.abs(dy) > 5) didPan = true;
+    if (didPan) {
+      panX = pointerStart.panX + dx;
+      panY = pointerStart.panY + dy;
+      layout();
+    }
+  };
+  const pointerup = () => {
+    pointerStart = void 0;
+  };
+  canvas.addEventListener("keydown", keydown);
+  canvas.addEventListener("pointerdown", pointerdown);
+  canvas.addEventListener("pointermove", pointermove);
+  canvas.addEventListener("pointerup", pointerup);
+  canvas.addEventListener("pointercancel", pointerup);
+  window.addEventListener("resize", resize);
+  function layout() {
+    const width = application.renderer.width;
+    const height = application.renderer.height;
+    const mobile = height > width;
+    const trayHeight = mobile ? selectedNodeId === void 0 ? 132 : 164 : 124;
+    const trayY = height - trayHeight - 18;
+    const graphBounds = { left: 28, top: 76, width: Math.max(100, width - 56), height: Math.max(80, trayY - 92) };
+    const nodes = state?.nodes ?? [];
+    const minColumn = Math.min(...nodes.map((node) => node.column), 0);
+    const maxColumn = Math.max(...nodes.map((node) => node.column), 1);
+    const minRow = Math.min(...nodes.map((node) => node.row), 0);
+    const maxRow = Math.max(...nodes.map((node) => node.row), 1);
+    const pointFor = (node) => ({
+      x: graphBounds.left + (node.column - minColumn) / Math.max(1, maxColumn - minColumn) * graphBounds.width + panX,
+      y: graphBounds.top + (node.row - minRow) / Math.max(1, maxRow - minRow) * graphBounds.height + panY
+    });
+    background.clear().rect(0, 0, width, height).fill(529183).rect(0, 0, width, height * 0.28).fill({ color: 1520456, alpha: 0.6 });
+    graph.removeChildren();
+    graph.addChild(connectionLayer, nodeLayer);
+    for (const [key, connectionView] of connectionViews) {
+      const source3 = nodes.find((node) => node.id === key.split(":")[0]);
+      const target = nodes.find((node) => node.id === key.split(":")[1]);
+      if (!source3 || !target) continue;
+      const from = pointFor(source3);
+      const to = pointFor(target);
+      connectionView.graphics.clear().moveTo(from.x, from.y).lineTo(to.x, to.y).stroke({
+        color: connectionView.state.isReachable ? 16113563 : connectionView.state.isVisitedRoute ? 9416892 : 4678260,
+        width: connectionView.state.isReachable ? 4 : 2,
+        alpha: connectionView.state.isReachable || connectionView.state.isVisitedRoute ? 0.9 : 0.35
+      });
+    }
+    for (const node of nodes) {
+      const view = nodeViews.get(node.id);
+      if (!view) continue;
+      view.update(node, node.id === selectedNodeId, !pending);
+      const point = pointFor(node);
+      view.position.set(point.x, point.y);
+    }
+    title.text = state?.title ?? "The Fold";
+    title.position.set(28, 22);
+    region.text = state?.regionName ?? "";
+    region.position.set(width - 28, 30);
+    region.anchor.set(1, 0);
+    feedback.position.set(width / 2, trayY - 22);
+    feedback.anchor.set(0.5, 0);
+    const selected = selectedNode();
+    contextPanel.clear().roundRect(16, trayY, width - 32, trayHeight, 12).fill({ color: 1058874, alpha: 0.98 }).stroke({ color: 9549506, width: 2 });
+    contextTitle.text = selected ? selected.kind : "Inspect a location";
+    contextDetails.text = selected ? `${selected.description} ${selected.isReachable ? "This route is available. Confirm to travel." : selected.isCurrent ? "This is your current location." : selected.isVisited ? "This location has been visited." : "This location is not reachable yet."}` : "Select a location to inspect its destination and route.";
+    contextTitle.position.set(32, trayY + 14);
+    contextDetails.style.wordWrapWidth = Math.max(1, mobile ? width - 64 : width - 330);
+    contextDetails.position.set(32, trayY + 44);
+    controls.removeChildren();
+    if (selected) {
+      addControl("Travel", "Commit travel", selected.isReachable && !pending && state?.canTravel === true, width - 282, trayY + trayHeight - 54, commitTravel);
+      addControl("Cancel", "Clear selection", !pending, width - 148, trayY + trayHeight - 54, cancel);
+    } else {
+      addControl("Reset", "Center map", !pending, width - 148, trayY + trayHeight - 54, resetView);
+    }
+  }
+  function addControl(label, hint, enabled, x2, y2, onPress) {
+    const control = new MapControl(label, hint, enabled, onPress);
+    control.position.set(x2, y2);
+    controls.addChild(control);
+  }
+  function reconcileViews(next) {
+    const nodeIds = new Set(next.nodes.map((node) => node.id));
+    for (const [id, view] of nodeViews) {
+      if (!nodeIds.has(id)) {
+        nodeLayer.removeChild(view);
+        view.destroy({ children: true });
+        nodeViews.delete(id);
+      }
+    }
+    for (const node of next.nodes) {
+      if (!nodeViews.has(node.id)) {
+        const view = new MapNodeView(() => {
+          const candidate = state?.nodes.find((entry) => entry.id === node.id);
+          if (candidate) inspect(candidate);
+        });
+        nodeViews.set(node.id, view);
+        nodeLayer.addChild(view);
+      }
+    }
+    const connectionIds = new Set(next.connections.map((connection) => `${connection.sourceId}:${connection.targetId}`));
+    for (const [id, view] of connectionViews) {
+      if (!connectionIds.has(id)) {
+        connectionLayer.removeChild(view.graphics);
+        view.graphics.destroy();
+        connectionViews.delete(id);
+      }
+    }
+    for (const connection of next.connections) {
+      const id = `${connection.sourceId}:${connection.targetId}`;
+      const existing = connectionViews.get(id);
+      if (existing) {
+        existing.state = connection;
+      } else {
+        const view = { graphics: new Graphics(), state: connection };
+        connectionViews.set(id, view);
+        connectionLayer.addChild(view.graphics);
+      }
+    }
+  }
+  resize();
+  return {
+    reconcile(nextSequence, candidate) {
+      if (!isMapState(candidate) || nextSequence <= sequence) return false;
+      sequence = nextSequence;
+      state = candidate;
+      reconcileViews(candidate);
+      selectedNodeId = void 0;
+      focusedIndex = 0;
+      if (pending && acceptedActionAwaitingReconcile) {
+        pending = false;
+        acceptedActionAwaitingReconcile = false;
+      }
+      accessibility.update(`${candidate.title}. ${candidate.regionName}. ${candidate.nodes.length} locations.`);
+      layout();
+      return true;
+    },
+    dispose() {
+      canvas.removeEventListener("keydown", keydown);
+      canvas.removeEventListener("pointerdown", pointerdown);
+      canvas.removeEventListener("pointermove", pointermove);
+      canvas.removeEventListener("pointerup", pointerup);
+      canvas.removeEventListener("pointercancel", pointerup);
+      window.removeEventListener("resize", resize);
+      accessibility.dispose();
+      application.destroy({ removeView: false }, { children: true });
+    }
+  };
+}
+var MapNodeView = class extends Container {
+  frame = new Graphics();
+  icon = new Text({ text: "", style: nodeStyle });
+  constructor(onPress) {
+    super();
+    this.addChild(this.frame, this.icon);
+    this.pivot.set(0.5);
+    this.on("pointertap", onPress);
+  }
+  update(node, selected, interactive) {
+    const color = node.isCurrent ? 16113563 : node.isReachable ? 7854502 : node.isVisited ? 9416892 : 4678260;
+    this.frame.clear().circle(0, 0, selected ? 29 : 24).fill({ color, alpha: node.isLocked ? 0.45 : 0.96 }).stroke({ color: selected ? 16777215 : 1058874, width: selected ? 4 : 2 });
+    this.icon.text = getNodeIcon(node.kind);
+    this.icon.anchor.set(0.5);
+    this.icon.position.set(0, 0);
+    this.eventMode = interactive ? "static" : "none";
+    this.cursor = interactive ? "pointer" : "default";
+  }
+};
+var MapControl = class extends Container {
+  frame = new Graphics();
+  caption = new Text({ text: "", style: controlStyle });
+  constructor(label, hint, enabled, onPress) {
+    super();
+    this.caption.text = label;
+    this.addChild(this.frame, this.caption);
+    this.frame.clear().roundRect(0, 0, 116, 42, 10).fill({ color: 1520456, alpha: enabled ? 0.96 : 0.42 }).stroke({ color: 9549506, width: 2 });
+    this.caption.position.set(16, 11);
+    this.eventMode = enabled ? "static" : "none";
+    this.cursor = enabled ? "pointer" : "default";
+    this.accessibleTitle = hint;
+    if (enabled) this.on("pointertap", onPress);
+  }
+};
+function getNodeIcon(kind) {
+  return { Map: "\u25C6", Encounter: "\u2694", Event: "?", Treasure: "\u2726", Rest: "\u2668", Shop: "\xA4", Elite: "\u2694", Boss: "\u265B" }[kind] ?? "\u2022";
+}
+function isMapState(value) {
+  return typeof value === "object" && value !== null && Array.isArray(value.nodes) && Array.isArray(value.connections);
+}
+function createMapAccessibilityOverlay(canvas) {
+  const parent = canvas.parentElement;
+  const ownerDocument = canvas.ownerDocument;
+  if (!parent || !ownerDocument) return noOpAccessibilityOverlay3;
+  const summary = ownerDocument.createElement("div");
+  summary.className = "pixi-map-accessibility-overlay";
+  summary.setAttribute("aria-live", "polite");
+  summary.setAttribute("role", "status");
+  parent.appendChild(summary);
+  return { update(message) {
+    summary.textContent = message;
+  }, dispose() {
+    summary.remove();
+  } };
+}
+var noOpAccessibilityOverlay3 = { update() {
+}, dispose() {
+} };
+var titleStyle4 = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 34, fontWeight: "bold" });
+var regionStyle = new TextStyle({ fill: 9549506, fontFamily: "Arial", fontSize: 18 });
+var contextTitleStyle4 = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 18, fontWeight: "bold" });
+var contextBodyStyle4 = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 14, lineHeight: 19, wordWrap: true });
+var feedbackStyle5 = new TextStyle({ fill: 16113563, fontFamily: "Arial", fontSize: 15, align: "center" });
+var nodeStyle = new TextStyle({ fill: 529183, fontFamily: "Arial", fontSize: 22, fontWeight: "bold" });
+var controlStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 15, fontWeight: "bold" });
+
 // src/pixi-encounter.ts
 async function createEncounterRenderer(canvas, intentSink, initialization) {
   if (!isVersionedOperation(initialization)) {
@@ -55170,6 +55524,7 @@ function isElement(value) {
 export {
   createEncounterRenderer,
   createEventRenderer,
+  createMapRenderer,
   createRestRenderer,
   createRewardRenderer,
   createShopRenderer
