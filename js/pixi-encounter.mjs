@@ -54251,6 +54251,8 @@ async function createShopRenderer(canvas, sink) {
   let acceptedActionAwaitingReconcile = false;
   let page = 0;
   let purchaseEffectElapsedMs = 0;
+  let currencyEffectElapsedMs = 0;
+  let currencyTransition;
   const selectableMerchandise = () => state?.merchandise.filter((merchandise) => !merchandise.isSold) ?? [];
   const announce = (message) => {
     feedback.text = message;
@@ -54346,9 +54348,19 @@ async function createShopRenderer(canvas, sink) {
   canvas.addEventListener("keydown", keydown);
   window.addEventListener("resize", resize);
   const tick = () => {
-    if (purchaseEffectElapsedMs <= 0) return;
-    purchaseEffectElapsedMs += Math.max(0, application.ticker.deltaMS);
-    if (purchaseEffectElapsedMs >= 420) purchaseEffectElapsedMs = 0;
+    if (purchaseEffectElapsedMs <= 0 && currencyEffectElapsedMs <= 0) return;
+    const elapsed = Math.max(0, application.ticker.deltaMS);
+    if (purchaseEffectElapsedMs > 0) {
+      purchaseEffectElapsedMs += elapsed;
+      if (purchaseEffectElapsedMs >= 420) purchaseEffectElapsedMs = 0;
+    }
+    if (currencyEffectElapsedMs > 0) {
+      currencyEffectElapsedMs += elapsed;
+      if (currencyEffectElapsedMs >= 420) {
+        currencyEffectElapsedMs = 0;
+        currencyTransition = void 0;
+      }
+    }
     layout();
   };
   application.ticker.add(tick);
@@ -54374,11 +54386,14 @@ async function createShopRenderer(canvas, sink) {
     const rows = Math.max(1, Math.ceil(merchandise.length / columns));
     const cardHeight = Math.max(66, Math.min(compact ? 104 : 132, (gridBottom - gridTop - (rows - 1) * gap) / rows));
     const purchaseGlow = purchaseEffectElapsedMs > 0 ? Math.max(0, 1 - purchaseEffectElapsedMs / 420) : 0;
+    const currencyProgress = currencyEffectElapsedMs > 0 ? Math.min(1, currencyEffectElapsedMs / 420) : 1;
+    const displayedCurrency = currencyTransition ? Math.round(currencyTransition.from + (currencyTransition.to - currencyTransition.from) * currencyProgress) : state?.currency ?? 0;
     background.clear().rect(0, 0, width, height).fill(726562).rect(0, 0, width, height * 0.22).fill({ color: 2044741, alpha: 0.94 });
     drawMerchantFixtures(merchant, width, height, layoutMode, purchaseGlow);
     title.text = state?.title ?? "Shop";
     title.position.set(28, 22);
-    currency.text = `Gold: ${state?.currency ?? 0}`;
+    currency.text = `Gold: ${displayedCurrency}`;
+    currency.alpha = currencyTransition ? 0.82 + purchaseGlow * 0.18 : 1;
     currency.position.set(width - 28, 29);
     currency.anchor.set(1, 0);
     feedback.position.set(width / 2, trayY - 22);
@@ -54433,6 +54448,8 @@ async function createShopRenderer(canvas, sink) {
   return {
     reconcile(nextSequence, candidate) {
       if (!isShopState(candidate) || nextSequence <= sequence) return false;
+      const previousCurrency = state?.currency ?? candidate.currency;
+      const completedPurchase = pending && acceptedActionAwaitingReconcile;
       sequence = nextSequence;
       state = candidate;
       selectedIndex = 0;
@@ -54442,8 +54459,15 @@ async function createShopRenderer(canvas, sink) {
         pending = false;
         acceptedActionAwaitingReconcile = false;
       }
-      feedback.text = "";
-      accessibility.update(`${candidate.title}. Gold: ${candidate.currency}. ${candidate.merchandise.length} merchandise choices available.`);
+      if (completedPurchase && candidate.currency !== previousCurrency) {
+        currencyTransition = { from: previousCurrency, to: candidate.currency };
+        currencyEffectElapsedMs = 1;
+        purchaseEffectElapsedMs = Math.max(purchaseEffectElapsedMs, 1);
+        announce(`Purchase complete. ${Math.abs(candidate.currency - previousCurrency)} gold spent. Gold remaining: ${candidate.currency}.`);
+      } else {
+        feedback.text = "";
+        accessibility.update(`${candidate.title}. Gold: ${candidate.currency}. ${candidate.merchandise.length} merchandise choices available.`);
+      }
       layout();
       return true;
     },
@@ -54579,7 +54603,10 @@ async function createMapRenderer(canvas, sink) {
   const selectableNodes = () => state?.nodes ?? [];
   const selectedNode = () => state?.nodes.find((node) => node.id === selectedNodeId);
   const resize = () => {
-    application.renderer.resize(Math.max(1, canvas.clientWidth || canvas.width || 960), Math.max(1, canvas.clientHeight || canvas.height || 540));
+    const surface = canvas.parentElement;
+    const width = surface?.clientWidth || canvas.clientWidth || canvas.width || 960;
+    const height = surface?.clientHeight || canvas.clientHeight || canvas.height || 540;
+    application.renderer.resize(Math.max(1, width), Math.max(1, height));
     layout();
   };
   const submit = async (name, sourceId) => {
@@ -54693,6 +54720,8 @@ async function createMapRenderer(canvas, sink) {
   canvas.addEventListener("pointerup", pointerup);
   canvas.addEventListener("pointercancel", pointerup);
   window.addEventListener("resize", resize);
+  const resizeObserver = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(resize);
+  resizeObserver?.observe(canvas.parentElement ?? canvas);
   function layout() {
     const width = application.renderer.width;
     const height = application.renderer.height;
@@ -54718,10 +54747,11 @@ async function createMapRenderer(canvas, sink) {
       if (!source3 || !target) continue;
       const from = pointFor(source3);
       const to = pointFor(target);
+      const selectedRoute = connectionView.state.isReachable && connectionView.state.targetId === selectedNodeId;
       connectionView.graphics.clear().moveTo(from.x, from.y).lineTo(to.x, to.y).stroke({
-        color: connectionView.state.isReachable ? 16113563 : connectionView.state.isVisitedRoute ? 9416892 : 4678260,
-        width: connectionView.state.isReachable ? 4 : 2,
-        alpha: connectionView.state.isReachable || connectionView.state.isVisitedRoute ? 0.9 : 0.35
+        color: selectedRoute ? 16777215 : connectionView.state.isReachable ? 16113563 : connectionView.state.isVisitedRoute ? 9416892 : 4678260,
+        width: selectedRoute ? 5 : connectionView.state.isReachable ? 4 : 2,
+        alpha: selectedRoute ? 1 : connectionView.state.isReachable || connectionView.state.isVisitedRoute ? 0.9 : 0.35
       });
     }
     for (const node of nodes) {
@@ -54821,6 +54851,7 @@ async function createMapRenderer(canvas, sink) {
       canvas.removeEventListener("pointerup", pointerup);
       canvas.removeEventListener("pointercancel", pointerup);
       window.removeEventListener("resize", resize);
+      resizeObserver?.disconnect();
       accessibility.dispose();
       application.destroy({ removeView: false }, { children: true });
     }
