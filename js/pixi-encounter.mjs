@@ -50362,7 +50362,7 @@ function layoutPlayer(viewport) {
     const scale = getMobileEntityScale(viewport);
     return {
       x: viewport.width / 2,
-      y: Math.min(Math.max(128, viewport.height * 0.42), viewport.height - 176),
+      y: Math.min(Math.max(156, viewport.height * 0.5), viewport.height - 176),
       scale
     };
   }
@@ -50434,13 +50434,13 @@ function getWideHandCenterBounds(count2, maximumRotation, fanDepth, cardWidth, c
 }
 function layoutNarrowEnemies(count2, viewport) {
   const horizontalPadding = 16;
-  const verticalPadding = 16;
   const entityWidth = 176;
   const entityHeight = 116;
   const entityGap = 8;
   const columns = Math.min(count2, 2);
   const rows = Math.ceil(count2 / columns);
   const player = layoutPlayer(viewport);
+  const verticalPadding = getEncounterLayoutMode(viewport) === "MobilePortrait" ? Math.min(84, Math.max(36, player.y * 0.24)) : 16;
   const playerScale = player.scale ?? 1;
   const availableWidth = Math.max(0, viewport.width - horizontalPadding * 2);
   const availableHeight = Math.max(0, player.y - entityHeight * playerScale / 2 - entityGap - verticalPadding);
@@ -50599,7 +50599,8 @@ var supportedAnimationNames = /* @__PURE__ */ new Set([
 var dragReturnDurationMs = 150;
 var handInspectionSettleDurationMs = 100;
 var handCardViewScale = handCardVisualSize.width / 180;
-var focusedHandScale = 1.32;
+var focusedHandScale = 1.38;
+var constrainedHandInspectionScale = 1.28;
 var focusedHandLift = 34;
 var draggedCardLift = 48;
 var draggedCardScale = 1.32;
@@ -51982,17 +51983,16 @@ ${resources}`;
   /** Builds the final hand transform for either a resting or inspected entry. */
   getHandLayoutTransform(tileId, position) {
     const isInspected = this.isHandEntryInspected(tileId);
-    const isWideHandLayout = position.rotation !== void 0;
     return {
       x: position.x,
-      y: position.y - (isInspected && isWideHandLayout ? focusedHandLift * (position.scale ?? 1) : 0),
+      y: position.y - (isInspected ? focusedHandLift * (position.scale ?? 1) : 0),
       rotation: isInspected ? 0 : position.rotation ?? 0,
       scale: (position.scale ?? 1) * (isInspected ? this.getHandInspectionScale(position) : 1)
     };
   }
   /** Scales constrained layouts modestly so inspection remains readable without crowding combat space. */
   getHandInspectionScale(position) {
-    return position.rotation !== void 0 ? focusedHandScale : 1.15;
+    return position.rotation !== void 0 ? focusedHandScale : constrainedHandInspectionScale;
   }
   /** Determines whether an entry should remain enlarged for hover, selection, or keyboard inspection. */
   isHandEntryInspected(tileId) {
@@ -54655,6 +54655,8 @@ var cardBodyStyle = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSiz
 
 // src/pixi-map.ts
 var mapSceneProtocolVersion = 2;
+var minimumMapColumnSpacing = 142;
+var minimumMapRowSpacing = 132;
 async function createMapRenderer(canvas, sink) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 529183, backgroundAlpha: 1, canvas, preference: "canvas" });
@@ -54687,6 +54689,7 @@ async function createMapRenderer(canvas, sink) {
   let panY = 0;
   let pointerStart;
   let didPan = false;
+  let disposed = false;
   const announce = (message) => {
     feedback.text = message;
     accessibility.update(message);
@@ -54694,6 +54697,7 @@ async function createMapRenderer(canvas, sink) {
   const selectableNodes = () => state?.nodes ?? [];
   const selectedNode = () => state?.nodes.find((node) => node.id === selectedNodeId);
   const resize = () => {
+    if (disposed) return;
     const size = getMapSurfaceSize(canvas);
     if (application.renderer.width !== size.width || application.renderer.height !== size.height) {
       application.renderer.resize(size.width, size.height);
@@ -54721,7 +54725,7 @@ async function createMapRenderer(canvas, sink) {
         acceptedActionAwaitingReconcile = false;
         announce(name === "commitTravel" ? "That route is no longer available." : "That map action is no longer available.");
       } else if (name === "selectNode") {
-        announce("Location inspected. Confirm travel when you are ready.");
+        announce("Location inspected.");
       } else if (name === "commitTravel") {
         announce("Traveling to the selected location.");
       }
@@ -54740,9 +54744,17 @@ async function createMapRenderer(canvas, sink) {
     void submit("selectNode", node.id);
     layout();
   };
-  const commitTravel = () => {
-    const node = selectedNode();
-    if (node?.isReachable && state?.canTravel) void submit("commitTravel", node.id);
+  const activate = (node) => {
+    if (pending || didPan) return;
+    if (!node.isReachable || state?.canTravel !== true) {
+      inspect(node);
+      return;
+    }
+    selectedNodeId = node.id;
+    focusedIndex = selectableNodes().findIndex((candidate) => candidate.id === node.id);
+    announce(`${node.kind}. Traveling to ${node.description}`);
+    void submit("commitTravel", node.id);
+    layout();
   };
   const cancel = () => {
     if (pending) return;
@@ -54752,11 +54764,21 @@ async function createMapRenderer(canvas, sink) {
     layout();
   };
   const resetView = () => {
-    panX = 0;
-    panY = 0;
+    centerOnCurrentNode();
     void submit("resetView", null);
     announce("Map view reset.");
     layout();
+  };
+  const centerOnCurrentNode = () => {
+    const current = state?.nodes.find((node) => node.isCurrent);
+    if (!current || disposed) {
+      panX = 0;
+      panY = 0;
+      return;
+    }
+    const metrics = getMapLayoutMetrics(application.renderer.width, application.renderer.height, state?.nodes ?? [], selectedNodeId);
+    panX = metrics.graphBounds.left + metrics.graphBounds.width / 2 - (metrics.mapLeft + (current.column - metrics.minColumn) * metrics.columnStep);
+    panY = metrics.graphBounds.top + metrics.graphBounds.height / 2 - (metrics.mapTop + (current.row - metrics.minRow) * metrics.rowStep);
   };
   const keydown = (event) => {
     const nodes = selectableNodes();
@@ -54771,11 +54793,8 @@ async function createMapRenderer(canvas, sink) {
       return;
     }
     if (event.key === "Enter" || event.key === " ") {
-      if (selectedNodeId !== void 0) commitTravel();
-      else {
-        const node = nodes[focusedIndex];
-        if (node) inspect(node);
-      }
+      const node = nodes[focusedIndex];
+      if (node) activate(node);
       event.preventDefault();
       return;
     }
@@ -54814,20 +54833,18 @@ async function createMapRenderer(canvas, sink) {
   const resizeObserver = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(resize);
   resizeObserver?.observe(canvas.parentElement ?? canvas);
   function layout() {
+    if (disposed) return;
     const width = application.renderer.width;
     const height = application.renderer.height;
     const mobile = height > width;
+    const metrics = getMapLayoutMetrics(width, height, state?.nodes ?? [], selectedNodeId);
+    const { minColumn, minRow, columnStep, rowStep, mapLeft, mapTop } = metrics;
     const trayHeight = mobile ? selectedNodeId === void 0 ? 132 : 164 : 124;
     const trayY = height - trayHeight - 18;
-    const graphBounds = { left: 28, top: 76, width: Math.max(100, width - 56), height: Math.max(80, trayY - 92) };
     const nodes = state?.nodes ?? [];
-    const minColumn = Math.min(...nodes.map((node) => node.column), 0);
-    const maxColumn = Math.max(...nodes.map((node) => node.column), 1);
-    const minRow = Math.min(...nodes.map((node) => node.row), 0);
-    const maxRow = Math.max(...nodes.map((node) => node.row), 1);
     const pointFor = (node) => ({
-      x: graphBounds.left + (node.column - minColumn) / Math.max(1, maxColumn - minColumn) * graphBounds.width + panX,
-      y: graphBounds.top + (node.row - minRow) / Math.max(1, maxRow - minRow) * graphBounds.height + panY
+      x: mapLeft + (node.column - minColumn) * columnStep + panX,
+      y: mapTop + (node.row - minRow) * rowStep + panY
     });
     background.clear().rect(0, 0, width, height).fill(529183).rect(0, 0, width, Math.min(height * 0.3, 176)).fill({ color: 1520456, alpha: 0.68 }).roundRect(16, 14, Math.max(1, width - 32), 48, 12).fill({ color: 1058874, alpha: 0.86 }).stroke({ color: 3563376, width: 1 });
     graph.removeChildren();
@@ -54862,17 +54879,14 @@ async function createMapRenderer(canvas, sink) {
     const selected = selectedNode();
     contextPanel.clear().roundRect(16, trayY, Math.max(1, width - 32), trayHeight, 12).fill({ color: 1058874, alpha: 0.98 }).roundRect(16, trayY, Math.max(1, width - 32), trayHeight, 12).stroke({ color: 9549506, width: 2 }).rect(18, trayY + 14, 4, Math.max(1, trayHeight - 28)).fill({ color: selected?.isReachable ? 7854502 : 16113563, alpha: 0.9 });
     contextTitle.text = selected ? selected.kind : "Inspect a location";
-    contextDetails.text = selected ? `${selected.description} ${selected.isReachable ? "This route is available. Confirm to travel." : selected.isCurrent ? "This is your current location." : selected.isVisited ? "This location has been visited." : "This location is not reachable yet."}` : "Select a location to inspect its destination and route.";
+    contextDetails.text = selected ? `${selected.description} ${selected.isReachable ? "Traveling to this location." : selected.isCurrent ? "This is your current location." : selected.isVisited ? "This location has been visited." : "This location is not reachable yet."}` : "Tap an available location to travel. Tap another location to inspect it.";
     contextTitle.position.set(32, trayY + 14);
     contextDetails.style.wordWrapWidth = Math.max(1, mobile ? width - 64 : width - 330);
     contextDetails.position.set(32, trayY + 44);
     controls.removeChildren();
-    const controlGap = 10;
-    const selectedControlWidth = Math.max(68, Math.min(116, (width - 56 - controlGap) / 2));
     if (selected) {
-      const controlStart = Math.max(16, width - 16 - (selectedControlWidth * 2 + controlGap));
-      addControl("Travel", "Commit travel", selected.isReachable && !pending && state?.canTravel === true, controlStart, trayY + trayHeight - 54, selectedControlWidth, commitTravel);
-      addControl("Cancel", "Clear selection", !pending, controlStart + selectedControlWidth + controlGap, trayY + trayHeight - 54, selectedControlWidth, cancel);
+      const cancelWidth = Math.max(68, Math.min(116, width - 32));
+      addControl("Clear", "Clear selection", !pending, Math.max(16, width - 16 - cancelWidth), trayY + trayHeight - 54, cancelWidth, cancel);
     } else {
       const resetWidth = Math.max(68, Math.min(116, width - 32));
       addControl("Reset", "Center map", !pending, Math.max(16, width - 16 - resetWidth), trayY + trayHeight - 54, resetWidth, resetView);
@@ -54896,7 +54910,7 @@ async function createMapRenderer(canvas, sink) {
       if (!nodeViews.has(node.id)) {
         const view = new MapNodeView(() => {
           const candidate = state?.nodes.find((entry) => entry.id === node.id);
-          if (candidate) inspect(candidate);
+          if (candidate) activate(candidate);
         });
         nodeViews.set(node.id, view);
         nodeLayer.addChild(view);
@@ -54931,6 +54945,7 @@ async function createMapRenderer(canvas, sink) {
       reconcileViews(candidate);
       selectedNodeId = void 0;
       focusedIndex = 0;
+      centerOnCurrentNode();
       if (pending && acceptedActionAwaitingReconcile) {
         pending = false;
         acceptedActionAwaitingReconcile = false;
@@ -54940,6 +54955,8 @@ async function createMapRenderer(canvas, sink) {
       return true;
     },
     dispose() {
+      if (disposed) return;
+      disposed = true;
       canvas.removeEventListener("keydown", keydown);
       canvas.removeEventListener("pointerdown", pointerdown);
       canvas.removeEventListener("pointermove", pointermove);
@@ -54955,9 +54972,10 @@ async function createMapRenderer(canvas, sink) {
 var MapNodeView = class extends Container {
   frame = new Graphics();
   icon = new Text({ text: "", style: nodeStyle });
+  caption = new Text({ text: "", style: nodeCaptionStyle });
   constructor(onPress) {
     super();
-    this.addChild(this.frame, this.icon);
+    this.addChild(this.frame, this.icon, this.caption);
     this.pivot.set(0.5);
     this.on("pointertap", onPress);
   }
@@ -54968,6 +54986,9 @@ var MapNodeView = class extends Container {
     this.icon.text = getNodeIcon(node.kind);
     this.icon.anchor.set(0.5);
     this.icon.position.set(0, 0);
+    this.caption.text = node.kind;
+    this.caption.anchor.set(0.5, 0);
+    this.caption.position.set(0, radius + 9);
     this.eventMode = interactive ? "static" : "none";
     this.cursor = interactive ? "pointer" : "default";
   }
@@ -54990,6 +55011,29 @@ var MapControl = class extends Container {
 };
 function getNodeIcon(kind) {
   return { Map: "\u25C6", Encounter: "\u2694", Event: "?", Treasure: "\u2726", Rest: "\u2668", Shop: "\xA4", Elite: "\u2694", Boss: "\u265B" }[kind] ?? "\u2022";
+}
+function getMapLayoutMetrics(width, height, nodes, selectedNodeId) {
+  const mobile = height > width;
+  const trayHeight = mobile ? selectedNodeId === void 0 ? 132 : 164 : 124;
+  const trayY = height - trayHeight - 18;
+  const graphBounds = { left: 28, top: 76, width: Math.max(100, width - 56), height: Math.max(80, trayY - 92) };
+  const minColumn = Math.min(...nodes.map((node) => node.column), 0);
+  const maxColumn = Math.max(...nodes.map((node) => node.column), 1);
+  const minRow = Math.min(...nodes.map((node) => node.row), 0);
+  const maxRow = Math.max(...nodes.map((node) => node.row), 1);
+  const columnStep = Math.max(minimumMapColumnSpacing, graphBounds.width / Math.max(1, maxColumn - minColumn));
+  const rowStep = Math.max(minimumMapRowSpacing, graphBounds.height / Math.max(1, maxRow - minRow));
+  const mapWidth = (maxColumn - minColumn) * columnStep;
+  const mapHeight = (maxRow - minRow) * rowStep;
+  return {
+    graphBounds,
+    minColumn,
+    minRow,
+    columnStep,
+    rowStep,
+    mapLeft: graphBounds.left + Math.max(0, (graphBounds.width - mapWidth) / 2),
+    mapTop: graphBounds.top + Math.max(0, (graphBounds.height - mapHeight) / 2)
+  };
 }
 function getMapSurfaceSize(canvas) {
   const surface = canvas.parentElement;
@@ -55024,6 +55068,7 @@ var contextTitleStyle4 = new TextStyle({ fill: 16317180, fontFamily: "Arial", fo
 var contextBodyStyle4 = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 14, lineHeight: 19, wordWrap: true });
 var feedbackStyle5 = new TextStyle({ fill: 16113563, fontFamily: "Arial", fontSize: 15, align: "center" });
 var nodeStyle = new TextStyle({ fill: 529183, fontFamily: "Arial", fontSize: 22, fontWeight: "bold" });
+var nodeCaptionStyle = new TextStyle({ fill: 14872051, fontFamily: "Arial", fontSize: 12, fontWeight: "bold", stroke: { color: 529183, width: 3 } });
 var controlStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 15, fontWeight: "bold" });
 
 // src/pixi-encounter.ts
