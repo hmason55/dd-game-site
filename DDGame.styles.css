@@ -35,6 +35,28 @@
         min-height: 0;
     }
 }
+/* /Components/PixiMainMenuSurface.razor.rz.scp.css */
+.pixi-main-menu-surface[b-22zhoaus0z] {
+    background: #08131f;
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: var(--mud-default-borderradius);
+    height: min(34rem, calc(100dvh - 8rem));
+    margin: clamp(1rem, 6vh, 4rem) auto;
+    max-width: 42rem;
+    overflow: hidden;
+    position: relative;
+    width: min(100%, 42rem);
+}
+
+.pixi-main-menu-surface canvas[b-22zhoaus0z] {
+    display: block;
+    height: 100%;
+    outline: none;
+    width: 100%;
+}
+
+.pixi-main-menu-surface canvas:focus-visible[b-22zhoaus0z] { outline: 3px solid var(--mud-palette-secondary); outline-offset: -3px; }
+.pixi-main-menu-help[b-22zhoaus0z] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
 /* /Components/Rooms/PixiEncounterSurface.razor.rz.scp.css */
 .pixi-encounter-surface[b-9jzg35z109] {
     position: relative;

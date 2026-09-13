@@ -52967,6 +52967,7 @@ var RewardScene = class {
   skipButton = new GameButton({ label: "Skip", width: 110, height: 42, enabled: false, onPress: () => this.skipRewards() });
   choiceViews = /* @__PURE__ */ new Map();
   optionViews = /* @__PURE__ */ new Map();
+  choiceSlots = /* @__PURE__ */ new Map();
   snapshot;
   selectedReward;
   selectedOption;
@@ -52974,6 +52975,7 @@ var RewardScene = class {
   revealElapsedMs = 0;
   pendingAction = false;
   resolution;
+  nextChoiceSlot = 0;
   /** Gets the stable display object for a choice, when it is currently present. */
   getChoiceView(id) {
     return this.choiceViews.get(id);
@@ -53102,7 +53104,10 @@ var RewardScene = class {
         this.choiceViews.delete(id);
       }
     }
-    choices.forEach((choice, index) => {
+    choices.forEach((choice) => {
+      if (!this.choiceSlots.has(choice.id)) {
+        this.choiceSlots.set(choice.id, this.nextChoiceSlot++);
+      }
       let view = this.choiceViews.get(choice.id);
       if (view === void 0) {
         view = new RewardChoiceView(choice, () => this.activateReward(choice));
@@ -53111,7 +53116,7 @@ var RewardScene = class {
       } else {
         view.setChoice(choice);
       }
-      view.setRevealProgress(this.reducedMotion ? 1 : getRevealProgress(this.revealElapsedMs, index));
+      view.setRevealProgress(this.reducedMotion ? 1 : getRevealProgress(this.revealElapsedMs, this.choiceSlots.get(choice.id) ?? 0));
     });
   }
   reconcileSelection(choices) {
@@ -53167,20 +53172,18 @@ var RewardScene = class {
     const choices = this.snapshot?.choices ?? [];
     this.choiceLayer.visible = !hasOptions;
     this.optionLayer.visible = hasOptions;
-    const columns = getChoiceColumns(choices.length, choiceArea, mobile);
-    const rows = Math.max(1, Math.ceil(choices.length / columns));
     const gap = 12;
-    const choiceWidth = Math.max(1, Math.min(220, (choiceArea.width - (columns - 1) * gap) / columns));
-    const choiceHeight = Math.max(1, Math.min(144, (choiceArea.height - (rows - 1) * gap) / rows));
-    choices.forEach((choice, index) => {
-      const column = index % columns;
-      const row = Math.floor(index / columns);
+    const listSlotCount = Math.max(1, this.nextChoiceSlot);
+    const choiceWidth = choiceArea.width;
+    const choiceHeight = Math.max(52, Math.min(mobile ? 88 : 104, (choiceArea.height - (listSlotCount - 1) * gap) / listSlotCount));
+    choices.forEach((choice) => {
       const view = this.choiceViews.get(choice.id);
       if (view === void 0) {
         return;
       }
       view.resize(choiceWidth, choiceHeight);
-      view.position.set(choiceArea.x + column * (choiceWidth + gap), choiceArea.y + row * (choiceHeight + gap));
+      const slot = this.choiceSlots.get(choice.id) ?? 0;
+      view.position.set(choiceArea.x, choiceArea.y + slot * (choiceHeight + gap));
     });
     if (hasOptions) {
       const options = this.selectedReward?.options ?? [];
@@ -53382,16 +53385,14 @@ var RewardChoiceView = class extends Container {
     super();
     this.choice = choice;
     this.onInspect = onInspect;
-    this.title.anchor.set(0.5, 0);
-    this.type.anchor.set(0.5, 0);
-    this.description.anchor.set(0.5, 0);
-    this.addChild(this.frame, this.title, this.type, this.description);
+    this.addChild(this.frame, this.rewardIcon, this.title, this.type, this.description);
     this.on("pointertap", () => this.onInspect());
     this.redraw();
   }
   choice;
   onInspect;
   frame = new Graphics();
+  rewardIcon = new Graphics();
   title = new Text({ text: "", style: choiceTitleStyle });
   type = new Text({ text: "", style: choiceTypeStyle });
   description = new Text({ text: "", style: choiceDescriptionStyle });
@@ -53440,18 +53441,55 @@ var RewardChoiceView = class extends Container {
   redraw() {
     const accent = getRarityColor2(this.choice.rarity);
     this.frame.clear().roundRect(0, 0, this.choiceWidth, this.choiceHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill }).stroke({ color: this.selected ? uiColors.buttonSelected : accent, width: this.selected ? 4 : uiTokens.frame.borderWidth });
+    drawRewardIcon(this.rewardIcon, this.choice.kind, accent, this.choiceHeight);
     this.title.text = this.choice.name;
     this.type.text = `${this.choice.kind} \xB7 ${this.choice.rarity}`;
     this.description.text = this.choice.description;
-    const compact = this.choiceHeight < 88;
-    this.title.position.set(this.choiceWidth / 2, compact ? 8 : 14);
-    this.type.position.set(this.choiceWidth / 2, compact ? 34 : 42);
-    this.description.position.set(this.choiceWidth / 2, 66);
-    this.type.visible = this.choiceHeight >= 56;
+    const compact = this.choiceHeight < 76;
+    const contentX = Math.min(this.choiceWidth - 22, Math.max(72, this.choiceHeight + 18));
+    this.title.anchor.set(0, 0);
+    this.type.anchor.set(0, 0);
+    this.description.anchor.set(0, 0);
+    this.title.position.set(contentX, compact ? 7 : 12);
+    this.type.position.set(contentX, compact ? 29 : 39);
+    this.description.position.set(contentX, compact ? 0 : 61);
+    this.type.visible = this.choiceHeight >= 48;
     this.description.visible = !compact;
-    this.description.style.wordWrapWidth = Math.max(1, this.choiceWidth - 24);
+    this.title.style.wordWrapWidth = Math.max(1, this.choiceWidth - contentX - 16);
+    this.description.style.wordWrapWidth = Math.max(1, this.choiceWidth - contentX - 16);
   }
 };
+function drawRewardIcon(graphics, kind, accent, height) {
+  const iconSize = Math.max(28, Math.min(52, height - 22));
+  const x2 = 14;
+  const y2 = Math.max(11, (height - iconSize) / 2);
+  graphics.clear().roundRect(x2, y2, iconSize, iconSize, 8).fill({ color: 463132 }).roundRect(x2, y2, iconSize, iconSize, 8).stroke({ color: accent, width: 2 });
+  switch (kind) {
+    case "card":
+      graphics.roundRect(x2 + 9, y2 + 6, iconSize - 18, iconSize - 12, 3).fill({ color: accent, alpha: 0.9 });
+      graphics.rect(x2 + 14, y2 + 12, iconSize - 28, 3).fill({ color: 463132 });
+      graphics.rect(x2 + 14, y2 + 20, iconSize - 22, 3).fill({ color: 463132 });
+      return;
+    case "relic":
+      graphics.rect(x2 + 11, y2 + 11, iconSize - 22, iconSize - 22).fill({ color: accent, alpha: 0.92 });
+      graphics.rect(x2 + 16, y2 + 16, iconSize - 32, iconSize - 32).fill({ color: 463132 });
+      return;
+    case "currency":
+      graphics.roundRect(x2 + 9, y2 + 12, iconSize - 18, iconSize - 24, iconSize / 2).fill({ color: accent, alpha: 0.92 });
+      graphics.rect(x2 + 15, y2 + 18, iconSize - 30, 3).fill({ color: 463132 });
+      return;
+    case "item":
+      graphics.roundRect(x2 + 14, y2 + 9, iconSize - 28, iconSize - 18, 5).fill({ color: accent, alpha: 0.92 });
+      graphics.rect(x2 + 18, y2 + 5, iconSize - 36, 7).fill({ color: accent });
+      return;
+    case "choice":
+      graphics.rect(x2 + 10, y2 + 12, iconSize - 24, iconSize - 18).fill({ color: accent, alpha: 0.92 });
+      graphics.rect(x2 + 16, y2 + 7, iconSize - 24, iconSize - 18).fill({ color: accent, alpha: 0.55 });
+      return;
+    default:
+      graphics.rect(x2 + 12, y2 + 12, iconSize - 24, iconSize - 24).fill({ color: accent, alpha: 0.92 });
+  }
+}
 var RewardOptionView = class extends Container {
   constructor(choice, onSelect) {
     super();
@@ -54668,14 +54706,13 @@ async function createMapRenderer(canvas, sink) {
   const connectionLayer = new Container();
   const nodeLayer = new Container();
   const contextPanel = new Graphics();
-  const title = new Text({ text: "The Fold", style: titleStyle4 });
   const region = new Text({ text: "", style: regionStyle });
   const contextTitle = new Text({ text: "Inspect a location", style: contextTitleStyle4 });
   const contextDetails = new Text({ text: "Select a node to review its route and destination.", style: contextBodyStyle4 });
   const feedback = new Text({ text: "", style: feedbackStyle5 });
   const controls = new Container();
   graph.addChild(connectionLayer, nodeLayer);
-  root.addChild(background, graph, title, region, contextPanel, contextTitle, contextDetails, controls, feedback);
+  root.addChild(background, graph, region, contextPanel, contextTitle, contextDetails, controls, feedback);
   application.stage.addChild(root);
   const nodeViews = /* @__PURE__ */ new Map();
   const connectionViews = /* @__PURE__ */ new Map();
@@ -54763,12 +54800,6 @@ async function createMapRenderer(canvas, sink) {
     announce("Location selection cancelled.");
     layout();
   };
-  const resetView = () => {
-    centerOnCurrentNode();
-    void submit("resetView", null);
-    announce("Map view reset.");
-    layout();
-  };
   const centerOnCurrentNode = () => {
     const current = state?.nodes.find((node) => node.isCurrent);
     if (!current || disposed) {
@@ -54779,16 +54810,12 @@ async function createMapRenderer(canvas, sink) {
     const metrics = getMapLayoutMetrics(application.renderer.width, application.renderer.height, state?.nodes ?? [], selectedNodeId);
     panX = metrics.graphBounds.left + metrics.graphBounds.width / 2 - (metrics.mapLeft + (current.column - metrics.minColumn) * metrics.columnStep);
     panY = metrics.graphBounds.top + metrics.graphBounds.height / 2 - (metrics.mapTop + (current.row - metrics.minRow) * metrics.rowStep);
+    constrainPan(metrics);
   };
   const keydown = (event) => {
     const nodes = selectableNodes();
     if (event.key === "Escape") {
       cancel();
-      event.preventDefault();
-      return;
-    }
-    if (event.key.toLowerCase() === "r") {
-      resetView();
       event.preventDefault();
       return;
     }
@@ -54818,17 +54845,27 @@ async function createMapRenderer(canvas, sink) {
     if (didPan) {
       panX = pointerStart.panX + dx;
       panY = pointerStart.panY + dy;
+      constrainPan(getMapLayoutMetrics(application.renderer.width, application.renderer.height, state?.nodes ?? [], selectedNodeId));
       layout();
     }
   };
   const pointerup = () => {
     pointerStart = void 0;
   };
+  const wheel = (event) => {
+    if (!state || disposed) return;
+    panX -= event.deltaX;
+    panY -= event.deltaY;
+    constrainPan(getMapLayoutMetrics(application.renderer.width, application.renderer.height, state.nodes, selectedNodeId));
+    layout();
+    event.preventDefault();
+  };
   canvas.addEventListener("keydown", keydown);
   canvas.addEventListener("pointerdown", pointerdown);
   canvas.addEventListener("pointermove", pointermove);
   canvas.addEventListener("pointerup", pointerup);
   canvas.addEventListener("pointercancel", pointerup);
+  canvas.addEventListener("wheel", wheel, { passive: false });
   window.addEventListener("resize", resize);
   const resizeObserver = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(resize);
   resizeObserver?.observe(canvas.parentElement ?? canvas);
@@ -54846,7 +54883,7 @@ async function createMapRenderer(canvas, sink) {
       x: mapLeft + (node.column - minColumn) * columnStep + panX,
       y: mapTop + (node.row - minRow) * rowStep + panY
     });
-    background.clear().rect(0, 0, width, height).fill(529183).rect(0, 0, width, Math.min(height * 0.3, 176)).fill({ color: 1520456, alpha: 0.68 }).roundRect(16, 14, Math.max(1, width - 32), 48, 12).fill({ color: 1058874, alpha: 0.86 }).stroke({ color: 3563376, width: 1 });
+    background.clear().rect(0, 0, width, height).fill(529183).rect(0, 0, width, Math.min(height * 0.18, 84)).fill({ color: 1520456, alpha: 0.38 });
     graph.removeChildren();
     graph.addChild(connectionLayer, nodeLayer);
     for (const [key, connectionView] of connectionViews) {
@@ -54869,17 +54906,15 @@ async function createMapRenderer(canvas, sink) {
       const point = pointFor(node);
       view.position.set(point.x, point.y);
     }
-    title.text = state?.title ?? "The Fold";
-    title.position.set(30, 23);
     region.text = state?.regionName ?? "";
-    region.position.set(width - 30, 29);
-    region.anchor.set(1, 0);
+    region.position.set(20, 14);
+    region.anchor.set(0, 0);
     feedback.position.set(width / 2, trayY - 22);
     feedback.anchor.set(0.5, 0);
     const selected = selectedNode();
     contextPanel.clear().roundRect(16, trayY, Math.max(1, width - 32), trayHeight, 12).fill({ color: 1058874, alpha: 0.98 }).roundRect(16, trayY, Math.max(1, width - 32), trayHeight, 12).stroke({ color: 9549506, width: 2 }).rect(18, trayY + 14, 4, Math.max(1, trayHeight - 28)).fill({ color: selected?.isReachable ? 7854502 : 16113563, alpha: 0.9 });
     contextTitle.text = selected ? selected.kind : "Inspect a location";
-    contextDetails.text = selected ? `${selected.description} ${selected.isReachable ? "Traveling to this location." : selected.isCurrent ? "This is your current location." : selected.isVisited ? "This location has been visited." : "This location is not reachable yet."}` : "Tap an available location to travel. Tap another location to inspect it.";
+    contextDetails.text = selected ? `${selected.description} ${selected.isReachable ? "Traveling to this location." : selected.isCurrent ? "This is your current location." : selected.isVisited ? "This location has been visited." : "This location is not reachable yet."}` : "Drag or scroll to explore the paths. Tap an available location to travel.";
     contextTitle.position.set(32, trayY + 14);
     contextDetails.style.wordWrapWidth = Math.max(1, mobile ? width - 64 : width - 330);
     contextDetails.position.set(32, trayY + 44);
@@ -54887,10 +54922,26 @@ async function createMapRenderer(canvas, sink) {
     if (selected) {
       const cancelWidth = Math.max(68, Math.min(116, width - 32));
       addControl("Clear", "Clear selection", !pending, Math.max(16, width - 16 - cancelWidth), trayY + trayHeight - 54, cancelWidth, cancel);
-    } else {
-      const resetWidth = Math.max(68, Math.min(116, width - 32));
-      addControl("Reset", "Center map", !pending, Math.max(16, width - 16 - resetWidth), trayY + trayHeight - 54, resetWidth, resetView);
     }
+  }
+  function constrainPan(metrics) {
+    const nodes = state?.nodes ?? [];
+    if (nodes.length === 0) {
+      panX = 0;
+      panY = 0;
+      return;
+    }
+    const maxColumn = Math.max(...nodes.map((node) => node.column));
+    const maxRow = Math.max(...nodes.map((node) => node.row));
+    const mapWidth = (maxColumn - metrics.minColumn) * metrics.columnStep;
+    const mapHeight = (maxRow - metrics.minRow) * metrics.rowStep;
+    const nodeRadius = 34;
+    const minimumPanX = metrics.graphBounds.left + metrics.graphBounds.width - (metrics.mapLeft + mapWidth + nodeRadius);
+    const maximumPanX = metrics.graphBounds.left - (metrics.mapLeft - nodeRadius);
+    const minimumPanY = metrics.graphBounds.top + metrics.graphBounds.height - (metrics.mapTop + mapHeight + nodeRadius);
+    const maximumPanY = metrics.graphBounds.top - (metrics.mapTop - nodeRadius);
+    panX = minimumPanX > maximumPanX ? (minimumPanX + maximumPanX) / 2 : Math.min(maximumPanX, Math.max(minimumPanX, panX));
+    panY = minimumPanY > maximumPanY ? (minimumPanY + maximumPanY) / 2 : Math.min(maximumPanY, Math.max(minimumPanY, panY));
   }
   function addControl(label, hint, enabled, x2, y2, width, onPress) {
     const control = new MapControl(label, hint, enabled, width, onPress);
@@ -54962,6 +55013,7 @@ async function createMapRenderer(canvas, sink) {
       canvas.removeEventListener("pointermove", pointermove);
       canvas.removeEventListener("pointerup", pointerup);
       canvas.removeEventListener("pointercancel", pointerup);
+      canvas.removeEventListener("wheel", wheel);
       window.removeEventListener("resize", resize);
       resizeObserver?.disconnect();
       accessibility.dispose();
@@ -54971,11 +55023,10 @@ async function createMapRenderer(canvas, sink) {
 }
 var MapNodeView = class extends Container {
   frame = new Graphics();
-  icon = new Text({ text: "", style: nodeStyle });
-  caption = new Text({ text: "", style: nodeCaptionStyle });
+  icon = new Graphics();
   constructor(onPress) {
     super();
-    this.addChild(this.frame, this.icon, this.caption);
+    this.addChild(this.frame, this.icon);
     this.pivot.set(0.5);
     this.on("pointertap", onPress);
   }
@@ -54983,12 +55034,7 @@ var MapNodeView = class extends Container {
     const color = node.isCurrent ? 16113563 : node.isReachable ? 7854502 : node.isVisited ? 9416892 : 4678260;
     const radius = selected ? 29 : 24;
     this.frame.clear().circle(0, 2, radius).fill({ color: 132631, alpha: 0.4 }).circle(0, 0, radius).fill({ color, alpha: node.isLocked ? 0.45 : 0.96 }).circle(0, 0, Math.max(1, radius - 7)).fill({ color: 1058874, alpha: 0.7 }).circle(0, 0, radius).stroke({ color: selected ? 16777215 : node.isReachable ? 14022371 : 1058874, width: selected ? 4 : 2 });
-    this.icon.text = getNodeIcon(node.kind);
-    this.icon.anchor.set(0.5);
-    this.icon.position.set(0, 0);
-    this.caption.text = node.kind;
-    this.caption.anchor.set(0.5, 0);
-    this.caption.position.set(0, radius + 9);
+    drawMapNodeIcon(this.icon, node.kind, 15726842);
     this.eventMode = interactive ? "static" : "none";
     this.cursor = interactive ? "pointer" : "default";
   }
@@ -55009,14 +55055,47 @@ var MapControl = class extends Container {
     if (enabled) this.on("pointertap", onPress);
   }
 };
-function getNodeIcon(kind) {
-  return { Map: "\u25C6", Encounter: "\u2694", Event: "?", Treasure: "\u2726", Rest: "\u2668", Shop: "\xA4", Elite: "\u2694", Boss: "\u265B" }[kind] ?? "\u2022";
+function drawMapNodeIcon(graphics, kind, color) {
+  graphics.clear();
+  switch (kind) {
+    case "Encounter":
+    case "Elite":
+      graphics.moveTo(-10, 8).lineTo(10, -8).stroke({ color, width: 3 });
+      graphics.moveTo(-10, -8).lineTo(10, 8).stroke({ color, width: 3 });
+      return;
+    case "Boss":
+      graphics.rect(-9, -4, 18, 12).fill({ color });
+      graphics.moveTo(-10, -8).lineTo(-5, -13).lineTo(0, -8).lineTo(5, -13).lineTo(10, -8).stroke({ color, width: 3 });
+      return;
+    case "Treasure":
+      graphics.rect(-10, -2, 20, 12).fill({ color });
+      graphics.rect(-12, -7, 24, 7).fill({ color });
+      graphics.rect(-2, -5, 4, 15).fill({ color: 1058874 });
+      return;
+    case "Rest":
+      graphics.moveTo(-10, 8).lineTo(-2, -10).lineTo(2, -3).lineTo(7, -12).lineTo(11, 8).stroke({ color, width: 3 });
+      return;
+    case "Shop":
+      graphics.rect(-10, -1, 20, 11).fill({ color });
+      graphics.moveTo(-12, -2).lineTo(-7, -10).lineTo(7, -10).lineTo(12, -2).stroke({ color, width: 3 });
+      return;
+    case "Event":
+      graphics.circle(0, 0, 9).stroke({ color, width: 3 });
+      graphics.circle(0, -5, 1.8).fill({ color });
+      graphics.rect(-1.5, -1, 3, 8).fill({ color });
+      return;
+    case "Map":
+      graphics.moveTo(-10, -8).lineTo(-3, -11).lineTo(4, -8).lineTo(11, -11).lineTo(11, 10).lineTo(4, 7).lineTo(-3, 10).lineTo(-10, 7).lineTo(-10, -8).stroke({ color, width: 3 });
+      return;
+    default:
+      graphics.circle(0, 0, 7).fill({ color });
+  }
 }
 function getMapLayoutMetrics(width, height, nodes, selectedNodeId) {
   const mobile = height > width;
   const trayHeight = mobile ? selectedNodeId === void 0 ? 132 : 164 : 124;
   const trayY = height - trayHeight - 18;
-  const graphBounds = { left: 28, top: 76, width: Math.max(100, width - 56), height: Math.max(80, trayY - 92) };
+  const graphBounds = { left: 28, top: 48, width: Math.max(100, width - 56), height: Math.max(80, trayY - 62) };
   const minColumn = Math.min(...nodes.map((node) => node.column), 0);
   const maxColumn = Math.max(...nodes.map((node) => node.column), 1);
   const minRow = Math.min(...nodes.map((node) => node.row), 0);
@@ -55062,14 +55141,142 @@ function createMapAccessibilityOverlay(canvas) {
 var noOpAccessibilityOverlay3 = { update() {
 }, dispose() {
 } };
-var titleStyle4 = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 26, fontWeight: "bold", letterSpacing: 1 });
-var regionStyle = new TextStyle({ fill: 9549506, fontFamily: "Arial", fontSize: 18 });
+var regionStyle = new TextStyle({ fill: 9549506, fontFamily: "Arial", fontSize: 14, fontWeight: "bold", letterSpacing: 0.6 });
 var contextTitleStyle4 = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 18, fontWeight: "bold" });
 var contextBodyStyle4 = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 14, lineHeight: 19, wordWrap: true });
 var feedbackStyle5 = new TextStyle({ fill: 16113563, fontFamily: "Arial", fontSize: 15, align: "center" });
-var nodeStyle = new TextStyle({ fill: 529183, fontFamily: "Arial", fontSize: 22, fontWeight: "bold" });
-var nodeCaptionStyle = new TextStyle({ fill: 14872051, fontFamily: "Arial", fontSize: 12, fontWeight: "bold", stroke: { color: 529183, width: 3 } });
 var controlStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 15, fontWeight: "bold" });
+
+// src/pixi-main-menu.ts
+async function createMainMenuRenderer(canvas, sink) {
+  const application = new Application();
+  await application.init({ antialias: true, autoDensity: true, background: 529183, backgroundAlpha: 1, canvas, preference: "canvas" });
+  canvas.tabIndex = 0;
+  const root = new Container();
+  const background = new Graphics();
+  const panel = new Graphics();
+  const title = new Text({ text: "DDGAME", style: titleStyle4 });
+  const subtitle = new Text({ text: "A descent into the Fold", style: subtitleStyle });
+  const feedback = new Text({ text: "", style: feedbackStyle6 });
+  const buttonLayer = new Container();
+  root.addChild(background, panel, title, subtitle, buttonLayer, feedback);
+  application.stage.addChild(root);
+  title.anchor.set(0.5, 0);
+  subtitle.anchor.set(0.5, 0);
+  feedback.anchor.set(0.5, 0);
+  let state;
+  let buttons = [];
+  let focusedIndex = 0;
+  let pending = false;
+  let disposed = false;
+  const layout = () => {
+    if (disposed) return;
+    const viewport = getViewport(canvas);
+    if (application.renderer.width !== viewport.width || application.renderer.height !== viewport.height) {
+      application.renderer.resize(viewport.width, viewport.height);
+    }
+    const { width, height } = application.renderer;
+    const panelWidth = Math.min(width - 32, 400);
+    const panelHeight = Math.min(height - 32, 388);
+    const panelX = (width - panelWidth) / 2;
+    const panelY = (height - panelHeight) / 2;
+    background.clear().rect(0, 0, width, height).fill(529183).rect(0, 0, width, height * 0.38).fill({ color: 1520456, alpha: 0.45 });
+    panel.clear().roundRect(panelX, panelY, panelWidth, panelHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
+    title.position.set(width / 2, panelY + 54);
+    subtitle.position.set(width / 2, panelY + 102);
+    const buttonWidth = Math.max(180, panelWidth - 72);
+    buttons.forEach((button, index) => {
+      button.resize(buttonWidth, 52);
+      button.position.set((width - buttonWidth) / 2, panelY + 148 + index * 66);
+      button.setFocused(index === focusedIndex);
+    });
+    feedback.position.set(width / 2, panelY + panelHeight - 30);
+  };
+  const submit = async (action) => {
+    if (pending) return;
+    pending = true;
+    buttons.forEach((button) => button.setEnabled(false));
+    feedback.text = "Opening\u2026";
+    try {
+      if (!await sink.invokeMethodAsync("HandleActionFromRendererAsync", action)) {
+        feedback.text = "That option is unavailable.";
+        pending = false;
+        reconcileButtons();
+      }
+    } catch {
+      feedback.text = "The menu could not complete that request.";
+      pending = false;
+      reconcileButtons();
+    }
+  };
+  const reconcileButtons = () => {
+    const entries = getEntries(state);
+    if (focusedIndex >= entries.length) focusedIndex = Math.max(0, entries.length - 1);
+    buttonLayer.removeChildren();
+    buttons = entries.map((entry, index) => {
+      const button = new GameButton({ label: entry.label, width: 1, height: 1, enabled: !pending, focused: index === focusedIndex, onPress: () => void submit(entry.action) });
+      buttonLayer.addChild(button);
+      return button;
+    });
+  };
+  const keydown = (event) => {
+    if (buttons.length === 0) return;
+    if (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "Tab") {
+      const direction = event.key === "ArrowUp" || event.key === "Tab" && event.shiftKey ? -1 : 1;
+      focusedIndex = (focusedIndex + direction + buttons.length) % buttons.length;
+      buttons.forEach((button, index) => button.setFocused(index === focusedIndex));
+      event.preventDefault();
+      return;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      buttons[focusedIndex]?.press();
+      event.preventDefault();
+    }
+  };
+  canvas.addEventListener("keydown", keydown);
+  window.addEventListener("resize", layout);
+  const resizeObserver = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(layout);
+  resizeObserver?.observe(canvas.parentElement ?? canvas);
+  return {
+    reconcile(candidate) {
+      if (!isMainMenuState(candidate)) return false;
+      state = candidate;
+      pending = false;
+      feedback.text = "";
+      reconcileButtons();
+      layout();
+      return true;
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      canvas.removeEventListener("keydown", keydown);
+      window.removeEventListener("resize", layout);
+      resizeObserver?.disconnect();
+      application.destroy({ removeView: false }, { children: true });
+    }
+  };
+}
+function getEntries(state) {
+  return [
+    ...state?.hasSavedGame ? [{ action: "continue", label: "Continue" }] : [],
+    { action: "newGame", label: "New Game" },
+    { action: "runHistory", label: "Run History" }
+  ];
+}
+function getViewport(canvas) {
+  const surface = canvas.parentElement;
+  return {
+    width: Math.max(1, surface?.clientWidth || canvas.clientWidth || canvas.width || 640),
+    height: Math.max(1, surface?.clientHeight || canvas.clientHeight || canvas.height || 480)
+  };
+}
+function isMainMenuState(value) {
+  return typeof value === "object" && value !== null && typeof value.hasSavedGame === "boolean";
+}
+var titleStyle4 = new TextStyle({ ...uiTokens.typography.panelTitle, align: "center", fill: 16113563, fontSize: 42, fontWeight: "bold", letterSpacing: 4 });
+var subtitleStyle = new TextStyle({ ...uiTokens.typography.body, align: "center", fill: 9549506, fontSize: 16 });
+var feedbackStyle6 = new TextStyle({ ...uiTokens.typography.body, align: "center", fill: 16113563, fontSize: 14 });
 
 // src/pixi-encounter.ts
 async function createEncounterRenderer(canvas, intentSink, initialization) {
@@ -55590,10 +55797,10 @@ var EncounterRuntimeScene = class {
   /**
    * Creates a lifecycle owner for the existing encounter presentation objects.
    */
-  constructor(scene, cancelAnimations, getViewport) {
+  constructor(scene, cancelAnimations, getViewport2) {
     this.scene = scene;
     this.cancelAnimations = cancelAnimations;
-    this.getViewport = getViewport;
+    this.getViewport = getViewport2;
   }
   scene;
   cancelAnimations;
@@ -55703,6 +55910,7 @@ function isElement(value) {
 export {
   createEncounterRenderer,
   createEventRenderer,
+  createMainMenuRenderer,
   createMapRenderer,
   createRestRenderer,
   createRewardRenderer,
