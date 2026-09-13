@@ -50317,6 +50317,10 @@ function normalizeDimension3(value) {
 }
 
 // src/layout.ts
+var handCardVisualSize = {
+  width: 108,
+  height: 144
+};
 function layoutEnemies(count2, viewport) {
   if (count2 === 0) {
     return [];
@@ -50382,9 +50386,9 @@ function layoutHand(count2, viewport) {
   if (getEncounterLayoutMode(viewport) !== "Wide") {
     return layoutNarrowHand(count2, viewport);
   }
-  const cardWidth = 108;
-  const cardVisualWidth = 90;
-  const cardVisualHeight = 126;
+  const cardWidth = handCardVisualSize.width;
+  const cardVisualWidth = handCardVisualSize.width;
+  const cardVisualHeight = handCardVisualSize.height;
   const horizontalPadding = 24;
   const availableWidth = viewport.width - horizontalPadding * 2 - cardWidth;
   const step = count2 === 1 ? 0 : Math.min(cardWidth * 0.88, availableWidth / (count2 - 1));
@@ -50393,19 +50397,22 @@ function layoutHand(count2, viewport) {
   const player = layoutPlayer(viewport);
   const playerBottom = player.y + 58 * (player.scale ?? 1);
   const handClearance = 4;
+  let cardScale = 1;
   let fanDepth = Math.min(38, 12 + count2 * 2.2);
-  let centerBounds = getWideHandCenterBounds(count2, maximumRotation, fanDepth, cardVisualWidth, cardVisualHeight, playerBottom, handClearance, viewport.height);
-  for (let attempt = 0; attempt < 6 && centerBounds.minimum > centerBounds.maximum; attempt += 1) {
+  let centerBounds = getWideHandCenterBounds(count2, maximumRotation, fanDepth, cardVisualWidth * cardScale, cardVisualHeight * cardScale, playerBottom, handClearance, viewport.height);
+  for (let attempt = 0; attempt < 8 && centerBounds.minimum > centerBounds.maximum; attempt += 1) {
     fanDepth *= 0.8;
-    centerBounds = getWideHandCenterBounds(count2, maximumRotation, fanDepth, cardVisualWidth, cardVisualHeight, playerBottom, handClearance, viewport.height);
+    cardScale = Math.max(0.72, cardScale * 0.95);
+    centerBounds = getWideHandCenterBounds(count2, maximumRotation, fanDepth * cardScale, cardVisualWidth * cardScale, cardVisualHeight * cardScale, playerBottom, handClearance, viewport.height);
   }
   const bottomRowY = Math.min(centerBounds.maximum, Math.max(centerBounds.minimum, viewport.height - 76));
   return Array.from({ length: count2 }, (_, index) => {
     const progress = count2 === 1 ? 0 : index / (count2 - 1) - 0.5;
     return {
       x: (viewport.width - rowWidth) / 2 + cardWidth / 2 + index * step,
-      y: bottomRowY + progress * progress * fanDepth * 4,
-      rotation: progress * maximumRotation * 2
+      y: bottomRowY + progress * progress * fanDepth * cardScale * 4,
+      rotation: progress * maximumRotation * 2,
+      ...cardScale === 1 ? {} : { scale: cardScale }
     };
   });
 }
@@ -50474,8 +50481,8 @@ function getCompactEntityScale(viewport) {
   return Math.max(0, Math.min(0.82, (availableWidth - entityGap) / (entityWidth * 2)));
 }
 function layoutNarrowHand(count2, viewport) {
-  const cardWidth = 108;
-  const cardHeight = 128;
+  const cardWidth = handCardVisualSize.width;
+  const cardHeight = handCardVisualSize.height;
   const horizontalPadding = 16;
   const bottomPadding = 16;
   const cardGap = 8;
@@ -50591,7 +50598,7 @@ var supportedAnimationNames = /* @__PURE__ */ new Set([
 ]);
 var dragReturnDurationMs = 150;
 var handInspectionSettleDurationMs = 100;
-var handCardViewScale = 0.5;
+var handCardViewScale = handCardVisualSize.width / 180;
 var focusedHandScale = 1.32;
 var focusedHandLift = 34;
 var draggedCardLift = 48;
@@ -51139,7 +51146,7 @@ ${resources}`;
       return;
     }
     drag.state = "dragging";
-    const target = this.findDropTarget(position);
+    const target = this.findDropTarget(position, drag.entry);
     if (isCardPresentationState2(drag.entry)) {
       applyTransform(drag.tile.container, this.getDraggedCardTransform(drag));
       this.drawDragAimArrow(drag, position, target);
@@ -51236,9 +51243,11 @@ ${resources}`;
       name: entry.name,
       description: formatCardDescription(entry.description),
       type: entry.cardType,
-      rarity: toCardViewRarity(entry.rarity)
+      rarity: toCardViewRarity(entry.rarity),
+      width: handCardVisualSize.width / handCardViewScale,
+      height: handCardVisualSize.height / handCardViewScale
     });
-    cardView.position.set(-45, -63);
+    cardView.position.set(-handCardVisualSize.width / 2, -handCardVisualSize.height / 2);
     cardView.scale.set(handCardViewScale);
     tile.container.removeAllListeners();
     tile.container.removeChild(tile.background, tile.accent, tile.targetHighlight, tile.artwork, tile.title, tile.description, tile.detail, tile.effects);
@@ -51332,7 +51341,7 @@ ${resources}`;
   completeDrag(event) {
     const drag = this.activeDrag;
     this.moveDrag(event);
-    const entity = drag ? this.findDropTarget(event.getLocalPosition(this.root)) : void 0;
+    const entity = drag ? this.findDropTarget(event.getLocalPosition(this.root), drag.entry) : void 0;
     if (!drag || drag.pointerId !== event.pointerId || drag.state !== "dragging" || this.isAnimationLockedForEntry(drag.entry) || !this.isValidDrop(drag.entry, entity)) {
       return false;
     }
@@ -51400,8 +51409,8 @@ ${resources}`;
     const sine = Math.sin(transform.rotation);
     const localX = horizontalOffset * cosine + verticalOffset * sine;
     const localY = -horizontalOffset * sine + verticalOffset * cosine;
-    const halfWidth = (isCardPresentationState2(entry) ? 45 : 54) * transform.scale;
-    const halfHeight = (isCardPresentationState2(entry) ? 63 : 64) * transform.scale;
+    const halfWidth = (isCardPresentationState2(entry) ? handCardVisualSize.width / 2 : 54) * transform.scale;
+    const halfHeight = (isCardPresentationState2(entry) ? handCardVisualSize.height / 2 : 64) * transform.scale;
     return Math.abs(localX) <= halfWidth && Math.abs(localY) <= halfHeight;
   }
   releaseActiveDrag(clearSelection = true) {
@@ -51540,7 +51549,13 @@ ${resources}`;
     this.dragAimArrow.clear();
     this.dragAimArrow.visible = false;
   }
-  findDropTarget(position) {
+  /**
+   * Resolves a forgiving drop target from the entry's targeting semantics and the current pointer position.
+   */
+  findDropTarget(position, entry) {
+    if (entry.targetMode === "player") {
+      return this.isPositionOverHandArea(position) ? void 0 : this.getPlayerEntity();
+    }
     for (const entity of this.entities.values()) {
       const tile = this.entityTiles.get(`${entity.isPlayer ? "player" : "enemy"}:${entity.id}`);
       const scale = tile?.container.scale.x ?? 1;
@@ -51548,7 +51563,80 @@ ${resources}`;
         return entity;
       }
     }
-    return void 0;
+    return entry.targetMode === "enemy" && this.isPositionInEnemyDropArea(position) ? this.findClosestTargetableEnemy(position) : void 0;
+  }
+  /**
+   * Gets the player presentation state without exposing the internal entity map to callers.
+   */
+  getPlayerEntity() {
+    return [...this.entities.values()].find((entity) => entity.isPlayer);
+  }
+  /**
+   * Keeps self-targeted drops out of the hand's full lower-screen interaction band.
+   */
+  isPositionOverHandArea(position) {
+    const handTop = this.getHandAreaTop();
+    return handTop !== void 0 && position.y >= handTop;
+  }
+  /**
+   * Gets the top edge of the hand interaction band, including rotated card bounds.
+   */
+  getHandAreaTop() {
+    let handTop;
+    for (const [tileId, position] of this.handLayoutPositions) {
+      const tile = this.handTiles.get(tileId);
+      if (!tile) {
+        continue;
+      }
+      const transform = this.getHandAreaTransform(tileId, position, tile);
+      const topExtent = (Math.abs(Math.sin(transform.rotation)) * (handCardVisualSize.width / 2) + Math.cos(transform.rotation) * (handCardVisualSize.height / 2)) * transform.scale;
+      handTop = Math.min(handTop ?? Number.POSITIVE_INFINITY, transform.y - topExtent);
+    }
+    return handTop;
+  }
+  /**
+   * Resolves the visible transform that contributes to the hand's safe cancellation area.
+   */
+  getHandAreaTransform(tileId, position, tile) {
+    const drag = this.activeDrag;
+    if (drag && getEntrySceneId(drag.entry) === tileId && isCardPresentationState2(drag.entry) && drag.state === "dragging") {
+      return this.getDraggedCardTransform(drag);
+    }
+    return this.isHandEntryInspected(tileId) ? this.getHandLayoutTransform(tileId, position) : captureTransform(tile.container);
+  }
+  /**
+   * Treats the upper combat field as a forgiving enemy-targeting region while preserving the hand as a safe cancel area.
+   */
+  isPositionInEnemyDropArea(position) {
+    if (this.isPositionOverHandArea(position)) {
+      return false;
+    }
+    const player = this.getPlayerEntity();
+    const playerTile = player ? this.entityTiles.get(`player:${player.id}`) : void 0;
+    const lowerBoundary = playerTile ? playerTile.container.y - entityHitHalfHeight * (playerTile.container.scale.x ?? 1) * 0.25 : this.getHandAreaTop() ?? this.viewport?.height ?? 0;
+    return position.y >= 0 && position.y <= lowerBoundary;
+  }
+  /**
+   * Selects the nearest legal enemy within the broad combat-field drop region.
+   */
+  findClosestTargetableEnemy(position) {
+    let closestEnemy;
+    let closestDistanceSquared = Number.POSITIVE_INFINITY;
+    for (const entity of this.entities.values()) {
+      if (entity.isPlayer || !entity.isTargetable || this.isAnimationLockedForEntity(entity)) {
+        continue;
+      }
+      const tile = this.entityTiles.get(`enemy:${entity.id}`);
+      if (!tile) {
+        continue;
+      }
+      const distanceSquared = Math.pow(position.x - tile.container.x, 2) + Math.pow(position.y - tile.container.y, 2);
+      if (distanceSquared < closestDistanceSquared) {
+        closestEnemy = entity;
+        closestDistanceSquared = distanceSquared;
+      }
+    }
+    return closestEnemy;
   }
   updateArtwork(tile, image, width, height) {
     if (!image || !this.assetLoader) {
@@ -51894,16 +51982,17 @@ ${resources}`;
   /** Builds the final hand transform for either a resting or inspected entry. */
   getHandLayoutTransform(tileId, position) {
     const isInspected = this.isHandEntryInspected(tileId);
+    const isWideHandLayout = position.rotation !== void 0;
     return {
       x: position.x,
-      y: position.y - (isInspected && position.scale === void 0 ? focusedHandLift : 0),
+      y: position.y - (isInspected && isWideHandLayout ? focusedHandLift * (position.scale ?? 1) : 0),
       rotation: isInspected ? 0 : position.rotation ?? 0,
       scale: (position.scale ?? 1) * (isInspected ? this.getHandInspectionScale(position) : 1)
     };
   }
   /** Scales constrained layouts modestly so inspection remains readable without crowding combat space. */
   getHandInspectionScale(position) {
-    return position.scale === void 0 ? focusedHandScale : 1.15;
+    return position.rotation !== void 0 ? focusedHandScale : 1.15;
   }
   /** Determines whether an entry should remain enlarged for hover, selection, or keyboard inspection. */
   isHandEntryInspected(tileId) {
