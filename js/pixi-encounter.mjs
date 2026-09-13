@@ -53833,6 +53833,7 @@ async function createEventRenderer(canvas, sink) {
     const width = application.renderer.width;
     const height = application.renderer.height;
     const mobile = height > width;
+    const shortLandscape = !mobile && height < 420;
     const choices = state?.isComplete ? [] : state?.options ?? [];
     const selected = choices.find((option) => option.id === selectedOptionId);
     const nested = getNestedChoice();
@@ -53841,19 +53842,19 @@ async function createEventRenderer(canvas, sink) {
     const controlsBelowDetails = mobile && (selected !== void 0 || nested !== void 0);
     const choiceWidth = mobile ? width - 48 : Math.max(260, width * 0.48);
     const choiceX = mobile ? 24 : width * 0.48;
-    const trayHeight = controlsBelowDetails ? 156 : mobile ? 126 : 118;
-    const trayY = height - trayHeight - 18;
-    const narrativeX = mobile ? 24 : width * 0.48;
-    const narrativeY = mobile ? height * 0.34 : 70;
-    narrative.style.wordWrapWidth = mobile ? width - 48 : Math.max(260, width * 0.42);
+    const trayHeight = controlsBelowDetails ? 156 : mobile ? 126 : shortLandscape ? 94 : 118;
+    const trayY = height - trayHeight - (shortLandscape ? 10 : 18);
+    const narrativeX = mobile ? 24 : shortLandscape ? 24 : width * 0.48;
+    const narrativeY = mobile ? height * 0.34 : shortLandscape ? 58 : 70;
+    narrative.style.wordWrapWidth = mobile ? width - 48 : shortLandscape ? Math.max(180, width * 0.4) : Math.max(260, width * 0.42);
     narrative.position.set(narrativeX, narrativeY);
     const narrativeBottom = narrativeY + Math.max(72, Number.isFinite(narrative.height) ? narrative.height : 0);
-    const choiceTop = mobile ? Math.max(height * 0.48, narrativeBottom + 16) : Math.max(196, narrativeBottom + 18);
-    const choiceBottom = trayY - 14;
-    const choiceGap = mobile ? 8 : 12;
+    const choiceTop = mobile ? Math.max(height * 0.48, narrativeBottom + 16) : shortLandscape ? 64 : Math.max(196, narrativeBottom + 18);
+    const choiceBottom = trayY - (shortLandscape ? 10 : 14);
+    const choiceGap = mobile ? 8 : shortLandscape ? 6 : 12;
     const nestedItems = nested ? getNestedPageItems(nested, width, height) : [];
     const displayedChoiceCount = nested ? nestedItems.length : choices.length;
-    const choiceHeight = Math.max(42, Math.min(68, (choiceBottom - choiceTop - Math.max(0, displayedChoiceCount - 1) * choiceGap) / Math.max(1, displayedChoiceCount)));
+    const choiceHeight = Math.max(shortLandscape ? 28 : 42, Math.min(shortLandscape ? 44 : 68, (choiceBottom - choiceTop - Math.max(0, displayedChoiceCount - 1) * choiceGap) / Math.max(1, displayedChoiceCount)));
     const focalAlpha = effectName === "choice-confirmed" ? 0.72 : effectName === "choice-rejected" ? 0.24 : 0.45;
     background.clear().rect(0, 0, width, height).fill(529183);
     focal.clear().circle(mobile ? width / 2 : width * 0.25, mobile ? height * 0.2 : height * 0.45, Math.min(width, height) * 0.2).fill({ color: 3631734, alpha: focalAlpha }).circle(mobile ? width / 2 : width * 0.25, mobile ? height * 0.2 : height * 0.45, Math.min(width, height) * 0.1).fill({ color: 14069334, alpha: effectName === "narrative-complete" ? 0.9 : 0.72 });
@@ -54163,19 +54164,20 @@ async function createRestRenderer(canvas, sink) {
   function layout() {
     const width = application.renderer.width;
     const height = application.renderer.height;
-    const compact = height > width || width < 760;
+    const shortLandscape = width >= height && height < 420;
+    const compact = !shortLandscape && (height > width || width < 760);
     const actions = state?.actions ?? [];
     const selected = actions.find((action) => action.id === selectedActionId);
     const controlsBelowDetails = compact && selected?.isAvailable === true;
-    const trayHeight = controlsBelowDetails ? 166 : compact ? 136 : 124;
-    const trayY = height - trayHeight - 18;
-    const gap = compact ? 8 : 16;
+    const trayHeight = controlsBelowDetails ? 166 : compact ? 136 : shortLandscape ? 94 : 124;
+    const trayY = height - trayHeight - (shortLandscape ? 10 : 18);
+    const gap = compact ? 8 : shortLandscape ? 8 : 16;
     const buttonWidth = compact ? Math.min(300, width - 48) : Math.min(250, (width - 64 - gap * 2) / 3);
-    const actionBottom = trayY - 16;
+    const actionBottom = trayY - (shortLandscape ? 10 : 16);
     const minimumButtonHeight = compact ? 28 : 42;
-    const preferredActionTop = compact ? Math.max(170, height * 0.35) : Math.max(152, height * 0.36);
+    const preferredActionTop = compact ? Math.max(170, height * 0.35) : shortLandscape ? Math.max(52, height * 0.24) : Math.max(152, height * 0.36);
     const actionTop = Math.min(preferredActionTop, actionBottom - minimumButtonHeight);
-    const buttonHeight = compact ? Math.max(minimumButtonHeight, Math.min(76, (actionBottom - actionTop - Math.max(0, actions.length - 1) * gap) / Math.max(1, actions.length))) : Math.max(minimumButtonHeight, Math.min(118, actionBottom - actionTop));
+    const buttonHeight = compact ? Math.max(minimumButtonHeight, Math.min(76, (actionBottom - actionTop - Math.max(0, actions.length - 1) * gap) / Math.max(1, actions.length))) : Math.max(minimumButtonHeight, Math.min(shortLandscape ? 80 : 118, actionBottom - actionTop));
     const actionGlow = effectName === "rest-recovery" ? 0.32 : effectName === "training" ? 0.22 : effectName === "rejected" ? 0.08 : 0.16;
     background.clear().rect(0, 0, width, height).fill(726562).circle(width * 0.5, height * 0.25, Math.min(width, height) * 0.2).fill({ color: effectName === "training" ? 6333946 : 16096779, alpha: actionGlow });
     title.position.set(width * 0.5, 36);
@@ -54692,10 +54694,10 @@ async function createMapRenderer(canvas, sink) {
   const selectableNodes = () => state?.nodes ?? [];
   const selectedNode = () => state?.nodes.find((node) => node.id === selectedNodeId);
   const resize = () => {
-    const surface = canvas.parentElement;
-    const width = surface?.clientWidth || canvas.clientWidth || canvas.width || 960;
-    const height = surface?.clientHeight || canvas.clientHeight || canvas.height || 540;
-    application.renderer.resize(Math.max(1, width), Math.max(1, height));
+    const size = getMapSurfaceSize(canvas);
+    if (application.renderer.width !== size.width || application.renderer.height !== size.height) {
+      application.renderer.resize(size.width, size.height);
+    }
     layout();
   };
   const submit = async (name, sourceId) => {
@@ -54827,7 +54829,7 @@ async function createMapRenderer(canvas, sink) {
       x: graphBounds.left + (node.column - minColumn) / Math.max(1, maxColumn - minColumn) * graphBounds.width + panX,
       y: graphBounds.top + (node.row - minRow) / Math.max(1, maxRow - minRow) * graphBounds.height + panY
     });
-    background.clear().rect(0, 0, width, height).fill(529183).rect(0, 0, width, height * 0.28).fill({ color: 1520456, alpha: 0.6 });
+    background.clear().rect(0, 0, width, height).fill(529183).rect(0, 0, width, Math.min(height * 0.3, 176)).fill({ color: 1520456, alpha: 0.68 }).roundRect(16, 14, Math.max(1, width - 32), 48, 12).fill({ color: 1058874, alpha: 0.86 }).stroke({ color: 3563376, width: 1 });
     graph.removeChildren();
     graph.addChild(connectionLayer, nodeLayer);
     for (const [key, connectionView] of connectionViews) {
@@ -54851,29 +54853,33 @@ async function createMapRenderer(canvas, sink) {
       view.position.set(point.x, point.y);
     }
     title.text = state?.title ?? "The Fold";
-    title.position.set(28, 22);
+    title.position.set(30, 23);
     region.text = state?.regionName ?? "";
-    region.position.set(width - 28, 30);
+    region.position.set(width - 30, 29);
     region.anchor.set(1, 0);
     feedback.position.set(width / 2, trayY - 22);
     feedback.anchor.set(0.5, 0);
     const selected = selectedNode();
-    contextPanel.clear().roundRect(16, trayY, width - 32, trayHeight, 12).fill({ color: 1058874, alpha: 0.98 }).stroke({ color: 9549506, width: 2 });
+    contextPanel.clear().roundRect(16, trayY, Math.max(1, width - 32), trayHeight, 12).fill({ color: 1058874, alpha: 0.98 }).roundRect(16, trayY, Math.max(1, width - 32), trayHeight, 12).stroke({ color: 9549506, width: 2 }).rect(18, trayY + 14, 4, Math.max(1, trayHeight - 28)).fill({ color: selected?.isReachable ? 7854502 : 16113563, alpha: 0.9 });
     contextTitle.text = selected ? selected.kind : "Inspect a location";
     contextDetails.text = selected ? `${selected.description} ${selected.isReachable ? "This route is available. Confirm to travel." : selected.isCurrent ? "This is your current location." : selected.isVisited ? "This location has been visited." : "This location is not reachable yet."}` : "Select a location to inspect its destination and route.";
     contextTitle.position.set(32, trayY + 14);
     contextDetails.style.wordWrapWidth = Math.max(1, mobile ? width - 64 : width - 330);
     contextDetails.position.set(32, trayY + 44);
     controls.removeChildren();
+    const controlGap = 10;
+    const selectedControlWidth = Math.max(68, Math.min(116, (width - 56 - controlGap) / 2));
     if (selected) {
-      addControl("Travel", "Commit travel", selected.isReachable && !pending && state?.canTravel === true, width - 282, trayY + trayHeight - 54, commitTravel);
-      addControl("Cancel", "Clear selection", !pending, width - 148, trayY + trayHeight - 54, cancel);
+      const controlStart = Math.max(16, width - 16 - (selectedControlWidth * 2 + controlGap));
+      addControl("Travel", "Commit travel", selected.isReachable && !pending && state?.canTravel === true, controlStart, trayY + trayHeight - 54, selectedControlWidth, commitTravel);
+      addControl("Cancel", "Clear selection", !pending, controlStart + selectedControlWidth + controlGap, trayY + trayHeight - 54, selectedControlWidth, cancel);
     } else {
-      addControl("Reset", "Center map", !pending, width - 148, trayY + trayHeight - 54, resetView);
+      const resetWidth = Math.max(68, Math.min(116, width - 32));
+      addControl("Reset", "Center map", !pending, Math.max(16, width - 16 - resetWidth), trayY + trayHeight - 54, resetWidth, resetView);
     }
   }
-  function addControl(label, hint, enabled, x2, y2, onPress) {
-    const control = new MapControl(label, hint, enabled, onPress);
+  function addControl(label, hint, enabled, x2, y2, width, onPress) {
+    const control = new MapControl(label, hint, enabled, width, onPress);
     control.position.set(x2, y2);
     controls.addChild(control);
   }
@@ -54957,7 +54963,8 @@ var MapNodeView = class extends Container {
   }
   update(node, selected, interactive) {
     const color = node.isCurrent ? 16113563 : node.isReachable ? 7854502 : node.isVisited ? 9416892 : 4678260;
-    this.frame.clear().circle(0, 0, selected ? 29 : 24).fill({ color, alpha: node.isLocked ? 0.45 : 0.96 }).stroke({ color: selected ? 16777215 : 1058874, width: selected ? 4 : 2 });
+    const radius = selected ? 29 : 24;
+    this.frame.clear().circle(0, 2, radius).fill({ color: 132631, alpha: 0.4 }).circle(0, 0, radius).fill({ color, alpha: node.isLocked ? 0.45 : 0.96 }).circle(0, 0, Math.max(1, radius - 7)).fill({ color: 1058874, alpha: 0.7 }).circle(0, 0, radius).stroke({ color: selected ? 16777215 : node.isReachable ? 14022371 : 1058874, width: selected ? 4 : 2 });
     this.icon.text = getNodeIcon(node.kind);
     this.icon.anchor.set(0.5);
     this.icon.position.set(0, 0);
@@ -54968,12 +54975,13 @@ var MapNodeView = class extends Container {
 var MapControl = class extends Container {
   frame = new Graphics();
   caption = new Text({ text: "", style: controlStyle });
-  constructor(label, hint, enabled, onPress) {
+  constructor(label, hint, enabled, width, onPress) {
     super();
     this.caption.text = label;
     this.addChild(this.frame, this.caption);
-    this.frame.clear().roundRect(0, 0, 116, 42, 10).fill({ color: 1520456, alpha: enabled ? 0.96 : 0.42 }).stroke({ color: 9549506, width: 2 });
-    this.caption.position.set(16, 11);
+    this.frame.clear().roundRect(0, 2, width, 42, 10).fill({ color: 132631, alpha: 0.36 }).roundRect(0, 0, width, 42, 10).fill({ color: enabled ? 1920099 : 1520456, alpha: enabled ? 0.98 : 0.42 }).roundRect(0, 0, width, 42, 10).stroke({ color: enabled ? 12905969 : 9549506, width: 2 }).rect(9, 9, 3, 24).fill({ color: enabled ? 16113563 : 9549506, alpha: 0.9 });
+    this.caption.anchor.set(0.5);
+    this.caption.position.set(width / 2 + 4, 21);
     this.eventMode = enabled ? "static" : "none";
     this.cursor = enabled ? "pointer" : "default";
     this.accessibleTitle = hint;
@@ -54982,6 +54990,12 @@ var MapControl = class extends Container {
 };
 function getNodeIcon(kind) {
   return { Map: "\u25C6", Encounter: "\u2694", Event: "?", Treasure: "\u2726", Rest: "\u2668", Shop: "\xA4", Elite: "\u2694", Boss: "\u265B" }[kind] ?? "\u2022";
+}
+function getMapSurfaceSize(canvas) {
+  const surface = canvas.parentElement;
+  const width = surface?.clientWidth || canvas.clientWidth || canvas.width || 960;
+  const height = surface?.clientHeight || canvas.clientHeight || canvas.height || 540;
+  return { width: Math.max(1, width), height: Math.max(1, height) };
 }
 function isMapState(value) {
   return typeof value === "object" && value !== null && Array.isArray(value.nodes) && Array.isArray(value.connections);
@@ -55004,7 +55018,7 @@ function createMapAccessibilityOverlay(canvas) {
 var noOpAccessibilityOverlay3 = { update() {
 }, dispose() {
 } };
-var titleStyle4 = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 34, fontWeight: "bold" });
+var titleStyle4 = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 26, fontWeight: "bold", letterSpacing: 1 });
 var regionStyle = new TextStyle({ fill: 9549506, fontFamily: "Arial", fontSize: 18 });
 var contextTitleStyle4 = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 18, fontWeight: "bold" });
 var contextBodyStyle4 = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 14, lineHeight: 19, wordWrap: true });

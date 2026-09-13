@@ -9,6 +9,111 @@ html, body, #app {
     user-select: none;
 }
 
+.game-menu-bar {
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
+}
+
+.game-menu-bar .game-end-turn {
+    flex: 0 1 12rem;
+    min-width: 6.5rem;
+    white-space: nowrap;
+}
+
+.mobile-only-combat-actions,
+.mobile-only-global-action {
+    display: none;
+}
+
+.game-main-content {
+    padding-bottom: max(4.5rem, calc(env(safe-area-inset-bottom) + 3.75rem)) !important;
+}
+
+@media (max-width: 700px) {
+    .game-menu-bar .mud-toolbar {
+        gap: 0.125rem;
+        padding-inline: 0.25rem;
+    }
+
+    .game-menu-bar .mud-icon-button {
+        height: 2.75rem;
+        min-width: 2.75rem;
+        width: 2.75rem;
+    }
+
+    .game-menu-bar .game-end-turn {
+        min-height: 2.5rem;
+        min-width: 5.75rem;
+        padding-inline: 0.5rem;
+    }
+
+    .game-menu-bar .game-secondary-combat-action,
+    .game-menu-bar .game-secondary-global-action {
+        display: none;
+    }
+
+    .mobile-only-combat-actions,
+    .mobile-only-global-action {
+        display: flex;
+    }
+}
+
+@media (max-width: 600px) {
+    .game-main-content {
+        padding-top: 0.5rem !important;
+        padding-inline: 0.5rem !important;
+    }
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+    .game-menu-bar .mud-toolbar {
+        min-height: 2.75rem;
+    }
+
+    .game-menu-bar .mud-icon-button {
+        height: 2.5rem;
+        min-width: 2.5rem;
+        width: 2.5rem;
+    }
+
+    .game-menu-bar .game-end-turn {
+        font-size: 0.75rem;
+        min-height: 2.25rem;
+        min-width: 5.25rem;
+    }
+
+    .game-main-content {
+        padding-bottom: max(3.5rem, calc(env(safe-area-inset-bottom) + 3rem)) !important;
+    }
+}
+
+.character-select-options {
+    display: grid !important;
+    gap: 0.5rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    width: 100%;
+}
+
+.character-select-options .mud-toggle-item {
+    justify-content: center;
+    margin: 0;
+    min-height: 3rem;
+    min-width: 0;
+    padding-inline: 0.5rem;
+}
+
+@media (max-width: 600px) {
+    .character-select-options {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+    .character-select-options .mud-toggle-item {
+        min-height: 2.5rem;
+    }
+}
+
 .pixi-encounter-surface canvas:focus-visible {
     outline: 3px solid var(--mud-palette-secondary);
     outline-offset: -3px;
@@ -559,6 +664,26 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     justify-content: center;
 }
 
+.center-container.rest-screen {
+    bottom: max(3.5rem, calc(env(safe-area-inset-bottom) + 3rem));
+    box-sizing: border-box;
+    height: auto;
+    overflow: hidden;
+    padding: 0.5rem;
+}
+
+.center-container.rest-screen .pixi-rest-surface {
+    height: 100%;
+    min-height: 0;
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+    .center-container.rest-screen {
+        bottom: max(3rem, calc(env(safe-area-inset-bottom) + 2.75rem));
+        padding-block: 0.25rem;
+    }
+}
+
 .encounter-screen {
     height: 100vh;
     height: 100dvh;
@@ -966,33 +1091,6 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
 
 .lighten {
     filter: brightness(125%);
-}
-
-#orientation-warning {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.9);
-    color: white;
-    z-index: 10000;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 1rem;
-}
-
-@media screen and (orientation: portrait) {
-    #orientation-warning {
-        display: flex;
-    }
-
-    #app {
-        display: none;
-    }
 }
 
 /* Align snackbar text to the center for bottom-center snackbars */
