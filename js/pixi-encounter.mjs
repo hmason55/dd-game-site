@@ -49812,6 +49812,71 @@ var ResourceCounter = class extends Container {
     this.valueText.text = String(value);
   }
 };
+var ProgressIndicator = class extends Container {
+  backgroundGraphic = new Graphics();
+  progressGraphic = new Graphics();
+  fill;
+  background;
+  indicatorWidth;
+  indicatorHeight;
+  currentValue;
+  maximumValue;
+  /**
+   * Creates a progress indicator.
+   */
+  constructor(options) {
+    super();
+    this.indicatorWidth = normalizeSize(options.width);
+    this.indicatorHeight = normalizeSize(options.height);
+    this.currentValue = options.value;
+    this.maximumValue = options.maximum;
+    this.fill = options.fill ?? uiColors.progressFill;
+    this.background = options.background ?? uiColors.progressBackground;
+    this.addChild(this.backgroundGraphic, this.progressGraphic);
+    this.redraw();
+  }
+  /**
+   * Gets the current value used to calculate progress.
+   */
+  get value() {
+    return this.currentValue;
+  }
+  /**
+   * Gets the maximum value used to calculate progress.
+   */
+  get maximum() {
+    return this.maximumValue;
+  }
+  /**
+   * Gets the normalized fill amount in the inclusive range from zero to one.
+   */
+  get progress() {
+    if (!Number.isFinite(this.currentValue) || !Number.isFinite(this.maximumValue) || this.maximumValue <= 0) {
+      return 0;
+    }
+    return Math.min(1, Math.max(0, this.currentValue / this.maximumValue));
+  }
+  /**
+   * Updates the values used to calculate and draw the filled portion.
+   */
+  setProgress(value, maximum) {
+    this.currentValue = value;
+    this.maximumValue = maximum;
+    this.redraw();
+  }
+  /**
+   * Updates indicator dimensions while retaining its current progress values.
+   */
+  resize(width, height) {
+    this.indicatorWidth = normalizeSize(width);
+    this.indicatorHeight = normalizeSize(height);
+    this.redraw();
+  }
+  redraw() {
+    this.backgroundGraphic.clear().rect(0, 0, this.indicatorWidth, this.indicatorHeight).fill({ color: this.background });
+    this.progressGraphic.clear().rect(0, 0, this.indicatorWidth * this.progress, this.indicatorHeight).fill({ color: this.fill });
+  }
+};
 var ContextPanel = class extends GamePanel {
   collapsedHeight;
   expandedHeight;
@@ -50522,10 +50587,11 @@ var RunHud = class extends Container {
     this.actions = actions;
     this.context.content.addChild(this.contextBody);
     this.contextBody.position.set(uiTokens.spacing.sm, uiTokens.spacing.sm);
-    this.addChild(this.health, this.currency, this.deck, this.relics, this.context);
+    this.addChild(this.health, this.healthBar, this.currency, this.deck, this.relics, this.context);
   }
   actions;
   health = new ResourceCounter({ icon: "\u2665", label: "", value: "0/0", valueLayout: "inline" });
+  healthBar = new ProgressIndicator({ width: 64, height: 5, value: 0, maximum: 1, fill: 13127512 });
   currency = new ResourceCounter({ icon: "\u25C6", label: "Vein", value: 0 });
   deck = new GameButton({ width: 92, height: 44, label: "Deck 0", onPress: () => this.actions.previewDeck() });
   relics = new GameButton({ width: 92, height: 44, label: "Relics 0", onPress: () => this.actions.toggleContext() });
@@ -50535,6 +50601,7 @@ var RunHud = class extends Container {
   /** Updates values without rebuilding unchanged controls. */
   reconcile(state, viewport) {
     this.health.setValue(`${state.health}/${state.maximumHealth}`);
+    this.healthBar.setProgress(state.health, state.maximumHealth);
     this.currency.setValue(state.currency);
     this.deck.label = `${state.inventoryOpen ? "Hand" : "Deck"} ${state.deckCount}`;
     this.relics.label = `Relics ${state.relicCount}`;
@@ -50543,7 +50610,8 @@ ${state.inventoryOpen ? "Inventory open" : "Hand open"}
 H: deck  C: context`;
     const padding = uiTokens.spacing.sm;
     this.health.position.set(padding, padding);
-    this.currency.position.set(78, padding);
+    this.healthBar.position.set(padding + 20, padding + 20);
+    this.currency.position.set(92, padding);
     if (getViewportLayoutMode(viewport) === "MobilePortrait") {
       this.deck.position.set(padding, 50);
       this.relics.position.set(100, 50);
@@ -50960,7 +51028,7 @@ var EncounterScene = class {
   updateEntityTile(id, entity, layer, position) {
     const tile = this.getOrCreateTile(this.entityTiles, id, layer);
     const health = `HP ${entity.health}/${entity.maxHealth} \xB7 B ${entity.block}`;
-    const resources = entity.isPlayer ? `E ${entity.energy} \xB7 M ${entity.mana}` : `P ${entity.posture}/${entity.maxPosture}`;
+    const resources = entity.isPlayer ? `\u26A1 ${entity.energy} \xB7 \u2726 ${entity.mana}` : `Posture ${entity.posture}/${entity.maxPosture}`;
     const telegraph = formatEntityTelegraph(entity.telegraph);
     tile.background.clear();
     tile.container.hitArea = new Rectangle(-entityHitHalfWidth, -entityHitHalfHeight, entityHitHalfWidth * 2, entityHitHalfHeight * 2);
@@ -50975,6 +51043,10 @@ ${resources}`;
     tile.description.position.set(0, -24);
     tile.detail.position.set(0, 7);
     tile.effects.position.set(0, 38);
+    this.drawMeter(tile.healthBar, entity.health, entity.maxHealth, -78, -9, 156, 5, 13127512);
+    tile.healthBar.visible = entity.maxHealth > 0;
+    this.drawMeter(tile.postureBar, entity.posture, entity.maxPosture, -78, 29, 156, 4, 14264667);
+    tile.postureBar.visible = !entity.isPlayer && entity.maxPosture > 0;
     if (!this.isDragPositionManaged(id)) {
       tile.container.position.set(position.x, position.y);
     }
@@ -50990,7 +51062,7 @@ ${resources}`;
     const tile = isCard ? this.getOrCreateCardTile(id, entry) : this.getOrCreateTile(this.handTiles, id, this.handLayer);
     const color = isCard ? getCardTypeColor(entry.cardType) : 4156503;
     const isQueued = isCard && (entry.isQueued || this.queuedEntryIds.has(entry.id));
-    const secondaryText = isCard ? `${entry.cardType}  ${entry.energyCost}E ${entry.manaCost}M${isQueued ? "\nQueued" : ""}` : `${entry.uses} uses`;
+    const secondaryText = isCard ? `${entry.cardType}  \u26A1 ${entry.energyCost}  \u2726 ${entry.manaCost}${isQueued ? "\nQueued" : ""}` : `${entry.uses} uses`;
     if (isCard && tile.cardView) {
       this.updateCardView(tile, entry, isQueued);
     } else {
@@ -51040,6 +51112,8 @@ ${resources}`;
     const description = new Text({ text: "", style: { align: "center", fill: 15856888, fontFamily: "Arial, system-ui", fontSize: 13, stroke: { color: 463132, width: 3 } } });
     const detail = new Text({ text: "", style: { align: "center", fill: 14148078, fontFamily: "Arial, system-ui", fontSize: 13, stroke: { color: 463132, width: 3 } } });
     const effects = new Text({ text: "", style: { align: "center", fill: 16769155, fontFamily: "Arial, system-ui", fontSize: 12, stroke: { color: 463132, width: 3 }, wordWrap: true, wordWrapWidth: 156 } });
+    const healthBar = new Graphics();
+    const postureBar = new Graphics();
     const container = new Container();
     title.anchor.set(0.5, 0.5);
     description.anchor.set(0.5, 0.5);
@@ -51052,9 +51126,9 @@ ${resources}`;
     description.position.set(0, -23);
     detail.position.set(0, 7);
     effects.position.set(0, 38);
-    container.addChild(background, targetHighlight, artwork, accent, title, description, detail, effects);
+    container.addChild(background, targetHighlight, artwork, accent, title, description, detail, healthBar, postureBar, effects);
     layer.addChild(container);
-    const tile = { container, background, accent, targetHighlight, artwork, title, description, detail, effects };
+    const tile = { container, background, accent, targetHighlight, artwork, title, description, detail, effects, healthBar, postureBar };
     tiles.set(id, tile);
     return tile;
   }
@@ -51092,6 +51166,14 @@ ${resources}`;
     this.refreshHandInspection(previousSelectedTileId);
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
+  }
+  /** Draws a compact clamped status meter below an entity's numeric status. */
+  drawMeter(graphic, value, maximum, x2, y2, width, height, fill) {
+    const ratio = maximum > 0 ? Math.max(0, Math.min(1, value / maximum)) : 0;
+    graphic.clear().roundRect(x2, y2, width, height, height / 2).fill({ color: 1452091, alpha: 0.94 });
+    if (ratio > 0) {
+      graphic.roundRect(x2, y2, width * ratio, height, height / 2).fill(fill);
+    }
   }
   /** Enlarges an entry while a pointer is over it without changing semantic selection. */
   handleEntryHover(entry) {
@@ -51251,7 +51333,7 @@ ${resources}`;
     cardView.position.set(-handCardVisualSize.width / 2, -handCardVisualSize.height / 2);
     cardView.scale.set(handCardViewScale);
     tile.container.removeAllListeners();
-    tile.container.removeChild(tile.background, tile.accent, tile.targetHighlight, tile.artwork, tile.title, tile.description, tile.detail, tile.effects);
+    tile.container.removeChild(tile.background, tile.accent, tile.targetHighlight, tile.artwork, tile.title, tile.description, tile.detail, tile.healthBar, tile.postureBar, tile.effects);
     tile.artwork.destroy();
     tile.title.destroy();
     tile.description.destroy();
@@ -52353,7 +52435,7 @@ function isUnmodifiedShortcut(event, key) {
   return !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === key;
 }
 function formatCardCost(card) {
-  return card.manaCost > 0 ? `${card.energyCost}E ${card.manaCost}M` : `${card.energyCost}E`;
+  return card.manaCost > 0 ? `\u26A1 ${card.energyCost}  \u2726 ${card.manaCost}` : `\u26A1 ${card.energyCost}`;
 }
 function formatEntityTelegraph(telegraph) {
   if (!telegraph) {
@@ -55155,15 +55237,13 @@ async function createMainMenuRenderer(canvas, sink) {
   const root = new Container();
   const background = new Graphics();
   const panel = new Graphics();
-  const title = new Text({ text: "DDGAME", style: titleStyle4 });
-  const subtitle = new Text({ text: "A descent into the Fold", style: subtitleStyle });
+  const watermark = new Text({ text: "", style: watermarkStyle });
   const feedback = new Text({ text: "", style: feedbackStyle6 });
   const buttonLayer = new Container();
-  root.addChild(background, panel, title, subtitle, buttonLayer, feedback);
+  root.addChild(background, panel, buttonLayer, feedback, watermark);
   application.stage.addChild(root);
-  title.anchor.set(0.5, 0);
-  subtitle.anchor.set(0.5, 0);
   feedback.anchor.set(0.5, 0);
+  watermark.anchor.set(1, 1);
   let state;
   let buttons = [];
   let focusedIndex = 0;
@@ -55182,12 +55262,11 @@ async function createMainMenuRenderer(canvas, sink) {
     const panelY = (height - panelHeight) / 2;
     background.clear().rect(0, 0, width, height).fill(529183).rect(0, 0, width, height * 0.38).fill({ color: 1520456, alpha: 0.45 });
     panel.clear().roundRect(panelX, panelY, panelWidth, panelHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
-    title.position.set(width / 2, panelY + 54);
-    subtitle.position.set(width / 2, panelY + 102);
+    watermark.position.set(width - 12, height - 10);
     const buttonWidth = Math.max(180, panelWidth - 72);
     buttons.forEach((button, index) => {
       button.resize(buttonWidth, 52);
-      button.position.set((width - buttonWidth) / 2, panelY + 148 + index * 66);
+      button.position.set((width - buttonWidth) / 2, panelY + 78 + index * 66);
       button.setFocused(index === focusedIndex);
     });
     feedback.position.set(width / 2, panelY + panelHeight - 30);
@@ -55241,6 +55320,7 @@ async function createMainMenuRenderer(canvas, sink) {
     reconcile(candidate) {
       if (!isMainMenuState(candidate)) return false;
       state = candidate;
+      watermark.text = `build ${state.version}`;
       pending = false;
       feedback.text = "";
       reconcileButtons();
@@ -55272,11 +55352,321 @@ function getViewport(canvas) {
   };
 }
 function isMainMenuState(value) {
-  return typeof value === "object" && value !== null && typeof value.hasSavedGame === "boolean";
+  return typeof value === "object" && value !== null && typeof value.hasSavedGame === "boolean" && typeof value.version === "string";
 }
-var titleStyle4 = new TextStyle({ ...uiTokens.typography.panelTitle, align: "center", fill: 16113563, fontSize: 42, fontWeight: "bold", letterSpacing: 4 });
-var subtitleStyle = new TextStyle({ ...uiTokens.typography.body, align: "center", fill: 9549506, fontSize: 16 });
 var feedbackStyle6 = new TextStyle({ ...uiTokens.typography.body, align: "center", fill: 16113563, fontSize: 14 });
+var watermarkStyle = new TextStyle({ ...uiTokens.typography.body, align: "right", fill: 6717587, fontSize: 11 });
+
+// src/pixi-character-select.ts
+async function createCharacterSelectRenderer(canvas, sink) {
+  const application = new Application();
+  await application.init({ antialias: true, autoDensity: true, background: 529183, canvas, preference: "canvas" });
+  canvas.tabIndex = 0;
+  const root = new Container();
+  const background = new Graphics();
+  const panel = new Graphics();
+  const heading = new Text({ text: "Choose a character", style: headingStyle });
+  const seedLabel = new Text({ text: "", style: bodyStyle2 });
+  const buttons = new Container();
+  const controls = new Container();
+  root.addChild(background, panel, heading, buttons, seedLabel, controls);
+  application.stage.addChild(root);
+  heading.anchor.set(0.5, 0);
+  seedLabel.anchor.set(0.5, 0);
+  let state;
+  let selection = 0;
+  let characterButtons = [];
+  let seedButtons = [];
+  let disposed = false;
+  const send = (action) => sink.invokeMethodAsync("HandleActionFromRendererAsync", action);
+  const embark = async () => {
+    const character = state?.characters[selection];
+    if (character) await send(`select:${character}`);
+    await send("embark");
+  };
+  const rebuild = () => {
+    if (!state) return;
+    selection = Math.max(0, state.characters.indexOf(state.selectedCharacter));
+    buttons.removeChildren();
+    characterButtons = state.characters.map((character, index) => {
+      const button = new GameButton({ label: character, width: 1, height: 1, selected: index === selection, onPress: () => {
+        void send(`select:${character}`);
+      } });
+      buttons.addChild(button);
+      return button;
+    });
+    controls.removeChildren();
+    const reroll = new GameButton({ label: "New seed", width: 1, height: 1, onPress: () => {
+      void send("rerollSeed");
+    } });
+    const paste = new GameButton({ label: "Paste", width: 1, height: 1, onPress: () => {
+      void send("pasteSeed");
+    } });
+    const embarkButton = new GameButton({ label: "Embark", width: 1, height: 1, selected: true, onPress: () => {
+      void embark();
+    } });
+    seedButtons = [reroll, paste, embarkButton];
+    controls.addChild(...seedButtons);
+  };
+  const layout = () => {
+    if (disposed) return;
+    const width = Math.max(1, canvas.parentElement?.clientWidth || canvas.clientWidth || 640);
+    const height = Math.max(1, canvas.parentElement?.clientHeight || canvas.clientHeight || 560);
+    application.renderer.resize(width, height);
+    const panelWidth = Math.min(width - 28, 430);
+    const panelHeight = Math.min(height - 28, 500);
+    const x2 = (width - panelWidth) / 2;
+    const y2 = (height - panelHeight) / 2;
+    background.clear().rect(0, 0, width, height).fill(529183);
+    panel.clear().roundRect(x2, y2, panelWidth, panelHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
+    const headingY = y2 + Math.max(12, panelHeight * 0.06);
+    const footerHeight = Math.max(70, panelHeight * 0.27);
+    const characterTop = headingY + Math.max(30, panelHeight * 0.1);
+    const characterHeight = Math.max(24, Math.min(48, (panelHeight - footerHeight - (characterTop - y2)) / Math.max(1, characterButtons.length) - 5));
+    const characterGap = Math.max(3, Math.min(10, characterHeight * 0.2));
+    heading.position.set(width / 2, headingY);
+    characterButtons.forEach((button, index) => {
+      button.resize(panelWidth - 64, characterHeight);
+      button.position.set(x2 + 32, characterTop + index * (characterHeight + characterGap));
+      button.setSelected(index === selection);
+    });
+    seedLabel.text = `Seed: ${state?.seed ?? "0"}`;
+    seedLabel.position.set(width / 2, y2 + panelHeight - footerHeight);
+    const controlWidth = (panelWidth - 72) / 3;
+    const controlHeight = Math.max(28, Math.min(46, panelHeight * 0.12));
+    seedButtons.forEach((button, index) => {
+      button.resize(controlWidth, controlHeight);
+      button.position.set(x2 + 28 + index * (controlWidth + 8), y2 + panelHeight - controlHeight - Math.max(12, panelHeight * 0.06));
+    });
+  };
+  const keydown = (event) => {
+    if (!state) return;
+    if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      selection = (selection + (event.key === "ArrowUp" ? -1 : 1) + state.characters.length) % state.characters.length;
+      characterButtons.forEach((button, index) => button.setSelected(index === selection));
+      event.preventDefault();
+    } else if (event.key === "Enter" || event.key === " ") {
+      void embark();
+      event.preventDefault();
+    }
+  };
+  canvas.addEventListener("keydown", keydown);
+  window.addEventListener("resize", layout);
+  const resizeObserver = new ResizeObserver(layout);
+  resizeObserver.observe(canvas.parentElement ?? canvas);
+  return {
+    reconcile(candidate) {
+      if (!isState(candidate)) return false;
+      state = candidate;
+      rebuild();
+      layout();
+      return true;
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", layout);
+      canvas.removeEventListener("keydown", keydown);
+      application.destroy({ removeView: false }, { children: true });
+    }
+  };
+}
+function isState(value) {
+  return typeof value === "object" && value !== null && Array.isArray(value.characters) && typeof value.selectedCharacter === "string" && typeof value.seed === "string";
+}
+var headingStyle = new TextStyle({ ...uiTokens.typography.panelTitle, align: "center", fill: 16113563, fontSize: 24 });
+var bodyStyle2 = new TextStyle({ ...uiTokens.typography.body, align: "center", fill: 14148078, fontSize: 15 });
+
+// src/pixi-leave.ts
+async function createLeaveRenderer(canvas, sink) {
+  const application = new Application();
+  await application.init({ antialias: true, autoDensity: true, background: 529183, canvas, preference: "canvas" });
+  canvas.tabIndex = 0;
+  const root = new Container();
+  const panel = new Graphics();
+  const label = new Text({ text: "Encounter complete", style: { ...uiTokens.typography.panelTitle, fill: 16113563 } });
+  const leave = new GameButton({ width: 1, height: 1, label: "Leave", onPress: () => {
+    void sink.invokeMethodAsync("HandleActionFromRendererAsync", "leave");
+  } });
+  label.anchor.set(0.5, 0);
+  root.addChild(panel, label, leave);
+  application.stage.addChild(root);
+  let disposed = false;
+  const layout = () => {
+    if (disposed) return;
+    const width = Math.max(1, canvas.parentElement?.clientWidth || canvas.clientWidth || 440);
+    const height = Math.max(1, canvas.parentElement?.clientHeight || canvas.clientHeight || 220);
+    application.renderer.resize(width, height);
+    panel.clear().roundRect(8, 8, width - 16, height - 16, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
+    label.position.set(width / 2, Math.max(28, height / 2 - 50));
+    leave.resize(Math.min(220, width - 64), 52);
+    leave.position.set((width - leave.panelSize.width) / 2, height / 2 + 4);
+  };
+  const keydown = (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      leave.press();
+      event.preventDefault();
+    }
+  };
+  canvas.addEventListener("keydown", keydown);
+  window.addEventListener("resize", layout);
+  const observer = new ResizeObserver(layout);
+  observer.observe(canvas.parentElement ?? canvas);
+  layout();
+  return { dispose() {
+    if (disposed) return;
+    disposed = true;
+    observer.disconnect();
+    window.removeEventListener("resize", layout);
+    canvas.removeEventListener("keydown", keydown);
+    application.destroy({ removeView: false }, { children: true });
+  } };
+}
+
+// src/pixi-collection.ts
+async function createCollectionRenderer(canvas, sink) {
+  const application = new Application();
+  await application.init({ antialias: true, autoDensity: true, background: 529183, canvas, preference: "canvas" });
+  canvas.tabIndex = 0;
+  const root = new Container();
+  const background = new Graphics();
+  const title = new Text({ text: "", style: { ...uiTokens.typography.panelTitle, fill: 16113563 } });
+  const tabLayer = new Container();
+  const entriesLayer = new Container();
+  const close = new GameButton({ width: 1, height: 1, label: "Close", onPress: () => {
+    void sink.invokeMethodAsync("HandleActionFromRendererAsync", "close");
+  } });
+  root.addChild(background, title, tabLayer, entriesLayer, close);
+  application.stage.addChild(root);
+  title.anchor.set(0.5, 0);
+  let state;
+  let disposed = false;
+  let scrollOffset = 0;
+  const rebuild = () => {
+    tabLayer.removeChildren();
+    entriesLayer.removeChildren();
+    if (!state) return;
+    title.text = state.title;
+    const currentState = state;
+    scrollOffset = 0;
+    currentState.tabs.forEach((tab2, index) => tabLayer.addChild(new GameButton({ width: 1, height: 1, label: `${tab2.label} ${tab2.entries.length}`, selected: index === currentState.activeTabIndex, onPress: () => {
+      void sink.invokeMethodAsync("HandleActionFromRendererAsync", `tab:${index}`);
+    } })));
+    const tab = currentState.tabs[currentState.activeTabIndex];
+    if (!tab) return;
+    tab.entries.forEach((entry) => {
+      const card = new Graphics();
+      const name = new Text({ text: entry.name, style: { ...uiTokens.typography.button, fill: 15856888, wordWrap: true, wordWrapWidth: 440 } });
+      const detail = new Text({ text: entry.detail, style: { ...uiTokens.typography.body, fill: 9425057 } });
+      const description = new Text({ text: entry.description, style: { ...uiTokens.typography.body, fill: 12109785, fontSize: 12, wordWrap: true, wordWrapWidth: 440 } });
+      card.eventMode = "static";
+      card.on("pointertap", () => {
+      });
+      card.addChild(name, detail, description);
+      entriesLayer.addChild(card);
+    });
+  };
+  const layout = () => {
+    if (disposed) return;
+    const width = Math.max(1, canvas.parentElement?.clientWidth || canvas.clientWidth || 900);
+    const height = Math.max(1, canvas.parentElement?.clientHeight || canvas.clientHeight || 640);
+    application.renderer.resize(width, height);
+    background.clear().roundRect(0, 0, width, height, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
+    title.position.set(width / 2, 20);
+    const tabs = tabLayer.children.filter((child) => child instanceof GameButton);
+    const tabWidth = Math.max(40, Math.min(150, (width - 40) / Math.max(1, tabs.length)));
+    tabs.forEach((tab, index) => {
+      tab.resize(Math.max(34, tabWidth - 4), 40);
+      tab.position.set(20 + index * tabWidth, 62);
+    });
+    close.resize(104, 40);
+    close.position.set(width - 124, height - 56);
+    entriesLayer.children.forEach((child, index) => {
+      if (!(child instanceof Graphics)) return;
+      const y2 = 118 + index * 88 - scrollOffset;
+      child.clear().roundRect(20, y2, width - 40, 76, 8).fill({ color: 1254710 }).stroke({ color: 3561587, width: 1 });
+      const [name, detail, description] = child.children.filter((entry) => entry instanceof Text);
+      name?.position.set(36, y2 + 10);
+      detail?.position.set(width - 160, y2 + 12);
+      description?.position.set(36, y2 + 38);
+      child.visible = y2 >= 108 && y2 < height - 70;
+    });
+  };
+  const scroll = (amount) => {
+    const entryCount = state?.tabs[state.activeTabIndex]?.entries.length ?? 0;
+    const viewportHeight = Math.max(0, application.renderer.height - 188);
+    scrollOffset = Math.max(0, Math.min(Math.max(0, entryCount * 88 - viewportHeight), scrollOffset + amount));
+    layout();
+  };
+  const wheel = (event) => {
+    scroll(event.deltaY);
+    event.preventDefault();
+  };
+  let scrollPointerId;
+  let lastScrollPointerY = 0;
+  const pointerdown = (event) => {
+    if (event.pointerType !== "mouse") {
+      scrollPointerId = event.pointerId;
+      lastScrollPointerY = event.clientY;
+    }
+  };
+  const pointermove = (event) => {
+    if (event.pointerId === scrollPointerId) {
+      scroll(lastScrollPointerY - event.clientY);
+      lastScrollPointerY = event.clientY;
+      event.preventDefault();
+    }
+  };
+  const pointerend = (event) => {
+    if (event.pointerId === scrollPointerId) scrollPointerId = void 0;
+  };
+  const keydown = (event) => {
+    if (event.key === "Escape") {
+      void sink.invokeMethodAsync("HandleActionFromRendererAsync", "close");
+      event.preventDefault();
+    }
+    if (event.key === "PageDown") {
+      scroll(application.renderer.height * 0.7);
+      event.preventDefault();
+    }
+    if (event.key === "PageUp") {
+      scroll(-application.renderer.height * 0.7);
+      event.preventDefault();
+    }
+  };
+  canvas.addEventListener("keydown", keydown);
+  canvas.addEventListener("wheel", wheel, { passive: false });
+  canvas.addEventListener("pointerdown", pointerdown);
+  canvas.addEventListener("pointermove", pointermove, { passive: false });
+  canvas.addEventListener("pointerup", pointerend);
+  canvas.addEventListener("pointercancel", pointerend);
+  window.addEventListener("resize", layout);
+  const observer = new ResizeObserver(layout);
+  observer.observe(canvas.parentElement ?? canvas);
+  return { reconcile(candidate) {
+    if (!isState2(candidate)) return false;
+    state = candidate;
+    rebuild();
+    layout();
+    return true;
+  }, dispose() {
+    if (disposed) return;
+    disposed = true;
+    observer.disconnect();
+    window.removeEventListener("resize", layout);
+    canvas.removeEventListener("keydown", keydown);
+    canvas.removeEventListener("wheel", wheel);
+    canvas.removeEventListener("pointerdown", pointerdown);
+    canvas.removeEventListener("pointermove", pointermove);
+    canvas.removeEventListener("pointerup", pointerend);
+    canvas.removeEventListener("pointercancel", pointerend);
+    application.destroy({ removeView: false }, { children: true });
+  } };
+}
+function isState2(value) {
+  return typeof value === "object" && value !== null && typeof value.title === "string" && Array.isArray(value.tabs) && Number.isInteger(value.activeTabIndex);
+}
 
 // src/pixi-encounter.ts
 async function createEncounterRenderer(canvas, intentSink, initialization) {
@@ -55908,8 +56298,11 @@ function isElement(value) {
   return value instanceof Element;
 }
 export {
+  createCharacterSelectRenderer,
+  createCollectionRenderer,
   createEncounterRenderer,
   createEventRenderer,
+  createLeaveRenderer,
   createMainMenuRenderer,
   createMapRenderer,
   createRestRenderer,

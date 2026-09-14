@@ -35,6 +35,37 @@
         min-height: 0;
     }
 }
+/* /Components/PixiCharacterSelectSurface.razor.rz.scp.css */
+.pixi-character-select-surface[b-oywb2u3hc5] {
+    background: #08131f;
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: var(--mud-default-borderradius);
+    height: min(40rem, calc(100dvh - 8rem));
+    margin: clamp(1rem, 6vh, 4rem) auto;
+    max-width: 42rem;
+    overflow: hidden;
+    width: min(100%, 42rem);
+}
+
+.pixi-character-select-surface canvas[b-oywb2u3hc5] {
+    display: block;
+    height: 100%;
+    outline: none;
+    width: 100%;
+}
+
+.pixi-character-select-help[b-oywb2u3hc5] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
+
+/* /Components/PixiCollectionSurface.razor.rz.scp.css */
+.pixi-collection-surface[b-16jlx61uh4] { background: rgba(3, 10, 18, .78); inset: 0; padding: clamp(1rem, 5vh, 4rem); position: fixed; z-index: 1400; }
+.pixi-collection-surface canvas[b-16jlx61uh4] { display: block; height: 100%; margin: auto; max-height: 48rem; max-width: 72rem; touch-action: none; width: 100%; }
+.pixi-collection-accessibility[b-16jlx61uh4] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
+
+/* /Components/PixiLeaveSurface.razor.rz.scp.css */
+.pixi-leave-surface[b-1eerug6m6b] { height: min(16rem, calc(100dvh - 8rem)); margin: 2rem auto; max-width: 28rem; width: min(100%, 28rem); }
+.pixi-leave-surface canvas[b-1eerug6m6b] { display: block; height: 100%; width: 100%; }
+.pixi-accessible-control[b-1eerug6m6b] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
+
 /* /Components/PixiMainMenuSurface.razor.rz.scp.css */
 .pixi-main-menu-surface[b-22zhoaus0z] {
     background: #08131f;
