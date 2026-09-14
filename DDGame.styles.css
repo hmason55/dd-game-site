@@ -194,13 +194,13 @@
     .pixi-rest-surface[b-her48madf3] { height: calc(100dvh - 5rem); min-height: 18rem; }
 }
 /* /Components/Rooms/PixiShopSurface.razor.rz.scp.css */
-.pixi-shop-surface[b-lr5mek7nhb] { height: clamp(22rem, 76dvh, 40rem); overflow: hidden; position: relative; width: 100%; }
+.pixi-shop-surface[b-lr5mek7nhb] { background: #0b1622; border: 1px solid var(--mud-palette-lines-default); border-radius: var(--mud-default-borderradius); height: min(calc(100dvh - 7rem), 48rem); margin: 0 auto 1rem; min-height: 30rem; overflow: hidden; position: relative; touch-action: none; width: min(calc(100vw - 2rem), 90rem); }
 .pixi-shop-surface canvas[b-lr5mek7nhb] { display: block; height: 100%; width: 100%; }
 .pixi-shop-surface canvas:focus-visible[b-lr5mek7nhb] { outline: 3px solid var(--mud-palette-secondary); outline-offset: -3px; }
 .pixi-shop-keyboard-help[b-lr5mek7nhb], .pixi-shop-accessibility-controls[b-lr5mek7nhb] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
 
 @media (max-width: 600px) {
-    .pixi-shop-surface[b-lr5mek7nhb] { height: min(72dvh, 42rem); min-height: 22rem; }
+    .pixi-shop-surface[b-lr5mek7nhb] { height: min(76dvh, 44rem); min-height: 22rem; width: calc(100vw - 1rem); }
 }
 
 @media (orientation: landscape) and (max-height: 540px) {

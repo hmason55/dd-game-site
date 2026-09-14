@@ -49920,6 +49920,84 @@ var ContextPanel = class extends GamePanel {
     this.setTrayOpen(!this.expanded);
   }
 };
+var Tooltip = class extends GamePanel {
+  tooltipText;
+  placement;
+  gap;
+  open = false;
+  /**
+   * Creates a hidden, non-interactive tooltip surface.
+   */
+  constructor(options) {
+    super(options);
+    this.placement = options.placement ?? "above";
+    this.gap = normalizeSize(options.gap ?? uiTokens.spacing.sm);
+    this.alpha = uiTokens.elevation.tooltipAlpha;
+    this.eventMode = "none";
+    this.tooltipText = new Text({ text: options.text, style: getUiTextStyle("Body") });
+    this.tooltipText.style.wordWrap = true;
+    this.tooltipText.style.wordWrapWidth = Math.max(1, this.panelSize.width - uiTokens.spacing.sm * 2);
+    this.tooltipText.position.set(uiTokens.spacing.sm, uiTokens.spacing.sm);
+    this.content.addChild(this.tooltipText);
+    this.visible = false;
+  }
+  /**
+   * Gets the text currently shown by the tooltip.
+   */
+  get text() {
+    return this.tooltipText.text;
+  }
+  /**
+   * Gets whether the tooltip is currently visible.
+   */
+  get isOpen() {
+    return this.open;
+  }
+  /**
+   * Updates the text without recreating the tooltip display tree.
+   */
+  setText(text) {
+    this.tooltipText.text = text;
+  }
+  /** Resizes the tooltip and wraps its text inside the updated content area. */
+  resize(width, height) {
+    super.resize(width, height);
+    this.tooltipText.style.wordWrapWidth = Math.max(1, this.panelSize.width - uiTokens.spacing.sm * 2);
+  }
+  /**
+   * Shows the tooltip beside the supplied scene-space anchor.
+   */
+  show(anchor) {
+    const position = this.getPosition(anchor);
+    this.position.set(position.x, position.y);
+    this.open = true;
+    this.visible = true;
+  }
+  /**
+   * Hides the tooltip while keeping its display tree available for later reuse.
+   */
+  hide() {
+    this.open = false;
+    this.visible = false;
+  }
+  getPosition(anchor) {
+    const x2 = normalizeCoordinate(anchor.x);
+    const y2 = normalizeCoordinate(anchor.y);
+    const width = normalizeSize(anchor.width);
+    const height = normalizeSize(anchor.height);
+    const tooltipSize = this.panelSize;
+    switch (this.placement) {
+      case "below":
+        return { x: x2 + (width - tooltipSize.width) / 2, y: y2 + height + this.gap };
+      case "left":
+        return { x: x2 - tooltipSize.width - this.gap, y: y2 + (height - tooltipSize.height) / 2 };
+      case "right":
+        return { x: x2 + width + this.gap, y: y2 + (height - tooltipSize.height) / 2 };
+      case "above":
+        return { x: x2 + (width - tooltipSize.width) / 2, y: y2 - tooltipSize.height - this.gap };
+    }
+  }
+};
 function getTextStyleOptions(kind) {
   switch (kind) {
     case "Button":
@@ -49932,6 +50010,9 @@ function getTextStyleOptions(kind) {
 }
 function normalizeSize(value) {
   return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+function normalizeCoordinate(value) {
+  return Number.isFinite(value) ? value : 0;
 }
 
 // src/card-view.ts
@@ -53793,14 +53874,15 @@ async function createEventRenderer(canvas, sink) {
   const background = new Graphics();
   const focal = new Graphics();
   const contextPanel = new Graphics();
-  const title = new Text({ text: "Event", style: titleStyle });
+  const title = new Text({ text: "", style: titleStyle });
   const narrative = new Text({ text: "", style: narrativeStyle });
   const contextTitle = new Text({ text: "Choose an option", style: contextTitleStyle });
   const contextDetails = new Text({ text: "Select a choice to inspect its outcome.", style: contextBodyStyle });
   const feedback = new Text({ text: "", style: feedbackStyle2 });
   const choiceLayer = new Container();
   const controlLayer = new Container();
-  root.addChild(background, focal, title, narrative, choiceLayer, contextPanel, contextTitle, contextDetails, controlLayer, feedback);
+  const tooltip = new Tooltip({ text: "", width: 272, height: 96, placement: "left" });
+  root.addChild(background, focal, title, narrative, choiceLayer, contextPanel, contextTitle, contextDetails, controlLayer, feedback, tooltip);
   application.stage.addChild(root);
   let state;
   let sequence = 0;
@@ -53815,6 +53897,7 @@ async function createEventRenderer(canvas, sink) {
   let narrativeProgress = 0;
   let effectName;
   let effectElapsedMs = 0;
+  let tooltipDelay;
   const availableOptions = () => state?.options.filter((option) => option.isAvailable) ?? [];
   const isNarrativeComplete = () => state !== void 0 && narrativeProgress >= toPlainNarrative(state.narrative).length;
   const playEffect = (name) => {
@@ -53824,6 +53907,21 @@ async function createEventRenderer(canvas, sink) {
   const announce = (message) => {
     feedback.text = message;
     accessibility.update(message);
+  };
+  const hideTooltip = () => {
+    if (tooltipDelay !== void 0) {
+      clearTimeout(tooltipDelay);
+      tooltipDelay = void 0;
+    }
+    tooltip.hide();
+  };
+  const scheduleTooltip = (text, anchor, delayMs) => {
+    hideTooltip();
+    if (!text) return;
+    tooltipDelay = setTimeout(() => {
+      tooltipDelay = void 0;
+      showTooltip(text, anchor);
+    }, delayMs);
   };
   const resize = () => {
     application.renderer.resize(Math.max(1, canvas.clientWidth || canvas.width || 960), Math.max(1, canvas.clientHeight || canvas.height || 540));
@@ -53852,6 +53950,12 @@ async function createEventRenderer(canvas, sink) {
     selectedIndex = availableOptions().findIndex((entry) => entry.id === option.id);
     announce(`Selected ${option.text}. ${getOptionSummary(option)} Review the outcome, then confirm or cancel.`);
     layout();
+  };
+  const pressOption = (option, isTouch) => {
+    selectOption(option);
+    if (!isTouch) {
+      confirmSelection();
+    }
   };
   const confirmSelection = () => {
     if (state?.isComplete) {
@@ -53957,7 +54061,6 @@ async function createEventRenderer(canvas, sink) {
     const choices = state?.isComplete ? [] : state?.options ?? [];
     const selected = choices.find((option) => option.id === selectedOptionId);
     const nested = getNestedChoice();
-    title.text = state?.title ?? "Event";
     narrative.text = toPlainNarrative(state?.narrative ?? "Loading event\u2026").slice(0, narrativeProgress);
     const controlsBelowDetails = mobile && (selected !== void 0 || nested !== void 0);
     const choiceWidth = mobile ? width - 48 : Math.max(260, width * 0.48);
@@ -53978,11 +54081,11 @@ async function createEventRenderer(canvas, sink) {
     const focalAlpha = effectName === "choice-confirmed" ? 0.72 : effectName === "choice-rejected" ? 0.24 : 0.45;
     background.clear().rect(0, 0, width, height).fill(529183);
     focal.clear().circle(mobile ? width / 2 : width * 0.25, mobile ? height * 0.2 : height * 0.45, Math.min(width, height) * 0.2).fill({ color: 3631734, alpha: focalAlpha }).circle(mobile ? width / 2 : width * 0.25, mobile ? height * 0.2 : height * 0.45, Math.min(width, height) * 0.1).fill({ color: 14069334, alpha: effectName === "narrative-complete" ? 0.9 : 0.72 });
-    title.position.set(28, 24);
     feedback.position.set(width / 2, trayY - 22);
     feedback.anchor.set(0.5);
     choiceLayer.removeChildren();
     controlLayer.removeChildren();
+    hideTooltip();
     contextPanel.clear().roundRect(16, trayY, width - 32, trayHeight, 12).fill({ color: 1058874, alpha: 0.98 }).stroke({ color: 9549506, width: 2 });
     if (state?.isComplete) {
       contextTitle.text = "Event complete";
@@ -53990,7 +54093,7 @@ async function createEventRenderer(canvas, sink) {
       addControl("Leave", "Return to map", true, width - 156, trayY + trayHeight - 54, 124, confirmSelection);
     } else {
       contextTitle.text = nested?.title ?? selected?.text ?? "Choose an option";
-      contextDetails.text = nested?.description ?? (selected ? getOptionSummary(selected) : "Select a choice to inspect its outcome and any consequences.");
+      contextDetails.text = nested?.description ?? (selected ? getOptionContextDetails(selected) : "Select a choice to inspect its outcome and any consequences.");
       if (selected !== void 0) {
         const controlY = trayY + trayHeight - 54;
         const confirmationHint = nested ? `Select ${nested.requiredSelectionCount} card${nested.requiredSelectionCount === 1 ? "" : "s"} (${selectedNestedItemIds.size}/${nested.requiredSelectionCount})` : "Apply this choice";
@@ -54009,17 +54112,35 @@ async function createEventRenderer(canvas, sink) {
       nestedItems.forEach((item, index) => {
         const itemIndex = nested.items.findIndex((candidate) => candidate.id === item.id);
         const itemSelected = selectedNestedItemIds.has(item.id) || selectedNestedItemIds.size === 0 && itemIndex === nestedIndex;
-        const choice = new EventChoice(item.name, item.description, !pending, itemSelected, () => toggleNestedItem(item));
+        const choiceY = choiceTop + index * (choiceHeight + choiceGap);
+        const choice = new EventChoice(
+          item.name,
+          item.description,
+          !pending,
+          itemSelected,
+          (isTouch) => toggleNestedItem(item, isTouch),
+          () => scheduleTooltip(item.tooltip, { x: choiceX, y: choiceY, width: choiceWidth, height: choiceHeight }, 2e3),
+          hideTooltip
+        );
         choice.resize(choiceWidth, choiceHeight);
-        choice.position.set(choiceX, choiceTop + index * (choiceHeight + choiceGap));
+        choice.position.set(choiceX, choiceY);
         choiceLayer.addChild(choice);
       });
     } else choices.forEach((option, index) => {
       const availableIndex = availableOptions().findIndex((entry) => entry.id === option.id);
       const selected2 = option.id === selectedOptionId || selectedOptionId === void 0 && availableIndex === selectedIndex;
-      const choice = new EventChoice(option.text, option.isAvailable ? [option.hint, option.details].filter(Boolean).join(" \xB7 ") : option.disabledReason ?? "Unavailable", option.isAvailable && isNarrativeComplete() && !pending, selected2, () => selectOption(option));
+      const choiceY = choiceTop + index * (choiceHeight + choiceGap);
+      const choice = new EventChoice(
+        option.text,
+        option.isAvailable ? [option.hint, option.details].filter(Boolean).join(" \xB7 ") : option.disabledReason ?? "Unavailable",
+        option.isAvailable && isNarrativeComplete() && !pending,
+        selected2,
+        (isTouch) => pressOption(option, isTouch),
+        () => scheduleTooltip(option.rewardTooltip, { x: choiceX, y: choiceY, width: choiceWidth, height: choiceHeight }, 0),
+        hideTooltip
+      );
       choice.resize(choiceWidth, choiceHeight);
-      choice.position.set(choiceX, choiceTop + index * (choiceHeight + choiceGap));
+      choice.position.set(choiceX, choiceY);
       choiceLayer.addChild(choice);
     });
   }
@@ -54040,7 +54161,7 @@ async function createEventRenderer(canvas, sink) {
     announce(`${nested.title}. ${nested.description}`);
     layout();
   }
-  function toggleNestedItem(item) {
+  function toggleNestedItem(item, requireConfirmation = true) {
     if (!item || pending) return;
     if (selectedNestedItemIds.has(item.id)) {
       selectedNestedItemIds.delete(item.id);
@@ -54054,6 +54175,9 @@ async function createEventRenderer(canvas, sink) {
     nestedIndex = nested?.items.findIndex((candidate) => candidate.id === item.id) ?? 0;
     announce(`${selectedNestedItemIds.has(item.id) ? "Selected" : "Deselected"} ${item.name}. ${selectedNestedItemIds.size} of ${nested?.requiredSelectionCount ?? 0} cards selected.`);
     layout();
+    if (!requireConfirmation && selectedNestedItemIds.size === nested?.requiredSelectionCount) {
+      void submit("chooseOption", selectedOptionId, [...selectedNestedItemIds]);
+    }
   }
   function getNestedPageSize(width, height) {
     return height > width ? 4 : 5;
@@ -54078,6 +54202,17 @@ async function createEventRenderer(canvas, sink) {
     control.resize(width, 42);
     control.position.set(x2, y2);
     controlLayer.addChild(control);
+  }
+  function showTooltip(text, anchor) {
+    const tooltipWidth = Math.min(272, Math.max(180, application.renderer.width - 24));
+    const estimatedLines = text.split("\n").reduce((count2, line) => count2 + Math.max(1, Math.ceil(line.length / 34)), 0);
+    const tooltipHeight = Math.min(224, Math.max(54, estimatedLines * 19 + 16));
+    tooltip.setText(text);
+    tooltip.resize(tooltipWidth, tooltipHeight);
+    tooltip.show(anchor);
+    const x2 = application.renderer.width > 600 ? Math.max(12, anchor.x - tooltipWidth - 8) : Math.max(12, Math.min(application.renderer.width - tooltipWidth - 12, anchor.x + anchor.width - tooltipWidth));
+    const y2 = Math.max(12, Math.min(application.renderer.height - tooltipHeight - 12, anchor.y + (anchor.height - tooltipHeight) / 2));
+    tooltip.position.set(x2, y2);
   }
   resize();
   return {
@@ -54104,6 +54239,7 @@ async function createEventRenderer(canvas, sink) {
       canvas.removeEventListener("keydown", keydown);
       window.removeEventListener("resize", resize);
       application.ticker.remove(tick);
+      hideTooltip();
       accessibility.dispose();
       application.destroy({ removeView: false }, { children: true });
     }
@@ -54113,16 +54249,18 @@ var EventChoice = class extends Container {
   frame = new Graphics();
   heading = new Text({ text: "", style: choiceHeadingStyle });
   hint = new Text({ text: "", style: choiceHintStyle });
-  constructor(text, hint, enabled, selected, onPress) {
+  constructor(text, hint, enabled, selected, onPress, onHoverStart = void 0, onHoverEnd = void 0) {
     super();
     this.heading.text = text;
     this.hint.text = hint;
     this.addChild(this.frame, this.heading, this.hint);
-    this.eventMode = enabled ? "static" : "none";
+    this.eventMode = enabled || onHoverStart !== void 0 ? "static" : "none";
     this.cursor = enabled ? "pointer" : "default";
     this.alpha = enabled ? 1 : 0.45;
     this.frame.tint = selected ? 16240238 : 16777215;
-    if (enabled) this.on("pointertap", onPress);
+    if (enabled) this.on("pointertap", (event) => onPress(event?.pointerType === "touch"));
+    if (onHoverStart !== void 0) this.on("pointerover", onHoverStart);
+    if (onHoverEnd !== void 0) this.on("pointerout", onHoverEnd);
   }
   resize(width, height) {
     this.frame.clear().roundRect(0, 0, width, height, 12).fill({ color: 1520456, alpha: 0.96 }).stroke({ color: 9549506, width: 2 });
@@ -54140,6 +54278,13 @@ var choiceHeadingStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fo
 var choiceHintStyle = new TextStyle({ fill: 12375521, fontFamily: "Arial", fontSize: 13, wordWrap: true });
 function getOptionSummary(option) {
   return [option.hint, option.details].filter(Boolean).join(" \xB7 ") || "This option has no additional preview.";
+}
+function getOptionContextDetails(option) {
+  const preview = option.rewardTooltip?.trim();
+  return preview ? `${getOptionSummary(option)}
+
+Reward preview:
+${preview}` : getOptionSummary(option);
 }
 function toPlainNarrative(narrative) {
   return narrative.replaceAll(/\[(?:\/?)[^\]]+\]/g, "");
@@ -54591,11 +54736,12 @@ async function createShopRenderer(canvas, sink) {
     const trayY = height - trayHeight - 18;
     const gridTop = layoutMode === "MobilePortrait" ? 142 : layoutMode === "Compact" ? 112 : 104;
     const gridBottom = trayY - 16;
-    const columns = layoutMode === "MobilePortrait" ? 2 : layoutMode === "Compact" ? 3 : Math.max(3, Math.min(5, merchandise.length || 3));
+    const hasCards = merchandise.some((entry) => entry.isCard);
+    const columns = getColumnCount(layoutMode, merchandise.length);
     const gap = compact ? 10 : 14;
-    const cardWidth = Math.max(104, Math.min(compact ? 180 : 190, (width - 48 - (columns - 1) * gap) / columns));
+    const cardWidth = Math.max(104, Math.min(compact ? 180 : 220, (width - 48 - (columns - 1) * gap) / columns));
     const rows = Math.max(1, Math.ceil(merchandise.length / columns));
-    const cardHeight = Math.max(66, Math.min(compact ? 104 : 132, (gridBottom - gridTop - (rows - 1) * gap) / rows));
+    const cardHeight = hasCards ? Math.max(150, Math.min(cardWidth * 1.4, gridBottom - gridTop)) : Math.max(66, Math.min(compact ? 104 : 132, (gridBottom - gridTop - (rows - 1) * gap) / rows));
     const purchaseGlow = purchaseEffectElapsedMs > 0 ? Math.max(0, 1 - purchaseEffectElapsedMs / 420) : 0;
     const currencyProgress = currencyEffectElapsedMs > 0 ? Math.min(1, currencyEffectElapsedMs / 420) : 1;
     const displayedCurrency = currencyTransition ? Math.round(currencyTransition.from + (currencyTransition.to - currencyTransition.from) * currencyProgress) : state?.currency ?? 0;
@@ -54644,8 +54790,9 @@ async function createShopRenderer(canvas, sink) {
   }
   function getPageSize() {
     const layoutMode = getLayoutMode(application.renderer.width, application.renderer.height);
-    const columns = layoutMode === "MobilePortrait" ? 2 : layoutMode === "Compact" ? 3 : Math.max(3, Math.min(5, state?.merchandise.length || 3));
-    return columns * 2;
+    const merchandise = state?.merchandise ?? [];
+    const columns = getColumnCount(layoutMode, merchandise.length);
+    return columns * (merchandise.some((entry) => entry.isCard) ? 1 : 2);
   }
   function getPageCount() {
     return Math.max(1, Math.ceil((state?.merchandise.length ?? 0) / getPageSize()));
@@ -54695,20 +54842,44 @@ var ShopMerchandiseCard = class extends Container {
   frame = new Graphics();
   heading = new Text({ text: "", style: cardHeadingStyle });
   description = new Text({ text: "", style: cardBodyStyle });
+  card;
+  selected;
   constructor(merchandise, selected, hasSelection, interactive, onPress) {
     super();
-    this.heading.text = merchandise.isSold ? `${merchandise.name} \u2014 Sold` : merchandise.name;
-    this.description.text = merchandise.kind === "control" ? merchandise.description : getMerchandiseCardText(merchandise);
-    this.addChild(this.frame, this.heading, this.description);
+    this.selected = selected;
+    if (merchandise.isCard) {
+      this.card = new CardView({
+        cost: getCardCost(merchandise),
+        name: merchandise.name,
+        description: merchandise.description,
+        type: merchandise.cardType ?? "Card",
+        rarity: toCardRarity2(merchandise.cardRarity),
+        enabled: interactive && !merchandise.isSold,
+        selected,
+        width: 180,
+        height: 252
+      });
+      this.addChild(this.card);
+    } else {
+      this.heading.text = merchandise.isSold ? `${merchandise.name} \u2014 Sold` : merchandise.name;
+      this.description.text = merchandise.kind === "control" ? merchandise.description : getMerchandiseCardText(merchandise);
+      this.addChild(this.frame, this.heading, this.description);
+    }
     const enabled = interactive && !merchandise.isSold;
     this.eventMode = enabled ? "static" : "none";
     this.cursor = enabled ? "pointer" : "default";
     const availabilityAlpha = merchandise.isSold ? 0.42 : merchandise.isAffordable ? 1 : 0.62;
     this.alpha = availabilityAlpha * (hasSelection && !selected ? 0.45 : 1);
     this.frame.tint = selected ? 16113563 : 16777215;
+    this.card?.setInteractionState({ enabled, focused: false, selected });
     if (enabled) this.on("pointertap", onPress);
   }
   resize(width, height) {
+    if (this.card) {
+      this.card.resize({ width, height });
+      this.card.setInteractionState({ enabled: this.eventMode === "static", focused: false, selected: this.selected });
+      return;
+    }
     this.frame.clear().roundRect(0, 0, width, height, 10).fill({ color: 2110536, alpha: 0.96 }).stroke({ color: 13280860, width: 2 });
     this.heading.position.set(14, 8);
     this.description.style.wordWrapWidth = Math.max(1, width - 28);
@@ -54718,6 +54889,22 @@ var ShopMerchandiseCard = class extends Container {
 function getLayoutMode(width, height) {
   if (height > width && width < 600) return "MobilePortrait";
   return width < 820 ? "Compact" : "Wide";
+}
+function getColumnCount(mode, merchandiseCount) {
+  if (mode === "MobilePortrait") return 2;
+  if (mode === "Compact") return Math.min(3, Math.max(1, merchandiseCount));
+  return Math.min(5, Math.max(1, merchandiseCount));
+}
+function getCardCost(merchandise) {
+  const costs = [
+    merchandise.cardEnergyCost ? `${merchandise.cardEnergyCost}\u26A1` : "",
+    merchandise.cardManaCost ? `${merchandise.cardManaCost}\u2726` : ""
+  ].filter(Boolean);
+  return costs.length > 0 ? costs.join(" ") : "0";
+}
+function toCardRarity2(rarity) {
+  if (rarity === "Rare" || rarity === "Uncommon" || rarity === "Special") return rarity;
+  return "Common";
 }
 function drawMerchantFixtures(graphics, width, height, mode, purchaseGlow) {
   const merchantX = mode === "Wide" ? width * 0.12 : width * 0.5;
