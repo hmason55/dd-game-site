@@ -50661,6 +50661,51 @@ function layoutNarrowHand(count2, viewport) {
   });
 }
 
+// src/motion-policy.ts
+var motionDurations = {
+  instant: 0,
+  quick: 100,
+  interactive: 150,
+  standard: 180,
+  emphasis: 260
+};
+var motionStaggerMs = 80;
+function getMotionDuration(durationClass, reducedMotion) {
+  return reducedMotion ? 0 : motionDurations[durationClass];
+}
+function getMotionStagger(index, reducedMotion) {
+  if (reducedMotion || !Number.isFinite(index)) {
+    return 0;
+  }
+  return Math.max(0, Math.floor(index)) * motionStaggerMs;
+}
+function getMotionProgress(elapsedMs, durationMs) {
+  if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) {
+    return durationMs <= 0 ? 1 : 0;
+  }
+  if (!Number.isFinite(durationMs) || durationMs <= 0) {
+    return 1;
+  }
+  return Math.min(1, elapsedMs / durationMs);
+}
+function easeMotion(progress, easing) {
+  const normalized = Math.min(1, Math.max(0, Number.isFinite(progress) ? progress : 0));
+  switch (easing) {
+    case "inCubic":
+      return normalized * normalized * normalized;
+    case "outCubic":
+      return 1 - Math.pow(1 - normalized, 3);
+    case "inOutCubic":
+      return normalized < 0.5 ? 4 * normalized * normalized * normalized : 1 - Math.pow(-2 * normalized + 2, 3) / 2;
+    case "linear":
+      return normalized;
+  }
+}
+function getMotionIntensity(value, reducedMotion) {
+  const normalized = Number.isFinite(value) ? Math.max(0, value) : 0;
+  return reducedMotion ? normalized * 0.25 : normalized;
+}
+
 // src/run-hud.ts
 var RunHud = class extends Container {
   constructor(actions) {
@@ -50745,8 +50790,6 @@ var supportedAnimationNames = /* @__PURE__ */ new Set([
   "death-removal",
   "fade-out"
 ]);
-var dragReturnDurationMs = 150;
-var handInspectionSettleDurationMs = 100;
 var handCardViewScale = handCardVisualSize.width / 180;
 var focusedHandScale = 1.38;
 var constrainedHandInspectionScale = 1.28;
@@ -50845,7 +50888,7 @@ var EncounterScene = class {
     ["card-play-to-corner", (_source, _target, tile, start, progress) => this.movePlayedCardToCenter(tile, start, progress)],
     ["draw-to-hand", (_source, _target, tile, start, progress) => {
       const anchors = this.getCardAnimationAnchors();
-      const easedProgress = easeOutCubic(progress);
+      const easedProgress = easeMotion(progress, "outCubic");
       tile.container.position.set(interpolate(anchors.draw.x, start.x, easedProgress), interpolate(anchors.draw.y, start.y, easedProgress));
       tile.container.alpha = Math.min(1, start.alpha * (0.25 + easedProgress));
       tile.container.scale.set(interpolate(start.scale * 0.7, start.scale, easedProgress));
@@ -50859,7 +50902,7 @@ var EncounterScene = class {
     ["hand-reflow", (_source, _target, tile, start, progress) => tile.container.scale.set(start.scale * (1 + Math.sin(progress * Math.PI) * 0.08))],
     ["lunge", (source3, target, _tile, start, progress) => this.lunge(source3, target, start, progress)],
     ["nudge", (source3, target, tile, start, progress) => this.nudge(source3, target, tile, start, progress)],
-    ["shake", (_source, _target, tile, start, progress) => tile.container.position.set(start.x + Math.sin(progress * Math.PI * 8) * (1 - progress) * (this.reducedMotion ? 3 : 14), start.y)],
+    ["shake", (_source, _target, tile, start, progress) => tile.container.position.set(start.x + Math.sin(progress * Math.PI * 8) * (1 - progress) * getMotionIntensity(14, this.reducedMotion), start.y)],
     ["hit-flash", (_source, _target, tile, _start, progress) => this.flashArtwork(tile, progress)],
     ["status-change", (_source, _target, tile, _start, progress) => tile.accent.alpha = 0.4 + Math.sin(progress * Math.PI) * 0.6],
     ["resource-change", (_source, _target, tile, _start, progress) => tile.detail.scale.set(1 + Math.sin(progress * Math.PI) * 0.15)],
@@ -51361,8 +51404,8 @@ ${resources}`;
         continue;
       }
       dragReturn.elapsedMs += Math.max(0, deltaMs);
-      const progress = Math.min(1, dragReturn.elapsedMs / dragReturnDurationMs);
-      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      const progress = getMotionProgress(dragReturn.elapsedMs, getMotionDuration("interactive", this.reducedMotion));
+      const easedProgress = easeMotion(progress, "outCubic");
       applyTransform(dragReturn.tile.container, {
         x: interpolate(dragReturn.start.x, dragReturn.destination.x, easedProgress),
         y: interpolate(dragReturn.start.y, dragReturn.destination.y, easedProgress),
@@ -51379,8 +51422,8 @@ ${resources}`;
         continue;
       }
       transition.elapsedMs += Math.max(0, deltaMs);
-      const progress = Math.min(1, transition.elapsedMs / handInspectionSettleDurationMs);
-      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      const progress = getMotionProgress(transition.elapsedMs, getMotionDuration("quick", this.reducedMotion));
+      const easedProgress = easeMotion(progress, "outCubic");
       applyTransform(transition.tile.container, {
         x: interpolate(transition.start.x, transition.destination.x, easedProgress),
         y: interpolate(transition.start.y, transition.destination.y, easedProgress),
@@ -51892,7 +51935,7 @@ ${resources}`;
   /** Moves a committed card to a readable, upright center stage before its zone transition. */
   movePlayedCardToCenter(tile, start, progress) {
     const destination = this.getCardAnimationAnchors().center;
-    const easedProgress = easeInOutCubic(progress);
+    const easedProgress = easeMotion(progress, "inOutCubic");
     this.dragLayer.addChild(tile.container);
     tile.container.position.set(interpolate(start.x, destination.x, easedProgress), interpolate(start.y, destination.y, easedProgress));
     tile.container.rotation = interpolate(start.rotation, 0, easedProgress);
@@ -51913,7 +51956,7 @@ ${resources}`;
    * Moves a card below the encounter while shrinking and fading it so it is gone at the destination.
    */
   removeCardToBottom(tile, start, destination, progress) {
-    const easedProgress = easeInCubic(progress);
+    const easedProgress = easeMotion(progress, "inCubic");
     tile.container.position.set(interpolate(start.x, destination.x, easedProgress), interpolate(start.y, destination.y, easedProgress));
     tile.container.alpha = start.alpha * (1 - easedProgress);
     tile.container.scale.set(start.scale * (1 - easedProgress));
@@ -51944,7 +51987,7 @@ ${resources}`;
   attack(source3, target, start, progress) {
     this.lunge(source3, target, start, progress);
     const impact = Math.sin(progress * Math.PI);
-    source3.container.scale.set(start.scale * (1 + impact * (this.reducedMotion ? 0.02 : 0.06)));
+    source3.container.scale.set(start.scale * (1 + impact * getMotionIntensity(0.06, this.reducedMotion)));
     this.drawAttackTrail(source3, start, progress);
   }
   /** Draws a renderer-owned trail for the outward portion of a targeted attack. */
@@ -51971,7 +52014,7 @@ ${resources}`;
    */
   hit(tile, start, progress) {
     const impactOffset = Math.sin(progress * Math.PI * 6) * (1 - progress) * 8;
-    const shakeOffset = Math.sin(progress * Math.PI * 8) * (1 - progress) * (this.reducedMotion ? 3 : 14);
+    const shakeOffset = Math.sin(progress * Math.PI * 8) * (1 - progress) * getMotionIntensity(14, this.reducedMotion);
     tile.container.position.set(start.x + impactOffset + shakeOffset, start.y);
     tile.artwork.alpha = progress === 1 ? start.artworkAlpha : this.reducedMotion ? 0.86 : 1;
   }
@@ -52471,15 +52514,6 @@ function getPendingIntentMessage(kind) {
 }
 function interpolate(start, end, progress) {
   return start + (end - start) * progress;
-}
-function easeInOutCubic(progress) {
-  return progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-}
-function easeOutCubic(progress) {
-  return 1 - Math.pow(1 - progress, 3);
-}
-function easeInCubic(progress) {
-  return progress * progress * progress;
 }
 function captureTransform(container) {
   return {
@@ -53190,7 +53224,7 @@ var RewardScene = class {
       this.advanceResolution(deltaMs);
       return;
     }
-    this.snapshot.choices.forEach((choice, index) => this.choiceViews.get(choice.id)?.setRevealProgress(this.reducedMotion ? 1 : getRevealProgress(this.revealElapsedMs, index)));
+    this.snapshot.choices.forEach((choice, index) => this.choiceViews.get(choice.id)?.setRevealProgress(getRevealProgress(this.revealElapsedMs, index, this.reducedMotion)));
   }
   /** Reflows the stable scene tree after the owning canvas changes size. */
   resize(viewport) {
@@ -53279,7 +53313,7 @@ var RewardScene = class {
       } else {
         view.setChoice(choice);
       }
-      view.setRevealProgress(this.reducedMotion ? 1 : getRevealProgress(this.revealElapsedMs, this.choiceSlots.get(choice.id) ?? 0));
+      view.setRevealProgress(getRevealProgress(this.revealElapsedMs, this.choiceSlots.get(choice.id) ?? 0, this.reducedMotion));
     });
   }
   reconcileSelection(choices) {
@@ -53465,7 +53499,7 @@ var RewardScene = class {
     const start = { x: choice.x, y: choice.y };
     const target = this.getCollectionDestination(this.selectedReward?.kind ?? "reward");
     if (this.reducedMotion) {
-      this.completeResolution({ choiceId, elapsedMs: 260, start, target, resolve: () => {
+      this.completeResolution({ choiceId, elapsedMs: getMotionDuration("emphasis", false), start, target, resolve: () => {
       } });
       return;
     }
@@ -53485,7 +53519,7 @@ var RewardScene = class {
       return;
     }
     resolution.elapsedMs += Math.max(0, Number.isFinite(deltaMs) ? deltaMs : 0);
-    const progress = Math.min(1, resolution.elapsedMs / 260);
+    const progress = getMotionProgress(resolution.elapsedMs, getMotionDuration("emphasis", this.reducedMotion));
     for (const [id, view] of this.choiceViews) {
       if (id === resolution.choiceId) {
         view.setResolutionProgress(progress, resolution.start, resolution.target);
@@ -53727,8 +53761,9 @@ function normalizeViewport2(viewport) {
     height: Number.isFinite(viewport.height) ? Math.max(1, viewport.height) : 1
   };
 }
-function getRevealProgress(elapsedMs, index) {
-  return Math.max(0, Math.min(1, (elapsedMs - index * 80) / 180));
+function getRevealProgress(elapsedMs, index, reducedMotion) {
+  const delay = getMotionStagger(index, reducedMotion);
+  return getMotionProgress(Math.max(0, elapsedMs - delay), getMotionDuration("standard", reducedMotion));
 }
 function getChoiceColumns(choiceCount, choiceArea, mobile) {
   if (choiceCount <= 1 || mobile) {
@@ -54609,6 +54644,7 @@ async function createShopRenderer(canvas, sink) {
   let purchaseEffectElapsedMs = 0;
   let currencyEffectElapsedMs = 0;
   let currencyTransition;
+  const reducedMotion = prefersReducedMotion3();
   const selectableMerchandise = () => state?.merchandise.filter((merchandise) => !merchandise.isSold) ?? [];
   const announce = (message) => {
     feedback.text = message;
@@ -54635,7 +54671,7 @@ async function createShopRenderer(canvas, sink) {
         choiceId: null
       });
       announce(result.accepted ? getAcceptedMessage(name) : name === "purchase" ? "That purchase is no longer available." : "That action is no longer available.");
-      if (result.accepted && name === "purchase") purchaseEffectElapsedMs = 1;
+      if (result.accepted && name === "purchase") purchaseEffectElapsedMs = reducedMotion ? 0 : 1;
       if (!result.accepted || !awaitReconcile) {
         pending = false;
         acceptedActionAwaitingReconcile = false;
@@ -54708,11 +54744,11 @@ async function createShopRenderer(canvas, sink) {
     const elapsed = Math.max(0, application.ticker.deltaMS);
     if (purchaseEffectElapsedMs > 0) {
       purchaseEffectElapsedMs += elapsed;
-      if (purchaseEffectElapsedMs >= 420) purchaseEffectElapsedMs = 0;
+      if (purchaseEffectElapsedMs >= getMotionDuration("emphasis", reducedMotion)) purchaseEffectElapsedMs = 0;
     }
     if (currencyEffectElapsedMs > 0) {
       currencyEffectElapsedMs += elapsed;
-      if (currencyEffectElapsedMs >= 420) {
+      if (currencyEffectElapsedMs >= getMotionDuration("emphasis", reducedMotion)) {
         currencyEffectElapsedMs = 0;
         currencyTransition = void 0;
       }
@@ -54742,8 +54778,8 @@ async function createShopRenderer(canvas, sink) {
     const cardWidth = Math.max(104, Math.min(compact ? 180 : 220, (width - 48 - (columns - 1) * gap) / columns));
     const rows = Math.max(1, Math.ceil(merchandise.length / columns));
     const cardHeight = hasCards ? Math.max(150, Math.min(cardWidth * 1.4, gridBottom - gridTop)) : Math.max(66, Math.min(compact ? 104 : 132, (gridBottom - gridTop - (rows - 1) * gap) / rows));
-    const purchaseGlow = purchaseEffectElapsedMs > 0 ? Math.max(0, 1 - purchaseEffectElapsedMs / 420) : 0;
-    const currencyProgress = currencyEffectElapsedMs > 0 ? Math.min(1, currencyEffectElapsedMs / 420) : 1;
+    const purchaseGlow = purchaseEffectElapsedMs > 0 ? 1 - getMotionProgress(purchaseEffectElapsedMs, getMotionDuration("emphasis", reducedMotion)) : 0;
+    const currencyProgress = currencyEffectElapsedMs > 0 ? getMotionProgress(currencyEffectElapsedMs, getMotionDuration("emphasis", reducedMotion)) : 1;
     const displayedCurrency = currencyTransition ? Math.round(currencyTransition.from + (currencyTransition.to - currencyTransition.from) * currencyProgress) : state?.currency ?? 0;
     background.clear().rect(0, 0, width, height).fill(726562).rect(0, 0, width, height * 0.22).fill({ color: 2044741, alpha: 0.94 });
     drawMerchantFixtures(merchant, width, height, layoutMode, purchaseGlow);
@@ -54818,9 +54854,15 @@ async function createShopRenderer(canvas, sink) {
         acceptedActionAwaitingReconcile = false;
       }
       if (completedPurchase && candidate.currency !== previousCurrency) {
-        currencyTransition = { from: previousCurrency, to: candidate.currency };
-        currencyEffectElapsedMs = 1;
-        purchaseEffectElapsedMs = Math.max(purchaseEffectElapsedMs, 1);
+        if (reducedMotion) {
+          currencyTransition = void 0;
+          currencyEffectElapsedMs = 0;
+          purchaseEffectElapsedMs = 0;
+        } else {
+          currencyTransition = { from: previousCurrency, to: candidate.currency };
+          currencyEffectElapsedMs = 1;
+          purchaseEffectElapsedMs = Math.max(purchaseEffectElapsedMs, 1);
+        }
         announce(`Purchase complete. ${Math.abs(candidate.currency - previousCurrency)} gold spent. Gold remaining: ${candidate.currency}.`);
       } else {
         feedback.text = "";
@@ -54837,6 +54879,9 @@ async function createShopRenderer(canvas, sink) {
       application.destroy({ removeView: false }, { children: true });
     }
   };
+}
+function prefersReducedMotion3() {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 var ShopMerchandiseCard = class extends Container {
   frame = new Graphics();
@@ -55901,12 +55946,12 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     },
     assetLoader,
     accessibilityOverlay.announce,
-    prefersReducedMotion3()
+    prefersReducedMotion4()
   );
   const runtime = new RunPresentationRuntime(createRunRuntimeApplication(application));
   const animationDirector = new AnimationDirector(scene.createAnimationCommandExecutor());
   const particleEffects = new ParticleEffectManager(runtime.renderLayers.effect, {
-    reducedMotion: prefersReducedMotion3(),
+    reducedMotion: prefersReducedMotion4(),
     resolveAnchor: (id) => scene.getEffectAnchor(id)
   });
   const runtimeScene = new EncounterRuntimeScene(scene, () => {
@@ -56353,7 +56398,7 @@ function parseCssPixel(value) {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
-function prefersReducedMotion3() {
+function prefersReducedMotion4() {
   return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 async function requireLoadedResult(preload, bundleName) {
