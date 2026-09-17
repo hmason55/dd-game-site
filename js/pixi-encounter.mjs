@@ -52868,6 +52868,7 @@ var RunPresentationRuntime = class {
     return {
       activeSceneId: this.activeScene?.scene.id,
       activeTickerCount: this.destroyed || !this.application.ticker.started ? 0 : 1,
+      displayObjectCount: this.destroyed ? 0 : countDisplayObjects(this.root),
       frameTimeSampleCount: this.frameTimeSampleCount,
       averageFrameTimeMs: this.frameTimeSampleCount === 0 ? 0 : this.frameTimeTotalMs / this.frameTimeSampleCount,
       maximumFrameTimeMs: this.maximumFrameTimeMs,
@@ -53058,6 +53059,10 @@ var RunPresentationRuntime = class {
     }
   }
 };
+function countDisplayObjects(displayObject) {
+  const children = displayObject.children ?? [];
+  return 1 + children.reduce((count2, child) => count2 + countDisplayObjects(child), 0);
+}
 
 // src/relic-view.ts
 var defaultHeight = 92;
@@ -56202,6 +56207,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
           canvasCount: 0,
           activeTickerCount: 0,
           activeSceneId: runtimeDiagnostics.activeSceneId,
+          displayObjectCount: runtimeDiagnostics.displayObjectCount,
           frameTimeSampleCount: runtimeDiagnostics.frameTimeSampleCount,
           averageFrameTimeMs: runtimeDiagnostics.averageFrameTimeMs,
           maximumFrameTimeMs: runtimeDiagnostics.maximumFrameTimeMs,
@@ -56233,6 +56239,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
         canvasCount: canvas.isConnected ? 1 : 0,
         activeTickerCount: runtimeDiagnostics.activeTickerCount,
         activeSceneId: runtimeDiagnostics.activeSceneId,
+        displayObjectCount: runtimeDiagnostics.displayObjectCount,
         frameTimeSampleCount: runtimeDiagnostics.frameTimeSampleCount,
         averageFrameTimeMs: runtimeDiagnostics.averageFrameTimeMs,
         maximumFrameTimeMs: runtimeDiagnostics.maximumFrameTimeMs,
