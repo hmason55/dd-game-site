@@ -49482,6 +49482,9 @@ var uiTokens = {
   color: {
     panelFill: 1450552,
     panelStroke: 6262197,
+    panelShadow: 463132,
+    panelInset: 792616,
+    panelOrnament: 14202982,
     buttonFocus: 8047615,
     buttonSelected: 16769155,
     progressFill: 8047477,
@@ -49504,6 +49507,9 @@ var uiTokens = {
   frame: {
     panelCornerRadius: 10,
     borderWidth: 2,
+    innerInset: 5,
+    ornamentLength: 18,
+    ornamentThickness: 3,
     selectedInset: 2,
     focusInset: 5,
     selectedCornerRadius: 8,
@@ -49525,6 +49531,9 @@ var uiTokens = {
 var uiColors = {
   panelFill: uiTokens.color.panelFill,
   panelStroke: uiTokens.color.panelStroke,
+  panelShadow: uiTokens.color.panelShadow,
+  panelInset: uiTokens.color.panelInset,
+  panelOrnament: uiTokens.color.panelOrnament,
   buttonFocus: uiTokens.color.buttonFocus,
   buttonSelected: uiTokens.color.buttonSelected,
   progressFill: uiTokens.color.progressFill,
@@ -49547,7 +49556,10 @@ function getUiPrimitiveDiagnostics() {
   return { textStyleCacheCount: textStyles.size };
 }
 var GamePanel = class extends Container {
+  shadow = new Graphics();
   background = new Graphics();
+  innerFrame = new Graphics();
+  ornaments = new Graphics();
   panelContent = new Container();
   fill;
   stroke;
@@ -49564,7 +49576,7 @@ var GamePanel = class extends Container {
     this.cornerRadius = Math.max(0, options.cornerRadius ?? uiTokens.frame.panelCornerRadius);
     this.panelWidth = normalizeSize(options.width);
     this.panelHeight = normalizeSize(options.height);
-    this.addChild(this.background, this.panelContent);
+    this.addChild(this.shadow, this.background, this.innerFrame, this.ornaments, this.panelContent);
     this.redraw();
   }
   /**
@@ -49588,7 +49600,16 @@ var GamePanel = class extends Container {
     this.redraw();
   }
   redraw() {
+    const inset = Math.min(uiTokens.frame.innerInset, this.panelWidth / 4, this.panelHeight / 4);
+    const innerWidth = Math.max(0, this.panelWidth - inset * 2);
+    const innerHeight = Math.max(0, this.panelHeight - inset * 2);
+    const ornamentLength = Math.min(uiTokens.frame.ornamentLength, innerWidth / 2);
+    const ornamentThickness = Math.min(uiTokens.frame.ornamentThickness, innerHeight / 2);
+    const ornamentOffset = inset + uiTokens.frame.borderWidth;
+    this.shadow.clear().roundRect(2, 4, Math.max(0, this.panelWidth - 2), Math.max(0, this.panelHeight - 2), this.cornerRadius).fill({ color: uiColors.panelShadow, alpha: 0.56 });
     this.background.clear().roundRect(0, 0, this.panelWidth, this.panelHeight, this.cornerRadius).fill({ color: this.fill }).stroke({ color: this.stroke, width: uiTokens.frame.borderWidth });
+    this.innerFrame.clear().roundRect(inset, inset, innerWidth, innerHeight, Math.max(0, this.cornerRadius - inset / 2)).stroke({ color: uiColors.panelInset, width: 1, alpha: 0.9 });
+    this.ornaments.clear().roundRect(ornamentOffset, ornamentOffset, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.88 }).roundRect(this.panelWidth - ornamentOffset - ornamentLength, ornamentOffset, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.88 }).roundRect(ornamentOffset, this.panelHeight - ornamentOffset - ornamentThickness, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.62 }).roundRect(this.panelWidth - ornamentOffset - ornamentLength, this.panelHeight - ornamentOffset - ornamentThickness, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.62 });
   }
 };
 var GameButton = class extends GamePanel {
@@ -50228,7 +50249,10 @@ var CardView = class extends Container {
     this.applyStatePresentation(palette);
   }
   drawFallbackArt(artBounds, palette) {
-    this.artFallback.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.spacing.xs).fill({ color: palette.artFill }).rect(artBounds.x, artBounds.y + artBounds.height * 0.56, artBounds.width, artBounds.height * 0.44).fill({ color: palette.accent, alpha: 0.4 }).roundRect(artBounds.x + artBounds.width * 0.18, artBounds.y + artBounds.height * 0.2, artBounds.width * 0.64, artBounds.height * 0.28, uiTokens.spacing.sm).fill({ color: palette.accent, alpha: 0.55 });
+    const medallionSize = Math.min(artBounds.width, artBounds.height) * 0.3;
+    const medallionX = artBounds.x + (artBounds.width - medallionSize) / 2;
+    const medallionY = artBounds.y + (artBounds.height - medallionSize) / 2;
+    this.artFallback.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.spacing.xs).fill({ color: palette.artFill }).roundRect(artBounds.x + 3, artBounds.y + 3, artBounds.width - 6, artBounds.height - 6, uiTokens.spacing.xs - 1).stroke({ color: palette.accent, width: 1, alpha: 0.72 }).rect(artBounds.x, artBounds.y + artBounds.height * 0.56, artBounds.width, artBounds.height * 0.44).fill({ color: palette.accent, alpha: 0.4 }).roundRect(medallionX, medallionY, medallionSize, medallionSize, medallionSize / 2).fill({ color: palette.accent, alpha: 0.7 }).roundRect(medallionX + 4, medallionY + 4, medallionSize - 8, medallionSize - 8, Math.max(0, medallionSize / 2 - 4)).fill({ color: palette.artFill, alpha: 0.94 }).rect(artBounds.x + artBounds.width * 0.12, artBounds.y + artBounds.height * 0.16, artBounds.width * 0.18, 3).fill({ color: palette.accent, alpha: 0.74 }).rect(artBounds.x + artBounds.width * 0.7, artBounds.y + artBounds.height * 0.16, artBounds.width * 0.18, 3).fill({ color: palette.accent, alpha: 0.74 });
     this.artFallback.visible = this.usesFallbackArt;
   }
   updateArtwork(artBounds) {
