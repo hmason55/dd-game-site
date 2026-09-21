@@ -48094,6 +48094,7 @@ var ParticleEffectManager = class {
     this.layer = layer;
     this.maxParticles = Math.max(1, options.maxParticles ?? 600);
     this.maxParticlesPerEmitter = Math.max(1, options.maxParticlesPerEmitter ?? 120);
+    this.maxPooledParticles = Math.max(0, options.maxPooledParticles ?? this.maxParticles);
     this.reducedMotion = options.reducedMotion ?? prefersReducedMotion();
     this.resolveAnchor = options.resolveAnchor;
   }
@@ -48104,6 +48105,7 @@ var ParticleEffectManager = class {
   textOffsetSlots = /* @__PURE__ */ new Map();
   maxParticles;
   maxParticlesPerEmitter;
+  maxPooledParticles;
   reducedMotion;
   disposed = false;
   resolveAnchor;
@@ -48171,7 +48173,7 @@ var ParticleEffectManager = class {
     return {
       activeEmitterCount: this.emitters.size,
       liveParticleCount: this.getLiveParticleCount(),
-      pooledParticleCount: [...this.pools.values()].reduce((total, pool) => total + pool.length, 0),
+      pooledParticleCount: this.getPooledParticleCount(),
       cachedTextureCount: this.textureCache.size,
       cachedTextureByteEstimate: getTextureByteEstimate(this.textureCache.values())
     };
@@ -48358,7 +48360,14 @@ var ParticleEffectManager = class {
   recycle(particle) {
     particle.display.removeFromParent();
     particle.display.visible = false;
+    if (this.getPooledParticleCount() >= this.maxPooledParticles) {
+      particle.display.destroy();
+      return;
+    }
     this.getPool(particle.mode).push(particle.display);
+  }
+  getPooledParticleCount() {
+    return [...this.pools.values()].reduce((total, pool) => total + pool.length, 0);
   }
   getPool(mode) {
     const existing = this.pools.get(mode);
