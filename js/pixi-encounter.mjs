@@ -54670,9 +54670,11 @@ async function createShopRenderer(canvas, sink) {
   let pending = false;
   let acceptedActionAwaitingReconcile = false;
   let page = 0;
-  let purchaseEffectElapsedMs = 0;
+  let resolutionEffect;
+  let resolutionEffectElapsedMs = 0;
   let currencyEffectElapsedMs = 0;
   let currencyTransition;
+  let pendingPurchaseMerchandiseId;
   const reducedMotion = prefersReducedMotion3();
   const selectableMerchandise = () => state?.merchandise.filter((merchandise) => !merchandise.isSold) ?? [];
   const announce = (message) => {
@@ -54688,6 +54690,7 @@ async function createShopRenderer(canvas, sink) {
     pending = true;
     const awaitReconcile = name !== "inspect";
     if (awaitReconcile) acceptedActionAwaitingReconcile = true;
+    if (name === "purchase") pendingPurchaseMerchandiseId = sourceId ?? void 0;
     try {
       const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", {
         protocolVersion: 1,
@@ -54700,15 +54703,16 @@ async function createShopRenderer(canvas, sink) {
         choiceId: null
       });
       announce(result.accepted ? getAcceptedMessage(name) : name === "purchase" ? "That purchase is no longer available." : "That action is no longer available.");
-      if (result.accepted && name === "purchase") purchaseEffectElapsedMs = reducedMotion ? 0 : 1;
       if (!result.accepted || !awaitReconcile) {
         pending = false;
         acceptedActionAwaitingReconcile = false;
+        pendingPurchaseMerchandiseId = void 0;
       }
     } catch {
       announce("The shop could not complete that request. Please try again.");
       pending = false;
       acceptedActionAwaitingReconcile = false;
+      pendingPurchaseMerchandiseId = void 0;
     } finally {
       layout();
     }
@@ -54769,11 +54773,14 @@ async function createShopRenderer(canvas, sink) {
   canvas.addEventListener("keydown", keydown);
   window.addEventListener("resize", resize);
   const tick = () => {
-    if (purchaseEffectElapsedMs <= 0 && currencyEffectElapsedMs <= 0) return;
+    if (resolutionEffectElapsedMs <= 0 && currencyEffectElapsedMs <= 0) return;
     const elapsed = Math.max(0, application.ticker.deltaMS);
-    if (purchaseEffectElapsedMs > 0) {
-      purchaseEffectElapsedMs += elapsed;
-      if (purchaseEffectElapsedMs >= getMotionDuration("emphasis", reducedMotion)) purchaseEffectElapsedMs = 0;
+    if (resolutionEffectElapsedMs > 0) {
+      resolutionEffectElapsedMs += elapsed;
+      if (resolutionEffectElapsedMs >= getMotionDuration("emphasis", reducedMotion)) {
+        resolutionEffectElapsedMs = 0;
+        resolutionEffect = void 0;
+      }
     }
     if (currencyEffectElapsedMs > 0) {
       currencyEffectElapsedMs += elapsed;
@@ -54807,15 +54814,15 @@ async function createShopRenderer(canvas, sink) {
     const cardWidth = Math.max(104, Math.min(compact ? 180 : 220, (width - 48 - (columns - 1) * gap) / columns));
     const rows = Math.max(1, Math.ceil(merchandise.length / columns));
     const cardHeight = hasCards ? Math.max(150, Math.min(cardWidth * 1.4, gridBottom - gridTop)) : Math.max(66, Math.min(compact ? 104 : 132, (gridBottom - gridTop - (rows - 1) * gap) / rows));
-    const purchaseGlow = purchaseEffectElapsedMs > 0 ? 1 - getMotionProgress(purchaseEffectElapsedMs, getMotionDuration("emphasis", reducedMotion)) : 0;
+    const resolutionGlow = resolutionEffectElapsedMs > 0 ? 1 - getMotionProgress(resolutionEffectElapsedMs, getMotionDuration("emphasis", reducedMotion)) : 0;
     const currencyProgress = currencyEffectElapsedMs > 0 ? getMotionProgress(currencyEffectElapsedMs, getMotionDuration("emphasis", reducedMotion)) : 1;
     const displayedCurrency = currencyTransition ? Math.round(currencyTransition.from + (currencyTransition.to - currencyTransition.from) * currencyProgress) : state?.currency ?? 0;
     background.clear().rect(0, 0, width, height).fill(726562).rect(0, 0, width, height * 0.22).fill({ color: 2044741, alpha: 0.94 });
-    drawMerchantFixtures(merchant, width, height, layoutMode, purchaseGlow);
+    drawMerchantFixtures(merchant, width, height, layoutMode, resolutionEffect?.kind, resolutionGlow);
     title.text = state?.title ?? "Shop";
     title.position.set(28, 22);
     currency.text = `Gold: ${displayedCurrency}`;
-    currency.alpha = currencyTransition ? 0.82 + purchaseGlow * 0.18 : 1;
+    currency.alpha = currencyTransition ? 0.82 + resolutionGlow * 0.18 : 1;
     currency.position.set(width - 28, 29);
     currency.anchor.set(1, 0);
     feedback.position.set(width / 2, trayY - 22);
@@ -54841,14 +54848,23 @@ async function createShopRenderer(canvas, sink) {
     merchandise.forEach((entry, index) => {
       const column = index % columns;
       const row = Math.floor(index / columns);
-      const card = new ShopMerchandiseCard(entry, entry.id === selectedMerchandiseId, selectedMerchandiseId !== void 0, !pending, () => inspect(entry));
+      const resolutionIntensity = resolutionEffect?.merchandiseId === entry.id ? resolutionGlow : 0;
+      const card = new ShopMerchandiseCard(entry, entry.id === selectedMerchandiseId, selectedMerchandiseId !== void 0, !pending, resolutionIntensity, resolutionEffect?.kind, () => inspect(entry));
       card.resize(cardWidth, cardHeight);
       card.position.set(24 + column * (cardWidth + gap), gridTop + row * (cardHeight + gap));
       merchandiseLayer.addChild(card);
     });
   }
   function addControl(label, hint, enabled, x2, y2, width, onPress) {
-    const control = new ShopMerchandiseCard({ id: label, kind: "control", name: label, description: hint, image: "", price: 0, isOnSale: false, isSold: false, isAffordable: enabled, disabledReason: null }, false, false, enabled, onPress);
+    const control = new ShopMerchandiseCard(
+      { id: label, kind: "control", name: label, description: hint, image: "", price: 0, isOnSale: false, isSold: false, isAffordable: enabled, disabledReason: null },
+      false,
+      false,
+      enabled,
+      0,
+      void 0,
+      onPress
+    );
     control.resize(width, 42);
     control.position.set(x2, y2);
     controlLayer.addChild(control);
@@ -54871,28 +54887,37 @@ async function createShopRenderer(canvas, sink) {
   return {
     reconcile(nextSequence, candidate) {
       if (!isShopState(candidate) || nextSequence <= sequence) return false;
-      const previousCurrency = state?.currency ?? candidate.currency;
+      const previousState = state;
+      const previousCurrency = previousState?.currency ?? candidate.currency;
       const completedPurchase = pending && acceptedActionAwaitingReconcile;
+      const purchasedMerchandiseId = pendingPurchaseMerchandiseId;
       sequence = nextSequence;
       state = candidate;
       selectedIndex = 0;
       selectedMerchandiseId = void 0;
-      page = 0;
       if (pending && acceptedActionAwaitingReconcile) {
         pending = false;
         acceptedActionAwaitingReconcile = false;
+      }
+      pendingPurchaseMerchandiseId = void 0;
+      const resolution = completedPurchase && purchasedMerchandiseId ? getPurchaseResolution(previousState, candidate, purchasedMerchandiseId) : void 0;
+      page = resolution ? getMerchandisePage(candidate.merchandise, resolution.merchandiseId, getPageSize()) : 0;
+      if (resolution && !reducedMotion) {
+        resolutionEffect = resolution;
+        resolutionEffectElapsedMs = 1;
+      } else if (resolution) {
+        resolutionEffect = void 0;
+        resolutionEffectElapsedMs = 0;
       }
       if (completedPurchase && candidate.currency !== previousCurrency) {
         if (reducedMotion) {
           currencyTransition = void 0;
           currencyEffectElapsedMs = 0;
-          purchaseEffectElapsedMs = 0;
         } else {
           currencyTransition = { from: previousCurrency, to: candidate.currency };
           currencyEffectElapsedMs = 1;
-          purchaseEffectElapsedMs = Math.max(purchaseEffectElapsedMs, 1);
         }
-        announce(`Purchase complete. ${Math.abs(candidate.currency - previousCurrency)} gold spent. Gold remaining: ${candidate.currency}.`);
+        announce(getPurchaseResolutionMessage(resolution, candidate.currency, previousCurrency));
       } else {
         feedback.text = "";
         accessibility.update(`${candidate.title}. Gold: ${candidate.currency}. ${candidate.merchandise.length} merchandise choices available.`);
@@ -54914,13 +54939,18 @@ function prefersReducedMotion3() {
 }
 var ShopMerchandiseCard = class extends Container {
   frame = new Graphics();
+  resolutionOverlay = new Graphics();
   heading = new Text({ text: "", style: cardHeadingStyle });
   description = new Text({ text: "", style: cardBodyStyle });
   card;
   selected;
-  constructor(merchandise, selected, hasSelection, interactive, onPress) {
+  resolutionIntensity;
+  resolutionKind;
+  constructor(merchandise, selected, hasSelection, interactive, resolutionIntensity, resolutionKind, onPress) {
     super();
     this.selected = selected;
+    this.resolutionIntensity = resolutionIntensity;
+    this.resolutionKind = resolutionKind;
     if (merchandise.isCard) {
       this.card = new CardView({
         cost: getCardCost(merchandise),
@@ -54934,6 +54964,7 @@ var ShopMerchandiseCard = class extends Container {
         height: 252
       });
       this.addChild(this.card);
+      if (resolutionIntensity > 0) this.addChild(this.resolutionOverlay);
     } else {
       this.heading.text = merchandise.isSold ? `${merchandise.name} \u2014 Sold` : merchandise.name;
       this.description.text = merchandise.kind === "control" ? merchandise.description : getMerchandiseCardText(merchandise);
@@ -54943,8 +54974,9 @@ var ShopMerchandiseCard = class extends Container {
     this.eventMode = enabled ? "static" : "none";
     this.cursor = enabled ? "pointer" : "default";
     const availabilityAlpha = merchandise.isSold ? 0.42 : merchandise.isAffordable ? 1 : 0.62;
-    this.alpha = availabilityAlpha * (hasSelection && !selected ? 0.45 : 1);
-    this.frame.tint = selected ? 16113563 : 16777215;
+    this.alpha = Math.min(1, availabilityAlpha * (hasSelection && !selected ? 0.45 : 1) + resolutionIntensity * 0.4);
+    this.scale.set(1 + resolutionIntensity * (resolutionKind === "Service" ? 0.035 : 0.065));
+    this.frame.tint = resolutionIntensity > 0 ? resolutionKind === "Service" ? 10212584 : 16113563 : selected ? 16113563 : 16777215;
     this.card?.setInteractionState({ enabled, focused: false, selected });
     if (enabled) this.on("pointertap", onPress);
   }
@@ -54952,6 +54984,12 @@ var ShopMerchandiseCard = class extends Container {
     if (this.card) {
       this.card.resize({ width, height });
       this.card.setInteractionState({ enabled: this.eventMode === "static", focused: false, selected: this.selected });
+      if (this.resolutionIntensity > 0) {
+        this.resolutionOverlay.clear().roundRect(0, 0, width, height, 10).fill({
+          color: this.resolutionKind === "Service" ? 10212584 : 16113563,
+          alpha: this.resolutionIntensity * 0.32
+        });
+      }
       return;
     }
     this.frame.clear().roundRect(0, 0, width, height, 10).fill({ color: 2110536, alpha: 0.96 }).stroke({ color: 13280860, width: 2 });
@@ -54960,6 +54998,10 @@ var ShopMerchandiseCard = class extends Container {
     this.description.position.set(14, 33);
   }
 };
+function getMerchandisePage(merchandise, merchandiseId, pageSize) {
+  const index = merchandise.findIndex((entry) => entry.id === merchandiseId);
+  return index < 0 ? 0 : Math.floor(index / pageSize);
+}
 function getLayoutMode(width, height) {
   if (height > width && width < 600) return "MobilePortrait";
   return width < 820 ? "Compact" : "Wide";
@@ -54980,12 +55022,23 @@ function toCardRarity2(rarity) {
   if (rarity === "Rare" || rarity === "Uncommon" || rarity === "Special") return rarity;
   return "Common";
 }
-function drawMerchantFixtures(graphics, width, height, mode, purchaseGlow) {
+function drawMerchantFixtures(graphics, width, height, mode, resolutionKind, resolutionGlow) {
   const merchantX = mode === "Wide" ? width * 0.12 : width * 0.5;
   const merchantY = mode === "Wide" ? height * 0.48 : 90;
   const merchantRadius = Math.min(width, height) * (mode === "Wide" ? 0.13 : 0.08);
   const shelfY = mode === "MobilePortrait" ? 130 : mode === "Compact" ? 104 : height * 0.72;
-  graphics.clear().rect(0, shelfY, width, Math.max(8, height * 0.025)).fill({ color: 6044962, alpha: 0.92 }).rect(0, shelfY + Math.max(14, height * 0.035), width, Math.max(6, height * 0.018)).fill({ color: 3416853, alpha: 0.9 }).circle(merchantX, merchantY, merchantRadius).fill({ color: 12024095, alpha: 0.45 + purchaseGlow * 0.3 }).circle(merchantX, merchantY, merchantRadius * 0.5).fill({ color: 16113563, alpha: 0.55 + purchaseGlow * 0.35 });
+  graphics.clear().rect(0, shelfY, width, Math.max(8, height * 0.025)).fill({ color: 6044962, alpha: 0.92 }).rect(0, shelfY + Math.max(14, height * 0.035), width, Math.max(6, height * 0.018)).fill({ color: 3416853, alpha: 0.9 }).circle(merchantX, merchantY, merchantRadius).fill({ color: resolutionKind === "Service" ? 4158355 : 12024095, alpha: 0.45 + resolutionGlow * 0.3 }).circle(merchantX, merchantY, merchantRadius * 0.5).fill({ color: resolutionKind === "Service" ? 12970999 : 16113563, alpha: 0.55 + resolutionGlow * 0.35 });
+}
+function getPurchaseResolution(previousState, nextState, merchandiseId) {
+  const previousMerchandise = previousState?.merchandise.find((entry) => entry.id === merchandiseId);
+  const resolvedMerchandise = nextState.merchandise.find((entry) => entry.id === merchandiseId);
+  if (!previousMerchandise || !resolvedMerchandise || previousMerchandise.isSold || !resolvedMerchandise.isSold) return void 0;
+  return { merchandiseId, kind: resolvedMerchandise.resolutionKind ?? "Merchandise" };
+}
+function getPurchaseResolutionMessage(resolution, currency, previousCurrency) {
+  const spent = Math.abs(currency - previousCurrency);
+  const outcome = resolution?.kind === "Service" ? "Service resolved." : "Merchandise sold.";
+  return `${outcome} ${spent} gold spent. Gold remaining: ${currency}.`;
 }
 function getMerchandiseCardText(merchandise) {
   const sale = merchandise.isOnSale ? "Sale \xB7 " : "";
@@ -55491,7 +55544,7 @@ var feedbackStyle5 = new TextStyle({ fill: 16113563, fontFamily: "Arial", fontSi
 var controlStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 15, fontWeight: "bold" });
 
 // src/pixi-main-menu.ts
-async function createMainMenuRenderer(canvas, sink) {
+async function createMainMenuRenderer(canvas, sink, initialState) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 529183, backgroundAlpha: 1, canvas, preference: "canvas" });
   canvas.tabIndex = 0;
@@ -55538,10 +55591,16 @@ async function createMainMenuRenderer(canvas, sink) {
     buttons.forEach((button) => button.setEnabled(false));
     feedback.text = "Opening\u2026";
     try {
-      if (!await sink.invokeMethodAsync("HandleActionFromRendererAsync", action)) {
+      const accepted = await sink.invokeMethodAsync("HandleActionFromRendererAsync", action);
+      if (!accepted) {
         feedback.text = "That option is unavailable.";
         pending = false;
         reconcileButtons();
+      } else if (action === "runHistory") {
+        pending = false;
+        feedback.text = "";
+        reconcileButtons();
+        layout();
       }
     } catch {
       feedback.text = "The menu could not complete that request.";
@@ -55577,17 +55636,20 @@ async function createMainMenuRenderer(canvas, sink) {
   window.addEventListener("resize", layout);
   const resizeObserver = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(layout);
   resizeObserver?.observe(canvas.parentElement ?? canvas);
+  const reconcile = (candidate) => {
+    const nextState = toMainMenuState(candidate);
+    if (!nextState) return false;
+    state = nextState;
+    watermark.text = `build ${state.version}`;
+    pending = false;
+    feedback.text = "";
+    reconcileButtons();
+    layout();
+    return true;
+  };
+  if (initialState !== void 0) reconcile(initialState);
   return {
-    reconcile(candidate) {
-      if (!isMainMenuState(candidate)) return false;
-      state = candidate;
-      watermark.text = `build ${state.version}`;
-      pending = false;
-      feedback.text = "";
-      reconcileButtons();
-      layout();
-      return true;
-    },
+    reconcile,
     dispose() {
       if (disposed) return;
       disposed = true;
@@ -55612,14 +55674,18 @@ function getViewport(canvas) {
     height: Math.max(1, surface?.clientHeight || canvas.clientHeight || canvas.height || 480)
   };
 }
-function isMainMenuState(value) {
-  return typeof value === "object" && value !== null && typeof value.hasSavedGame === "boolean" && typeof value.version === "string";
+function toMainMenuState(value) {
+  if (typeof value !== "object" || value === null) return void 0;
+  const candidate = value;
+  const hasSavedGame = candidate.hasSavedGame ?? candidate.HasSavedGame;
+  const version = candidate.version ?? candidate.Version;
+  return typeof hasSavedGame === "boolean" && typeof version === "string" ? { hasSavedGame, version } : void 0;
 }
 var feedbackStyle6 = new TextStyle({ ...uiTokens.typography.body, align: "center", fill: 16113563, fontSize: 14 });
 var watermarkStyle = new TextStyle({ ...uiTokens.typography.body, align: "right", fill: 6717587, fontSize: 11 });
 
 // src/pixi-character-select.ts
-async function createCharacterSelectRenderer(canvas, sink) {
+async function createCharacterSelectRenderer(canvas, sink, initialState) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 529183, canvas, preference: "canvas" });
   canvas.tabIndex = 0;
@@ -55713,28 +55779,36 @@ async function createCharacterSelectRenderer(canvas, sink) {
   };
   canvas.addEventListener("keydown", keydown);
   window.addEventListener("resize", layout);
-  const resizeObserver = new ResizeObserver(layout);
-  resizeObserver.observe(canvas.parentElement ?? canvas);
+  const resizeObserver = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(layout);
+  resizeObserver?.observe(canvas.parentElement ?? canvas);
+  const reconcile = (candidate) => {
+    const nextState = toCharacterSelectState(candidate);
+    if (!nextState) return false;
+    state = nextState;
+    rebuild();
+    layout();
+    return true;
+  };
+  if (initialState !== void 0) reconcile(initialState);
   return {
-    reconcile(candidate) {
-      if (!isState(candidate)) return false;
-      state = candidate;
-      rebuild();
-      layout();
-      return true;
-    },
+    reconcile,
     dispose() {
       if (disposed) return;
       disposed = true;
-      resizeObserver.disconnect();
+      resizeObserver?.disconnect();
       window.removeEventListener("resize", layout);
       canvas.removeEventListener("keydown", keydown);
       application.destroy({ removeView: false }, { children: true });
     }
   };
 }
-function isState(value) {
-  return typeof value === "object" && value !== null && Array.isArray(value.characters) && typeof value.selectedCharacter === "string" && typeof value.seed === "string";
+function toCharacterSelectState(value) {
+  if (typeof value !== "object" || value === null) return void 0;
+  const candidate = value;
+  const characters = candidate.characters ?? candidate.Characters;
+  const selectedCharacter = candidate.selectedCharacter ?? candidate.SelectedCharacter;
+  const seed = candidate.seed ?? candidate.Seed;
+  return Array.isArray(characters) && characters.every((character) => typeof character === "string") && typeof selectedCharacter === "string" && typeof seed === "string" ? { characters, selectedCharacter, seed } : void 0;
 }
 var headingStyle = new TextStyle({ ...uiTokens.typography.panelTitle, align: "center", fill: 16113563, fontSize: 24 });
 var bodyStyle2 = new TextStyle({ ...uiTokens.typography.body, align: "center", fill: 14148078, fontSize: 15 });
@@ -55906,7 +55980,7 @@ async function createCollectionRenderer(canvas, sink) {
   const observer = new ResizeObserver(layout);
   observer.observe(canvas.parentElement ?? canvas);
   return { reconcile(candidate) {
-    if (!isState2(candidate)) return false;
+    if (!isState(candidate)) return false;
     state = candidate;
     rebuild();
     layout();
@@ -55925,7 +55999,7 @@ async function createCollectionRenderer(canvas, sink) {
     application.destroy({ removeView: false }, { children: true });
   } };
 }
-function isState2(value) {
+function isState(value) {
   return typeof value === "object" && value !== null && typeof value.title === "string" && Array.isArray(value.tabs) && Number.isInteger(value.activeTabIndex);
 }
 
