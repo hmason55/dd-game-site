@@ -23,9 +23,9 @@
 
 @media (max-width: 600px) {
     .pixi-reward-surface[b-lxd0nfvn0m] {
-        min-height: min(40rem, calc(95dvh - 8rem));
+        min-height: 0;
         aspect-ratio: auto;
-        height: calc(95dvh - 8rem);
+        height: min(76dvh, calc(100dvh - 8rem));
     }
 }
 
@@ -133,7 +133,7 @@
 .pixi-event-accessibility-controls[b-999uhjpgcf], .pixi-event-keyboard-help[b-999uhjpgcf] { position: absolute; height: 1px; overflow: hidden; width: 1px; clip: rect(0 0 0 0); white-space: nowrap; }
 
 @media (max-width: 600px) {
-    .pixi-event-surface[b-999uhjpgcf] { height: min(72dvh, 42rem); min-height: 22rem; }
+    .pixi-event-surface[b-999uhjpgcf] { height: min(72dvh, 42rem); min-height: min(22rem, calc(100dvh - 8rem)); }
 }
 
 @media (orientation: landscape) and (max-height: 540px) {
@@ -168,7 +168,7 @@
 @media (max-width: 600px) {
     .pixi-map-surface[b-1kmtvgocsf] {
         height: min(72dvh, 42rem);
-        min-height: 22rem;
+        min-height: min(22rem, calc(100dvh - 8rem));
         width: 100%;
     }
 }
@@ -187,7 +187,7 @@
 .pixi-rest-accessibility-controls[b-her48madf3] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
 
 @media (max-width: 600px) {
-    .pixi-rest-surface[b-her48madf3] { height: min(72dvh, 42rem); min-height: 22rem; }
+    .pixi-rest-surface[b-her48madf3] { height: min(72dvh, 42rem); min-height: min(22rem, calc(100dvh - 8rem)); }
 }
 
 @media (orientation: landscape) and (max-height: 540px) {
@@ -200,7 +200,7 @@
 .pixi-shop-keyboard-help[b-lr5mek7nhb], .pixi-shop-accessibility-controls[b-lr5mek7nhb] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
 
 @media (max-width: 600px) {
-    .pixi-shop-surface[b-lr5mek7nhb] { height: min(76dvh, 44rem); min-height: 22rem; width: calc(100vw - 1rem); }
+    .pixi-shop-surface[b-lr5mek7nhb] { height: min(76dvh, 44rem); min-height: min(22rem, calc(100dvh - 8rem)); width: calc(100vw - 1rem); }
 }
 
 @media (orientation: landscape) and (max-height: 540px) {

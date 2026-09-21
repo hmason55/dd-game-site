@@ -53938,6 +53938,7 @@ function prefersReducedMotion2() {
 }
 
 // src/pixi-event.ts
+var eventSceneProtocolVersion = 2;
 async function createEventRenderer(canvas, sink) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 529183, backgroundAlpha: 1, canvas, preference: "canvas" });
@@ -54004,7 +54005,8 @@ async function createEventRenderer(canvas, sink) {
     if (pending) return;
     pending = true;
     try {
-      const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: 1, sceneId: "event", name, sequence, sourceId: null, targetId: null, optionIndex: null, choiceId, selectionIds });
+      const optionIndex = name === "chooseOption" && choiceId !== null ? state?.options.findIndex((option) => option.id === choiceId) ?? -1 : null;
+      const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: eventSceneProtocolVersion, sceneId: "event", name, sequence, sourceId: null, targetId: null, optionIndex: optionIndex !== null && optionIndex >= 0 ? optionIndex : null, choiceId, selectionIds });
       announce(result.accepted ? "Resolved." : "That choice is no longer available.");
       playEffect(result.accepted ? "choice-confirmed" : "choice-rejected");
       if (result.accepted) acceptedActionAwaitingReconcile = true;
@@ -55188,6 +55190,7 @@ async function createMapRenderer(canvas, sink) {
     if (pending || travelTransition || didPan) return;
     selectedNodeId = node.id;
     focusedIndex = selectableNodes().findIndex((candidate) => candidate.id === node.id);
+    centerOnNode(node);
     announce(`${node.kind}. ${node.description} ${node.isReachable ? "This route is available." : node.isCurrent ? "You are here." : node.isVisited ? "Already visited." : "This route is locked."}`);
     void submit("selectNode", node.id);
     layout();
@@ -55205,6 +55208,7 @@ async function createMapRenderer(canvas, sink) {
     }
     selectedNodeId = node.id;
     focusedIndex = selectableNodes().findIndex((candidate) => candidate.id === node.id);
+    centerOnNode(node);
     announce(`${node.kind}. Traveling to ${node.description}`);
     beginTravel(current, node);
     layout();
@@ -55223,10 +55227,15 @@ async function createMapRenderer(canvas, sink) {
       panY = 0;
       return;
     }
+    centerOnNode(current, true);
+  };
+  const centerOnNode = (node, constrainToMapBounds = false) => {
     const metrics = getMapLayoutMetrics(application.renderer.width, application.renderer.height, state?.nodes ?? [], selectedNodeId);
-    panX = metrics.graphBounds.left + metrics.graphBounds.width / 2 - (metrics.mapLeft + (current.column - metrics.minColumn) * metrics.columnStep);
-    panY = metrics.graphBounds.top + metrics.graphBounds.height / 2 - (metrics.mapTop + (current.row - metrics.minRow) * metrics.rowStep);
-    constrainPan(metrics);
+    panX = metrics.graphBounds.left + metrics.graphBounds.width / 2 - (metrics.mapLeft + (node.column - metrics.minColumn) * metrics.columnStep);
+    panY = metrics.graphBounds.top + metrics.graphBounds.height / 2 - (metrics.mapTop + (node.row - metrics.minRow) * metrics.rowStep);
+    if (constrainToMapBounds) {
+      constrainPan(metrics);
+    }
   };
   const keydown = (event) => {
     const nodes = selectableNodes();
@@ -55338,17 +55347,20 @@ async function createMapRenderer(canvas, sink) {
     region.text = state?.regionName ?? "";
     region.position.set(20, 14);
     region.anchor.set(0, 0);
-    feedback.position.set(contextBounds.left + contextBounds.width / 2, contextBounds.top - 22);
+    feedback.position.set(contextBounds.left + contextBounds.width / 2, metrics.contextVisible ? contextBounds.top - 22 : height - 28);
     feedback.anchor.set(0.5, 0);
     const selected = selectedNode();
-    contextPanel.clear().roundRect(contextBounds.left, contextBounds.top, contextBounds.width, contextBounds.height, 12).fill({ color: 1058874, alpha: 0.98 }).roundRect(contextBounds.left, contextBounds.top, contextBounds.width, contextBounds.height, 12).stroke({ color: 9549506, width: 2 }).rect(contextBounds.left + 2, contextBounds.top + 14, 4, Math.max(1, contextBounds.height - 28)).fill({ color: selected?.isReachable ? 7854502 : 16113563, alpha: 0.9 });
-    contextTitle.text = selected ? selected.kind : "Inspect a location";
-    contextDetails.text = selected ? `${selected.description} ${selected.isReachable ? "Traveling to this location." : selected.isCurrent ? "This is your current location." : selected.isVisited ? "This location has been visited." : "This location is not reachable yet."}` : "Drag or scroll to explore the paths. Tap an available location to travel.";
-    contextTitle.position.set(contextBounds.left + 16, contextBounds.top + 14);
-    contextDetails.style.wordWrapWidth = Math.max(1, contextBounds.width - 32);
-    contextDetails.position.set(contextBounds.left + 16, contextBounds.top + 44);
     controls.removeChildren();
-    if (selected) {
+    contextPanel.visible = metrics.contextVisible;
+    contextTitle.visible = metrics.contextVisible;
+    contextDetails.visible = metrics.contextVisible;
+    if (selected && metrics.contextVisible) {
+      contextPanel.clear().roundRect(contextBounds.left, contextBounds.top, contextBounds.width, contextBounds.height, 12).fill({ color: 1058874, alpha: 0.98 }).roundRect(contextBounds.left, contextBounds.top, contextBounds.width, contextBounds.height, 12).stroke({ color: 9549506, width: 2 }).rect(contextBounds.left + 2, contextBounds.top + 14, 4, Math.max(1, contextBounds.height - 28)).fill({ color: selected.isReachable ? 7854502 : 16113563, alpha: 0.9 });
+      contextTitle.text = selected.kind;
+      contextDetails.text = `${selected.description} ${selected.isReachable ? "Traveling to this location." : selected.isCurrent ? "This is your current location." : selected.isVisited ? "This location has been visited." : "This location is not reachable yet."}`;
+      contextTitle.position.set(contextBounds.left + 16, contextBounds.top + 14);
+      contextDetails.style.wordWrapWidth = Math.max(1, contextBounds.width - 32);
+      contextDetails.position.set(contextBounds.left + 16, contextBounds.top + 44);
       const cancelWidth = Math.max(68, Math.min(116, contextBounds.width - 32));
       addControl("Clear", "Clear selection", !pending && !travelTransition, contextBounds.left + contextBounds.width - 16 - cancelWidth, contextBounds.top + contextBounds.height - 54, cancelWidth, cancel);
     }
@@ -55555,9 +55567,10 @@ function drawTravelMarker(graphics, transition, nodes, pointFor, reducedMotion) 
 }
 function getMapLayoutMetrics(width, height, nodes, selectedNodeId) {
   const mode = getViewportLayoutMode({ width, height });
+  const contextVisible = selectedNodeId !== void 0;
   const contextHeight = mode === "MobilePortrait" ? selectedNodeId === void 0 ? 132 : 164 : 124;
-  const contextBounds = mode === "Wide" ? { left: Math.max(16, width - 340), top: 58, width: Math.min(324, Math.max(180, width - 32)), height: Math.max(160, height - 82) } : { left: 16, top: height - contextHeight - 18, width: Math.max(1, width - 32), height: contextHeight };
-  const graphBounds = mode === "Wide" ? { left: 28, top: 48, width: Math.max(100, contextBounds.left - 52), height: Math.max(80, height - 80) } : { left: 28, top: 48, width: Math.max(100, width - 56), height: Math.max(80, contextBounds.top - 62) };
+  const contextBounds = contextVisible && mode === "Wide" ? { left: Math.max(16, width - 340), top: 58, width: Math.min(324, Math.max(180, width - 32)), height: Math.max(160, height - 82) } : contextVisible ? { left: 16, top: height - contextHeight - 18, width: Math.max(1, width - 32), height: contextHeight } : { left: width / 2, top: height - 18, width: 0, height: 0 };
+  const graphBounds = contextVisible && mode === "Wide" ? { left: 28, top: 48, width: Math.max(100, contextBounds.left - 52), height: Math.max(80, height - 80) } : contextVisible ? { left: 28, top: 48, width: Math.max(100, width - 56), height: Math.max(80, contextBounds.top - 62) } : { left: 28, top: 48, width: Math.max(100, width - 56), height: Math.max(80, height - 68) };
   const minColumn = Math.min(...nodes.map((node) => node.column), 0);
   const maxColumn = Math.max(...nodes.map((node) => node.column), 1);
   const minRow = Math.min(...nodes.map((node) => node.row), 0);
@@ -55570,6 +55583,7 @@ function getMapLayoutMetrics(width, height, nodes, selectedNodeId) {
     mode,
     graphBounds,
     contextBounds,
+    contextVisible,
     minColumn,
     minRow,
     columnStep,
