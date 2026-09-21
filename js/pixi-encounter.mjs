@@ -55101,14 +55101,17 @@ async function createMapRenderer(canvas, sink) {
   const graph = new Container();
   const connectionLayer = new Container();
   const nodeLayer = new Container();
+  const travelMarker = new Graphics();
+  const graphMask = new Graphics();
   const contextPanel = new Graphics();
   const region = new Text({ text: "", style: regionStyle });
   const contextTitle = new Text({ text: "Inspect a location", style: contextTitleStyle4 });
   const contextDetails = new Text({ text: "Select a node to review its route and destination.", style: contextBodyStyle4 });
   const feedback = new Text({ text: "", style: feedbackStyle5 });
   const controls = new Container();
-  graph.addChild(connectionLayer, nodeLayer);
-  root.addChild(background, graph, region, contextPanel, contextTitle, contextDetails, controls, feedback);
+  graph.addChild(connectionLayer, nodeLayer, travelMarker);
+  graph.mask = graphMask;
+  root.addChild(background, graph, region, contextPanel, contextTitle, contextDetails, controls, feedback, graphMask);
   application.stage.addChild(root);
   const nodeViews = /* @__PURE__ */ new Map();
   const connectionViews = /* @__PURE__ */ new Map();
@@ -55121,8 +55124,10 @@ async function createMapRenderer(canvas, sink) {
   let panX = 0;
   let panY = 0;
   let pointerStart;
+  let travelTransition;
   let didPan = false;
   let disposed = false;
+  const reducedMotion = prefersReducedMotion4();
   const announce = (message) => {
     feedback.text = message;
     accessibility.update(message);
@@ -55134,6 +55139,7 @@ async function createMapRenderer(canvas, sink) {
     const size = getMapSurfaceSize(canvas);
     if (application.renderer.width !== size.width || application.renderer.height !== size.height) {
       application.renderer.resize(size.width, size.height);
+      centerOnCurrentNode();
     }
     layout();
   };
@@ -55170,7 +55176,7 @@ async function createMapRenderer(canvas, sink) {
     layout();
   };
   const inspect = (node) => {
-    if (pending || didPan) return;
+    if (pending || travelTransition || didPan) return;
     selectedNodeId = node.id;
     focusedIndex = selectableNodes().findIndex((candidate) => candidate.id === node.id);
     announce(`${node.kind}. ${node.description} ${node.isReachable ? "This route is available." : node.isCurrent ? "You are here." : node.isVisited ? "Already visited." : "This route is locked."}`);
@@ -55178,19 +55184,24 @@ async function createMapRenderer(canvas, sink) {
     layout();
   };
   const activate = (node) => {
-    if (pending || didPan) return;
+    if (pending || travelTransition || didPan) return;
     if (!node.isReachable || state?.canTravel !== true) {
       inspect(node);
+      return;
+    }
+    const current = state?.nodes.find((candidate) => candidate.isCurrent);
+    if (!current) {
+      void submit("commitTravel", node.id);
       return;
     }
     selectedNodeId = node.id;
     focusedIndex = selectableNodes().findIndex((candidate) => candidate.id === node.id);
     announce(`${node.kind}. Traveling to ${node.description}`);
-    void submit("commitTravel", node.id);
+    beginTravel(current, node);
     layout();
   };
   const cancel = () => {
-    if (pending) return;
+    if (pending || travelTransition) return;
     selectedNodeId = void 0;
     void submit("cancel", null);
     announce("Location selection cancelled.");
@@ -55265,23 +55276,34 @@ async function createMapRenderer(canvas, sink) {
   window.addEventListener("resize", resize);
   const resizeObserver = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(resize);
   resizeObserver?.observe(canvas.parentElement ?? canvas);
+  const tick = () => {
+    if (!travelTransition) return;
+    travelTransition.elapsedMs += Math.max(0, application.ticker.deltaMS);
+    const duration = getMotionDuration("emphasis", reducedMotion);
+    if (travelTransition.elapsedMs >= duration) {
+      const destinationId = travelTransition.destinationId;
+      travelTransition = void 0;
+      void submit("commitTravel", destinationId);
+    }
+    layout();
+  };
+  application.ticker.add(tick);
   function layout() {
     if (disposed) return;
     const width = application.renderer.width;
     const height = application.renderer.height;
-    const mobile = height > width;
     const metrics = getMapLayoutMetrics(width, height, state?.nodes ?? [], selectedNodeId);
     const { minColumn, minRow, columnStep, rowStep, mapLeft, mapTop } = metrics;
-    const trayHeight = mobile ? selectedNodeId === void 0 ? 132 : 164 : 124;
-    const trayY = height - trayHeight - 18;
+    const { contextBounds } = metrics;
     const nodes = state?.nodes ?? [];
     const pointFor = (node) => ({
       x: mapLeft + (node.column - minColumn) * columnStep + panX,
       y: mapTop + (node.row - minRow) * rowStep + panY
     });
     background.clear().rect(0, 0, width, height).fill(529183).rect(0, 0, width, Math.min(height * 0.18, 84)).fill({ color: 1520456, alpha: 0.38 });
+    graphMask.clear().rect(metrics.graphBounds.left, metrics.graphBounds.top, metrics.graphBounds.width, metrics.graphBounds.height).fill(16777215);
     graph.removeChildren();
-    graph.addChild(connectionLayer, nodeLayer);
+    graph.addChild(connectionLayer, nodeLayer, travelMarker);
     for (const [key, connectionView] of connectionViews) {
       const source3 = nodes.find((node) => node.id === key.split(":")[0]);
       const target = nodes.find((node) => node.id === key.split(":")[1]);
@@ -55289,36 +55311,45 @@ async function createMapRenderer(canvas, sink) {
       const from = pointFor(source3);
       const to = pointFor(target);
       const selectedRoute = connectionView.state.isReachable && connectionView.state.targetId === selectedNodeId;
+      const travelRoute = travelTransition?.sourceId === connectionView.state.sourceId && travelTransition.destinationId === connectionView.state.targetId;
       connectionView.graphics.clear().moveTo(from.x, from.y).lineTo(to.x, to.y).stroke({
-        color: selectedRoute ? 16777215 : connectionView.state.isReachable ? 16113563 : connectionView.state.isVisitedRoute ? 9416892 : 4678260,
-        width: selectedRoute ? 5 : connectionView.state.isReachable ? 4 : 2,
-        alpha: selectedRoute ? 1 : connectionView.state.isReachable || connectionView.state.isVisitedRoute ? 0.9 : 0.35
+        color: travelRoute || selectedRoute ? 16777215 : connectionView.state.isReachable ? 16113563 : connectionView.state.isVisitedRoute ? 9416892 : 4678260,
+        width: travelRoute || selectedRoute ? 5 : connectionView.state.isReachable ? 4 : 2,
+        alpha: travelRoute || selectedRoute ? 1 : connectionView.state.isReachable || connectionView.state.isVisitedRoute ? 0.9 : 0.35
       });
     }
     for (const node of nodes) {
       const view = nodeViews.get(node.id);
       if (!view) continue;
-      view.update(node, node.id === selectedNodeId, !pending);
+      view.update(node, node.id === selectedNodeId, !pending && !travelTransition);
       const point = pointFor(node);
       view.position.set(point.x, point.y);
     }
+    drawTravelMarker(travelMarker, travelTransition, nodes, pointFor, reducedMotion);
     region.text = state?.regionName ?? "";
     region.position.set(20, 14);
     region.anchor.set(0, 0);
-    feedback.position.set(width / 2, trayY - 22);
+    feedback.position.set(contextBounds.left + contextBounds.width / 2, contextBounds.top - 22);
     feedback.anchor.set(0.5, 0);
     const selected = selectedNode();
-    contextPanel.clear().roundRect(16, trayY, Math.max(1, width - 32), trayHeight, 12).fill({ color: 1058874, alpha: 0.98 }).roundRect(16, trayY, Math.max(1, width - 32), trayHeight, 12).stroke({ color: 9549506, width: 2 }).rect(18, trayY + 14, 4, Math.max(1, trayHeight - 28)).fill({ color: selected?.isReachable ? 7854502 : 16113563, alpha: 0.9 });
+    contextPanel.clear().roundRect(contextBounds.left, contextBounds.top, contextBounds.width, contextBounds.height, 12).fill({ color: 1058874, alpha: 0.98 }).roundRect(contextBounds.left, contextBounds.top, contextBounds.width, contextBounds.height, 12).stroke({ color: 9549506, width: 2 }).rect(contextBounds.left + 2, contextBounds.top + 14, 4, Math.max(1, contextBounds.height - 28)).fill({ color: selected?.isReachable ? 7854502 : 16113563, alpha: 0.9 });
     contextTitle.text = selected ? selected.kind : "Inspect a location";
     contextDetails.text = selected ? `${selected.description} ${selected.isReachable ? "Traveling to this location." : selected.isCurrent ? "This is your current location." : selected.isVisited ? "This location has been visited." : "This location is not reachable yet."}` : "Drag or scroll to explore the paths. Tap an available location to travel.";
-    contextTitle.position.set(32, trayY + 14);
-    contextDetails.style.wordWrapWidth = Math.max(1, mobile ? width - 64 : width - 330);
-    contextDetails.position.set(32, trayY + 44);
+    contextTitle.position.set(contextBounds.left + 16, contextBounds.top + 14);
+    contextDetails.style.wordWrapWidth = Math.max(1, contextBounds.width - 32);
+    contextDetails.position.set(contextBounds.left + 16, contextBounds.top + 44);
     controls.removeChildren();
     if (selected) {
-      const cancelWidth = Math.max(68, Math.min(116, width - 32));
-      addControl("Clear", "Clear selection", !pending, Math.max(16, width - 16 - cancelWidth), trayY + trayHeight - 54, cancelWidth, cancel);
+      const cancelWidth = Math.max(68, Math.min(116, contextBounds.width - 32));
+      addControl("Clear", "Clear selection", !pending && !travelTransition, contextBounds.left + contextBounds.width - 16 - cancelWidth, contextBounds.top + contextBounds.height - 54, cancelWidth, cancel);
     }
+  }
+  function beginTravel(source3, destination) {
+    if (getMotionDuration("emphasis", reducedMotion) === 0) {
+      void submit("commitTravel", destination.id);
+      return;
+    }
+    travelTransition = { sourceId: source3.id, destinationId: destination.id, elapsedMs: 0 };
   }
   function constrainPan(metrics) {
     const nodes = state?.nodes ?? [];
@@ -55388,16 +55419,22 @@ async function createMapRenderer(canvas, sink) {
     reconcile(nextSequence, candidate) {
       if (!isMapState(candidate) || nextSequence <= sequence) return false;
       sequence = nextSequence;
+      const cancelledTravelTransition = travelTransition && !isTravelTransitionValid(travelTransition, candidate);
       state = candidate;
       reconcileViews(candidate);
       selectedNodeId = void 0;
       focusedIndex = 0;
+      if (cancelledTravelTransition) travelTransition = void 0;
       centerOnCurrentNode();
       if (pending && acceptedActionAwaitingReconcile) {
         pending = false;
         acceptedActionAwaitingReconcile = false;
       }
-      accessibility.update(`${candidate.title}. ${candidate.regionName}. ${candidate.nodes.length} locations.`);
+      if (cancelledTravelTransition) {
+        announce("That route is no longer available.");
+      } else {
+        accessibility.update(`${candidate.title}. ${candidate.regionName}. ${candidate.nodes.length} locations.`);
+      }
       layout();
       return true;
     },
@@ -55412,10 +55449,16 @@ async function createMapRenderer(canvas, sink) {
       canvas.removeEventListener("wheel", wheel);
       window.removeEventListener("resize", resize);
       resizeObserver?.disconnect();
+      application.ticker.remove(tick);
       accessibility.dispose();
       application.destroy({ removeView: false }, { children: true });
     }
   };
+}
+function isTravelTransitionValid(transition, state) {
+  const source3 = state.nodes.find((node) => node.id === transition.sourceId);
+  const destination = state.nodes.find((node) => node.id === transition.destinationId);
+  return state.canTravel === true && source3?.isCurrent === true && destination?.isReachable === true && state.connections.some((connection) => connection.sourceId === transition.sourceId && connection.targetId === transition.destinationId && connection.isReachable);
 }
 var MapNodeView = class extends Container {
   frame = new Graphics();
@@ -55487,11 +55530,25 @@ function drawMapNodeIcon(graphics, kind, color) {
       graphics.circle(0, 0, 7).fill({ color });
   }
 }
+function drawTravelMarker(graphics, transition, nodes, pointFor, reducedMotion) {
+  graphics.clear();
+  if (!transition) return;
+  const source3 = nodes.find((node) => node.id === transition.sourceId);
+  const destination = nodes.find((node) => node.id === transition.destinationId);
+  if (!source3 || !destination) return;
+  const progress = easeMotion(getMotionProgress(transition.elapsedMs, getMotionDuration("emphasis", reducedMotion)), "inOutCubic");
+  const from = pointFor(source3);
+  const to = pointFor(destination);
+  const x2 = from.x + (to.x - from.x) * progress;
+  const y2 = from.y + (to.y - from.y) * progress;
+  const pulse = 0.7 + (1 - progress) * 0.3;
+  graphics.circle(x2, y2, 34 * pulse).fill({ color: 16113563, alpha: 0.16 }).circle(x2, y2, 22).fill({ color: 16113563, alpha: 0.96 }).circle(x2, y2, 14).fill({ color: 1520456, alpha: 0.96 }).circle(x2, y2, 22).stroke({ color: 16777215, width: 3, alpha: 0.92 });
+}
 function getMapLayoutMetrics(width, height, nodes, selectedNodeId) {
-  const mobile = height > width;
-  const trayHeight = mobile ? selectedNodeId === void 0 ? 132 : 164 : 124;
-  const trayY = height - trayHeight - 18;
-  const graphBounds = { left: 28, top: 48, width: Math.max(100, width - 56), height: Math.max(80, trayY - 62) };
+  const mode = getViewportLayoutMode({ width, height });
+  const contextHeight = mode === "MobilePortrait" ? selectedNodeId === void 0 ? 132 : 164 : 124;
+  const contextBounds = mode === "Wide" ? { left: Math.max(16, width - 340), top: 58, width: Math.min(324, Math.max(180, width - 32)), height: Math.max(160, height - 82) } : { left: 16, top: height - contextHeight - 18, width: Math.max(1, width - 32), height: contextHeight };
+  const graphBounds = mode === "Wide" ? { left: 28, top: 48, width: Math.max(100, contextBounds.left - 52), height: Math.max(80, height - 80) } : { left: 28, top: 48, width: Math.max(100, width - 56), height: Math.max(80, contextBounds.top - 62) };
   const minColumn = Math.min(...nodes.map((node) => node.column), 0);
   const maxColumn = Math.max(...nodes.map((node) => node.column), 1);
   const minRow = Math.min(...nodes.map((node) => node.row), 0);
@@ -55501,7 +55558,9 @@ function getMapLayoutMetrics(width, height, nodes, selectedNodeId) {
   const mapWidth = (maxColumn - minColumn) * columnStep;
   const mapHeight = (maxRow - minRow) * rowStep;
   return {
+    mode,
     graphBounds,
+    contextBounds,
     minColumn,
     minRow,
     columnStep,
@@ -55509,6 +55568,9 @@ function getMapLayoutMetrics(width, height, nodes, selectedNodeId) {
     mapLeft: graphBounds.left + Math.max(0, (graphBounds.width - mapWidth) / 2),
     mapTop: graphBounds.top + Math.max(0, (graphBounds.height - mapHeight) / 2)
   };
+}
+function prefersReducedMotion4() {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 function getMapSurfaceSize(canvas) {
   const surface = canvas.parentElement;
@@ -56049,12 +56111,12 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     },
     assetLoader,
     accessibilityOverlay.announce,
-    prefersReducedMotion4()
+    prefersReducedMotion5()
   );
   const runtime = new RunPresentationRuntime(createRunRuntimeApplication(application));
   const animationDirector = new AnimationDirector(scene.createAnimationCommandExecutor());
   const particleEffects = new ParticleEffectManager(runtime.renderLayers.effect, {
-    reducedMotion: prefersReducedMotion4(),
+    reducedMotion: prefersReducedMotion5(),
     resolveAnchor: (id) => scene.getEffectAnchor(id)
   });
   const runtimeScene = new EncounterRuntimeScene(scene, () => {
@@ -56503,7 +56565,7 @@ function parseCssPixel(value) {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
-function prefersReducedMotion4() {
+function prefersReducedMotion5() {
   return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 async function requireLoadedResult(preload, bundleName) {
