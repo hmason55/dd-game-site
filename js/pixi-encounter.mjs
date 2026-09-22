@@ -49907,6 +49907,95 @@ var ProgressIndicator = class extends Container {
     this.progressGraphic.clear().rect(0, 0, this.indicatorWidth * this.progress, this.indicatorHeight).fill({ color: this.fill });
   }
 };
+var ScrollContainer = class extends Container {
+  viewport = new Container();
+  viewportMask = new Graphics();
+  contentLayer = new Container();
+  viewportWidth;
+  viewportHeight;
+  totalContentHeight;
+  offset = 0;
+  /**
+   * Creates a clipped viewport and its dedicated scrollable content layer.
+   */
+  constructor(options) {
+    super();
+    this.viewportWidth = normalizeSize(options.width);
+    this.viewportHeight = normalizeSize(options.height);
+    this.totalContentHeight = normalizeSize(options.contentHeight ?? options.height);
+    this.viewport.addChild(this.viewportMask, this.contentLayer);
+    this.viewport.mask = this.viewportMask;
+    this.addChild(this.viewport);
+    this.redrawViewport();
+    this.updateContentPosition();
+  }
+  /**
+   * Gets the layer intended for scrollable scene-specific children.
+   */
+  get content() {
+    return this.contentLayer;
+  }
+  /**
+   * Gets the current viewport dimensions.
+   */
+  get viewportSize() {
+    return { width: this.viewportWidth, height: this.viewportHeight };
+  }
+  /**
+   * Gets the total scrollable content height.
+   */
+  get contentHeight() {
+    return this.totalContentHeight;
+  }
+  /**
+   * Gets the current vertical offset from the top of the content.
+   */
+  get scrollOffset() {
+    return this.offset;
+  }
+  /**
+   * Gets the maximum allowed vertical offset from the top of the content.
+   */
+  get maximumScrollOffset() {
+    return Math.max(0, this.totalContentHeight - this.viewportHeight);
+  }
+  /**
+   * Updates the viewport dimensions while retaining the closest valid scroll offset.
+   */
+  resize(width, height) {
+    this.viewportWidth = normalizeSize(width);
+    this.viewportHeight = normalizeSize(height);
+    this.redrawViewport();
+    this.setScrollOffset(this.offset);
+  }
+  /**
+   * Updates the scrollable content height while retaining the closest valid scroll offset.
+   */
+  setContentHeight(height) {
+    this.totalContentHeight = normalizeSize(height);
+    this.setScrollOffset(this.offset);
+  }
+  /**
+   * Sets the vertical content offset, clamped to the available scroll range.
+   */
+  setScrollOffset(offset) {
+    const normalizedOffset = Number.isFinite(offset) ? offset : 0;
+    this.offset = Math.min(this.maximumScrollOffset, Math.max(0, normalizedOffset));
+    this.updateContentPosition();
+  }
+  /**
+   * Moves the vertical content offset by the supplied amount.
+   */
+  scrollBy(amount) {
+    this.setScrollOffset(this.offset + amount);
+  }
+  redrawViewport() {
+    this.viewportMask.clear().rect(0, 0, this.viewportWidth, this.viewportHeight).fill({ color: 16777215 });
+  }
+  updateContentPosition() {
+    this.contentLayer.position.set(0, -this.offset);
+  }
+};
 var ContextPanel = class extends GamePanel {
   collapsedHeight;
   expandedHeight;
@@ -54664,7 +54753,7 @@ async function createShopRenderer(canvas, sink) {
   const root = new Container();
   const background = new Graphics();
   const merchant = new Graphics();
-  const merchandiseLayer = new Container();
+  const merchandiseScroll = new ScrollContainer({ width: 1, height: 1 });
   const contextPanel = new Graphics();
   const title = new Text({ text: "Shop", style: titleStyle3 });
   const currency = new Text({ text: "", style: currencyStyle });
@@ -54672,7 +54761,7 @@ async function createShopRenderer(canvas, sink) {
   const contextDetails = new Text({ text: "Choose an item to inspect its price and effect.", style: contextBodyStyle3 });
   const feedback = new Text({ text: "", style: feedbackStyle4 });
   const controlLayer = new Container();
-  root.addChild(background, merchant, title, currency, merchandiseLayer, contextPanel, contextTitle, contextDetails, controlLayer, feedback);
+  root.addChild(background, merchant, title, currency, merchandiseScroll, contextPanel, contextTitle, contextDetails, controlLayer, feedback);
   application.stage.addChild(root);
   let sequence = 0;
   let state;
@@ -54680,12 +54769,12 @@ async function createShopRenderer(canvas, sink) {
   let selectedMerchandiseId;
   let pending = false;
   let acceptedActionAwaitingReconcile = false;
-  let page = 0;
   let resolutionEffect;
   let resolutionEffectElapsedMs = 0;
   let currencyEffectElapsedMs = 0;
   let currencyTransition;
   let pendingPurchaseMerchandiseId;
+  let touchScrollPointer;
   const reducedMotion = prefersReducedMotion3();
   const selectableMerchandise = () => state?.merchandise.filter((merchandise) => !merchandise.isSold) ?? [];
   const announce = (message) => {
@@ -54732,10 +54821,10 @@ async function createShopRenderer(canvas, sink) {
     if (pending || merchandise.isSold) return;
     selectedMerchandiseId = merchandise.id;
     selectedIndex = selectableMerchandise().findIndex((entry) => entry.id === merchandise.id);
-    page = Math.floor(selectedIndex / getPageSize());
     announce(`Selected ${merchandise.name}. ${getMerchandiseSummary(merchandise)} Review it, then confirm or cancel.`);
     void submit("inspect", merchandise.id);
     layout();
+    scrollMerchandiseIntoView(selectedIndex);
   };
   const confirmPurchase = () => {
     const merchandise = state?.merchandise.find((entry) => entry.id === selectedMerchandiseId);
@@ -54775,13 +54864,42 @@ async function createShopRenderer(canvas, sink) {
       return;
     }
     if (event.key === "PageUp" || event.key === "PageDown") {
-      page = event.key === "PageUp" ? Math.max(0, page - 1) : Math.min(getPageCount() - 1, page + 1);
-      selectedMerchandiseId = void 0;
+      merchandiseScroll.scrollBy((event.key === "PageUp" ? -1 : 1) * merchandiseScroll.viewportSize.height * 0.8);
       layout();
       event.preventDefault();
     }
   };
+  const wheel = (event) => {
+    if (merchandiseScroll.maximumScrollOffset === 0 || event.deltaY === 0) return;
+    merchandiseScroll.scrollBy(normalizeWheelDelta(event, merchandiseScroll.viewportSize.height));
+    event.preventDefault();
+  };
+  const pointerdown = (event) => {
+    if (event.pointerType !== "touch") return;
+    touchScrollPointer = { id: event.pointerId, y: event.clientY, moved: false };
+    canvas.setPointerCapture?.(event.pointerId);
+  };
+  const pointermove = (event) => {
+    if (touchScrollPointer?.id !== event.pointerId) return;
+    const offset = touchScrollPointer.y - event.clientY;
+    if (offset === 0) return;
+    touchScrollPointer = { id: event.pointerId, y: event.clientY, moved: touchScrollPointer.moved || Math.abs(offset) >= 2 };
+    if (merchandiseScroll.maximumScrollOffset === 0) return;
+    merchandiseScroll.scrollBy(offset);
+    event.preventDefault();
+  };
+  const pointerup = (event) => {
+    if (touchScrollPointer?.id !== event.pointerId) return;
+    if (touchScrollPointer.moved) event.preventDefault();
+    touchScrollPointer = void 0;
+    canvas.releasePointerCapture?.(event.pointerId);
+  };
   canvas.addEventListener("keydown", keydown);
+  canvas.addEventListener("wheel", wheel, { passive: false });
+  canvas.addEventListener("pointerdown", pointerdown);
+  canvas.addEventListener("pointermove", pointermove);
+  canvas.addEventListener("pointerup", pointerup);
+  canvas.addEventListener("pointercancel", pointerup);
   window.addEventListener("resize", resize);
   const tick = () => {
     if (resolutionEffectElapsedMs <= 0 && currencyEffectElapsedMs <= 0) return;
@@ -54806,65 +54924,60 @@ async function createShopRenderer(canvas, sink) {
   function layout() {
     const width = application.renderer.width;
     const height = application.renderer.height;
-    const layoutMode = getLayoutMode(width, height);
-    const compact = layoutMode !== "Wide";
     const allMerchandise = state?.merchandise ?? [];
-    const pageSize = getPageSize();
-    const pageCount = Math.max(1, Math.ceil(allMerchandise.length / pageSize));
-    page = Math.min(page, pageCount - 1);
-    const merchandise = allMerchandise.slice(page * pageSize, (page + 1) * pageSize);
     const selected = allMerchandise.find((entry) => entry.id === selectedMerchandiseId);
-    const controlsBelowDetails = compact && selected !== void 0;
-    const trayHeight = controlsBelowDetails ? 164 : compact ? 132 : 118;
-    const trayY = height - trayHeight - 18;
-    const gridTop = layoutMode === "MobilePortrait" ? 142 : layoutMode === "Compact" ? 112 : 104;
-    const gridBottom = trayY - 16;
-    const hasCards = merchandise.some((entry) => entry.isCard);
-    const columns = getColumnCount(layoutMode, merchandise.length);
-    const gap = compact ? 10 : 14;
-    const cardWidth = Math.max(104, Math.min(compact ? 180 : 220, (width - 48 - (columns - 1) * gap) / columns));
-    const rows = Math.max(1, Math.ceil(merchandise.length / columns));
-    const cardHeight = hasCards ? Math.max(150, Math.min(cardWidth * 1.4, gridBottom - gridTop)) : Math.max(66, Math.min(compact ? 104 : 132, (gridBottom - gridTop - (rows - 1) * gap) / rows));
+    const merchandiseLayout = createMerchandiseLayout(width, height, allMerchandise, selected);
     const resolutionGlow = resolutionEffectElapsedMs > 0 ? 1 - getMotionProgress(resolutionEffectElapsedMs, getMotionDuration("emphasis", reducedMotion)) : 0;
     const currencyProgress = currencyEffectElapsedMs > 0 ? getMotionProgress(currencyEffectElapsedMs, getMotionDuration("emphasis", reducedMotion)) : 1;
     const displayedCurrency = currencyTransition ? Math.round(currencyTransition.from + (currencyTransition.to - currencyTransition.from) * currencyProgress) : state?.currency ?? 0;
     background.clear().rect(0, 0, width, height).fill(726562).rect(0, 0, width, height * 0.22).fill({ color: 2044741, alpha: 0.94 });
-    drawMerchantFixtures(merchant, width, height, layoutMode, resolutionEffect?.kind, resolutionGlow);
+    drawMerchantFixtures(merchant, width, height, merchandiseLayout.mode, resolutionEffect?.kind, resolutionGlow);
     title.text = state?.title ?? "Shop";
     title.position.set(28, 22);
     currency.text = `Gold: ${displayedCurrency}`;
     currency.alpha = currencyTransition ? 0.82 + resolutionGlow * 0.18 : 1;
     currency.position.set(width - 28, 29);
     currency.anchor.set(1, 0);
-    feedback.position.set(width / 2, trayY - 22);
+    feedback.position.set(width / 2, merchandiseLayout.trayY - 22);
     feedback.anchor.set(0.5, 0);
-    merchandiseLayer.removeChildren();
+    merchandiseScroll.position.set(24, merchandiseLayout.gridTop);
+    merchandiseScroll.resize(Math.max(1, width - 48), Math.max(1, merchandiseLayout.gridBottom - merchandiseLayout.gridTop));
+    merchandiseScroll.setContentHeight(merchandiseLayout.contentHeight);
+    merchandiseScroll.content.removeChildren();
     controlLayer.removeChildren();
-    contextPanel.clear().roundRect(16, trayY, width - 32, trayHeight, 12).fill({ color: 1518395, alpha: 0.98 }).stroke({ color: 13280860, width: 2 });
+    contextPanel.clear().roundRect(16, merchandiseLayout.trayY, width - 32, merchandiseLayout.trayHeight, 12).fill({ color: 1518395, alpha: 0.98 }).stroke({ color: 13280860, width: 2 });
     contextTitle.text = selected?.name ?? "Browse merchandise";
     contextDetails.text = selected ? getMerchandiseSummary(selected) : "Select merchandise to inspect its effect, price, and availability.";
-    contextTitle.position.set(32, trayY + 14);
-    contextDetails.style.wordWrapWidth = Math.max(1, width - 64 - (selected === void 0 || controlsBelowDetails ? 0 : 270));
-    contextDetails.position.set(32, trayY + 44);
+    contextTitle.position.set(32, merchandiseLayout.trayY + 14);
+    contextDetails.style.wordWrapWidth = Math.max(1, width - 64 - (selected === void 0 || merchandiseLayout.compact ? 0 : 270));
+    contextDetails.position.set(32, merchandiseLayout.trayY + 44);
     if (selected !== void 0) {
-      addControl("Buy", "Confirm purchase", selected.isAffordable && !selected.isSold && !pending, width - 282, trayY + trayHeight - 54, 124, confirmPurchase);
-      addControl("Cancel", "Return to merchandise", !pending, width - 148, trayY + trayHeight - 54, 116, cancelSelection);
+      addControl("Buy", "Confirm purchase", selected.isAffordable && !selected.isSold && !pending, width - 282, merchandiseLayout.trayY + merchandiseLayout.trayHeight - 54, 124, confirmPurchase);
+      addControl("Cancel", "Return to merchandise", !pending, width - 148, merchandiseLayout.trayY + merchandiseLayout.trayHeight - 54, 116, cancelSelection);
     } else {
-      addControl("Leave", "Return to map", !pending, width - 148, trayY + trayHeight - 54, 116, leave);
+      addControl("Leave", "Return to map", !pending, width - 148, merchandiseLayout.trayY + merchandiseLayout.trayHeight - 54, 116, leave);
     }
-    if (pageCount > 1) {
-      addControl("Previous", "Previous merchandise page", !pending && page > 0, 32, trayY + trayHeight - 54, 116, () => changePage(-1));
-      addControl("Next", "Next merchandise page", !pending && page < pageCount - 1, 158, trayY + trayHeight - 54, 116, () => changePage(1));
-    }
-    merchandise.forEach((entry, index) => {
-      const column = index % columns;
-      const row = Math.floor(index / columns);
+    allMerchandise.forEach((entry, index) => {
+      const column = index % merchandiseLayout.columns;
+      const row = Math.floor(index / merchandiseLayout.columns);
       const resolutionIntensity = resolutionEffect?.merchandiseId === entry.id ? resolutionGlow : 0;
       const card = new ShopMerchandiseCard(entry, entry.id === selectedMerchandiseId, selectedMerchandiseId !== void 0, !pending, resolutionIntensity, resolutionEffect?.kind, () => inspect(entry));
-      card.resize(cardWidth, cardHeight);
-      card.position.set(24 + column * (cardWidth + gap), gridTop + row * (cardHeight + gap));
-      merchandiseLayer.addChild(card);
+      card.resize(merchandiseLayout.cardWidth, merchandiseLayout.cardHeight);
+      card.position.set(column * (merchandiseLayout.cardWidth + merchandiseLayout.gap), row * (merchandiseLayout.cardHeight + merchandiseLayout.gap));
+      merchandiseScroll.content.addChild(card);
     });
+  }
+  function scrollMerchandiseIntoView(index) {
+    if (index < 0 || state === void 0) return;
+    const selected = state.merchandise.find((entry) => entry.id === selectedMerchandiseId);
+    const merchandiseLayout = createMerchandiseLayout(application.renderer.width, application.renderer.height, state.merchandise, selected);
+    const row = Math.floor(index / merchandiseLayout.columns);
+    const top = row * (merchandiseLayout.cardHeight + merchandiseLayout.gap);
+    const bottom = top + merchandiseLayout.cardHeight;
+    const viewportTop = merchandiseScroll.scrollOffset;
+    const viewportBottom = viewportTop + merchandiseScroll.viewportSize.height;
+    if (top < viewportTop) merchandiseScroll.setScrollOffset(top);
+    else if (bottom > viewportBottom) merchandiseScroll.setScrollOffset(bottom - merchandiseScroll.viewportSize.height);
   }
   function addControl(label, hint, enabled, x2, y2, width, onPress) {
     const control = new ShopMerchandiseCard(
@@ -54879,20 +54992,6 @@ async function createShopRenderer(canvas, sink) {
     control.resize(width, 42);
     control.position.set(x2, y2);
     controlLayer.addChild(control);
-  }
-  function getPageSize() {
-    const layoutMode = getLayoutMode(application.renderer.width, application.renderer.height);
-    const merchandise = state?.merchandise ?? [];
-    const columns = getColumnCount(layoutMode, merchandise.length);
-    return columns * (merchandise.some((entry) => entry.isCard) ? 1 : 2);
-  }
-  function getPageCount() {
-    return Math.max(1, Math.ceil((state?.merchandise.length ?? 0) / getPageSize()));
-  }
-  function changePage(direction) {
-    page = Math.max(0, Math.min(getPageCount() - 1, page + direction));
-    selectedMerchandiseId = void 0;
-    layout();
   }
   resize();
   return {
@@ -54912,7 +55011,6 @@ async function createShopRenderer(canvas, sink) {
       }
       pendingPurchaseMerchandiseId = void 0;
       const resolution = completedPurchase && purchasedMerchandiseId ? getPurchaseResolution(previousState, candidate, purchasedMerchandiseId) : void 0;
-      page = resolution ? getMerchandisePage(candidate.merchandise, resolution.merchandiseId, getPageSize()) : 0;
       if (resolution && !reducedMotion) {
         resolutionEffect = resolution;
         resolutionEffectElapsedMs = 1;
@@ -54934,10 +55032,16 @@ async function createShopRenderer(canvas, sink) {
         accessibility.update(`${candidate.title}. Gold: ${candidate.currency}. ${candidate.merchandise.length} merchandise choices available.`);
       }
       layout();
+      if (resolution) scrollMerchandiseIntoView(candidate.merchandise.findIndex((entry) => entry.id === resolution.merchandiseId));
       return true;
     },
     dispose() {
       canvas.removeEventListener("keydown", keydown);
+      canvas.removeEventListener("wheel", wheel);
+      canvas.removeEventListener("pointerdown", pointerdown);
+      canvas.removeEventListener("pointermove", pointermove);
+      canvas.removeEventListener("pointerup", pointerup);
+      canvas.removeEventListener("pointercancel", pointerup);
       window.removeEventListener("resize", resize);
       application.ticker.remove(tick);
       accessibility.dispose();
@@ -55009,13 +55113,42 @@ var ShopMerchandiseCard = class extends Container {
     this.description.position.set(14, 33);
   }
 };
-function getMerchandisePage(merchandise, merchandiseId, pageSize) {
-  const index = merchandise.findIndex((entry) => entry.id === merchandiseId);
-  return index < 0 ? 0 : Math.floor(index / pageSize);
-}
 function getLayoutMode(width, height) {
   if (height > width && width < 600) return "MobilePortrait";
   return width < 820 ? "Compact" : "Wide";
+}
+function createMerchandiseLayout(width, height, merchandise, selected) {
+  const mode = getLayoutMode(width, height);
+  const compact = mode !== "Wide";
+  const shortLandscape = mode === "Compact" && height < 420;
+  const trayHeight = shortLandscape ? selected === void 0 ? 66 : 88 : selected !== void 0 && compact ? 164 : compact ? 132 : 118;
+  const trayY = height - trayHeight - (shortLandscape ? 10 : 18);
+  const gridTop = mode === "MobilePortrait" ? 142 : shortLandscape ? 58 : mode === "Compact" ? 112 : 104;
+  const gridBottom = trayY - (shortLandscape ? 8 : 16);
+  const columns = getColumnCount(mode, merchandise.length);
+  const gap = compact ? 10 : 14;
+  const cardWidth = Math.max(104, Math.min(compact ? 180 : 220, (width - 48 - (columns - 1) * gap) / columns));
+  const rows = Math.max(1, Math.ceil(merchandise.length / columns));
+  const hasCards = merchandise.some((entry) => entry.isCard);
+  const cardHeight = hasCards ? Math.max(150, Math.min(cardWidth * 1.4, compact ? 242 : 300)) : Math.max(66, Math.min(compact ? 104 : 132, 132));
+  return {
+    mode,
+    compact,
+    trayHeight,
+    trayY,
+    gridTop,
+    gridBottom,
+    columns,
+    gap,
+    cardWidth,
+    cardHeight,
+    contentHeight: rows * cardHeight + Math.max(0, rows - 1) * gap
+  };
+}
+function normalizeWheelDelta(event, viewportHeight) {
+  if (event.deltaMode === 1) return event.deltaY * 20;
+  if (event.deltaMode === 2) return event.deltaY * viewportHeight;
+  return event.deltaY;
 }
 function getColumnCount(mode, merchandiseCount) {
   if (mode === "MobilePortrait") return 2;
