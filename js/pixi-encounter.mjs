@@ -51019,7 +51019,7 @@ var EncounterScene = class {
       this.removeCardToBottom(tile, start, this.getCardAnimationAnchors().discard, progress);
     }],
     ["exhaust", (_source, _target, tile, start, progress) => {
-      this.removeCardToBottom(tile, start, this.getCardAnimationAnchors().exhaust, progress);
+      this.fadeCardOut(tile, start, progress);
     }],
     ["hand-reflow", (_source, _target, tile, start, progress) => tile.container.scale.set(start.scale * (1 + Math.sin(progress * Math.PI) * 0.08))],
     ["lunge", (source3, target, _tile, start, progress) => this.lunge(source3, target, start, progress)],
@@ -52083,6 +52083,10 @@ ${resources}`;
     tile.container.alpha = start.alpha * (1 - easedProgress);
     tile.container.scale.set(start.scale * (1 - easedProgress));
   }
+  /** Fades an exhausted card at its current play position without moving it into a discard zone. */
+  fadeCardOut(tile, start, progress) {
+    tile.container.alpha = start.alpha * (1 - easeMotion(progress, "inCubic"));
+  }
   /**
    * Calculates animation origins and destinations inside the current scene viewport.
    */
@@ -52091,8 +52095,7 @@ ${resources}`;
     return {
       center: { x: viewport.width / 2, y: viewport.height / 2 },
       draw: { x: Math.max(0, viewport.width - 80), y: Math.max(0, viewport.height - 40) },
-      discard: { x: Math.max(0, viewport.width - 100), y: viewport.height + 30 },
-      exhaust: { x: Math.max(0, viewport.width - 40), y: viewport.height + 30 }
+      discard: { x: Math.max(0, viewport.width - 100), y: viewport.height + 30 }
     };
   }
   lunge(source3, target, start, progress) {
@@ -54260,7 +54263,7 @@ async function createEventRenderer(canvas, sink) {
       contextDetails.text = nested?.description ?? (selected ? getOptionContextDetails(selected) : "Select a choice to inspect its outcome and any consequences.");
       if (selected !== void 0) {
         const controlY = trayY + trayHeight - 54;
-        const confirmationHint = nested ? `Select ${nested.requiredSelectionCount} card${nested.requiredSelectionCount === 1 ? "" : "s"} (${selectedNestedItemIds.size}/${nested.requiredSelectionCount})` : "Apply this choice";
+        const confirmationHint = nested ? `Select ${formatSelectionRequirement(nested, selectedNestedItemIds.size)}` : "Apply this choice";
         addControl("Confirm", confirmationHint, !pending && (!nested || selectedNestedItemIds.size === nested.requiredSelectionCount), width - 282, controlY, 124, confirmSelection);
         addControl("Cancel", nested ? "Return to event choice" : "Return to choices", !pending, width - 148, controlY, 116, cancelSelection);
         if (nested && getNestedPageCount(nested, width, height) > 1) {
@@ -54332,12 +54335,12 @@ async function createEventRenderer(canvas, sink) {
     } else if (selectedNestedItemIds.size < getNestedChoice()?.requiredSelectionCount) {
       selectedNestedItemIds.add(item.id);
     } else {
-      announce("Deselect a card before choosing another.");
+      announce(`Deselect a ${getSelectionLabel(getNestedChoice())} before choosing another.`);
       return;
     }
     const nested = getNestedChoice();
     nestedIndex = nested?.items.findIndex((candidate) => candidate.id === item.id) ?? 0;
-    announce(`${selectedNestedItemIds.has(item.id) ? "Selected" : "Deselected"} ${item.name}. ${selectedNestedItemIds.size} of ${nested?.requiredSelectionCount ?? 0} cards selected.`);
+    announce(`${selectedNestedItemIds.has(item.id) ? "Selected" : "Deselected"} ${item.name}. ${formatSelectedItems(nested, selectedNestedItemIds.size)}.`);
     layout();
     if (!requireConfirmation && selectedNestedItemIds.size === nested?.requiredSelectionCount) {
       void submit("chooseOption", selectedOptionId, [...selectedNestedItemIds]);
@@ -54408,6 +54411,20 @@ async function createEventRenderer(canvas, sink) {
       application.destroy({ removeView: false }, { children: true });
     }
   };
+}
+function getSelectionLabel(nested) {
+  const label = nested?.selectionLabel?.trim();
+  return label && label.length > 0 ? label : "item";
+}
+function formatSelectionRequirement(nested, selectedCount) {
+  const label = getSelectionLabel(nested);
+  const plural = nested.requiredSelectionCount === 1 ? label : `${label}s`;
+  return `${nested.requiredSelectionCount} ${plural} (${selectedCount}/${nested.requiredSelectionCount})`;
+}
+function formatSelectedItems(nested, selectedCount) {
+  const label = getSelectionLabel(nested);
+  const plural = selectedCount === 1 ? label : `${label}s`;
+  return `${selectedCount} of ${nested?.requiredSelectionCount ?? 0} ${plural} selected`;
 }
 var EventChoice = class extends Container {
   frame = new Graphics();
