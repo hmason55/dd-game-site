@@ -21,6 +21,14 @@
     -webkit-user-drag: none;
 }
 
+.pixi-reward-accessibility-controls[b-lxd0nfvn0m],
+.pixi-reward-keyboard-help[b-lxd0nfvn0m] {
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    width: 1px;
+}
+
 @media (max-width: 600px) {
     .pixi-reward-surface[b-lxd0nfvn0m] {
         min-height: 0;
@@ -35,6 +43,7 @@
         min-height: 0;
     }
 }
+
 /* /Components/PixiCharacterSelectSurface.razor.rz.scp.css */
 .pixi-character-select-surface[b-oywb2u3hc5] {
     background: #08131f;
