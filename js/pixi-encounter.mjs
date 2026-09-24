@@ -54133,7 +54133,7 @@ async function createEventRenderer(canvas, sink) {
   };
   const pressOption = (option, isTouch) => {
     selectOption(option);
-    if (!isTouch) {
+    if (!isTouch && !option.requiresConfirmation) {
       confirmSelection();
     }
   };
@@ -54283,7 +54283,7 @@ async function createEventRenderer(canvas, sink) {
       contextDetails.text = nested?.description ?? (selected ? getOptionContextDetails(selected) : "Select a choice to inspect its outcome and any consequences.");
       if (selected !== void 0) {
         const controlY = trayY + trayHeight - 54;
-        const confirmationHint = nested ? `Select ${formatSelectionRequirement(nested, selectedNestedItemIds.size)}` : "Apply this choice";
+        const confirmationHint = nested ? `Select ${formatSelectionRequirement(nested, selectedNestedItemIds.size)}` : selected.requiresConfirmation ? "Review this risky choice, then apply it" : "Apply this choice";
         addControl("Confirm", confirmationHint, !pending && (!nested || selectedNestedItemIds.size === nested.requiredSelectionCount), width - 282, controlY, 124, confirmSelection);
         addControl("Cancel", nested ? "Return to event choice" : "Return to choices", !pending, width - 148, controlY, 116, cancelSelection);
         if (nested && getNestedPageCount(nested, width, height) > 1) {
