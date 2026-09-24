@@ -50861,8 +50861,17 @@ H: deck  C: context`;
     this.healthBar.position.set(padding + 20, padding + 20);
     this.currency.position.set(92, padding);
     if (getViewportLayoutMode(viewport) === "MobilePortrait") {
-      this.deck.position.set(padding, 50);
-      this.relics.position.set(100, 50);
+      const controlGap = uiTokens.spacing.sm;
+      const controlsWidth = 92 * 2 + controlGap;
+      if (usesStackedMobileControls(viewport)) {
+        const controlsX = Math.max(padding, viewport.width - padding - 92);
+        this.deck.position.set(controlsX, padding);
+        this.relics.position.set(controlsX, padding + 44 + controlGap);
+      } else {
+        const controlsX = Math.max(padding, viewport.width - padding - controlsWidth);
+        this.deck.position.set(controlsX, padding);
+        this.relics.position.set(controlsX + 92 + controlGap, padding);
+      }
       this.context.resize(Math.max(0, viewport.width - padding * 2), 116);
       this.context.position.set(padding, viewport.height - this.context.panelSize.height - padding);
     } else {
@@ -50882,6 +50891,9 @@ H: deck  C: context`;
     return getViewportLayoutMode(viewport) === "MobilePortrait" ? this.context.panelSize.height + uiTokens.spacing.sm * 2 : 0;
   }
 };
+function usesStackedMobileControls(viewport) {
+  return viewport.width < 344 || viewport.height < 560;
+}
 
 // src/encounter-scene.ts
 var supportedAnimationNames = /* @__PURE__ */ new Set([
@@ -54090,7 +54102,8 @@ async function createEventRenderer(canvas, sink) {
     }, delayMs);
   };
   const resize = () => {
-    application.renderer.resize(Math.max(1, canvas.clientWidth || canvas.width || 960), Math.max(1, canvas.clientHeight || canvas.height || 540));
+    const size = getEventSurfaceSize(canvas);
+    application.renderer.resize(size.width, size.height);
     layout();
   };
   const submit = async (name, choiceId, selectionIds = null) => {
@@ -54219,6 +54232,10 @@ async function createEventRenderer(canvas, sink) {
   };
   canvas.addEventListener("keydown", keydown);
   window.addEventListener("resize", resize);
+  const resizeObserver = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(resize);
+  resizeObserver?.observe(canvas.parentElement ?? canvas);
+  const visualViewport = window.visualViewport;
+  visualViewport?.addEventListener("resize", resize);
   application.ticker.add(tick);
   function layout() {
     const width = application.renderer.width;
@@ -54229,6 +54246,9 @@ async function createEventRenderer(canvas, sink) {
     const selected = choices.find((option) => option.id === selectedOptionId);
     const nested = getNestedChoice();
     narrative.text = toPlainNarrative(state?.narrative ?? "Loading event\u2026").slice(0, narrativeProgress);
+    title.text = state?.title ?? "Event";
+    title.style.wordWrapWidth = Math.max(1, width - 48);
+    title.position.set(24, 22);
     const controlsBelowDetails = mobile && (selected !== void 0 || nested !== void 0);
     const choiceWidth = mobile ? width - 48 : Math.max(260, width * 0.48);
     const choiceX = mobile ? 24 : width * 0.48;
@@ -54405,11 +54425,26 @@ async function createEventRenderer(canvas, sink) {
     dispose() {
       canvas.removeEventListener("keydown", keydown);
       window.removeEventListener("resize", resize);
+      visualViewport?.removeEventListener("resize", resize);
+      resizeObserver?.disconnect();
       application.ticker.remove(tick);
       hideTooltip();
       accessibility.dispose();
       application.destroy({ removeView: false }, { children: true });
     }
+  };
+}
+function getEventSurfaceSize(canvas) {
+  const host = canvas.parentElement;
+  const hostWidth = Math.max(1, host?.clientWidth || canvas.clientWidth || canvas.width || 960);
+  const hostHeight = Math.max(1, host?.clientHeight || canvas.clientHeight || canvas.height || 540);
+  const visualViewport = window.visualViewport;
+  if (!visualViewport || !Number.isFinite(visualViewport.width) || !Number.isFinite(visualViewport.height)) {
+    return { width: hostWidth, height: hostHeight };
+  }
+  return {
+    width: Math.min(hostWidth, Math.max(1, visualViewport.width)),
+    height: Math.min(hostHeight, Math.max(1, visualViewport.height))
   };
 }
 function getSelectionLabel(nested) {
