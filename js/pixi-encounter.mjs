@@ -50999,6 +50999,7 @@ var EncounterScene = class {
   handLayoutTransitions = /* @__PURE__ */ new Map();
   animationLockResolver = () => false;
   intentPending = false;
+  inputReleased = false;
   pendingIntentSequence;
   pendingIntentMessage;
   viewport;
@@ -51111,6 +51112,9 @@ var EncounterScene = class {
    * Processes a keyboard interaction without forwarding high-frequency input to .NET.
    */
   handleKeyboardEvent(event) {
+    if (this.inputReleased) {
+      return false;
+    }
     if (event.key === "Escape") {
       this.cancelKeyboardInteraction();
       return true;
@@ -51208,7 +51212,7 @@ var EncounterScene = class {
    * Releases every display object created by the scene.
    */
   dispose() {
-    this.settleTransientDragOwnership();
+    this.releaseInput();
     this.releasedDragPositions.clear();
     this.root.destroy({ children: true });
     this.entityTiles.clear();
@@ -51495,6 +51499,19 @@ ${resources}`;
       drag.tile.container.position.set(position.x, position.y);
     }
     this.entryInteractionStates.set(getEntrySceneId(drag.entry), this.isValidDrop(drag.entry, target) ? "valid-drop" : "invalid-drop");
+    this.refreshSelectionHighlights();
+  }
+  /** Releases this scene's pointer, drag, and keyboard ownership before it is replaced. */
+  releaseInput() {
+    if (this.inputReleased) {
+      return;
+    }
+    this.inputReleased = true;
+    this.root.eventMode = "none";
+    this.settleTransientDragOwnership();
+    this.hoveredEntryId = void 0;
+    this.focusedEntryId = void 0;
+    this.refreshInteractionState();
     this.refreshSelectionHighlights();
   }
   /**
@@ -52896,7 +52913,7 @@ var RunPresentationRuntime = class {
       try {
         await this.removeActiveScene();
         const controller = new AbortController();
-        activeScene = { scene, controller };
+        activeScene = { scene, controller, inputReleased: false };
         this.layers.scene.addChild(scene.displayObject);
         this.activeScene = activeScene;
         this.transitionCount++;
@@ -53181,17 +53198,43 @@ var RunPresentationRuntime = class {
       return;
     }
     this.activeScene = void 0;
+    let firstError = this.releaseActiveSceneInput(activeScene);
     activeScene.controller.abort();
     const context2 = this.createContext(activeScene.controller);
     try {
       await activeScene.scene.exit?.(context2);
-    } finally {
+    } catch (error) {
+      firstError ??= error;
+    }
+    try {
       this.layers.scene.removeChild(activeScene.scene.displayObject);
       try {
         beforeDestroy?.();
-      } finally {
-        await activeScene.scene.destroy?.(context2);
+      } catch (error) {
+        firstError ??= error;
       }
+      try {
+        await activeScene.scene.destroy?.(context2);
+      } catch (error) {
+        firstError ??= error;
+      }
+    } finally {
+      if (firstError !== void 0) {
+        throw firstError;
+      }
+    }
+  }
+  /** Releases a mounted scene's drag, focus, and pointer ownership exactly once per lifecycle. */
+  releaseActiveSceneInput(activeScene) {
+    if (!activeScene || activeScene.inputReleased) {
+      return void 0;
+    }
+    activeScene.inputReleased = true;
+    try {
+      activeScene.scene.releaseInput?.(this.createContext(activeScene.controller));
+      return void 0;
+    } catch (error) {
+      return error;
     }
   }
   disposeSystems() {
@@ -57037,10 +57080,14 @@ var EncounterRuntimeScene = class {
       this.scene.reconcile(this.latestSnapshot, this.getViewport());
     }
   }
+  /** Releases scene-owned input before the runtime begins replacement teardown. */
+  releaseInput() {
+    this.cancelAnimations();
+    this.scene.releaseInput();
+  }
   /** Cancels scene-local timelines before the runtime replaces or disposes this scene. */
   exit() {
-    this.cancelAnimations();
-    this.scene.settleTransientDragOwnership();
+    this.releaseInput();
   }
   /** Settles pointer-owned motion before visibility suspension stops the primary ticker. */
   suspend() {
