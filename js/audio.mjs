@@ -52,6 +52,29 @@ function waitForAudioPreload(audio, timeoutMs = 5000) {
     });
 }
 
+const presentationCueSounds = Object.freeze({
+    Focus: ["UI Select Click 01", "UI Select Click 02", "UI Select Click 03", "UI Select Click 04", "UI Select Click 05"],
+    Select: ["UI Select Click 01", "UI Select Click 02", "UI Select Click 03", "UI Select Click 04", "UI Select Click 05"],
+    Confirm: ["UI Select Click 01", "UI Select Click 02", "UI Select Click 03", "UI Select Click 04", "UI Select Click 05"],
+    Reject: ["click"],
+    Purchase: ["loot"],
+    Reward: ["loot"],
+    Travel: ["UI Page Flipping 01", "UI Page Flipping 02"],
+    Rest: ["UI Page Flipping 01", "UI Page Flipping 02"],
+    Hit: ["hit", "hurt"],
+    Block: ["block"],
+    Status: ["typewriter"],
+    Transition: ["UI Page Flipping 01", "UI Page Flipping 02"]
+});
+
+function presentationCueIntensity() {
+    return typeof window !== "undefined"
+        && typeof window.matchMedia === "function"
+        && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? 0.5
+        : 1;
+}
+
 export const audioPlayer = {
     sounds: {},
     tracks: {},
@@ -130,7 +153,7 @@ export const audioPlayer = {
         }
     },
 
-    playSound(name) {
+    playSound(name, intensity = 1) {
         const sound = this.sounds[name];
         if (!sound) {
             console.warn("Sound not found:", name);
@@ -140,18 +163,27 @@ export const audioPlayer = {
         const audio = sound.pool.next();
         audio.pause();
         audio.currentTime = 0;
-        audio.volume = sound.baseVolume * this.mix.master * this.mix.sfx;
+        audio.volume = sound.baseVolume * this.mix.master * this.mix.sfx * this.clamp(intensity);
         const variance = (Math.random() * 2 - 1) * this.pitchVariance;
         audio.playbackRate = 1 + variance;
         audio.play().catch(err => console.error("Audio playback failed:", err));
     },
 
-    playRandom(names) {
+    playRandom(names, intensity = 1) {
         if (!names || names.length === 0) {
             return;
         }
         const index = Math.floor(Math.random() * names.length);
-        this.playSound(names[index]);
+        this.playSound(names[index], intensity);
+    },
+
+    playPresentationCue(cue) {
+        const names = presentationCueSounds[cue];
+        if (!names) {
+            return;
+        }
+
+        this.playRandom(names, presentationCueIntensity());
     },
 
     unlockAudio() {
