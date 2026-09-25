@@ -140,6 +140,9 @@
 .pixi-event-surface[b-999uhjpgcf] { height: min(76vh, 640px); min-height: 360px; overflow: hidden; position: relative; width: 100%; }
 .pixi-event-surface canvas[b-999uhjpgcf] { display: block; height: 100%; outline: none; touch-action: manipulation; width: 100%; }
 .pixi-event-accessibility-controls[b-999uhjpgcf], .pixi-event-keyboard-help[b-999uhjpgcf] { position: absolute; height: 1px; overflow: hidden; width: 1px; clip: rect(0 0 0 0); white-space: nowrap; }
+.pixi-event-surface.renderer-unavailable[b-999uhjpgcf] { height: auto; min-height: 0; overflow: visible; }
+.pixi-event-surface.renderer-unavailable canvas[b-999uhjpgcf], .pixi-event-surface.renderer-unavailable .pixi-event-keyboard-help[b-999uhjpgcf] { display: none; }
+.pixi-event-surface.renderer-unavailable .pixi-event-accessibility-controls[b-999uhjpgcf] { clip: auto; height: auto; overflow: visible; position: static; white-space: normal; width: auto; }
 
 @media (max-width: 600px) {
     .pixi-event-surface[b-999uhjpgcf] { height: min(72dvh, 42rem); min-height: min(22rem, calc(100dvh - 8rem)); }
@@ -148,7 +151,6 @@
 @media (orientation: landscape) and (max-height: 540px) {
     .pixi-event-surface[b-999uhjpgcf] { height: calc(100dvh - 5rem); min-height: 18rem; }
 }
-
 /* /Components/Rooms/PixiMapSurface.razor.rz.scp.css */
 .pixi-map-surface[b-1kmtvgocsf] {
     background: #08131f;
@@ -174,6 +176,9 @@
 
 .pixi-map-surface canvas:focus-visible[b-1kmtvgocsf] { outline: 3px solid var(--mud-palette-secondary); outline-offset: -3px; }
 .pixi-map-keyboard-help[b-1kmtvgocsf], .pixi-map-accessibility-controls[b-1kmtvgocsf] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
+.pixi-map-surface.renderer-unavailable[b-1kmtvgocsf] { height: auto; min-height: 0; overflow: visible; }
+.pixi-map-surface.renderer-unavailable canvas[b-1kmtvgocsf], .pixi-map-surface.renderer-unavailable .pixi-map-keyboard-help[b-1kmtvgocsf] { display: none; }
+.pixi-map-surface.renderer-unavailable .pixi-map-accessibility-controls[b-1kmtvgocsf] { height: auto; overflow: visible; position: static; width: auto; }
 
 @media (max-width: 600px) {
     .pixi-map-surface[b-1kmtvgocsf] {
