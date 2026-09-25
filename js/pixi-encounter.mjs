@@ -54041,6 +54041,73 @@ function prefersReducedMotion2() {
   return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+// src/modal-overlay.ts
+var ModalOverlay = class extends Container {
+  backdrop = new Graphics();
+  modalPanel;
+  sceneWidth;
+  sceneHeight;
+  open = false;
+  /**
+   * Creates a hidden modal surface centered in the supplied scene dimensions.
+   */
+  constructor(options) {
+    super();
+    this.sceneWidth = normalizeSize2(options.sceneWidth);
+    this.sceneHeight = normalizeSize2(options.sceneHeight);
+    this.modalPanel = new GamePanel(options);
+    this.backdrop.eventMode = "static";
+    this.addChild(this.backdrop, this.modalPanel);
+    this.redraw();
+    this.setOpen(false);
+  }
+  /**
+   * Gets the stable panel content layer for scene-specific modal content.
+   */
+  get content() {
+    return this.modalPanel.content;
+  }
+  /**
+   * Gets the current modal panel dimensions.
+   */
+  get panelSize() {
+    return this.modalPanel.panelSize;
+  }
+  /**
+   * Gets whether the modal is currently visible and intercepting pointer input.
+   */
+  get isOpen() {
+    return this.open;
+  }
+  /**
+   * Shows or hides the modal without rebuilding its display tree.
+   */
+  setOpen(open) {
+    this.open = open;
+    this.visible = open;
+    this.eventMode = open ? "static" : "none";
+  }
+  /**
+   * Updates scene dimensions and recenters the existing modal panel.
+   */
+  resize(sceneWidth, sceneHeight, panelWidth, panelHeight) {
+    this.sceneWidth = normalizeSize2(sceneWidth);
+    this.sceneHeight = normalizeSize2(sceneHeight);
+    if (panelWidth !== void 0 && panelHeight !== void 0) {
+      this.modalPanel.resize(panelWidth, panelHeight);
+    }
+    this.redraw();
+  }
+  redraw() {
+    this.backdrop.clear().rect(0, 0, this.sceneWidth, this.sceneHeight).fill({ color: 0, alpha: uiTokens.elevation.overlayAlpha });
+    const panelSize = this.modalPanel.panelSize;
+    this.modalPanel.position.set((this.sceneWidth - panelSize.width) / 2, (this.sceneHeight - panelSize.height) / 2);
+  }
+};
+function normalizeSize2(value) {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
 // src/pixi-event.ts
 var eventSceneProtocolVersion = 2;
 async function createEventRenderer(canvas, sink) {
@@ -54060,7 +54127,13 @@ async function createEventRenderer(canvas, sink) {
   const choiceLayer = new Container();
   const controlLayer = new Container();
   const tooltip = new Tooltip({ text: "", width: 272, height: 96, placement: "left" });
-  root.addChild(background, focal, title, narrative, choiceLayer, contextPanel, contextTitle, contextDetails, controlLayer, feedback, tooltip);
+  const nestedOverlay = new ModalOverlay({ sceneWidth: 0, sceneHeight: 0, width: 360, height: 320 });
+  const nestedTitle = new Text({ text: "", style: contextTitleStyle });
+  const nestedDetails = new Text({ text: "", style: contextBodyStyle });
+  const nestedChoiceLayer = new Container();
+  const nestedControlLayer = new Container();
+  nestedOverlay.content.addChild(nestedTitle, nestedDetails, nestedChoiceLayer, nestedControlLayer);
+  root.addChild(background, focal, title, narrative, choiceLayer, contextPanel, contextTitle, contextDetails, controlLayer, feedback, tooltip, nestedOverlay);
   application.stage.addChild(root);
   let state;
   let sequence = 0;
@@ -54162,6 +54235,7 @@ async function createEventRenderer(canvas, sink) {
       nestedChoiceOpen = false;
       selectedNestedItemIds.clear();
       announce("Returned to the event choice.");
+      focusCanvas();
       layout();
       return;
     }
@@ -54199,6 +54273,7 @@ async function createEventRenderer(canvas, sink) {
       const direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
       nestedIndex = (nestedIndex + direction + nested.items.length) % nested.items.length;
       nestedPage = Math.floor(nestedIndex / getNestedPageSize(application.renderer.width, application.renderer.height));
+      layout();
       event.preventDefault();
       return;
     }
@@ -54272,6 +54347,8 @@ async function createEventRenderer(canvas, sink) {
     feedback.anchor.set(0.5);
     choiceLayer.removeChildren();
     controlLayer.removeChildren();
+    nestedChoiceLayer.removeChildren();
+    nestedControlLayer.removeChildren();
     hideTooltip();
     contextPanel.clear().roundRect(16, trayY, width - 32, trayHeight, 12).fill({ color: 1058874, alpha: 0.98 }).stroke({ color: 9549506, width: 2 });
     if (state?.isComplete) {
@@ -54281,39 +54358,18 @@ async function createEventRenderer(canvas, sink) {
     } else {
       contextTitle.text = nested?.title ?? selected?.text ?? "Choose an option";
       contextDetails.text = nested?.description ?? (selected ? getOptionContextDetails(selected) : "Select a choice to inspect its outcome and any consequences.");
-      if (selected !== void 0) {
+      if (selected !== void 0 && !nested) {
         const controlY = trayY + trayHeight - 54;
-        const confirmationHint = nested ? `Select ${formatSelectionRequirement(nested, selectedNestedItemIds.size)}` : selected.requiresConfirmation ? "Review this risky choice, then apply it" : "Apply this choice";
-        addControl("Confirm", confirmationHint, !pending && (!nested || selectedNestedItemIds.size === nested.requiredSelectionCount), width - 282, controlY, 124, confirmSelection);
-        addControl("Cancel", nested ? "Return to event choice" : "Return to choices", !pending, width - 148, controlY, 116, cancelSelection);
-        if (nested && getNestedPageCount(nested, width, height) > 1) {
-          addControl("Previous", "Previous cards", !pending && nestedPage > 0, 32, controlY, 116, () => changeNestedPage(-1));
-          addControl("Next", "Next cards", !pending && nestedPage < getNestedPageCount(nested, width, height) - 1, 158, controlY, 116, () => changeNestedPage(1));
-        }
+        const confirmationHint = selected.requiresConfirmation ? "Review this risky choice, then apply it" : "Apply this choice";
+        addControl("Confirm", confirmationHint, !pending, width - 282, controlY, 124, confirmSelection);
+        addControl("Cancel", "Return to choices", !pending, width - 148, controlY, 116, cancelSelection);
       }
     }
     contextTitle.position.set(32, trayY + 14);
     contextDetails.style.wordWrapWidth = Math.max(1, width - 64 - (selectedOptionId === void 0 || controlsBelowDetails ? 0 : 270));
     contextDetails.position.set(32, trayY + 44);
-    if (nested) {
-      nestedItems.forEach((item, index) => {
-        const itemIndex = nested.items.findIndex((candidate) => candidate.id === item.id);
-        const itemSelected = selectedNestedItemIds.has(item.id) || selectedNestedItemIds.size === 0 && itemIndex === nestedIndex;
-        const choiceY = choiceTop + index * (choiceHeight + choiceGap);
-        const choice = new EventChoice(
-          item.name,
-          item.description,
-          !pending,
-          itemSelected,
-          (isTouch) => toggleNestedItem(item, isTouch),
-          () => scheduleTooltip(item.tooltip, { x: choiceX, y: choiceY, width: choiceWidth, height: choiceHeight }, 2e3),
-          hideTooltip
-        );
-        choice.resize(choiceWidth, choiceHeight);
-        choice.position.set(choiceX, choiceY);
-        choiceLayer.addChild(choice);
-      });
-    } else choices.forEach((option, index) => {
+    layoutNestedOverlay(nested, nestedItems, width, height);
+    if (!nested) choices.forEach((option, index) => {
       const availableIndex = availableOptions().findIndex((entry) => entry.id === option.id);
       const selected2 = option.id === selectedOptionId || selectedOptionId === void 0 && availableIndex === selectedIndex;
       const choiceY = choiceTop + index * (choiceHeight + choiceGap);
@@ -54335,6 +54391,52 @@ async function createEventRenderer(canvas, sink) {
     if (!nestedChoiceOpen || selectedOptionId === void 0) return void 0;
     return state?.options.find((option) => option.id === selectedOptionId)?.nestedChoice;
   }
+  function getNestedItemDetails(nested) {
+    const item = nested.items[nestedIndex] ?? nested.items.find((candidate) => selectedNestedItemIds.has(candidate.id));
+    if (!item) return "";
+    return `${item.name}
+${item.tooltip ?? item.description}`;
+  }
+  function layoutNestedOverlay(nested, items, sceneWidth, sceneHeight) {
+    nestedOverlay.setOpen(nested !== void 0);
+    if (!nested) return;
+    const panelWidth = Math.min(Math.max(280, sceneWidth - 32), 520);
+    const panelHeight = Math.min(Math.max(220, sceneHeight - 24), 460);
+    nestedOverlay.resize(sceneWidth, sceneHeight, panelWidth, panelHeight);
+    nestedTitle.text = nested.title;
+    nestedTitle.position.set(18, 14);
+    nestedDetails.text = `${nested.description}
+
+${getNestedItemDetails(nested)}
+
+${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
+    nestedDetails.style.wordWrapWidth = panelWidth - 36;
+    nestedDetails.position.set(18, 42);
+    const paginated = getNestedPageCount(nested, sceneWidth, sceneHeight) > 1;
+    const actionControlsY = panelHeight - 56;
+    const navigationControlsY = actionControlsY - 48;
+    const detailsHeight = Math.max(nestedDetails.height, estimateTextHeight(nestedDetails.text, panelWidth - 36, 19));
+    const choiceTop = 42 + detailsHeight + 12;
+    const choiceBottom = (paginated ? navigationControlsY : actionControlsY) - 10;
+    const choiceGap = 8;
+    const choiceCount = Math.max(1, items.length);
+    const choiceHeight = Math.max(26, Math.min(52, (choiceBottom - choiceTop - (choiceCount - 1) * choiceGap) / choiceCount));
+    items.forEach((item, index) => {
+      const itemIndex = nested.items.findIndex((candidate) => candidate.id === item.id);
+      const itemSelected = selectedNestedItemIds.has(item.id) || selectedNestedItemIds.size === 0 && itemIndex === nestedIndex;
+      const choice = new EventChoice(item.name, item.description, !pending, itemSelected, () => toggleNestedItem(item));
+      choice.resize(panelWidth - 36, choiceHeight);
+      choice.position.set(18, choiceTop + index * (choiceHeight + choiceGap));
+      nestedChoiceLayer.addChild(choice);
+    });
+    const controlWidth = (panelWidth - 54) / 2;
+    addNestedControl("Confirm", `Use ${formatSelectionRequirement(nested, selectedNestedItemIds.size)}`, !pending && selectedNestedItemIds.size === nested.requiredSelectionCount, 18, actionControlsY, controlWidth, confirmSelection);
+    addNestedControl("Back", "Return to event choice", !pending, 36 + controlWidth, actionControlsY, controlWidth, cancelSelection);
+    if (paginated) {
+      addNestedControl("Previous", "Previous choices", !pending && nestedPage > 0, 18, navigationControlsY, controlWidth, () => changeNestedPage(-1));
+      addNestedControl("Next", "Next choices", !pending && nestedPage < getNestedPageCount(nested, sceneWidth, sceneHeight) - 1, 36 + controlWidth, navigationControlsY, controlWidth, () => changeNestedPage(1));
+    }
+  }
   function openNestedChoice(option) {
     const nested = option.nestedChoice;
     if (!nested || nested.items.length < nested.requiredSelectionCount) {
@@ -54346,6 +54448,7 @@ async function createEventRenderer(canvas, sink) {
     nestedPage = 0;
     selectedNestedItemIds.clear();
     announce(`${nested.title}. ${nested.description}`);
+    focusCanvas();
     layout();
   }
   function toggleNestedItem(item, requireConfirmation = true) {
@@ -54367,7 +54470,8 @@ async function createEventRenderer(canvas, sink) {
     }
   }
   function getNestedPageSize(width, height) {
-    return height > width ? 4 : 5;
+    if (height < 400) return 1;
+    return height > width ? 3 : 4;
   }
   function getNestedPageItems(nested, width, height) {
     const pageSize = getNestedPageSize(width, height);
@@ -54389,6 +54493,17 @@ async function createEventRenderer(canvas, sink) {
     control.resize(width, 42);
     control.position.set(x2, y2);
     controlLayer.addChild(control);
+  }
+  function addNestedControl(label, hint, enabled, x2, y2, width, onPress) {
+    const control = new EventChoice(label, hint, enabled, false, onPress);
+    control.resize(width, 40);
+    control.position.set(x2, y2);
+    nestedControlLayer.addChild(control);
+  }
+  function focusCanvas() {
+    if (typeof canvas.focus === "function") {
+      canvas.focus({ preventScroll: true });
+    }
   }
   function showTooltip(text, anchor) {
     const tooltipWidth = Math.min(272, Math.max(180, application.renderer.width - 24));
@@ -54446,6 +54561,11 @@ function getEventSurfaceSize(canvas) {
     width: Math.min(hostWidth, Math.max(1, visualViewport.width)),
     height: Math.min(hostHeight, Math.max(1, visualViewport.height))
   };
+}
+function estimateTextHeight(text, width, lineHeight) {
+  const charactersPerLine = Math.max(1, Math.floor(width / 7));
+  const lineCount = text.split("\n").reduce((count2, line) => count2 + Math.max(1, Math.ceil(line.length / charactersPerLine)), 0);
+  return lineCount * lineHeight;
 }
 function getSelectionLabel(nested) {
   const label = nested?.selectionLabel?.trim();
