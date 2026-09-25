@@ -48088,6 +48088,82 @@ function isOptionalNonNegativeFiniteNumber(value) {
   return value === void 0 || isFiniteNumber2(value) && value >= 0;
 }
 
+// src/canvas-focus.ts
+function createCanvasFocusCoordinator(canvas) {
+  if (typeof document === "undefined") {
+    return {
+      focus() {
+        if (typeof canvas.focus === "function") {
+          canvas.focus({ preventScroll: true });
+        }
+      },
+      dispose() {
+      }
+    };
+  }
+  let canvasHadKeyboardFocus = document.activeElement === canvas;
+  let restoreAfterDialog = false;
+  let disposed = false;
+  const containingDialog = findDialogOwner(canvas);
+  const focus = () => {
+    if (!disposed && typeof canvas.focus === "function") {
+      canvas.focus({ preventScroll: true });
+    }
+  };
+  const onCanvasFocus = () => {
+    canvasHadKeyboardFocus = true;
+    restoreAfterDialog = false;
+  };
+  const onCanvasBlur = () => {
+    canvasHadKeyboardFocus = true;
+  };
+  const onFocusIn = (event) => {
+    if (!isDialogTarget(event.target) || event.target === canvas) {
+      return;
+    }
+    const targetDialog = findDialogOwner(event.target);
+    if (targetDialog !== containingDialog && targetDialog !== null) {
+      restoreAfterDialog = canvasHadKeyboardFocus;
+      return;
+    }
+    if (restoreAfterDialog) {
+      restoreAfterDialog = false;
+      focus();
+      return;
+    }
+    canvasHadKeyboardFocus = false;
+  };
+  const onVisibilityChange = () => {
+    const activeElement = document.activeElement;
+    if (!document.hidden && canvasHadKeyboardFocus && (activeElement === canvas || findDialogOwner(activeElement) === null)) {
+      focus();
+    }
+  };
+  document.addEventListener("focusin", onFocusIn);
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  canvas.addEventListener("focus", onCanvasFocus);
+  canvas.addEventListener("blur", onCanvasBlur);
+  return {
+    focus,
+    dispose() {
+      if (disposed) {
+        return;
+      }
+      disposed = true;
+      document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      canvas.removeEventListener("focus", onCanvasFocus);
+      canvas.removeEventListener("blur", onCanvasBlur);
+    }
+  };
+}
+function isDialogTarget(value) {
+  return typeof value === "object" && value !== null && "closest" in value && typeof value.closest === "function";
+}
+function findDialogOwner(value) {
+  return isDialogTarget(value) ? value.closest("[role='dialog'], .mud-dialog") : null;
+}
+
 // src/particle-effect-manager.ts
 var ParticleEffectManager = class {
   constructor(layer, options = {}) {
@@ -54082,6 +54158,7 @@ async function createRewardRenderer(canvas, actionSink) {
     preference: "canvas"
   });
   canvas.tabIndex = 0;
+  const canvasFocus = createCanvasFocusCoordinator(canvas);
   const accessibility = createRewardAccessibilityOverlay(canvas);
   let scene;
   const updateAccessibility = () => accessibility.update(scene.getAccessibleSummary());
@@ -54123,6 +54200,7 @@ async function createRewardRenderer(canvas, actionSink) {
       window.removeEventListener("resize", resize);
       canvas.removeEventListener("keydown", handleKeyboardEvent);
       application.ticker.remove(tick);
+      canvasFocus.dispose();
       accessibility.dispose();
       application.destroy({ removeView: false }, { children: true });
     }
@@ -54237,6 +54315,7 @@ async function createEventRenderer(canvas, sink) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 529183, backgroundAlpha: 1, canvas, preference: "canvas" });
   canvas.tabIndex = 0;
+  const canvasFocus = createCanvasFocusCoordinator(canvas);
   const accessibility = createEventAccessibilityOverlay(canvas);
   const root = new Container();
   const background = new Graphics();
@@ -54358,7 +54437,7 @@ async function createEventRenderer(canvas, sink) {
       nestedChoiceOpen = false;
       selectedNestedItemIds.clear();
       announce("Returned to the event choice.");
-      focusCanvas();
+      canvasFocus.focus();
       layout();
       return;
     }
@@ -54571,7 +54650,7 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
     nestedPage = 0;
     selectedNestedItemIds.clear();
     announce(`${nested.title}. ${nested.description}`);
-    focusCanvas();
+    canvasFocus.focus();
     layout();
   }
   function toggleNestedItem(item, requireConfirmation = true) {
@@ -54623,11 +54702,6 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
     control.position.set(x2, y2);
     nestedControlLayer.addChild(control);
   }
-  function focusCanvas() {
-    if (typeof canvas.focus === "function") {
-      canvas.focus({ preventScroll: true });
-    }
-  }
   function showTooltip(text, anchor) {
     const tooltipWidth = Math.min(272, Math.max(180, application.renderer.width - 24));
     const estimatedLines = text.split("\n").reduce((count2, line) => count2 + Math.max(1, Math.ceil(line.length / 34)), 0);
@@ -54667,6 +54741,7 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
       resizeObserver?.disconnect();
       application.ticker.remove(tick);
       hideTooltip();
+      canvasFocus.dispose();
       accessibility.dispose();
       application.destroy({ removeView: false }, { children: true });
     }
@@ -54783,6 +54858,7 @@ async function createRestRenderer(canvas, sink) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 726562, backgroundAlpha: 1, canvas, preference: "canvas" });
   canvas.tabIndex = 0;
+  const canvasFocus = createCanvasFocusCoordinator(canvas);
   const accessibility = createRestAccessibilityOverlay(canvas);
   const root = new Container();
   const background = new Graphics();
@@ -54962,6 +55038,7 @@ Health: ${state.health} / ${state.maximumHealth}` : "Loading camp\u2026";
       window.removeEventListener("resize", resize);
       canvas.removeEventListener("keydown", keydown);
       application.ticker.remove(tick);
+      canvasFocus.dispose();
       accessibility.dispose();
       application.destroy({ removeView: false }, { children: true });
     }
@@ -55044,6 +55121,7 @@ async function createShopRenderer(canvas, sink) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 726562, backgroundAlpha: 1, canvas, preference: "canvas" });
   canvas.tabIndex = 0;
+  const canvasFocus = createCanvasFocusCoordinator(canvas);
   const accessibility = createShopAccessibilityOverlay(canvas);
   const root = new Container();
   const background = new Graphics();
@@ -55339,6 +55417,7 @@ async function createShopRenderer(canvas, sink) {
       canvas.removeEventListener("pointercancel", pointerup);
       window.removeEventListener("resize", resize);
       application.ticker.remove(tick);
+      canvasFocus.dispose();
       accessibility.dispose();
       application.destroy({ removeView: false }, { children: true });
     }
@@ -55534,6 +55613,7 @@ async function createMapRenderer(canvas, sink) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 529183, backgroundAlpha: 1, canvas, preference: "canvas" });
   canvas.tabIndex = 0;
+  const canvasFocus = createCanvasFocusCoordinator(canvas);
   const accessibility = createMapAccessibilityOverlay(canvas);
   const root = new Container();
   const background = new Graphics();
@@ -55899,6 +55979,7 @@ async function createMapRenderer(canvas, sink) {
       window.removeEventListener("resize", resize);
       resizeObserver?.disconnect();
       application.ticker.remove(tick);
+      canvasFocus.dispose();
       accessibility.dispose();
       application.destroy({ removeView: false }, { children: true });
     }
@@ -56550,6 +56631,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     }
     throw error;
   }
+  const canvasFocus = createCanvasFocusCoordinator(canvas);
   const accessibilityOverlay = createEncounterAccessibilityOverlay(canvas);
   let semanticInteropCount = 0;
   let viewport = encounterDesignViewport;
@@ -56705,39 +56787,11 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
       event.stopPropagation();
     }
   };
-  let canvasHadKeyboardFocus = document.activeElement === canvas;
-  let restoreFocusAfterDialog = false;
-  const trackCanvasFocus = () => {
-    canvasHadKeyboardFocus = true;
-    restoreFocusAfterDialog = false;
-  };
-  const trackCanvasBlur = () => {
-    canvasHadKeyboardFocus = true;
-  };
-  const trackDialogFocus = (event) => {
-    if (!isElement(event.target) || event.target === canvas) {
-      return;
-    }
-    if (event.target.closest("[role='dialog'], .mud-dialog") !== null) {
-      restoreFocusAfterDialog = canvasHadKeyboardFocus;
-      return;
-    }
-    if (restoreFocusAfterDialog) {
-      restoreFocusAfterDialog = false;
-      canvas.focus({ preventScroll: true });
-      canvasHadKeyboardFocus = true;
-      return;
-    }
-    canvasHadKeyboardFocus = false;
-  };
   window.addEventListener("resize", handleViewportChange);
   window.addEventListener("orientationchange", handleViewportChange);
   const devicePixelRatioWatcher = createDevicePixelRatioWatcher(handleViewportChange);
   visualViewport?.addEventListener("resize", handleVisualViewportChange);
   document.addEventListener("visibilitychange", suspendWhenHidden);
-  document.addEventListener("focusin", trackDialogFocus);
-  canvas.addEventListener("focus", trackCanvasFocus);
-  canvas.addEventListener("blur", trackCanvasBlur);
   canvas.addEventListener("webglcontextlost", preventContextLoss);
   canvas.addEventListener("webglcontextrestored", reconcileAfterContextRestore);
   canvas.addEventListener("keydown", handleKeyboardEvent);
@@ -56844,7 +56898,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
         averageFrameTimeMs: runtimeDiagnostics.averageFrameTimeMs,
         maximumFrameTimeMs: runtimeDiagnostics.maximumFrameTimeMs,
         longFrameCount: runtimeDiagnostics.longFrameCount,
-        listenerCount: 11,
+        listenerCount: 12,
         appliedSequence,
         rendererType,
         suspended,
@@ -56886,9 +56940,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     devicePixelRatioWatcher.dispose();
     visualViewport?.removeEventListener("resize", handleVisualViewportChange);
     document.removeEventListener("visibilitychange", suspendWhenHidden);
-    document.removeEventListener("focusin", trackDialogFocus);
-    canvas.removeEventListener("focus", trackCanvasFocus);
-    canvas.removeEventListener("blur", trackCanvasBlur);
+    canvasFocus.dispose();
     canvas.removeEventListener("webglcontextlost", preventContextLoss);
     canvas.removeEventListener("webglcontextrestored", reconcileAfterContextRestore);
     canvas.removeEventListener("keydown", handleKeyboardEvent);
@@ -57160,9 +57212,6 @@ function isParticleEmitterDisposalRequest(value) {
 }
 function isRecord4(value) {
   return typeof value === "object" && value !== null;
-}
-function isElement(value) {
-  return value instanceof Element;
 }
 export {
   createCharacterSelectRenderer,
