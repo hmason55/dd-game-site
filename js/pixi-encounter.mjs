@@ -52743,15 +52743,18 @@ var RunPresentationRuntime = class {
   /**
    * Creates the persistent render layers and attaches one ticker callback for the run lifetime.
    */
-  constructor(application, systems4 = []) {
+  constructor(application, systems4 = [], options = {}) {
     this.application = application;
     this.systems = [...systems4];
+    this.announceTransition = options.announceTransition;
+    this.setTransitionViewport(options.transitionViewport ?? { width: 1, height: 1 });
     const scene = new Container();
     const effect = new Container();
     const hud = new Container();
     const overlay = new Container();
     const transition = new Container();
     this.layers = { scene, effect, hud, overlay, transition };
+    this.transitionSurface.addChild(this.transitionBackdrop, this.transitionMessage);
     this.root.addChild(scene, effect, hud, overlay, transition);
     this.application.stage.addChild(this.root);
     this.application.ticker.add(this.advance);
@@ -52777,11 +52780,28 @@ var RunPresentationRuntime = class {
   longFrameCount = 0;
   pendingPreloadCleanups = /* @__PURE__ */ new Set();
   preloadCleanupError;
+  transitionSurface = new Container();
+  transitionBackdrop = new Graphics();
+  transitionMessage = new Text({ text: "", style: transitionTextStyle });
+  viewportWidth = 1;
+  viewportHeight = 1;
+  transitionOwner;
+  announceTransition;
   /**
    * Gets the persistent ordered layers shared by all scenes.
    */
   get renderLayers() {
     return this.layers;
+  }
+  /** Gets whether the shared transition surface currently owns keyboard and pointer input. */
+  get isTransitionInputBlocked() {
+    return this.transitionOwner !== void 0;
+  }
+  /** Updates the transition blocker synchronously when the host viewport changes. */
+  setTransitionViewport(viewport) {
+    this.viewportWidth = Math.max(1, viewport.width);
+    this.viewportHeight = Math.max(1, viewport.height);
+    this.layoutTransition();
   }
   /**
    * Registers a reusable visual system after the runtime creates its persistent render layers.
@@ -52839,15 +52859,20 @@ var RunPresentationRuntime = class {
         await mountedScene.scene.reconcile?.(state, this.createContext(mountedScene.controller));
         return;
       }
+      const transitionOwner = {};
+      this.showTransition("Loading next scene\u2026", transitionOwner);
       try {
         await preload?.task;
       } catch (error) {
         if (preload && this.isPreloadSuperseded(preload)) {
+          this.hideTransition(transitionOwner);
           return;
         }
+        this.showFailureTransition(transitionOwner);
         throw error;
       }
       if (preload && this.isPreloadSuperseded(preload)) {
+        this.hideTransition(transitionOwner);
         return;
       }
       try {
@@ -52857,29 +52882,34 @@ var RunPresentationRuntime = class {
           this.abandonScenePreload(preload);
           await this.waitForPendingPreloadCleanups().catch(() => void 0);
         }
+        this.showFailureTransition(transitionOwner);
         throw error;
       }
       if (preload && this.isPreloadSuperseded(preload)) {
+        this.hideTransition(transitionOwner);
         return;
       }
       if (preload) {
         this.consumeScenePreload(preload.task);
       }
-      await this.removeActiveScene();
-      const controller = new AbortController();
-      const activeScene = { scene, controller };
-      this.layers.scene.addChild(scene.displayObject);
-      this.activeScene = activeScene;
-      this.transitionCount++;
+      let activeScene;
       try {
+        await this.removeActiveScene();
+        const controller = new AbortController();
+        activeScene = { scene, controller };
+        this.layers.scene.addChild(scene.displayObject);
+        this.activeScene = activeScene;
+        this.transitionCount++;
         await scene.enter(state, this.createContext(controller));
         if (this.suspended) {
           await scene.suspend?.(this.createContext(controller));
         }
+        this.hideTransition(transitionOwner);
       } catch (error) {
         if (this.activeScene === activeScene) {
-          await this.removeActiveScene();
+          await this.removeActiveScene().catch(() => void 0);
         }
+        this.showFailureTransition(transitionOwner);
         throw error;
       }
     });
@@ -52900,7 +52930,8 @@ var RunPresentationRuntime = class {
   /**
    * Reflows the active scene after the persistent renderer changes size.
    */
-  resize(width, height) {
+  resize(width, height, transitionViewport = { width, height }) {
+    this.setTransitionViewport(transitionViewport);
     return this.enqueue(async () => {
       this.throwIfDisposing();
       const activeScene = this.activeScene;
@@ -52958,6 +52989,7 @@ var RunPresentationRuntime = class {
         return;
       }
       this.destroyed = true;
+      this.destroyTransitionSurface();
       try {
         await this.removeActiveScene(() => this.disposeSystems());
       } finally {
@@ -53038,6 +53070,45 @@ var RunPresentationRuntime = class {
   }
   createContext(controller) {
     return { layers: this.layers, signal: controller.signal };
+  }
+  /** Displays the shared loading surface while a scene replacement owns input and lifecycle work. */
+  showTransition(message, owner) {
+    this.transitionOwner = owner;
+    this.transitionMessage.text = message;
+    this.announceTransition?.(message);
+    if (this.transitionSurface.parent !== this.layers.transition) {
+      this.layers.transition.addChild(this.transitionSurface);
+    }
+    this.transitionSurface.eventMode = "static";
+    this.layoutTransition();
+  }
+  /** Keeps the persistent runtime alive after a failed preload, cleanup, or scene entry. */
+  showFailureTransition(owner) {
+    this.showTransition("Unable to load this scene. Please try again.", owner);
+  }
+  /** Removes the transition input blocker after a scene mounts successfully. */
+  hideTransition(owner) {
+    if (owner !== void 0 && owner !== this.transitionOwner) {
+      return;
+    }
+    this.layers.transition.removeChild(this.transitionSurface);
+    this.transitionSurface.eventMode = "none";
+    this.transitionOwner = void 0;
+  }
+  /** Sizes the shared transition surface from the latest authoritative viewport dimensions. */
+  layoutTransition() {
+    this.transitionBackdrop.clear().rect(0, 0, this.viewportWidth, this.viewportHeight).fill({ color: 529183, alpha: 0.84 });
+    this.transitionMessage.style.wordWrap = true;
+    this.transitionMessage.style.wordWrapWidth = Math.max(1, this.viewportWidth - 48);
+    this.transitionMessage.anchor.set(0.5);
+    this.transitionMessage.position.set(this.viewportWidth / 2, this.viewportHeight / 2);
+  }
+  /** Releases the detached transition surface as well as the persistent root tree. */
+  destroyTransitionSurface() {
+    this.layers.transition.removeChild(this.transitionSurface);
+    this.transitionSurface.eventMode = "none";
+    this.transitionOwner = void 0;
+    this.transitionSurface.destroy({ children: true });
   }
   consumeScenePreload(preload) {
     if (this.nextScenePreload?.task === preload) {
@@ -53176,6 +53247,15 @@ function countDisplayObjects(displayObject) {
   const children = displayObject.children ?? [];
   return 1 + children.reduce((count2, child) => count2 + countDisplayObjects(child), 0);
 }
+var transitionTextStyle = new TextStyle({
+  fill: 16317180,
+  fontFamily: "Arial",
+  fontSize: 20,
+  fontWeight: "bold",
+  align: "center",
+  wordWrap: true,
+  wordWrapWidth: 1
+});
 
 // src/relic-view.ts
 var defaultHeight = 92;
@@ -56441,7 +56521,10 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     accessibilityOverlay.announce,
     prefersReducedMotion5()
   );
-  const runtime = new RunPresentationRuntime(createRunRuntimeApplication(application));
+  const runtime = new RunPresentationRuntime(createRunRuntimeApplication(application), [], {
+    transitionViewport: { width: application.renderer.width, height: application.renderer.height },
+    announceTransition: accessibilityOverlay.announce
+  });
   const animationDirector = new AnimationDirector(scene.createAnimationCommandExecutor());
   const particleEffects = new ParticleEffectManager(runtime.renderLayers.effect, {
     reducedMotion: prefersReducedMotion5(),
@@ -56505,8 +56588,12 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     if (!hasActiveScene) {
       return;
     }
-    void runtime.resize(viewport.width, viewport.height).catch(() => void 0);
+    void runtime.resize(viewport.width, viewport.height, getTransitionViewport()).catch(() => void 0);
   };
+  const getTransitionViewport = () => ({
+    width: viewportDescriptor?.width ?? application.renderer.width,
+    height: viewportDescriptor?.height ?? application.renderer.height
+  });
   const resizeRenderer = (forceRendererResize = false, viewportOverride) => {
     if (disposed) {
       return;
@@ -56517,6 +56604,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
       devicePixelRatio: window.devicePixelRatio
     });
     applyViewportLayout(viewportUpdate);
+    runtime.setTransitionViewport(getTransitionViewport());
     application.renderer.resolution = viewportUpdate.descriptor.devicePixelRatio;
     if (forceRendererResize || viewportUpdate.rendererMetricsChanged) {
       application.renderer.resize(viewportUpdate.descriptor.width, viewportUpdate.descriptor.height);
@@ -56564,6 +56652,11 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     updateRuntimeSuspension();
   };
   const handleKeyboardEvent = (event) => {
+    if (runtime.isTransitionInputBlocked) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (scene.handleKeyboardEvent(event)) {
       event.preventDefault();
       event.stopPropagation();
