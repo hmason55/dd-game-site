@@ -28,6 +28,20 @@
     position: absolute;
     width: 1px;
 }
+.pixi-reward-surface.renderer-unavailable[b-lxd0nfvn0m] {
+    aspect-ratio: auto;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+}
+.pixi-reward-surface.renderer-unavailable canvas[b-lxd0nfvn0m],
+.pixi-reward-surface.renderer-unavailable .pixi-reward-keyboard-help[b-lxd0nfvn0m] { display: none; }
+.pixi-reward-surface.renderer-unavailable .pixi-reward-accessibility-controls[b-lxd0nfvn0m] {
+    height: auto;
+    overflow: visible;
+    position: static;
+    width: auto;
+}
 
 @media (max-width: 600px) {
     .pixi-reward-surface[b-lxd0nfvn0m] {
@@ -200,6 +214,9 @@
 .pixi-rest-surface canvas:focus-visible[b-her48madf3] { outline: 3px solid var(--mud-palette-secondary); outline-offset: -3px; }
 .pixi-rest-keyboard-help[b-her48madf3] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
 .pixi-rest-accessibility-controls[b-her48madf3] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
+.pixi-rest-surface.renderer-unavailable[b-her48madf3] { height: auto; min-height: 0; overflow: visible; }
+.pixi-rest-surface.renderer-unavailable canvas[b-her48madf3], .pixi-rest-surface.renderer-unavailable .pixi-rest-keyboard-help[b-her48madf3] { display: none; }
+.pixi-rest-surface.renderer-unavailable .pixi-rest-accessibility-controls[b-her48madf3] { height: auto; overflow: visible; position: static; width: auto; }
 
 @media (max-width: 600px) {
     .pixi-rest-surface[b-her48madf3] { height: min(72dvh, 42rem); min-height: min(22rem, calc(100dvh - 8rem)); }
@@ -213,6 +230,9 @@
 .pixi-shop-surface canvas[b-lr5mek7nhb] { display: block; height: 100%; width: 100%; }
 .pixi-shop-surface canvas:focus-visible[b-lr5mek7nhb] { outline: 3px solid var(--mud-palette-secondary); outline-offset: -3px; }
 .pixi-shop-keyboard-help[b-lr5mek7nhb], .pixi-shop-accessibility-controls[b-lr5mek7nhb] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
+.pixi-shop-surface.renderer-unavailable[b-lr5mek7nhb] { height: auto; min-height: 0; overflow: visible; }
+.pixi-shop-surface.renderer-unavailable canvas[b-lr5mek7nhb], .pixi-shop-surface.renderer-unavailable .pixi-shop-keyboard-help[b-lr5mek7nhb] { display: none; }
+.pixi-shop-surface.renderer-unavailable .pixi-shop-accessibility-controls[b-lr5mek7nhb] { height: auto; overflow: visible; position: static; width: auto; }
 
 @media (max-width: 600px) {
     .pixi-shop-surface[b-lr5mek7nhb] { height: min(76dvh, 44rem); min-height: min(22rem, calc(100dvh - 8rem)); width: calc(100vw - 1rem); }
