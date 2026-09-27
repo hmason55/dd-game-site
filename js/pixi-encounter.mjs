@@ -49832,6 +49832,7 @@ var GameButton = class extends GamePanel {
 var SceneTitle = class extends Container {
   titleText;
   subtitleText;
+  titleStyle;
   titleWidth;
   /**
    * Creates a scene heading.
@@ -49839,7 +49840,8 @@ var SceneTitle = class extends Container {
   constructor(options) {
     super();
     this.titleWidth = normalizeSize(options.width);
-    this.titleText = new Text({ text: options.title, style: getUiTextStyle("PanelTitle") });
+    this.titleStyle = new TextStyle(getTextStyleOptions("PanelTitle"));
+    this.titleText = new Text({ text: options.title, style: this.titleStyle });
     this.titleText.anchor.set(0.5, 0);
     this.addChild(this.titleText);
     if (options.subtitle !== void 0) {
@@ -49876,8 +49878,12 @@ var SceneTitle = class extends Container {
   }
   layout() {
     const centerX = this.titleWidth / 2;
+    this.titleStyle.wordWrap = true;
+    this.titleStyle.breakWords = true;
+    this.titleStyle.wordWrapWidth = this.titleWidth;
     this.titleText.position.set(centerX, 0);
-    this.subtitleText?.position.set(centerX, 24);
+    const titleHeight = Number.isFinite(this.titleText.height) ? this.titleText.height : 20;
+    this.subtitleText?.position.set(centerX, Math.max(24, titleHeight + uiTokens.spacing.xs));
   }
 };
 var ResourceCounter = class extends Container {
@@ -52949,6 +52955,7 @@ var RunPresentationRuntime = class {
       this.throwIfDisposing();
       const mountedScene = this.activeScene;
       if (mountedScene?.scene.id === scene.id) {
+        this.hideTransition();
         await mountedScene.scene.reconcile?.(state, this.createContext(mountedScene.controller));
         return;
       }
@@ -54346,6 +54353,7 @@ async function createEventRenderer(canvas, sink) {
   const selectedNestedItemIds = /* @__PURE__ */ new Set();
   let nestedPage = 0;
   let pending = false;
+  let acceptedActionAwaitingReconcile = false;
   let narrativeProgress = 0;
   let effectName;
   let effectElapsedMs = 0;
@@ -54388,7 +54396,8 @@ async function createEventRenderer(canvas, sink) {
       const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: eventSceneProtocolVersion, sceneId: "event", name, sequence, sourceId: null, targetId: null, optionIndex: optionIndex !== null && optionIndex >= 0 ? optionIndex : null, choiceId, selectionIds });
       announce(result.accepted ? "Resolved." : "That choice is no longer available.");
       playEffect(result.accepted ? "choice-confirmed" : "choice-rejected");
-      if (!result.accepted) pending = false;
+      if (result.accepted) acceptedActionAwaitingReconcile = true;
+      else pending = false;
     } catch {
       announce("The choice could not be completed. Please try again.");
       pending = false;
@@ -54554,12 +54563,12 @@ async function createEventRenderer(canvas, sink) {
     if (state?.isComplete) {
       contextTitle.text = "Event complete";
       contextDetails.text = "Return to the map when you are ready.";
-      addControl("Leave", "Return to map", true, width - 156, trayY + trayHeight - 64, 124, confirmSelection);
+      addControl("Leave", "Return to map", true, width - 156, trayY + trayHeight - 54, 124, confirmSelection);
     } else {
       contextTitle.text = nested?.title ?? selected?.text ?? "Choose an option";
       contextDetails.text = nested?.description ?? (selected ? getOptionContextDetails(selected) : "Select a choice to inspect its outcome and any consequences.");
       if (selected !== void 0 && !nested) {
-        const controlY = trayY + trayHeight - 64;
+        const controlY = trayY + trayHeight - 54;
         const confirmationHint = selected.requiresConfirmation ? "Review this risky choice, then apply it" : "Apply this choice";
         addControl("Confirm", confirmationHint, !pending, width - 282, controlY, 124, confirmSelection);
         addControl("Cancel", "Return to choices", !pending, width - 148, controlY, 116, cancelSelection);
@@ -54690,7 +54699,7 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
   }
   function addControl(label, hint, enabled, x2, y2, width, onPress) {
     const control = new EventChoice(label, hint, enabled, false, onPress);
-    control.resize(width, 58);
+    control.resize(width, 42);
     control.position.set(x2, y2);
     controlLayer.addChild(control);
   }
@@ -54721,8 +54730,9 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
       selectedOptionId = void 0;
       nestedChoiceOpen = false;
       selectedNestedItemIds.clear();
-      if (pending) {
+      if (pending && acceptedActionAwaitingReconcile) {
         pending = false;
+        acceptedActionAwaitingReconcile = false;
       }
       narrativeProgress = 0;
       feedback.text = "";
@@ -54762,13 +54772,6 @@ function estimateTextHeight(text, width, lineHeight) {
   const lineCount = text.split("\n").reduce((count2, line) => count2 + Math.max(1, Math.ceil(line.length / charactersPerLine)), 0);
   return lineCount * lineHeight;
 }
-function truncateChoiceText(text, width, maxLines, characterWidth) {
-  if (maxLines <= 0) return "";
-  const normalized = text.replaceAll(/\s+/g, " ").trim();
-  const maximumCharacters = Math.max(1, Math.floor(width / characterWidth) * maxLines);
-  if (normalized.length <= maximumCharacters) return normalized;
-  return `${normalized.slice(0, Math.max(0, maximumCharacters - 1)).trimEnd()}\u2026`;
-}
 function getSelectionLabel(nested) {
   const label = nested?.selectionLabel?.trim();
   return label && label.length > 0 ? label : "item";
@@ -54787,12 +54790,10 @@ var EventChoice = class extends Container {
   frame = new Graphics();
   heading = new Text({ text: "", style: choiceHeadingStyle });
   hint = new Text({ text: "", style: choiceHintStyle });
-  headingText;
-  hintText;
   constructor(text, hint, enabled, selected, onPress, onHoverStart = void 0, onHoverEnd = void 0) {
     super();
-    this.headingText = text;
-    this.hintText = hint;
+    this.heading.text = text;
+    this.hint.text = hint;
     this.addChild(this.frame, this.heading, this.hint);
     this.eventMode = enabled || onHoverStart !== void 0 ? "static" : "none";
     this.cursor = enabled ? "pointer" : "default";
@@ -54803,18 +54804,10 @@ var EventChoice = class extends Container {
     if (onHoverEnd !== void 0) this.on("pointerout", onHoverEnd);
   }
   resize(width, height) {
-    const contentWidth = Math.max(1, width - 32);
-    const headingLineCount = height >= 76 ? 2 : 1;
-    const hintLineCount = Math.max(0, Math.floor((height - 16 - headingLineCount * 21) / 16));
     this.frame.clear().roundRect(0, 0, width, height, 12).fill({ color: 1520456, alpha: 0.96 }).stroke({ color: 9549506, width: 2 });
-    this.heading.style.wordWrapWidth = contentWidth;
-    this.heading.style.breakWords = true;
-    this.heading.text = truncateChoiceText(this.headingText, contentWidth, headingLineCount, 11);
     this.heading.position.set(16, 8);
-    this.hint.style.wordWrapWidth = contentWidth;
-    this.hint.style.breakWords = true;
-    this.hint.text = truncateChoiceText(this.hintText, contentWidth, hintLineCount, 8);
-    this.hint.position.set(16, 10 + headingLineCount * 21);
+    this.hint.style.wordWrapWidth = Math.max(1, width - 32);
+    this.hint.position.set(16, 31);
   }
 };
 var titleStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 34, fontWeight: "bold" });
@@ -55130,6 +55123,18 @@ var noOpRestAccessibilityOverlay = {
   }
 };
 
+// src/input-policy.ts
+var pointerDragSlopPixels = 8;
+function isPrimaryPointer(event) {
+  return event.isPrimary !== false;
+}
+function getPointerId(event) {
+  return Number.isInteger(event.pointerId) ? event.pointerId : 1;
+}
+function hasExceededPointerDragSlop(start, event) {
+  return Math.hypot(event.clientX - start.x, event.clientY - start.y) >= pointerDragSlopPixels;
+}
+
 // src/pixi-shop.ts
 async function createShopRenderer(canvas, sink) {
   const application = new Application();
@@ -55162,6 +55167,8 @@ async function createShopRenderer(canvas, sink) {
   let currencyTransition;
   let pendingPurchaseMerchandiseId;
   let touchScrollPointer;
+  let suppressedTouchTapPointerId;
+  const merchandiseCards = /* @__PURE__ */ new Map();
   const reducedMotion = prefersReducedMotion3();
   const selectableMerchandise = () => state?.merchandise.filter((merchandise) => !merchandise.isSold) ?? [];
   const announce = (message) => {
@@ -55262,24 +55269,32 @@ async function createShopRenderer(canvas, sink) {
     event.preventDefault();
   };
   const pointerdown = (event) => {
-    if (event.pointerType !== "touch") return;
-    touchScrollPointer = { id: event.pointerId, y: event.clientY, moved: false };
-    canvas.setPointerCapture?.(event.pointerId);
+    if (event.pointerType !== "touch" || touchScrollPointer !== void 0 || !isPrimaryPointer(event)) return;
+    touchScrollPointer = { pointerId: getPointerId(event), x: event.clientX, y: event.clientY, currentY: event.clientY, moved: false };
+    canvas.setPointerCapture?.(touchScrollPointer.pointerId);
   };
   const pointermove = (event) => {
-    if (touchScrollPointer?.id !== event.pointerId) return;
-    const offset = touchScrollPointer.y - event.clientY;
+    if (!touchScrollPointer || getPointerId(event) !== touchScrollPointer.pointerId) return;
+    const offset = touchScrollPointer.currentY - event.clientY;
     if (offset === 0) return;
-    touchScrollPointer = { id: event.pointerId, y: event.clientY, moved: touchScrollPointer.moved || Math.abs(offset) >= 2 };
+    touchScrollPointer = {
+      ...touchScrollPointer,
+      currentY: event.clientY,
+      moved: touchScrollPointer.moved || hasExceededPointerDragSlop(touchScrollPointer, event)
+    };
     if (merchandiseScroll.maximumScrollOffset === 0) return;
     merchandiseScroll.scrollBy(offset);
     event.preventDefault();
   };
   const pointerup = (event) => {
-    if (touchScrollPointer?.id !== event.pointerId) return;
-    if (touchScrollPointer.moved) event.preventDefault();
+    if (!touchScrollPointer || getPointerId(event) !== touchScrollPointer.pointerId) return;
+    if (touchScrollPointer.moved) {
+      suppressedTouchTapPointerId = touchScrollPointer.pointerId;
+      event.preventDefault();
+    }
+    const pointerId = touchScrollPointer.pointerId;
     touchScrollPointer = void 0;
-    canvas.releasePointerCapture?.(event.pointerId);
+    canvas.releasePointerCapture?.(pointerId);
   };
   canvas.addEventListener("keydown", keydown);
   canvas.addEventListener("wheel", wheel, { passive: false });
@@ -55330,7 +55345,6 @@ async function createShopRenderer(canvas, sink) {
     merchandiseScroll.position.set(24, merchandiseLayout.gridTop);
     merchandiseScroll.resize(Math.max(1, width - 48), Math.max(1, merchandiseLayout.gridBottom - merchandiseLayout.gridTop));
     merchandiseScroll.setContentHeight(merchandiseLayout.contentHeight);
-    merchandiseScroll.content.removeChildren();
     controlLayer.removeChildren();
     contextPanel.clear().roundRect(16, merchandiseLayout.trayY, width - 32, merchandiseLayout.trayHeight, 12).fill({ color: 1518395, alpha: 0.98 }).stroke({ color: 13280860, width: 2 });
     contextTitle.text = selected?.name ?? "Browse merchandise";
@@ -55344,15 +55358,43 @@ async function createShopRenderer(canvas, sink) {
     } else {
       addControl("Leave", "Return to map", !pending, width - 148, merchandiseLayout.trayY + merchandiseLayout.trayHeight - 54, 116, leave);
     }
-    allMerchandise.forEach((entry, index) => {
+    const cards = allMerchandise.map((entry, index) => {
       const column = index % merchandiseLayout.columns;
       const row = Math.floor(index / merchandiseLayout.columns);
       const resolutionIntensity = resolutionEffect?.merchandiseId === entry.id ? resolutionGlow : 0;
-      const card = new ShopMerchandiseCard(entry, entry.id === selectedMerchandiseId, selectedMerchandiseId !== void 0, !pending, resolutionIntensity, resolutionEffect?.kind, () => inspect(entry));
+      const card = getMerchandiseCard(entry);
+      card.update(entry, entry.id === selectedMerchandiseId, selectedMerchandiseId !== void 0, !pending, resolutionIntensity, resolutionEffect?.kind, (event) => {
+        if (event?.pointerType === "touch" && event.pointerId === suppressedTouchTapPointerId) {
+          suppressedTouchTapPointerId = void 0;
+          return;
+        }
+        inspect(entry);
+      });
       card.resize(merchandiseLayout.cardWidth, merchandiseLayout.cardHeight);
       card.position.set(column * (merchandiseLayout.cardWidth + merchandiseLayout.gap), row * (merchandiseLayout.cardHeight + merchandiseLayout.gap));
-      merchandiseScroll.content.addChild(card);
+      return card;
     });
+    reconcileMerchandiseCards(cards);
+  }
+  function getMerchandiseCard(entry) {
+    const existing = merchandiseCards.get(entry.id);
+    if (existing && existing.isCard === Boolean(entry.isCard)) return existing;
+    existing?.destroy({ children: true });
+    const card = new ShopMerchandiseCard(entry);
+    merchandiseCards.set(entry.id, card);
+    return card;
+  }
+  function reconcileMerchandiseCards(cards) {
+    const activeCards = new Set(cards);
+    for (const [id, card] of merchandiseCards) {
+      if (activeCards.has(card)) continue;
+      merchandiseCards.delete(id);
+      card.destroy({ children: true });
+    }
+    const currentCards = merchandiseScroll.content.children;
+    if (currentCards.length === cards.length && currentCards.every((card, index) => card === cards[index])) return;
+    merchandiseScroll.content.removeChildren();
+    merchandiseScroll.content.addChild(...cards);
   }
   function scrollMerchandiseIntoView(index) {
     if (index < 0 || state === void 0) return;
@@ -55367,15 +55409,9 @@ async function createShopRenderer(canvas, sink) {
     else if (bottom > viewportBottom) merchandiseScroll.setScrollOffset(bottom - merchandiseScroll.viewportSize.height);
   }
   function addControl(label, hint, enabled, x2, y2, width, onPress) {
-    const control = new ShopMerchandiseCard(
-      { id: label, kind: "control", name: label, description: hint, image: "", price: 0, isOnSale: false, isSold: false, isAffordable: enabled, disabledReason: null },
-      false,
-      false,
-      enabled,
-      0,
-      void 0,
-      onPress
-    );
+    const controlState = { id: label, kind: "control", name: label, description: hint, image: "", price: 0, isOnSale: false, isSold: false, isAffordable: enabled, disabledReason: null };
+    const control = new ShopMerchandiseCard(controlState);
+    control.update(controlState, false, false, enabled, 0, void 0, onPress);
     control.resize(width, 42);
     control.position.set(x2, y2);
     controlLayer.addChild(control);
@@ -55441,19 +55477,18 @@ function prefersReducedMotion3() {
   return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 var ShopMerchandiseCard = class extends Container {
+  isCard;
   frame = new Graphics();
   resolutionOverlay = new Graphics();
   heading = new Text({ text: "", style: cardHeadingStyle });
   description = new Text({ text: "", style: cardBodyStyle });
   card;
-  selected;
-  resolutionIntensity;
+  selected = false;
+  resolutionIntensity = 0;
   resolutionKind;
-  constructor(merchandise, selected, hasSelection, interactive, resolutionIntensity, resolutionKind, onPress) {
+  constructor(merchandise) {
     super();
-    this.selected = selected;
-    this.resolutionIntensity = resolutionIntensity;
-    this.resolutionKind = resolutionKind;
+    this.isCard = Boolean(merchandise.isCard);
     if (merchandise.isCard) {
       this.card = new CardView({
         cost: getCardCost(merchandise),
@@ -55461,17 +55496,24 @@ var ShopMerchandiseCard = class extends Container {
         description: merchandise.description,
         type: merchandise.cardType ?? "Card",
         rarity: toCardRarity2(merchandise.cardRarity),
-        enabled: interactive && !merchandise.isSold,
-        selected,
+        enabled: false,
+        selected: false,
         width: 180,
         height: 252
       });
       this.addChild(this.card);
-      if (resolutionIntensity > 0) this.addChild(this.resolutionOverlay);
     } else {
+      this.addChild(this.frame, this.heading, this.description);
+    }
+  }
+  /** Updates dynamic merchandise state without allocating another card display tree. */
+  update(merchandise, selected, hasSelection, interactive, resolutionIntensity, resolutionKind, onPress) {
+    this.selected = selected;
+    this.resolutionIntensity = resolutionIntensity;
+    this.resolutionKind = resolutionKind;
+    if (!this.card) {
       this.heading.text = merchandise.isSold ? `${merchandise.name} \u2014 Sold` : merchandise.name;
       this.description.text = merchandise.kind === "control" ? merchandise.description : getMerchandiseCardText(merchandise);
-      this.addChild(this.frame, this.heading, this.description);
     }
     const enabled = interactive && !merchandise.isSold;
     this.eventMode = enabled ? "static" : "none";
@@ -55481,6 +55523,9 @@ var ShopMerchandiseCard = class extends Container {
     this.scale.set(1 + resolutionIntensity * (resolutionKind === "Service" ? 0.035 : 0.065));
     this.frame.tint = resolutionIntensity > 0 ? resolutionKind === "Service" ? 10212584 : 16113563 : selected ? 16113563 : 16777215;
     this.card?.setInteractionState({ enabled, focused: false, selected });
+    if (this.card && resolutionIntensity > 0 && !this.children.includes(this.resolutionOverlay)) this.addChild(this.resolutionOverlay);
+    if (this.card && resolutionIntensity === 0 && this.children.includes(this.resolutionOverlay)) this.removeChild(this.resolutionOverlay);
+    this.removeAllListeners("pointertap");
     if (enabled) this.on("pointertap", onPress);
   }
   resize(width, height) {
@@ -55781,14 +55826,16 @@ async function createMapRenderer(canvas, sink) {
     }
   };
   const pointerdown = (event) => {
-    pointerStart = { x: event.clientX, y: event.clientY, panX, panY };
+    if (pointerStart !== void 0 || !isPrimaryPointer(event)) return;
+    pointerStart = { pointerId: getPointerId(event), x: event.clientX, y: event.clientY, panX, panY };
     didPan = false;
+    canvas.setPointerCapture?.(pointerStart.pointerId);
   };
   const pointermove = (event) => {
-    if (!pointerStart) return;
+    if (!pointerStart || getPointerId(event) !== pointerStart.pointerId) return;
     const dx = event.clientX - pointerStart.x;
     const dy = event.clientY - pointerStart.y;
-    if (Math.abs(dx) + Math.abs(dy) > 5) didPan = true;
+    if (hasExceededPointerDragSlop(pointerStart, event)) didPan = true;
     if (didPan) {
       panX = pointerStart.panX + dx;
       panY = pointerStart.panY + dy;
@@ -55796,7 +55843,9 @@ async function createMapRenderer(canvas, sink) {
       layout();
     }
   };
-  const pointerup = () => {
+  const pointerup = (event) => {
+    if (!pointerStart || getPointerId(event) !== pointerStart.pointerId) return;
+    canvas.releasePointerCapture?.(pointerStart.pointerId);
     pointerStart = void 0;
   };
   const wheel = (event) => {
@@ -56178,20 +56227,25 @@ async function createMainMenuRenderer(canvas, sink, initialState) {
       application.renderer.resize(viewport.width, viewport.height);
     }
     const { width, height } = application.renderer;
-    const panelWidth = Math.min(width - 32, 400);
-    const panelHeight = Math.min(height - 32, 388);
+    const panelWidth = Math.max(1, Math.min(Math.max(1, width - 32), 400));
+    const panelHeight = Math.max(1, Math.min(Math.max(1, height - 32), 388));
     const panelX = (width - panelWidth) / 2;
     const panelY = (height - panelHeight) / 2;
     background.clear().rect(0, 0, width, height).fill(529183).rect(0, 0, width, height * 0.38).fill({ color: 1520456, alpha: 0.45 });
     panel.clear().roundRect(panelX, panelY, panelWidth, panelHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
     watermark.position.set(width - 12, height - 10);
     const buttonWidth = Math.max(180, panelWidth - 72);
+    const buttonGap = Math.max(8, Math.min(14, panelHeight * 0.05));
+    const feedbackReserve = 34;
+    const buttonHeight = Math.max(32, Math.min(52, (panelHeight - 12 - feedbackReserve - buttonGap * Math.max(0, buttons.length - 1)) / Math.max(1, buttons.length)));
+    const buttonBlockHeight = buttonHeight * buttons.length + buttonGap * Math.max(0, buttons.length - 1);
+    const buttonStartY = panelY + Math.max(12, (panelHeight - feedbackReserve - buttonBlockHeight) / 2);
     buttons.forEach((button, index) => {
-      button.resize(buttonWidth, 52);
-      button.position.set((width - buttonWidth) / 2, panelY + 78 + index * 66);
+      button.resize(buttonWidth, buttonHeight);
+      button.position.set((width - buttonWidth) / 2, buttonStartY + index * (buttonHeight + buttonGap));
       button.setFocused(index === focusedIndex);
     });
-    feedback.position.set(width / 2, panelY + panelHeight - 30);
+    feedback.position.set(width / 2, panelY + panelHeight - 22);
   };
   const submit = async (action) => {
     if (pending) return;
