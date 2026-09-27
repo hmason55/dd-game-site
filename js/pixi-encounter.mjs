@@ -54346,7 +54346,6 @@ async function createEventRenderer(canvas, sink) {
   const selectedNestedItemIds = /* @__PURE__ */ new Set();
   let nestedPage = 0;
   let pending = false;
-  let acceptedActionAwaitingReconcile = false;
   let narrativeProgress = 0;
   let effectName;
   let effectElapsedMs = 0;
@@ -54389,8 +54388,7 @@ async function createEventRenderer(canvas, sink) {
       const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: eventSceneProtocolVersion, sceneId: "event", name, sequence, sourceId: null, targetId: null, optionIndex: optionIndex !== null && optionIndex >= 0 ? optionIndex : null, choiceId, selectionIds });
       announce(result.accepted ? "Resolved." : "That choice is no longer available.");
       playEffect(result.accepted ? "choice-confirmed" : "choice-rejected");
-      if (result.accepted) acceptedActionAwaitingReconcile = true;
-      else pending = false;
+      if (!result.accepted) pending = false;
     } catch {
       announce("The choice could not be completed. Please try again.");
       pending = false;
@@ -54556,12 +54554,12 @@ async function createEventRenderer(canvas, sink) {
     if (state?.isComplete) {
       contextTitle.text = "Event complete";
       contextDetails.text = "Return to the map when you are ready.";
-      addControl("Leave", "Return to map", true, width - 156, trayY + trayHeight - 54, 124, confirmSelection);
+      addControl("Leave", "Return to map", true, width - 156, trayY + trayHeight - 64, 124, confirmSelection);
     } else {
       contextTitle.text = nested?.title ?? selected?.text ?? "Choose an option";
       contextDetails.text = nested?.description ?? (selected ? getOptionContextDetails(selected) : "Select a choice to inspect its outcome and any consequences.");
       if (selected !== void 0 && !nested) {
-        const controlY = trayY + trayHeight - 54;
+        const controlY = trayY + trayHeight - 64;
         const confirmationHint = selected.requiresConfirmation ? "Review this risky choice, then apply it" : "Apply this choice";
         addControl("Confirm", confirmationHint, !pending, width - 282, controlY, 124, confirmSelection);
         addControl("Cancel", "Return to choices", !pending, width - 148, controlY, 116, cancelSelection);
@@ -54692,7 +54690,7 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
   }
   function addControl(label, hint, enabled, x2, y2, width, onPress) {
     const control = new EventChoice(label, hint, enabled, false, onPress);
-    control.resize(width, 42);
+    control.resize(width, 58);
     control.position.set(x2, y2);
     controlLayer.addChild(control);
   }
@@ -54723,9 +54721,8 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
       selectedOptionId = void 0;
       nestedChoiceOpen = false;
       selectedNestedItemIds.clear();
-      if (pending && acceptedActionAwaitingReconcile) {
+      if (pending) {
         pending = false;
-        acceptedActionAwaitingReconcile = false;
       }
       narrativeProgress = 0;
       feedback.text = "";
@@ -54765,6 +54762,13 @@ function estimateTextHeight(text, width, lineHeight) {
   const lineCount = text.split("\n").reduce((count2, line) => count2 + Math.max(1, Math.ceil(line.length / charactersPerLine)), 0);
   return lineCount * lineHeight;
 }
+function truncateChoiceText(text, width, maxLines, characterWidth) {
+  if (maxLines <= 0) return "";
+  const normalized = text.replaceAll(/\s+/g, " ").trim();
+  const maximumCharacters = Math.max(1, Math.floor(width / characterWidth) * maxLines);
+  if (normalized.length <= maximumCharacters) return normalized;
+  return `${normalized.slice(0, Math.max(0, maximumCharacters - 1)).trimEnd()}\u2026`;
+}
 function getSelectionLabel(nested) {
   const label = nested?.selectionLabel?.trim();
   return label && label.length > 0 ? label : "item";
@@ -54783,10 +54787,12 @@ var EventChoice = class extends Container {
   frame = new Graphics();
   heading = new Text({ text: "", style: choiceHeadingStyle });
   hint = new Text({ text: "", style: choiceHintStyle });
+  headingText;
+  hintText;
   constructor(text, hint, enabled, selected, onPress, onHoverStart = void 0, onHoverEnd = void 0) {
     super();
-    this.heading.text = text;
-    this.hint.text = hint;
+    this.headingText = text;
+    this.hintText = hint;
     this.addChild(this.frame, this.heading, this.hint);
     this.eventMode = enabled || onHoverStart !== void 0 ? "static" : "none";
     this.cursor = enabled ? "pointer" : "default";
@@ -54797,10 +54803,18 @@ var EventChoice = class extends Container {
     if (onHoverEnd !== void 0) this.on("pointerout", onHoverEnd);
   }
   resize(width, height) {
+    const contentWidth = Math.max(1, width - 32);
+    const headingLineCount = height >= 76 ? 2 : 1;
+    const hintLineCount = Math.max(0, Math.floor((height - 16 - headingLineCount * 21) / 16));
     this.frame.clear().roundRect(0, 0, width, height, 12).fill({ color: 1520456, alpha: 0.96 }).stroke({ color: 9549506, width: 2 });
+    this.heading.style.wordWrapWidth = contentWidth;
+    this.heading.style.breakWords = true;
+    this.heading.text = truncateChoiceText(this.headingText, contentWidth, headingLineCount, 11);
     this.heading.position.set(16, 8);
-    this.hint.style.wordWrapWidth = Math.max(1, width - 32);
-    this.hint.position.set(16, 31);
+    this.hint.style.wordWrapWidth = contentWidth;
+    this.hint.style.breakWords = true;
+    this.hint.text = truncateChoiceText(this.hintText, contentWidth, hintLineCount, 8);
+    this.hint.position.set(16, 10 + headingLineCount * 21);
   }
 };
 var titleStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 34, fontWeight: "bold" });

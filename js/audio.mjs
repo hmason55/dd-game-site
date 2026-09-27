@@ -67,12 +67,14 @@ const presentationCueSounds = Object.freeze({
     Transition: ["UI Page Flipping 01", "UI Page Flipping 02"]
 });
 
-function presentationCueIntensity() {
-    return typeof window !== "undefined"
+function presentationCueIntensity(configuredIntensity) {
+    const motionMultiplier = typeof window !== "undefined"
         && typeof window.matchMedia === "function"
         && window.matchMedia("(prefers-reduced-motion: reduce)").matches
         ? 0.5
         : 1;
+
+    return configuredIntensity * motionMultiplier;
 }
 
 export const audioPlayer = {
@@ -93,6 +95,7 @@ export const audioPlayer = {
         ambient: 1
     },
     pitchVariance: 0.15,
+    presentationCueIntensity: 1,
 
     async loadSound(name, src, volume = 0.5) {
         try {
@@ -183,7 +186,11 @@ export const audioPlayer = {
             return;
         }
 
-        this.playRandom(names, presentationCueIntensity());
+        this.playRandom(names, presentationCueIntensity(this.presentationCueIntensity));
+    },
+
+    setPresentationCueIntensity(intensity) {
+        this.presentationCueIntensity = this.clamp(intensity);
     },
 
     unlockAudio() {
