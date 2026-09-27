@@ -55664,6 +55664,149 @@ var feedbackStyle4 = new TextStyle({ fill: 16113563, fontFamily: "Arial", fontSi
 var cardHeadingStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 16, fontWeight: "bold", wordWrap: true });
 var cardBodyStyle = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 12, lineHeight: 16, wordWrap: true });
 
+// src/pixi-treasure.ts
+async function createTreasureRenderer(canvas, sink) {
+  const application = new Application();
+  await application.init({ antialias: true, autoDensity: true, background: 726562, backgroundAlpha: 1, canvas, preference: "canvas" });
+  canvas.tabIndex = 0;
+  const canvasFocus = createCanvasFocusCoordinator(canvas);
+  const accessibility = createTreasureAccessibilityOverlay(canvas);
+  const root = new Container();
+  const backdrop = new GamePanel({ width: 1, height: 1, fill: uiColors.panelShadow, stroke: uiColors.panelStroke });
+  const title = new SceneTitle({ title: "Treasure room", width: 1 });
+  const description = new Text({ text: "", style: { ...uiTokens.typography.body, align: "center", wordWrap: true } });
+  const feedback = new Text({ text: "", style: { ...uiTokens.typography.body, align: "center", fill: uiColors.panelTitleText } });
+  let state;
+  let sequence = 0;
+  let focusedIndex = 0;
+  let pending = false;
+  let disposed = false;
+  const buttons = [
+    new GameButton({ width: 1, height: 1, label: "Collect treasure", onPress: () => {
+      void submit("collectTreasure");
+    } }),
+    new GameButton({ width: 1, height: 1, label: "Leave", onPress: () => {
+      void submit("leave");
+    } })
+  ];
+  root.addChild(backdrop, title, description, ...buttons, feedback);
+  application.stage.addChild(root);
+  const resize = () => {
+    if (disposed) return;
+    application.renderer.resize(Math.max(1, canvas.clientWidth || canvas.width || 960), Math.max(1, canvas.clientHeight || canvas.height || 540));
+    layout();
+  };
+  const submit = async (name) => {
+    if (pending || !isAvailable(name)) return;
+    pending = true;
+    try {
+      const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: 1, sceneId: "treasure", name, sequence, sourceId: null, targetId: null, optionIndex: null, choiceId: null });
+      feedback.text = result.accepted ? name === "collectTreasure" ? "Opening the cache\u2026" : "Returning to the map\u2026" : "That action is no longer available.";
+      if (!result.accepted) pending = false;
+    } catch {
+      feedback.text = "The action could not be completed. Please try again.";
+      pending = false;
+    }
+    layout();
+  };
+  const keydown = (event) => {
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp" || event.key === "ArrowRight" || event.key === "ArrowDown") {
+      focusedIndex = (focusedIndex + (event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1) + buttons.length) % buttons.length;
+      layout();
+      event.preventDefault();
+      return;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      buttons[focusedIndex]?.press();
+      event.preventDefault();
+    }
+  };
+  function isAvailable(name) {
+    return name === "collectTreasure" ? state?.canCollect === true : state?.canLeave === true;
+  }
+  function layout() {
+    const width = application.renderer.width;
+    const height = application.renderer.height;
+    const compact = width < 680 || height > width;
+    const panelWidth = Math.min(width - 32, compact ? 420 : 660);
+    const panelHeight = Math.min(height - 32, compact ? 330 : 280);
+    const panelX = (width - panelWidth) / 2;
+    const panelY = (height - panelHeight) / 2;
+    const buttonWidth = compact ? panelWidth - 48 : Math.min(260, (panelWidth - 64) / 2);
+    const buttonHeight = 56;
+    const buttonGap = compact ? 12 : 20;
+    const buttonY = compact ? panelY + panelHeight - 142 : panelY + panelHeight - 84;
+    backdrop.resize(panelWidth, panelHeight);
+    backdrop.position.set(panelX, panelY);
+    title.title = state?.title ?? "Treasure room";
+    title.resize(panelWidth - 48);
+    title.position.set(panelX + 24, panelY + 28);
+    description.text = state?.description ?? "Loading treasure\u2026";
+    description.style.wordWrapWidth = Math.max(1, panelWidth - 72);
+    description.position.set(width / 2, panelY + 98);
+    description.anchor.set(0.5, 0);
+    buttons.forEach((button, index) => {
+      button.setEnabled(!pending && isAvailable(index === 0 ? "collectTreasure" : "leave"));
+      button.setFocused(index === focusedIndex);
+      button.resize(buttonWidth, buttonHeight);
+      button.position.set(compact ? panelX + 24 : panelX + (panelWidth - buttonWidth * 2 - buttonGap) / 2 + index * (buttonWidth + buttonGap), compact ? buttonY + index * (buttonHeight + buttonGap) : buttonY);
+    });
+    feedback.position.set(width / 2, panelY + panelHeight - 26);
+    feedback.anchor.set(0.5, 0.5);
+  }
+  canvas.addEventListener("keydown", keydown);
+  window.addEventListener("resize", resize);
+  resize();
+  return {
+    reconcile(nextSequence, candidate) {
+      if (!isTreasureState(candidate) || nextSequence <= sequence) return false;
+      sequence = nextSequence;
+      state = candidate;
+      pending = false;
+      focusedIndex = state.canCollect ? 0 : 1;
+      feedback.text = "";
+      accessibility.update(`${state.title}. ${state.description}`);
+      layout();
+      return true;
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      canvas.removeEventListener("keydown", keydown);
+      window.removeEventListener("resize", resize);
+      canvasFocus.dispose();
+      accessibility.dispose();
+      application.destroy({ removeView: false }, { children: true });
+    }
+  };
+}
+function isTreasureState(value) {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value;
+  return typeof candidate.title === "string" && typeof candidate.description === "string" && typeof candidate.canCollect === "boolean" && typeof candidate.canLeave === "boolean";
+}
+function createTreasureAccessibilityOverlay(canvas) {
+  const parent = canvas.parentElement;
+  const ownerDocument = canvas.ownerDocument;
+  if (!parent || !ownerDocument) return noOpTreasureAccessibilityOverlay;
+  const summary = ownerDocument.createElement("div");
+  summary.className = "pixi-treasure-accessibility-overlay";
+  summary.setAttribute("aria-live", "polite");
+  summary.setAttribute("role", "status");
+  parent.appendChild(summary);
+  return { update(message) {
+    summary.textContent = message;
+  }, dispose() {
+    summary.remove();
+  } };
+}
+var noOpTreasureAccessibilityOverlay = {
+  update() {
+  },
+  dispose() {
+  }
+};
+
 // src/pixi-map.ts
 var mapSceneProtocolVersion = 2;
 var minimumMapColumnSpacing = 142;
@@ -55705,6 +55848,13 @@ async function createMapRenderer(canvas, sink) {
   let travelTransition;
   let didPan = false;
   let disposed = false;
+  let layoutCount = 0;
+  let visibleNodeCount = 0;
+  let visibleConnectionCount = 0;
+  let updatedNodeCount = 0;
+  let updatedConnectionCount = 0;
+  let eligibleNodeUpdateCount = 0;
+  let eligibleConnectionUpdateCount = 0;
   const reducedMotion = prefersReducedMotion4();
   const announce = (message) => {
     feedback.text = message;
@@ -55879,6 +56029,7 @@ async function createMapRenderer(canvas, sink) {
   application.ticker.add(tick);
   function layout() {
     if (disposed) return;
+    layoutCount++;
     const width = application.renderer.width;
     const height = application.renderer.height;
     const metrics = getMapLayoutMetrics(width, height, state?.nodes ?? [], selectedNodeId);
@@ -55893,12 +56044,19 @@ async function createMapRenderer(canvas, sink) {
     graphMask.clear().rect(metrics.graphBounds.left, metrics.graphBounds.top, metrics.graphBounds.width, metrics.graphBounds.height).fill(16777215);
     graph.removeChildren();
     graph.addChild(connectionLayer, nodeLayer, travelMarker);
+    let nextVisibleConnectionCount = 0;
     for (const [key, connectionView] of connectionViews) {
       const source3 = nodes.find((node) => node.id === key.split(":")[0]);
       const target = nodes.find((node) => node.id === key.split(":")[1]);
       if (!source3 || !target) continue;
       const from = pointFor(source3);
       const to = pointFor(target);
+      eligibleConnectionUpdateCount++;
+      const isVisible = isRouteVisible(from, to, metrics.graphBounds);
+      connectionView.graphics.visible = isVisible;
+      if (!isVisible) continue;
+      nextVisibleConnectionCount++;
+      updatedConnectionCount++;
       const selectedRoute = connectionView.state.isReachable && connectionView.state.targetId === selectedNodeId;
       const travelRoute = travelTransition?.sourceId === connectionView.state.sourceId && travelTransition.destinationId === connectionView.state.targetId;
       connectionView.graphics.clear().moveTo(from.x, from.y).lineTo(to.x, to.y).stroke({
@@ -55907,13 +56065,22 @@ async function createMapRenderer(canvas, sink) {
         alpha: travelRoute || selectedRoute ? 1 : connectionView.state.isReachable || connectionView.state.isVisitedRoute ? 0.9 : 0.35
       });
     }
+    let nextVisibleNodeCount = 0;
     for (const node of nodes) {
       const view = nodeViews.get(node.id);
       if (!view) continue;
-      view.update(node, node.id === selectedNodeId, !pending && !travelTransition);
       const point = pointFor(node);
       view.position.set(point.x, point.y);
+      eligibleNodeUpdateCount++;
+      const isVisible = isNodeVisible(point, metrics.graphBounds);
+      view.visible = isVisible;
+      if (!isVisible) continue;
+      nextVisibleNodeCount++;
+      updatedNodeCount++;
+      view.update(node, node.id === selectedNodeId, !pending && !travelTransition);
     }
+    visibleConnectionCount = nextVisibleConnectionCount;
+    visibleNodeCount = nextVisibleNodeCount;
     drawTravelMarker(travelMarker, travelTransition, nodes, pointFor, reducedMotion);
     region.text = state?.regionName ?? "";
     region.position.set(20, 14);
@@ -56030,6 +56197,21 @@ async function createMapRenderer(canvas, sink) {
       layout();
       return true;
     },
+    getDiagnostics() {
+      return {
+        connectionCount: connectionViews.size,
+        culledConnectionCount: Math.max(0, connectionViews.size - visibleConnectionCount),
+        culledNodeCount: Math.max(0, nodeViews.size - visibleNodeCount),
+        eligibleConnectionUpdateCount,
+        eligibleNodeUpdateCount,
+        layoutCount,
+        nodeCount: nodeViews.size,
+        updatedConnectionCount,
+        updatedNodeCount,
+        visibleConnectionCount,
+        visibleNodeCount
+      };
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
@@ -56047,6 +56229,18 @@ async function createMapRenderer(canvas, sink) {
       application.destroy({ removeView: false }, { children: true });
     }
   };
+}
+function isNodeVisible(point, bounds) {
+  const radius = 36;
+  return point.x >= bounds.left - radius && point.x <= bounds.left + bounds.width + radius && point.y >= bounds.top - radius && point.y <= bounds.top + bounds.height + radius;
+}
+function isRouteVisible(from, to, bounds) {
+  const strokeWidth = 6;
+  const minimumX = Math.min(from.x, to.x);
+  const maximumX = Math.max(from.x, to.x);
+  const minimumY = Math.min(from.y, to.y);
+  const maximumY = Math.max(from.y, to.y);
+  return maximumX >= bounds.left - strokeWidth && minimumX <= bounds.left + bounds.width + strokeWidth && maximumY >= bounds.top - strokeWidth && minimumY <= bounds.top + bounds.height + strokeWidth;
 }
 function isTravelTransitionValid(transition, state) {
   const source3 = state.nodes.find((node) => node.id === transition.sourceId);
@@ -56663,6 +56857,262 @@ async function createCollectionRenderer(canvas, sink) {
 }
 function isState(value) {
   return typeof value === "object" && value !== null && typeof value.title === "string" && Array.isArray(value.tabs) && Number.isInteger(value.activeTabIndex);
+}
+
+// src/pixi-card-choice.ts
+async function createCardChoiceRenderer(canvas, sink) {
+  const application = new Application();
+  await application.init({ antialias: true, autoDensity: true, background: 529183, canvas, preference: "canvas" });
+  canvas.tabIndex = 0;
+  const root = new Container();
+  const panel = new GamePanel({ width: 1, height: 1, fill: uiColors.panelFill, stroke: uiColors.panelStroke });
+  const title = new SceneTitle({ title: "Choose a card", width: 1 });
+  const cardLayer = new Container();
+  const selection = new Text({ text: "Select a card to inspect it.", style: selectionStyle });
+  const primaryConfirm = new GameButton({ width: 1, height: 1, label: "Confirm", enabled: false, onPress: () => {
+    if (selectedCardId) void submit(`confirm:${selectedCardId}`);
+  } });
+  const dangerConfirm = new GameButton({ width: 1, height: 1, label: "Confirm", fill: 5514026, stroke: 14643831, enabled: false, onPress: () => {
+    if (selectedCardId) void submit(`confirm:${selectedCardId}`);
+  } });
+  const cancel = new GameButton({ width: 1, height: 1, label: "Cancel", onPress: () => {
+    void submit("cancel");
+  } });
+  root.addChild(panel, title, cardLayer, selection, primaryConfirm, dangerConfirm, cancel);
+  application.stage.addChild(root);
+  let state;
+  let selectedCardId;
+  let focusedCardIndex;
+  let scrollPointerId;
+  let lastScrollPointerY = 0;
+  let scrollOffset = 0;
+  let disposed = false;
+  const submit = async (action) => {
+    await sink.invokeMethodAsync("HandleActionFromRendererAsync", action);
+  };
+  const activeConfirm = () => isDangerAccent(state?.accent) ? dangerConfirm : primaryConfirm;
+  const select = (card, index) => {
+    selectedCardId = card.id;
+    focusedCardIndex = index;
+    selection.text = `${card.name}
+${card.detail}
+${card.description}`;
+    cardLayer.children.forEach((child) => {
+      if (child instanceof CardChoiceButton) child.setSelected(child.cardId === card.id);
+    });
+    primaryConfirm.setEnabled(true);
+    dangerConfirm.setEnabled(true);
+    ensureFocusedCardVisible(index);
+    layout();
+  };
+  const layout = () => {
+    if (disposed) return;
+    const width = Math.max(1, canvas.parentElement?.clientWidth || canvas.clientWidth || 900);
+    const height = Math.max(1, canvas.parentElement?.clientHeight || canvas.clientHeight || 640);
+    application.renderer.resize(width, height);
+    panel.resize(width - 24, height - 24);
+    panel.position.set(12, 12);
+    title.title = state?.title ?? "Choose a card";
+    title.resize(width - 64);
+    title.position.set(32, 36);
+    const mobile = width < 620;
+    const detailHeight = mobile ? 104 : 90;
+    const controlsY = height - 64;
+    const listTop = 96;
+    const listBottom = Math.max(listTop, controlsY - detailHeight - 14);
+    const entries = cardLayer.children.filter((child) => child instanceof CardChoiceButton);
+    const columns = mobile ? 1 : Math.min(3, Math.max(1, Math.floor((width - 72) / 230)));
+    const buttonWidth = Math.max(160, (width - 64 - (columns - 1) * 12) / columns);
+    const buttonHeight = 54;
+    const rowHeight = buttonHeight + 10;
+    const contentHeight = Math.ceil(entries.length / columns) * rowHeight;
+    const viewportHeight = Math.max(0, listBottom - listTop);
+    scrollOffset = Math.max(0, Math.min(Math.max(0, contentHeight - viewportHeight), scrollOffset));
+    entries.forEach((button, index) => {
+      const y2 = listTop + Math.floor(index / columns) * rowHeight - scrollOffset;
+      button.resize(buttonWidth, buttonHeight);
+      button.position.set(32 + index % columns * (buttonWidth + 12), y2);
+      button.visible = y2 + buttonHeight >= listTop && y2 <= listBottom;
+    });
+    selection.style.wordWrapWidth = Math.max(1, width - 64);
+    selection.position.set(32, controlsY - detailHeight);
+    const confirm = activeConfirm();
+    confirm.label = state?.buttonText ?? "Confirm";
+    confirm.resize(132, 44);
+    confirm.position.set(width - (state?.allowCancel ? 292 : 152), controlsY);
+    primaryConfirm.visible = confirm === primaryConfirm;
+    dangerConfirm.visible = confirm === dangerConfirm;
+    cancel.visible = state?.allowCancel === true;
+    cancel.resize(112, 44);
+    cancel.position.set(width - 140, controlsY);
+  };
+  const scroll = (amount) => {
+    const width = application.renderer.width;
+    const height = application.renderer.height;
+    const columns = width < 620 ? 1 : Math.min(3, Math.max(1, Math.floor((width - 72) / 230)));
+    const contentHeight = Math.ceil((state?.cards.length ?? 0) / columns) * 64;
+    const viewportHeight = Math.max(0, height - 96 - (width < 620 ? 104 : 90) - 78);
+    scrollOffset = Math.max(0, Math.min(Math.max(0, contentHeight - viewportHeight), scrollOffset + amount));
+    layout();
+  };
+  const ensureFocusedCardVisible = (index) => {
+    const width = application.renderer.width;
+    const height = application.renderer.height;
+    const columns = width < 620 ? 1 : Math.min(3, Math.max(1, Math.floor((width - 72) / 230)));
+    const listTop = 96;
+    const listBottom = Math.max(listTop, height - 64 - (width < 620 ? 104 : 90) - 14);
+    const cardTop = listTop + Math.floor(index / columns) * 64;
+    const cardBottom = cardTop + 54;
+    if (cardTop < listTop + scrollOffset) {
+      scrollOffset = cardTop - listTop;
+    } else if (cardBottom > listBottom + scrollOffset) {
+      scrollOffset = cardBottom - listBottom;
+    }
+  };
+  const moveFocus = (direction) => {
+    const cards = state?.cards ?? [];
+    if (cards.length === 0) return;
+    if (focusedCardIndex === void 0) {
+      const firstCard = cards[0];
+      if (firstCard) select(firstCard, 0);
+      return;
+    }
+    const columns = application.renderer.width < 620 ? 1 : Math.min(3, Math.max(1, Math.floor((application.renderer.width - 72) / 230)));
+    const offset = direction === "up" ? -columns : direction === "down" ? columns : direction === "left" ? -1 : 1;
+    const nextIndex = Math.min(cards.length - 1, Math.max(0, focusedCardIndex + offset));
+    const card = cards[nextIndex];
+    if (card) select(card, nextIndex);
+  };
+  const wheel = (event) => {
+    scroll(event.deltaY);
+    event.preventDefault();
+  };
+  const keydown = (event) => {
+    if (event.key === "Escape" && state?.allowCancel) {
+      void submit("cancel");
+      event.preventDefault();
+    }
+    if (event.key === "PageDown") {
+      scroll(application.renderer.height * 0.7);
+      event.preventDefault();
+      return;
+    }
+    if (event.key === "PageUp") {
+      scroll(-application.renderer.height * 0.7);
+      event.preventDefault();
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      moveFocus("up");
+      event.preventDefault();
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      moveFocus("down");
+      event.preventDefault();
+      return;
+    }
+    if (event.key === "ArrowLeft") {
+      moveFocus("left");
+      event.preventDefault();
+      return;
+    }
+    if (event.key === "ArrowRight") {
+      moveFocus("right");
+      event.preventDefault();
+      return;
+    }
+    if ((event.key === "Enter" || event.key === " ") && selectedCardId) {
+      void submit(`confirm:${selectedCardId}`);
+      event.preventDefault();
+    }
+  };
+  const pointerdown = (event) => {
+    if (event.pointerType !== "mouse") {
+      scrollPointerId = event.pointerId;
+      lastScrollPointerY = event.clientY;
+    }
+  };
+  const pointermove = (event) => {
+    if (event.pointerId !== scrollPointerId) return;
+    scroll(lastScrollPointerY - event.clientY);
+    lastScrollPointerY = event.clientY;
+    event.preventDefault();
+  };
+  const pointerend = (event) => {
+    if (event.pointerId === scrollPointerId) scrollPointerId = void 0;
+  };
+  canvas.addEventListener("wheel", wheel, { passive: false });
+  canvas.addEventListener("keydown", keydown);
+  canvas.addEventListener("pointerdown", pointerdown);
+  canvas.addEventListener("pointermove", pointermove, { passive: false });
+  canvas.addEventListener("pointerup", pointerend);
+  canvas.addEventListener("pointercancel", pointerend);
+  window.addEventListener("resize", layout);
+  return {
+    reconcile(candidate) {
+      if (!isCardChoiceState(candidate)) return false;
+      state = candidate;
+      selectedCardId = void 0;
+      focusedCardIndex = void 0;
+      scrollOffset = 0;
+      primaryConfirm.setEnabled(false);
+      dangerConfirm.setEnabled(false);
+      selection.text = "Select a card to inspect it.";
+      cardLayer.removeChildren();
+      candidate.cards.forEach((card, index) => cardLayer.addChild(new CardChoiceButton(card, () => select(card, index))));
+      layout();
+      return true;
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      window.removeEventListener("resize", layout);
+      canvas.removeEventListener("wheel", wheel);
+      canvas.removeEventListener("keydown", keydown);
+      canvas.removeEventListener("pointerdown", pointerdown);
+      canvas.removeEventListener("pointermove", pointermove);
+      canvas.removeEventListener("pointerup", pointerend);
+      canvas.removeEventListener("pointercancel", pointerend);
+      application.destroy({ removeView: false }, { children: true });
+    }
+  };
+}
+var CardChoiceButton = class extends Container {
+  background = new Graphics();
+  labelText = new Text({ text: "", style: cardLabelStyle });
+  selected = false;
+  constructor(card, onPress) {
+    super();
+    this.cardId = card.id;
+    this.labelText.text = card.name;
+    this.addChild(this.background, this.labelText);
+    this.eventMode = "static";
+    this.cursor = "pointer";
+    this.on("pointertap", onPress);
+  }
+  cardId;
+  resize(width, height) {
+    this.background.clear().roundRect(0, 0, width, height, 8).fill({ color: 1254710 }).stroke({ color: this.selected ? uiColors.buttonSelected : 3561587, width: this.selected ? 2 : 1 });
+    this.labelText.style.wordWrapWidth = Math.max(1, width - 28);
+    this.labelText.position.set(14, 17);
+  }
+  setSelected(selected) {
+    this.selected = selected;
+  }
+};
+var selectionStyle = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 14, lineHeight: 19, wordWrap: true, breakWords: true });
+var cardLabelStyle = new TextStyle({ fill: 16317180, fontFamily: "Arial", fontSize: 16, fontWeight: "bold", wordWrap: true, breakWords: true });
+function isCardChoiceState(value) {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value;
+  return typeof candidate.title === "string" && typeof candidate.buttonText === "string" && typeof candidate.allowCancel === "boolean" && isChoiceAccent(candidate.accent) && Array.isArray(candidate.cards);
+}
+function isChoiceAccent(value) {
+  return value === "Primary" || value === "Danger" || value === 0 || value === 1;
+}
+function isDangerAccent(accent) {
+  return accent === "Danger" || accent === 1;
 }
 
 // src/pixi-encounter.ts
@@ -57282,6 +57732,7 @@ function isRecord4(value) {
   return typeof value === "object" && value !== null;
 }
 export {
+  createCardChoiceRenderer,
   createCharacterSelectRenderer,
   createCollectionRenderer,
   createEncounterRenderer,
@@ -57291,7 +57742,8 @@ export {
   createMapRenderer,
   createRestRenderer,
   createRewardRenderer,
-  createShopRenderer
+  createShopRenderer,
+  createTreasureRenderer
 };
 /*! Bundled license information:
 

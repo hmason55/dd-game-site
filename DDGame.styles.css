@@ -1,3 +1,9 @@
+/* /Components/Dialogs/PixiCardChoiceOverlay.razor.rz.scp.css */
+.pixi-card-choice-overlay[b-kqbmtuwmtl] { background: rgba(3, 10, 18, .8); inset: 0; padding: clamp(1rem, 5vh, 4rem); position: fixed; z-index: 1500; }
+.pixi-card-choice-overlay canvas[b-kqbmtuwmtl] { display: block; height: 100%; margin: auto; max-height: 48rem; max-width: 72rem; touch-action: none; width: 100%; }
+.pixi-card-choice-accessibility[b-kqbmtuwmtl] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
+.pixi-card-choice-overlay.renderer-unavailable .pixi-card-choice-accessibility[b-kqbmtuwmtl] { height: auto; left: 1rem; overflow: visible; top: 1rem; width: calc(100% - 2rem); }
+.pixi-card-choice-overlay.renderer-unavailable canvas[b-kqbmtuwmtl] { display: none; }
 /* /Components/Dialogs/PixiRewardSurface.razor.rz.scp.css */
 .pixi-reward-surface[b-lxd0nfvn0m] {
     width: min(100%, 68rem);
@@ -242,6 +248,18 @@
     .pixi-shop-surface[b-lr5mek7nhb] { height: calc(100dvh - 5rem); min-height: 18rem; }
 }
 
+/* /Components/Rooms/PixiTreasureSurface.razor.rz.scp.css */
+.pixi-treasure-surface[b-d4ng9ktinb] { background: #0b1622; border: 1px solid var(--mud-palette-lines-default); border-radius: var(--mud-default-borderradius); height: min(calc(100dvh - 7rem), 36rem); margin: 0 auto 1rem; min-height: 22rem; overflow: hidden; position: relative; width: min(calc(100vw - 2rem), 56rem); }
+.pixi-treasure-surface canvas[b-d4ng9ktinb] { display: block; height: 100%; width: 100%; }
+.pixi-treasure-surface canvas:focus-visible[b-d4ng9ktinb] { outline: 3px solid var(--mud-palette-secondary); outline-offset: -3px; }
+.pixi-treasure-keyboard-help[b-d4ng9ktinb], .pixi-treasure-accessibility-controls[b-d4ng9ktinb] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
+.pixi-treasure-surface.renderer-unavailable[b-d4ng9ktinb] { height: auto; min-height: 0; overflow: visible; }
+.pixi-treasure-surface.renderer-unavailable canvas[b-d4ng9ktinb], .pixi-treasure-surface.renderer-unavailable .pixi-treasure-keyboard-help[b-d4ng9ktinb] { display: none; }
+.pixi-treasure-surface.renderer-unavailable .pixi-treasure-accessibility-controls[b-d4ng9ktinb] { height: auto; overflow: visible; position: static; width: auto; }
+
+@media (max-width: 600px) {
+    .pixi-treasure-surface[b-d4ng9ktinb] { height: min(70dvh, 36rem); min-height: min(20rem, calc(100dvh - 8rem)); width: calc(100vw - 1rem); }
+}
 /* /Layout/MainLayout.razor.rz.scp.css */
 .page[b-f125ol7vjg] {
     position: relative;
