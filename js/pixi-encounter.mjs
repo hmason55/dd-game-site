@@ -49142,15 +49142,20 @@ function assertResidency(definitions, expectedResidency) {
 }
 
 // src/run-asset-manifests.ts
+var runUiIconAssets = {
+  health: { url: "/img/Icons/Health.png", fallback: "\u2665" },
+  stamina: { url: "/img/Icons/Stamina.png", fallback: "\u2726" },
+  status: { url: "/img/Icons/Status.png", fallback: "\u25C6" }
+};
 var runAssetBundleManifest = {
   "core-ui": {
     id: "core-ui",
     residency: "run",
     optionalFontFamilies: ["Arial", "system-ui"],
     urls: [
-      "/img/Icons/Health.png",
-      "/img/Icons/Stamina.png",
-      "/img/Icons/Status.png"
+      runUiIconAssets.health.url,
+      runUiIconAssets.stamina.url,
+      runUiIconAssets.status.url
     ]
   },
   cards: {
@@ -49502,7 +49507,23 @@ function describeEncounter(snapshot) {
   }).join(" ");
   const entries = snapshot.inventoryMode ? snapshot.items.map((item) => `${item.name}: ${item.uses} uses. ${expandKeywords(item.description)}.`).join(" ") : snapshot.hand.map((card) => `${card.name}: ${expandKeywords(card.description)}.`).join(" ");
   const entryLabel = snapshot.inventoryMode ? "Items" : "Cards";
-  return `${snapshot.phase}. ${player} ${enemies} ${entryLabel}: ${entries}`.trim();
+  return `${describeTurnPhase(snapshot.phase)}. ${player} ${enemies} ${entryLabel}: ${entries}`.trim();
+}
+function describeTurnPhase(phase) {
+  switch (phase) {
+    case "WaitingForInput":
+      return "Your turn";
+    case "PlayerTurnStart":
+      return "Starting turn";
+    case "PlayerActing":
+      return "Resolving turn";
+    case "EnemyTurn":
+      return "Enemy turn";
+    case "CombatEnded":
+      return "Combat ended";
+    default:
+      return phase.replace(/([a-z])([A-Z])/g, "$1 $2");
+  }
 }
 function describeStatuses(statuses) {
   return statuses.length === 0 ? "" : `; statuses ${statuses.map((status) => `${status.name} ${status.stacks}`).join(", ")}`;
@@ -49527,6 +49548,45 @@ var noOpAccessibilityOverlay = {
   announce() {
   },
   dispose() {
+  }
+};
+
+// src/encounter-backdrop.ts
+var EncounterBackdrop = class extends Container {
+  atmosphere = new Graphics();
+  architecture = new Graphics();
+  floor = new Graphics();
+  /** Creates the reusable three-plane scene backdrop. */
+  constructor() {
+    super();
+    this.eventMode = "none";
+    this.addChild(this.atmosphere, this.architecture, this.floor);
+  }
+  /** Repaints all planes for the current viewport without moving gameplay elements. */
+  resize(width, height) {
+    const w2 = Math.max(0, Number.isFinite(width) ? width : 0);
+    const h2 = Math.max(0, Number.isFinite(height) ? height : 0);
+    const horizon = h2 * 0.64;
+    const pillarWidth = Math.max(20, w2 * 0.055);
+    this.atmosphere.clear().rect(0, 0, w2, h2).fill({ color: 529182 }).rect(0, 0, w2, horizon).fill({ color: 1586241, alpha: 0.46 }).rect(0, h2 * 0.18, w2, h2 * 0.25).fill({ color: 2646128, alpha: 0.12 }).rect(0, horizon - 3, w2, 6).fill({ color: 7444898, alpha: 0.24 });
+    this.architecture.clear();
+    this.floor.clear();
+    if (w2 === 0 || h2 === 0) {
+      return;
+    }
+    for (const x2 of [w2 * 0.07, w2 * 0.87]) {
+      this.architecture.roundRect(x2, h2 * 0.04, pillarWidth, horizon - h2 * 0.04, 7).fill({ color: 530982, alpha: 0.8 }).stroke({ color: 4550006, width: 2, alpha: 0.45 }).rect(x2 + pillarWidth * 0.18, h2 * 0.06, pillarWidth * 0.1, horizon - h2 * 0.09).fill({ color: 9812141, alpha: 0.1 }).rect(x2 - pillarWidth * 0.2, horizon - 12, pillarWidth * 1.4, 12).fill({ color: 1585466 });
+    }
+    this.floor.rect(0, horizon, w2, h2 - horizon).fill({ color: 1058352 }).rect(0, horizon + 8, w2, 2).fill({ color: 6323575, alpha: 0.32 });
+    for (let i2 = 1; i2 < 5; i2++) {
+      const y2 = horizon + (h2 - horizon) * (i2 / 5) ** 1.45;
+      this.floor.rect(0, y2, w2, 1).fill({ color: 7705226, alpha: 0.12 });
+    }
+    for (let i2 = 1; i2 < 8; i2++) {
+      const x2 = w2 * i2 / 8;
+      this.floor.rect(x2, horizon + 6, 1, h2 - horizon - 6).fill({ color: 7705226, alpha: 0.09 });
+    }
+    this.floor.roundRect(w2 * 0.12, horizon - 7, w2 * 0.27, 8, 4).fill({ color: 8500641, alpha: 0.16 }).roundRect(w2 * 0.62, horizon - 7, w2 * 0.27, 8, 4).fill({ color: 8500641, alpha: 0.16 });
   }
 };
 
@@ -49649,6 +49709,7 @@ var GamePanel = class extends Container {
   fill;
   stroke;
   cornerRadius;
+  surface;
   panelWidth;
   panelHeight;
   /**
@@ -49659,6 +49720,7 @@ var GamePanel = class extends Container {
     this.fill = options.fill ?? uiColors.panelFill;
     this.stroke = options.stroke ?? uiColors.panelStroke;
     this.cornerRadius = Math.max(0, options.cornerRadius ?? uiTokens.frame.panelCornerRadius);
+    this.surface = options.surface ?? "panel";
     this.panelWidth = normalizeSize(options.width);
     this.panelHeight = normalizeSize(options.height);
     this.addChild(this.shadow, this.background, this.innerFrame, this.ornaments, this.panelContent);
@@ -49693,8 +49755,16 @@ var GamePanel = class extends Container {
     const ornamentOffset = inset + uiTokens.frame.borderWidth;
     this.shadow.clear().roundRect(2, 4, Math.max(0, this.panelWidth - 2), Math.max(0, this.panelHeight - 2), this.cornerRadius).fill({ color: uiColors.panelShadow, alpha: 0.56 });
     this.background.clear().roundRect(0, 0, this.panelWidth, this.panelHeight, this.cornerRadius).fill({ color: this.fill }).stroke({ color: this.stroke, width: uiTokens.frame.borderWidth });
+    if (this.surface === "button") {
+      this.background.roundRect(3, 3, Math.max(0, this.panelWidth - 6), Math.max(0, this.panelHeight - 9), Math.max(0, this.cornerRadius - 2)).stroke({ color: 11129818, width: 1, alpha: 0.65 }).rect(12, 4, Math.max(0, this.panelWidth - 24), 2).fill({ color: 12968415, alpha: 0.44 }).rect(12, Math.max(0, this.panelHeight - 6), Math.max(0, this.panelWidth - 24), 2).fill({ color: uiColors.panelShadow, alpha: 0.75 });
+    } else {
+      this.background.rect(12, 4, Math.max(0, this.panelWidth - 24), 2).fill({ color: uiColors.panelOrnament, alpha: 0.38 });
+    }
     this.innerFrame.clear().roundRect(inset, inset, innerWidth, innerHeight, Math.max(0, this.cornerRadius - inset / 2)).stroke({ color: uiColors.panelInset, width: 1, alpha: 0.9 });
     this.ornaments.clear().roundRect(ornamentOffset, ornamentOffset, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.88 }).roundRect(this.panelWidth - ornamentOffset - ornamentLength, ornamentOffset, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.88 }).roundRect(ornamentOffset, this.panelHeight - ornamentOffset - ornamentThickness, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.62 }).roundRect(this.panelWidth - ornamentOffset - ornamentLength, this.panelHeight - ornamentOffset - ornamentThickness, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.62 });
+    if (this.surface === "button") {
+      this.ornaments.roundRect(4, Math.max(4, this.panelHeight / 2 - 4), 2, 8, 1).fill({ color: uiColors.panelOrnament, alpha: 0.82 }).roundRect(Math.max(4, this.panelWidth - 6), Math.max(4, this.panelHeight / 2 - 4), 2, 8, 1).fill({ color: uiColors.panelOrnament, alpha: 0.82 });
+    }
   }
 };
 var GameButton = class extends GamePanel {
@@ -49708,7 +49778,7 @@ var GameButton = class extends GamePanel {
    * Creates an interactive button.
    */
   constructor(options) {
-    super(options);
+    super({ ...options, surface: "button" });
     this.onPress = options.onPress;
     this.isEnabled = options.enabled ?? true;
     this.isFocused = this.isEnabled && (options.focused ?? false);
@@ -50076,49 +50146,6 @@ var ScrollContainer = class extends Container {
   }
   updateContentPosition() {
     this.contentLayer.position.set(0, -this.offset);
-  }
-};
-var ContextPanel = class extends GamePanel {
-  collapsedHeight;
-  expandedHeight;
-  expanded = true;
-  /**
-   * Creates an expanded contextual panel.
-   */
-  constructor(options) {
-    super(options);
-    this.expandedHeight = this.panelSize.height;
-    this.collapsedHeight = Math.min(this.expandedHeight, normalizeSize(options.collapsedHeight ?? 48));
-  }
-  /**
-   * Gets whether the full contextual content is currently visible.
-   */
-  get trayOpen() {
-    return this.expanded;
-  }
-  /**
-   * Opens or collapses the panel's content tray.
-   */
-  setTrayOpen(open) {
-    if (this.expanded === open) {
-      return;
-    }
-    this.expanded = open;
-    this.content.visible = open;
-    super.resize(this.panelSize.width, open ? this.expandedHeight : Math.min(this.expandedHeight, this.collapsedHeight));
-  }
-  /**
-   * Updates the expanded dimensions while preserving the current tray state.
-   */
-  resize(width, height) {
-    this.expandedHeight = normalizeSize(height);
-    super.resize(width, this.expanded ? this.expandedHeight : Math.min(this.expandedHeight, this.collapsedHeight));
-  }
-  /**
-   * Switches between the open and collapsed tray states.
-   */
-  toggleTray() {
-    this.setTrayOpen(!this.expanded);
   }
 };
 var Tooltip = class extends GamePanel {
@@ -50679,7 +50706,7 @@ function layoutEnemies(count2, viewport) {
     return layoutNarrowEnemies(count2, viewport);
   }
   const horizontalPadding = 24;
-  const verticalPadding = 24;
+  const verticalPadding = 76;
   const entityWidth = 176;
   const entityHeight = 116;
   const entityGap = 12;
@@ -50689,7 +50716,7 @@ function layoutEnemies(count2, viewport) {
   const availableWidth = Math.max(0, maximumCombatWidth);
   const availableHeight = Math.max(entityHeight, layoutPlayer(viewport).y - 58 - verticalPadding - entityGap);
   const horizontalScale = availableWidth / (columns * entityWidth);
-  const verticalScale = availableHeight / (rows * entityHeight + (rows - 1) * entityGap);
+  const verticalScale = (availableHeight - (rows - 1) * entityGap) / (rows * entityHeight);
   const scale = Math.min(1, horizontalScale, verticalScale);
   const tileWidth = entityWidth * scale;
   const tileHeight = entityHeight * scale;
@@ -50790,7 +50817,7 @@ function layoutNarrowEnemies(count2, viewport) {
   const columns = Math.min(count2, 2);
   const rows = Math.ceil(count2 / columns);
   const player = layoutPlayer(viewport);
-  const verticalPadding = getEncounterLayoutMode(viewport) === "MobilePortrait" ? Math.min(84, Math.max(36, player.y * 0.24)) : 16;
+  const verticalPadding = getEncounterLayoutMode(viewport) === "MobilePortrait" ? Math.min(84, Math.max(76, player.y * 0.24)) : 60;
   const playerScale = player.scale ?? 1;
   const availableWidth = Math.max(0, viewport.width - horizontalPadding * 2);
   const availableHeight = Math.max(0, player.y - entityHeight * playerScale / 2 - entityGap - verticalPadding);
@@ -50912,70 +50939,46 @@ function getMotionIntensity(value, reducedMotion) {
 
 // src/run-hud.ts
 var RunHud = class extends Container {
-  constructor(actions) {
-    super();
-    this.actions = actions;
-    this.context.content.addChild(this.contextBody);
-    this.contextBody.position.set(uiTokens.spacing.sm, uiTokens.spacing.sm);
-    this.addChild(this.health, this.healthBar, this.currency, this.deck, this.relics, this.context);
-  }
-  actions;
   health = new ResourceCounter({ icon: "\u2665", label: "", value: "0/0", valueLayout: "inline" });
   healthBar = new ProgressIndicator({ width: 64, height: 5, value: 0, maximum: 1, fill: 13127512 });
   currency = new ResourceCounter({ icon: "\u25C6", label: "Vein", value: 0 });
   deck = new ResourceCounter({ icon: "\u25A3", label: "Deck", value: 0 });
-  relics = new GameButton({ width: 92, height: 44, label: "Relics 0", onPress: () => this.actions.toggleContext() });
-  context = new ContextPanel({ width: 220, height: 116, collapsedHeight: 44 });
-  contextBody = new Text({ text: "", style: getUiTextStyle("Body") });
-  contextOpen = true;
-  /** Updates values without rebuilding unchanged controls. */
+  relics = new ResourceCounter({ icon: "\u2726", label: "Relics", value: 0 });
+  turn = new Text({ text: "", style: getUiTextStyle("Body") });
+  constructor() {
+    super();
+    this.addChild(this.health, this.healthBar, this.currency, this.deck, this.relics, this.turn);
+  }
+  /** Reconciles resource values and a concise, human-readable phase label. */
   reconcile(state, viewport) {
     this.health.setValue(`${state.health}/${state.maximumHealth}`);
     this.healthBar.setProgress(state.health, state.maximumHealth);
     this.currency.setValue(state.currency);
     this.deck.setValue(state.deckCount);
-    this.relics.label = `Relics ${state.relicCount}`;
-    this.contextBody.text = `${state.phase}
-${state.inventoryOpen ? "Inventory open" : "Hand open"}
-C: context`;
+    this.relics.setValue(state.relicCount);
+    this.turn.text = describeTurnPhase(state.phase);
+    this.layout(viewport);
+  }
+  /** Temporarily gives the shared feedback row to a pending or rejected action. */
+  setFeedbackVisible(visible, viewport) {
+    this.turn.visible = !visible || getViewportLayoutMode(viewport) !== "MobilePortrait";
+  }
+  layout(viewport) {
     const padding = uiTokens.spacing.sm;
     this.health.position.set(padding, padding);
     this.healthBar.position.set(padding + 20, padding + 20);
     this.currency.position.set(92, padding);
     if (getViewportLayoutMode(viewport) === "MobilePortrait") {
-      const controlGap = uiTokens.spacing.sm;
-      const controlsWidth = 92 * 2 + controlGap;
-      if (usesStackedMobileControls(viewport)) {
-        const controlsX = Math.max(padding, viewport.width - padding - 92);
-        this.deck.position.set(controlsX, padding);
-        this.relics.position.set(controlsX, padding + 44 + controlGap);
-      } else {
-        const controlsX = Math.max(padding, viewport.width - padding - controlsWidth);
-        this.deck.position.set(controlsX, padding);
-        this.relics.position.set(controlsX + 92 + controlGap, padding);
-      }
-      this.context.resize(Math.max(0, viewport.width - padding * 2), 116);
-      this.context.position.set(padding, viewport.height - this.context.panelSize.height - padding);
-    } else {
-      this.deck.position.set(viewport.width - 310, padding);
-      this.relics.position.set(viewport.width - 210, padding);
-      this.context.resize(220, 116);
-      this.context.position.set(viewport.width - 220 - padding, 64);
+      this.deck.position.set(viewport.width - 132, padding);
+      this.relics.position.set(viewport.width - 68, padding);
+      this.turn.position.set(padding, 44);
+      return;
     }
-  }
-  /** Toggles the contextual information tray without hover input. */
-  toggleContext() {
-    this.contextOpen = !this.contextOpen;
-    this.context.setTrayOpen(this.contextOpen);
-  }
-  /** Reserves the mobile tray region so encounter controls remain reachable. */
-  getReservedBottomSpace(viewport) {
-    return getViewportLayoutMode(viewport) === "MobilePortrait" ? this.context.panelSize.height + uiTokens.spacing.sm * 2 : 0;
+    this.deck.position.set(viewport.width - 190, padding);
+    this.relics.position.set(viewport.width - 96, padding);
+    this.turn.position.set(192, padding);
   }
 };
-function usesStackedMobileControls(viewport) {
-  return viewport.width < 344 || viewport.height < 560;
-}
 
 // src/encounter-scene.ts
 var supportedAnimationNames = /* @__PURE__ */ new Set([
@@ -51029,10 +51032,10 @@ var EncounterScene = class {
     this.root.on("pointerup", (event) => this.releaseDrag(event));
     this.root.on("pointerupoutside", (event) => this.cancelDrag(event));
     this.root.on("pointercancel", (event) => this.cancelDrag(event));
-    this.backgroundLayer.addChild(this.background);
+    this.backgroundLayer.addChild(this.background, this.backdrop);
     this.effectsLayer.addChild(this.dragAimArrow, this.attackTrail);
     this.intentStatusLabel.anchor.set(0.5, 0.5);
-    this.overlayLayer.addChild(this.phaseLabel, this.runHud, this.intentStatusBackground, this.intentStatusLabel);
+    this.overlayLayer.addChild(this.runHud, this.intentStatusBackground, this.intentStatusLabel);
     this.root.addChild(this.backgroundLayer, this.enemyLayer, this.playerLayer, this.handLayer, this.effectsLayer, this.overlayLayer, this.dragLayer);
   }
   emitIntent;
@@ -51047,15 +51050,13 @@ var EncounterScene = class {
   dragLayer = new Container();
   effectsLayer = new Container();
   overlayLayer = new Container();
-  runHud = new RunHud({
-    toggleContext: () => this.toggleContext()
-  });
+  runHud = new RunHud();
   background = new Graphics();
+  backdrop = new EncounterBackdrop();
   dragAimArrow = new Graphics();
   attackTrail = new Graphics();
   intentStatusBackground = new Graphics();
   intentStatusLabel = new Text({ text: "", style: { fill: 15856888, fontFamily: "Arial", fontSize: 13 } });
-  phaseLabel = new Text({ text: "", style: { fill: 12109785, fontFamily: "Arial", fontSize: 14 } });
   entityTiles = /* @__PURE__ */ new Map();
   handTiles = /* @__PURE__ */ new Map();
   handLayoutPositions = /* @__PURE__ */ new Map();
@@ -51079,6 +51080,7 @@ var EncounterScene = class {
   inputReleased = false;
   pendingIntentSequence;
   pendingIntentMessage;
+  rejectionFeedbackRemainingMs = 0;
   viewport;
   animationStarts = /* @__PURE__ */ new Map();
   animationCommandHandlers = /* @__PURE__ */ new Map([
@@ -51205,10 +51207,6 @@ var EncounterScene = class {
     if (this.intentPending) {
       return false;
     }
-    if (isUnmodifiedShortcut(event, "c")) {
-      this.toggleContext();
-      return true;
-    }
     if (event.key === "Tab") {
       this.focusEntry(1);
       return true;
@@ -51241,8 +51239,6 @@ var EncounterScene = class {
     this.viewport = { width: viewport.width, height: viewport.height };
     this.currentSequence = snapshot.sequence;
     this.repaintBackground(viewport);
-    this.phaseLabel.text = snapshot.phase;
-    this.phaseLabel.position.set(Math.min(180, viewport.width * 0.45), 12);
     this.layoutInputLockFeedback(viewport);
     this.runHud.reconcile({
       health: snapshot.player.health,
@@ -51250,13 +51246,12 @@ var EncounterScene = class {
       currency: snapshot.currency,
       deckCount: snapshot.deckCount,
       relicCount: snapshot.relicCount,
-      phase: snapshot.phase,
-      inventoryOpen: snapshot.inventoryMode
+      phase: snapshot.phase
     }, viewport);
+    this.runHud.setFeedbackVisible(this.intentPending || this.rejectionFeedbackRemainingMs > 0, viewport);
     this.reconcileQueuedEntries(snapshot);
-    const contentViewport = this.getContentViewport(viewport);
-    this.reconcileEntities(snapshot.player, snapshot.enemies, contentViewport);
-    this.reconcileHand(snapshot, contentViewport);
+    this.reconcileEntities(snapshot.player, snapshot.enemies, viewport);
+    this.reconcileHand(snapshot, viewport);
     if (shouldReleasePendingIntent) {
       this.releasePendingIntent();
     }
@@ -51301,6 +51296,7 @@ var EncounterScene = class {
   }
   repaintBackground(viewport) {
     this.background.clear().rect(0, 0, viewport.width, viewport.height).fill({ color: 726562 });
+    this.backdrop.resize(viewport.width, viewport.height);
   }
   /**
    * Positions the scene-owned pending-action feedback without participating in gameplay layout.
@@ -51308,9 +51304,9 @@ var EncounterScene = class {
   layoutInputLockFeedback(viewport) {
     const width = Math.min(240, Math.max(160, viewport.width - 32));
     const x2 = viewport.width / 2;
-    const y2 = getViewportLayoutMode(viewport) === "MobilePortrait" ? 102 : 31;
+    const y2 = getViewportLayoutMode(viewport) === "MobilePortrait" ? 42 : 30;
     this.intentStatusBackground.clear().roundRect(x2 - width / 2, y2, width, 28, 8).fill({ color: 1452091, alpha: 0.94 }).stroke({ color: 8299977, width: 1 });
-    this.intentStatusBackground.visible = this.intentPending;
+    this.intentStatusBackground.visible = this.intentPending || this.rejectionFeedbackRemainingMs > 0;
     this.intentStatusLabel.position.set(x2, y2 + 14);
   }
   reconcileEntities(player, enemies, viewport) {
@@ -51369,7 +51365,8 @@ var EncounterScene = class {
     const health = `HP ${entity.health}/${entity.maxHealth} \xB7 B ${entity.block}`;
     const resources = entity.isPlayer ? `\u26A1 ${entity.energy} \xB7 \u2726 ${entity.mana}` : `Posture ${entity.posture}/${entity.maxPosture}`;
     const telegraph = formatEntityTelegraph(entity.telegraph);
-    tile.background.clear();
+    const frameColor = entity.isPlayer ? 12044691 : 7974576;
+    tile.background.clear().roundRect(-89, -57, 178, 113, 13).fill({ color: 728618, alpha: 0.74 }).stroke({ color: frameColor, width: 2, alpha: 0.68 }).roundRect(-78, -49, 156, 96, 9).stroke({ color: 12968147, width: 1, alpha: 0.27 }).rect(-34, -58, 68, 3).fill({ color: frameColor, alpha: 0.8 }).roundRect(-66, 52, 132, 5, 2).fill({ color: frameColor, alpha: 0.22 });
     tile.container.hitArea = new Rectangle(-entityHitHalfWidth, -entityHitHalfHeight, entityHitHalfWidth * 2, entityHitHalfHeight * 2);
     tile.accent.clear();
     this.updateArtwork(tile, entity.image, 164, 104);
@@ -51626,6 +51623,12 @@ ${resources}`;
    * @param deltaMs - Elapsed time supplied by the renderer ticker.
    */
   tick(deltaMs) {
+    if (this.rejectionFeedbackRemainingMs > 0) {
+      this.rejectionFeedbackRemainingMs = Math.max(0, this.rejectionFeedbackRemainingMs - Math.max(0, deltaMs));
+      if (this.rejectionFeedbackRemainingMs === 0) {
+        this.updateFeedbackVisibility();
+      }
+    }
     for (const [tileId, dragReturn] of this.dragReturns) {
       if (dragReturn.tile.container.destroyed) {
         this.dragReturns.delete(tileId);
@@ -52369,11 +52372,12 @@ ${resources}`;
     tile.targetHighlight.clear();
     tile.targetHighlight.visible = isTargeting;
     if (isTargeting) {
+      const cueColor = isFocused ? 16769155 : isValidTarget ? 11141006 : 14912909;
       tile.targetHighlight.roundRect(-entityHitHalfWidth, -entityHitHalfHeight, entityHitHalfWidth * 2, entityHitHalfHeight * 2, 12).stroke({
-        color: isFocused ? 16769155 : isValidTarget ? 11141006 : 14912909,
+        color: cueColor,
         width: isFocused || isValidTarget ? 4 : 2,
         alpha: isFocused ? 0.95 : isValidTarget ? 0.9 : 0.55
-      });
+      }).roundRect(-18, -entityHitHalfHeight - 4, 36, 4, 2).fill({ color: cueColor, alpha: 0.9 }).roundRect(-18, entityHitHalfHeight, 36, 4, 2).fill({ color: cueColor, alpha: 0.9 });
     }
   }
   refreshInteractionState() {
@@ -52517,12 +52521,6 @@ ${resources}`;
       this.handLayer.addChild(inspectedTile.container);
     }
   }
-  toggleContext() {
-    this.runHud.toggleContext();
-  }
-  getContentViewport(viewport) {
-    return { width: viewport.width, height: Math.max(0, viewport.height - this.runHud.getReservedBottomSpace(viewport)) };
-  }
   /**
    * Walks the retained scene graph so reused labels recreate their textures without replacing display objects.
    */
@@ -52616,12 +52614,14 @@ ${resources}`;
       if (!result.accepted) {
         this.returnReleasedEntry(intent.kind, intent.sourceId);
         this.releasePendingIntent();
+        this.showRejectedIntent();
       } else if (intent.kind === "previewDeck") {
         this.releasePendingIntent();
       }
     }).catch(() => {
       this.returnReleasedEntry(intent.kind, intent.sourceId);
       this.releasePendingIntent();
+      this.showRejectedIntent();
     });
   }
   queueCardIntent(intent) {
@@ -52652,6 +52652,7 @@ ${resources}`;
     this.queuedEntryIds.delete(sourceId);
     this.committedCardSequences.delete(sourceId);
     this.returnReleasedEntry("playCard", sourceId);
+    this.showRejectedIntent();
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
   }
@@ -52677,8 +52678,7 @@ ${resources}`;
     this.intentPending = false;
     this.pendingIntentSequence = void 0;
     this.pendingIntentMessage = void 0;
-    this.intentStatusBackground.visible = false;
-    this.intentStatusLabel.visible = false;
+    this.updateFeedbackVisibility();
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
   }
@@ -52687,12 +52687,26 @@ ${resources}`;
    */
   beginPendingIntent(intent) {
     this.intentPending = true;
+    this.rejectionFeedbackRemainingMs = 0;
     this.pendingIntentSequence = intent.sequence;
     this.pendingIntentMessage = getPendingIntentMessage(intent.kind);
     this.intentStatusLabel.text = this.pendingIntentMessage;
-    this.intentStatusBackground.visible = true;
-    this.intentStatusLabel.visible = true;
+    this.updateFeedbackVisibility();
     this.announceInteraction?.(this.pendingIntentMessage);
+  }
+  showRejectedIntent() {
+    this.rejectionFeedbackRemainingMs = 1800;
+    this.intentStatusLabel.text = "Action unavailable";
+    this.updateFeedbackVisibility();
+    this.announceInteraction?.("Action unavailable.");
+  }
+  updateFeedbackVisibility() {
+    const visible = this.intentPending || this.rejectionFeedbackRemainingMs > 0;
+    this.intentStatusBackground.visible = visible;
+    this.intentStatusLabel.visible = visible;
+    if (this.viewport) {
+      this.runHud.setFeedbackVisible(visible, this.viewport);
+    }
   }
   reconcileQueuedEntries(snapshot) {
     const authoritativeQueuedEntryIds = new Set(snapshot.hand.filter((card) => card.isQueued).map((card) => card.id));
@@ -52774,9 +52788,6 @@ function getRarityColor(rarity) {
 }
 function getCharacterColor(character) {
   return character === "Hollowblade" ? 11623797 : character === "Gravetender" ? 7518106 : character === "Dredgecaller" ? 8745910 : character === "Oathbound" ? 13935439 : 8623272;
-}
-function isUnmodifiedShortcut(event, key) {
-  return !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === key;
 }
 function formatCardCost(card) {
   return card.manaCost > 0 ? `\u26A1 ${card.energyCost}  \u2726 ${card.manaCost}` : `\u26A1 ${card.energyCost}`;
