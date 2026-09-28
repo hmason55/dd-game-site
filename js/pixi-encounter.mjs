@@ -51141,6 +51141,12 @@ var EncounterScene = class {
     return this.effectsLayer;
   }
   /**
+   * Invalidates cached Pixi text textures after the browser restores rendering or finishes loading a font.
+   */
+  refreshTextTextures() {
+    this.refreshTextTexturesIn(this.root);
+  }
+  /**
    * Determines whether a stable scene-object identifier is currently visible.
    */
   hasSceneObject(id) {
@@ -52540,6 +52546,17 @@ ${resources}`;
   }
   getContentViewport(viewport) {
     return { width: viewport.width, height: Math.max(0, viewport.height - this.runHud.getReservedBottomSpace(viewport)) };
+  }
+  /**
+   * Walks the retained scene graph so reused labels recreate their textures without replacing display objects.
+   */
+  refreshTextTexturesIn(container) {
+    if (container instanceof Text) {
+      container.onViewUpdate();
+    }
+    for (const child of container.children) {
+      this.refreshTextTexturesIn(child);
+    }
   }
   focusEntry(direction) {
     const entryIds = [...this.selectableEntries.values()].filter((entry2) => entry2.isDraggable && !this.queuedEntryIds.has(entry2.id) && !this.isEntryInteractionOwned(getEntrySceneId(entry2), entry2.id) && !this.isAnimationLockedForEntry(entry2)).map((entry2) => entry2.id);
@@ -57188,7 +57205,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   let suspended = document.hidden;
   let contextLost = false;
   let contextRestorationPending = false;
-  let contextRecoveryPending = false;
+  let presentationRecoveryPending = false;
   let hasActiveScene = false;
   const pendingAnimations = [];
   const rendererType = application.renderer.type.toString();
@@ -57265,8 +57282,12 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   const resizeObserver = new ResizeObserver(handleViewportChange);
   resizeObserver.observe(canvas.parentElement ?? canvas);
   const updateRuntimeSuspension = () => {
+    const wasSuspended = suspended;
     suspended = document.hidden || contextLost;
     if (suspended) {
+      if (!wasSuspended && hasActiveScene) {
+        presentationRecoveryPending = true;
+      }
       void runtime.suspend().catch(() => void 0);
       return;
     }
@@ -57274,8 +57295,8 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     contextRestorationPending = false;
     void runtime.resume().then(async () => {
       resizeRenderer(forceRendererResize);
-      if (contextRecoveryPending) {
-        await recoverAfterContextRestoration();
+      if (presentationRecoveryPending) {
+        await recoverAfterPresentationInterruption();
       }
       reconcileScene();
     }).catch(() => void 0);
@@ -57291,7 +57312,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   const reconcileAfterContextRestore = () => {
     contextLost = false;
     contextRestorationPending = true;
-    contextRecoveryPending = true;
+    presentationRecoveryPending = true;
     updateRuntimeSuspension();
   };
   const handleKeyboardEvent = (event) => {
@@ -57480,11 +57501,11 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
       }
     }
   }
-  async function recoverAfterContextRestoration() {
-    while (!disposed && !contextLost && contextRecoveryPending) {
+  async function recoverAfterPresentationInterruption() {
+    while (!disposed && !contextLost && presentationRecoveryPending) {
       const snapshot = latestSnapshot;
       if (!snapshot) {
-        contextRecoveryPending = false;
+        presentationRecoveryPending = false;
         return;
       }
       await assetLoader.preload(snapshot);
@@ -57503,8 +57524,13 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
           continue;
         }
       }
-      contextRecoveryPending = false;
+      presentationRecoveryPending = false;
       await runtime.reconcile(snapshot);
+      if (snapshot !== latestSnapshot) {
+        presentationRecoveryPending = true;
+        continue;
+      }
+      scene.refreshTextTextures();
     }
   }
 }
