@@ -117,6 +117,65 @@
 
 .pixi-main-menu-surface canvas:focus-visible[b-22zhoaus0z] { outline: 3px solid var(--mud-palette-secondary); outline-offset: -3px; }
 .pixi-main-menu-help[b-22zhoaus0z] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
+/* /Components/PixiRunControlsSurface.razor.rz.scp.css */
+.pixi-run-controls-surface[b-2ntaig32y6] {
+    bottom: 0;
+    height: calc(64px + env(safe-area-inset-bottom));
+    left: 0;
+    position: fixed;
+    width: 100%;
+    z-index: 1200;
+}
+
+.pixi-run-controls-surface.open[b-2ntaig32y6] { height: min(100dvh, 620px); }
+.pixi-run-controls-surface canvas[b-2ntaig32y6] { display: block; height: 100%; outline: none; touch-action: manipulation; width: 100%; }
+.pixi-run-controls-surface canvas:focus-visible[b-2ntaig32y6] { outline: 3px solid var(--mud-palette-secondary); outline-offset: -3px; }
+.pixi-run-controls-help[b-2ntaig32y6], .pixi-run-controls-accessibility[b-2ntaig32y6] {
+    border: 0;
+    clip: rect(0, 0, 0, 0);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+}
+
+.pixi-run-controls-surface.renderer-unavailable[b-2ntaig32y6] { height: auto; min-height: 64px; position: fixed; }
+.pixi-run-controls-surface.renderer-unavailable canvas[b-2ntaig32y6] { display: none; }
+.pixi-run-controls-surface.renderer-unavailable .pixi-run-controls-accessibility[b-2ntaig32y6],
+.pixi-run-controls-surface .pixi-run-controls-accessibility:focus-within[b-2ntaig32y6] {
+    clip: auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    padding: 4px;
+    position: static;
+    white-space: normal;
+    width: auto;
+}
+
+.pixi-run-controls-accessibility button[b-2ntaig32y6] {
+    background: var(--mud-palette-background);
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 4px;
+    color: var(--mud-palette-text-primary);
+    min-height: 44px;
+    min-width: 44px;
+    padding: 8px;
+}
+.pixi-run-controls-surface .pixi-run-controls-accessibility:focus-within[b-2ntaig32y6] {
+    background: var(--mud-palette-surface);
+    bottom: calc(64px + env(safe-area-inset-bottom));
+    max-height: 80dvh;
+    overflow: auto;
+    position: absolute;
+    width: 100%;
+}
 /* /Components/Rooms/PixiEncounterSurface.razor.rz.scp.css */
 .pixi-encounter-surface[b-9jzg35z109] {
     position: relative;

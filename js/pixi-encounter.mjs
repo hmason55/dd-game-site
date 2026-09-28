@@ -50923,7 +50923,7 @@ var RunHud = class extends Container {
   health = new ResourceCounter({ icon: "\u2665", label: "", value: "0/0", valueLayout: "inline" });
   healthBar = new ProgressIndicator({ width: 64, height: 5, value: 0, maximum: 1, fill: 13127512 });
   currency = new ResourceCounter({ icon: "\u25C6", label: "Vein", value: 0 });
-  deck = new GameButton({ width: 92, height: 44, label: "Deck 0", onPress: () => this.actions.previewDeck() });
+  deck = new ResourceCounter({ icon: "\u25A3", label: "Deck", value: 0 });
   relics = new GameButton({ width: 92, height: 44, label: "Relics 0", onPress: () => this.actions.toggleContext() });
   context = new ContextPanel({ width: 220, height: 116, collapsedHeight: 44 });
   contextBody = new Text({ text: "", style: getUiTextStyle("Body") });
@@ -50933,11 +50933,11 @@ var RunHud = class extends Container {
     this.health.setValue(`${state.health}/${state.maximumHealth}`);
     this.healthBar.setProgress(state.health, state.maximumHealth);
     this.currency.setValue(state.currency);
-    this.deck.label = `${state.inventoryOpen ? "Hand" : "Deck"} ${state.deckCount}`;
+    this.deck.setValue(state.deckCount);
     this.relics.label = `Relics ${state.relicCount}`;
     this.contextBody.text = `${state.phase}
 ${state.inventoryOpen ? "Inventory open" : "Hand open"}
-H: deck  C: context`;
+C: context`;
     const padding = uiTokens.spacing.sm;
     this.health.position.set(padding, padding);
     this.healthBar.position.set(padding + 20, padding + 20);
@@ -51031,11 +51031,8 @@ var EncounterScene = class {
     this.root.on("pointercancel", (event) => this.cancelDrag(event));
     this.backgroundLayer.addChild(this.background);
     this.effectsLayer.addChild(this.dragAimArrow, this.attackTrail);
-    this.endTurnLabel.eventMode = "static";
-    this.endTurnLabel.cursor = "pointer";
-    this.endTurnLabel.on("pointertap", () => this.submitEndTurn());
     this.intentStatusLabel.anchor.set(0.5, 0.5);
-    this.overlayLayer.addChild(this.phaseLabel, this.endTurnLabel, this.runHud, this.intentStatusBackground, this.intentStatusLabel);
+    this.overlayLayer.addChild(this.phaseLabel, this.runHud, this.intentStatusBackground, this.intentStatusLabel);
     this.root.addChild(this.backgroundLayer, this.enemyLayer, this.playerLayer, this.handLayer, this.effectsLayer, this.overlayLayer, this.dragLayer);
   }
   emitIntent;
@@ -51051,7 +51048,6 @@ var EncounterScene = class {
   effectsLayer = new Container();
   overlayLayer = new Container();
   runHud = new RunHud({
-    previewDeck: () => this.submitDeckPreview(),
     toggleContext: () => this.toggleContext()
   });
   background = new Graphics();
@@ -51060,7 +51056,6 @@ var EncounterScene = class {
   intentStatusBackground = new Graphics();
   intentStatusLabel = new Text({ text: "", style: { fill: 15856888, fontFamily: "Arial", fontSize: 13 } });
   phaseLabel = new Text({ text: "", style: { fill: 12109785, fontFamily: "Arial", fontSize: 14 } });
-  endTurnLabel = new Text({ text: "End Turn", style: { fill: 16769155, fontFamily: "Arial", fontSize: 14 } });
   entityTiles = /* @__PURE__ */ new Map();
   handTiles = /* @__PURE__ */ new Map();
   handLayoutPositions = /* @__PURE__ */ new Map();
@@ -51210,10 +51205,6 @@ var EncounterScene = class {
     if (this.intentPending) {
       return false;
     }
-    if (isUnmodifiedShortcut(event, "h")) {
-      this.submitDeckPreview();
-      return true;
-    }
     if (isUnmodifiedShortcut(event, "c")) {
       this.toggleContext();
       return true;
@@ -51252,8 +51243,6 @@ var EncounterScene = class {
     this.repaintBackground(viewport);
     this.phaseLabel.text = snapshot.phase;
     this.phaseLabel.position.set(Math.min(180, viewport.width * 0.45), 12);
-    this.endTurnLabel.visible = snapshot.phase === "WaitingForInput";
-    this.endTurnLabel.position.set(viewport.width - 80, 12);
     this.layoutInputLockFeedback(viewport);
     this.runHud.reconcile({
       health: snapshot.player.health,
@@ -52403,8 +52392,6 @@ ${resources}`;
       tile.container.eventMode = isInteractive ? "static" : "none";
       tile.container.cursor = isInteractive ? "pointer" : "default";
     }
-    this.endTurnLabel.eventMode = this.endTurnLabel.visible && !this.intentPending && this.queuedEntryIds.size === 0 ? "static" : "none";
-    this.endTurnLabel.cursor = this.endTurnLabel.eventMode === "static" ? "pointer" : "default";
   }
   submitEntryIntent(entry, targetId) {
     this.submitIntent({
@@ -52414,12 +52401,6 @@ ${resources}`;
       sequence: this.currentSequence,
       sceneId: encounterSceneId
     });
-  }
-  submitEndTurn() {
-    if (this.intentPending || this.queuedEntryIds.size > 0 || !this.endTurnLabel.visible) {
-      return;
-    }
-    this.submitIntent({ kind: "endTurn", sourceId: null, targetId: null, sequence: this.currentSequence, sceneId: encounterSceneId });
   }
   /** Applies the current hand layout and inspection treatment for a card. */
   applyHandLayoutTransform(tileId, tile, position) {
@@ -52534,11 +52515,6 @@ ${resources}`;
     }
     if (this.handLayer.children.at(-1) !== inspectedTile.container) {
       this.handLayer.addChild(inspectedTile.container);
-    }
-  }
-  submitDeckPreview() {
-    if (!this.intentPending) {
-      this.submitIntent({ kind: "previewDeck", sourceId: null, targetId: null, sequence: this.currentSequence, sceneId: encounterSceneId });
     }
   }
   toggleContext() {
@@ -55001,7 +54977,7 @@ async function createRestRenderer(canvas, sink) {
     const minimumButtonHeight = compact ? 28 : 42;
     const preferredActionTop = compact ? Math.max(170, height * 0.35) : shortLandscape ? Math.max(52, height * 0.24) : Math.max(152, height * 0.36);
     const actionTop = Math.min(preferredActionTop, actionBottom - minimumButtonHeight);
-    const buttonHeight = compact ? Math.max(minimumButtonHeight, Math.min(76, (actionBottom - actionTop - Math.max(0, actions.length - 1) * gap) / Math.max(1, actions.length))) : Math.max(minimumButtonHeight, Math.min(shortLandscape ? 80 : 118, actionBottom - actionTop));
+    const buttonHeight2 = compact ? Math.max(minimumButtonHeight, Math.min(76, (actionBottom - actionTop - Math.max(0, actions.length - 1) * gap) / Math.max(1, actions.length))) : Math.max(minimumButtonHeight, Math.min(shortLandscape ? 80 : 118, actionBottom - actionTop));
     const actionGlow = effectName === "rest-recovery" ? 0.32 : effectName === "training" ? 0.22 : effectName === "rejected" ? 0.08 : 0.16;
     background.clear().rect(0, 0, width, height).fill(726562).circle(width * 0.5, height * 0.25, Math.min(width, height) * 0.2).fill({ color: effectName === "training" ? 6333946 : 16096779, alpha: actionGlow });
     title.position.set(width * 0.5, 36);
@@ -55028,8 +55004,8 @@ Health: ${state.health} / ${state.maximumHealth}` : "Loading camp\u2026";
       const availableIndex = availableActions().findIndex((entry) => entry.id === action.id);
       const button = new RestButton(action.name, action.isAvailable ? action.description : action.disabledReason ?? "Unavailable", action.isAvailable && !pending, action.id === selectedActionId || selectedActionId === void 0 && availableIndex === selectedIndex, () => selectAction(action));
       const x2 = compact ? (width - buttonWidth) / 2 : 32 + index * (buttonWidth + gap);
-      const y2 = compact ? actionTop + index * (buttonHeight + gap) : actionTop;
-      button.resize(buttonWidth, buttonHeight);
+      const y2 = compact ? actionTop + index * (buttonHeight2 + gap) : actionTop;
+      button.resize(buttonWidth, buttonHeight2);
       button.position.set(x2, y2);
       actionLayer.addChild(button);
     });
@@ -55750,8 +55726,8 @@ async function createTreasureRenderer(canvas, sink) {
     const panelX = (width - panelWidth) / 2;
     const panelY = (height - panelHeight) / 2;
     const buttonWidth = compact ? panelWidth - 48 : Math.min(260, (panelWidth - 64) / 2);
-    const buttonHeight = 56;
-    const buttonGap = compact ? 12 : 20;
+    const buttonHeight2 = 56;
+    const buttonGap2 = compact ? 12 : 20;
     const buttonY = compact ? panelY + panelHeight - 142 : panelY + panelHeight - 84;
     backdrop.resize(panelWidth, panelHeight);
     backdrop.position.set(panelX, panelY);
@@ -55765,8 +55741,8 @@ async function createTreasureRenderer(canvas, sink) {
     buttons.forEach((button, index) => {
       button.setEnabled(!pending && isAvailable(index === 0 ? "collectTreasure" : "leave"));
       button.setFocused(index === focusedIndex);
-      button.resize(buttonWidth, buttonHeight);
-      button.position.set(compact ? panelX + 24 : panelX + (panelWidth - buttonWidth * 2 - buttonGap) / 2 + index * (buttonWidth + buttonGap), compact ? buttonY + index * (buttonHeight + buttonGap) : buttonY);
+      button.resize(buttonWidth, buttonHeight2);
+      button.position.set(compact ? panelX + 24 : panelX + (panelWidth - buttonWidth * 2 - buttonGap2) / 2 + index * (buttonWidth + buttonGap2), compact ? buttonY + index * (buttonHeight2 + buttonGap2) : buttonY);
     });
     feedback.position.set(width / 2, panelY + panelHeight - 26);
     feedback.anchor.set(0.5, 0.5);
@@ -56446,14 +56422,14 @@ async function createMainMenuRenderer(canvas, sink, initialState) {
     panel.clear().roundRect(panelX, panelY, panelWidth, panelHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
     watermark.position.set(width - 12, height - 10);
     const buttonWidth = Math.max(180, panelWidth - 72);
-    const buttonGap = Math.max(8, Math.min(14, panelHeight * 0.05));
+    const buttonGap2 = Math.max(8, Math.min(14, panelHeight * 0.05));
     const feedbackReserve = 34;
-    const buttonHeight = Math.max(32, Math.min(52, (panelHeight - 12 - feedbackReserve - buttonGap * Math.max(0, buttons.length - 1)) / Math.max(1, buttons.length)));
-    const buttonBlockHeight = buttonHeight * buttons.length + buttonGap * Math.max(0, buttons.length - 1);
+    const buttonHeight2 = Math.max(32, Math.min(52, (panelHeight - 12 - feedbackReserve - buttonGap2 * Math.max(0, buttons.length - 1)) / Math.max(1, buttons.length)));
+    const buttonBlockHeight = buttonHeight2 * buttons.length + buttonGap2 * Math.max(0, buttons.length - 1);
     const buttonStartY = panelY + Math.max(12, (panelHeight - feedbackReserve - buttonBlockHeight) / 2);
     buttons.forEach((button, index) => {
-      button.resize(buttonWidth, buttonHeight);
-      button.position.set((width - buttonWidth) / 2, buttonStartY + index * (buttonHeight + buttonGap));
+      button.resize(buttonWidth, buttonHeight2);
+      button.position.set((width - buttonWidth) / 2, buttonStartY + index * (buttonHeight2 + buttonGap2));
       button.setFocused(index === focusedIndex);
     });
     feedback.position.set(width / 2, panelY + panelHeight - 22);
@@ -56940,16 +56916,16 @@ ${card.description}`;
     const entries = cardLayer.children.filter((child) => child instanceof CardChoiceButton);
     const columns = mobile ? 1 : Math.min(3, Math.max(1, Math.floor((width - 72) / 230)));
     const buttonWidth = Math.max(160, (width - 64 - (columns - 1) * 12) / columns);
-    const buttonHeight = 54;
-    const rowHeight = buttonHeight + 10;
+    const buttonHeight2 = 54;
+    const rowHeight = buttonHeight2 + 10;
     const contentHeight = Math.ceil(entries.length / columns) * rowHeight;
     const viewportHeight = Math.max(0, listBottom - listTop);
     scrollOffset = Math.max(0, Math.min(Math.max(0, contentHeight - viewportHeight), scrollOffset));
     entries.forEach((button, index) => {
       const y2 = listTop + Math.floor(index / columns) * rowHeight - scrollOffset;
-      button.resize(buttonWidth, buttonHeight);
+      button.resize(buttonWidth, buttonHeight2);
       button.position.set(32 + index % columns * (buttonWidth + 12), y2);
-      button.visible = y2 + buttonHeight >= listTop && y2 <= listBottom;
+      button.visible = y2 + buttonHeight2 >= listTop && y2 <= listBottom;
     });
     selection.style.wordWrapWidth = Math.max(1, width - 64);
     selection.position.set(32, controlsY - detailHeight);
@@ -57130,6 +57106,206 @@ function isChoiceAccent(value) {
 }
 function isDangerAccent(accent) {
   return accent === "Danger" || accent === 1;
+}
+
+// src/pixi-run-controls.ts
+var toolbarHeight = 64;
+var buttonHeight = 48;
+var menuButtonHeight = 44;
+var buttonGap = 6;
+var actionIds = /* @__PURE__ */ new Set(["deck", "discard", "inventory", "endTurn", "map", "backpack", "rewards", "history", "settings", "fullscreen", "title", "restart"]);
+var toolbarPriority = ["endTurn", "map", "inventory", "deck", "backpack", "discard", "fullscreen", "rewards"];
+async function createRunControlsRenderer(canvas, sink, initialState) {
+  const application = new Application();
+  await application.init({ antialias: true, autoDensity: true, backgroundAlpha: 0, canvas, preference: "canvas" });
+  canvas.tabIndex = 0;
+  const root = new Container();
+  const backdrop = new Graphics();
+  const panel = new Graphics();
+  const toolbar = new Graphics();
+  const controls = new Container();
+  const feedback = new Text({ text: "", style: new TextStyle({ ...uiTokens.typography.body, fill: 16765322, fontSize: 13 }) });
+  root.addChild(backdrop, panel, toolbar, controls, feedback);
+  application.stage.addChild(root);
+  let state = { menuOpen: false, actions: [] };
+  let buttons = [];
+  const buttonActions = /* @__PURE__ */ new Map();
+  let focusedAction = "menu";
+  let page = 0;
+  let pending = false;
+  let disposed = false;
+  let previousFocus = null;
+  const submit = async (action) => {
+    if (pending || disposed) return false;
+    if (action === "previous" || action === "next") {
+      page += action === "next" ? 1 : -1;
+      layout();
+      return true;
+    }
+    if (action !== "menu" && !state.actions.some((entry) => entry.id === action && entry.enabled)) return false;
+    pending = true;
+    buttons.forEach((button) => button.setEnabled(false));
+    feedback.text = "Working\u2026";
+    try {
+      const accepted = await sink.invokeMethodAsync("HandleActionFromRendererAsync", action);
+      if (disposed) return false;
+      feedback.text = accepted ? "" : "That action is unavailable.";
+      return accepted;
+    } catch {
+      feedback.text = "The action could not be completed.";
+      return false;
+    } finally {
+      pending = false;
+      if (!disposed) layout();
+    }
+  };
+  const createButton = (action, label, enabled, width, height, x2, y2) => {
+    const button = new GameButton({ width, height, label, enabled: enabled && !pending, focused: action === focusedAction, onPress: () => void submit(action) });
+    button.position.set(x2, y2);
+    button.on("pointerover", () => button.setFocused(true));
+    button.on("pointerout", () => button.setFocused(action === focusedAction));
+    button.on("pointerdown", () => button.setSelected(true));
+    button.on("pointerup", () => button.setSelected(false));
+    button.on("pointerupoutside", () => button.setSelected(false));
+    controls.addChild(button);
+    buttons.push(button);
+    buttonActions.set(button, action);
+  };
+  const layout = () => {
+    if (disposed) return;
+    const width = Math.max(1, canvas.parentElement?.clientWidth ?? canvas.clientWidth);
+    const height = Math.max(1, canvas.parentElement?.clientHeight ?? canvas.clientHeight);
+    application.renderer.resize(width, height);
+    for (const button of buttons) button.destroy({ children: true });
+    buttons = [];
+    buttonActions.clear();
+    controls.removeChildren();
+    backdrop.clear();
+    panel.clear();
+    const barY = Math.max(0, height - toolbarHeight);
+    toolbar.clear().rect(0, barY, width, toolbarHeight).fill(uiColors.panelFill).rect(0, barY, width, 2).fill(uiColors.panelStroke);
+    const menuWidth = 64;
+    const availableSlots = Math.max(0, Math.floor((width - menuWidth - 16) / 98));
+    const primaries = toolbarPriority.map((id) => state.actions.find((action) => action.id === id && action.primary)).filter((entry) => entry !== void 0).slice(0, availableSlots);
+    const menuActions = state.actions.filter((entry) => !primaries.some((primary) => primary.id === entry.id));
+    const primaryWidth = Math.min(92, Math.max(44, (width - menuWidth - 16) / Math.max(1, primaries.length) - buttonGap));
+    createButton("menu", state.menuOpen ? "Close" : "Menu", true, 58, buttonHeight, 6, barY + 8);
+    primaries.forEach((entry, index) => createButton(entry.id, entry.label, entry.enabled, primaryWidth, buttonHeight, menuWidth + 6 + index * (primaryWidth + buttonGap), barY + 8));
+    if (!state.menuOpen) {
+      feedback.visible = false;
+      return;
+    }
+    backdrop.clear().rect(0, 0, width, barY).fill({ color: 463132, alpha: 0.78 });
+    const panelWidth = Math.min(width - 16, 620);
+    const panelX = (width - panelWidth) / 2;
+    panel.roundRect(panelX, 8, panelWidth, Math.max(1, barY - 14), uiTokens.frame.panelCornerRadius).fill(uiColors.panelFill).stroke({ color: uiColors.panelStroke, width: 2 });
+    const columns = panelWidth >= 520 ? 2 : 1;
+    const rowHeight = menuButtonHeight + buttonGap;
+    const rows = Math.max(1, Math.floor((barY - 86) / rowHeight));
+    const pageSize = rows * columns;
+    const totalPages = Math.max(1, Math.ceil(menuActions.length / pageSize));
+    page = Math.max(0, Math.min(page, totalPages - 1));
+    const visibleActions = menuActions.slice(page * pageSize, (page + 1) * pageSize);
+    const entryWidth = (panelWidth - 24 - buttonGap * (columns - 1)) / columns;
+    visibleActions.forEach((entry, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      createButton(entry.id, entry.label, entry.enabled, entryWidth, menuButtonHeight, panelX + 12 + column * (entryWidth + buttonGap), 20 + row * rowHeight);
+    });
+    if (totalPages > 1) {
+      createButton("previous", "Previous", page > 0, 96, menuButtonHeight, panelX + 12, barY - 56);
+      createButton("next", "Next", page < totalPages - 1, 96, menuButtonHeight, panelX + panelWidth - 108, barY - 56);
+    }
+    feedback.visible = true;
+    feedback.position.set(panelX + 12, barY - 22);
+  };
+  const keydown = (event) => {
+    if (event.key === "Escape" && state.menuOpen) {
+      event.preventDefault();
+      void submit("menu");
+      return;
+    }
+    const active = buttons.filter((button) => button.enabled);
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+      const current = active.findIndex((button) => button.focused);
+      const direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+      const next = active[(current + direction + active.length) % active.length];
+      if (next) {
+        focusedAction = buttonActions.get(next) ?? "menu";
+        buttons.forEach((button) => button.setFocused(button === next));
+      }
+      event.preventDefault();
+      return;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      active.find((button) => button.focused)?.press();
+      event.preventDefault();
+    }
+  };
+  const globalKeydown = (event) => {
+    const target = event.target;
+    if (event.code !== "KeyM" || event.repeat || event.altKey || event.ctrlKey || event.metaKey || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLButtonElement) return;
+    if (state.actions.every((action) => !action.enabled)) return;
+    const wasOpen = state.menuOpen;
+    const focusBeforeShortcut = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    event.preventDefault();
+    void submit("menu").then((accepted) => {
+      if (accepted && !disposed && !wasOpen) {
+        previousFocus = focusBeforeShortcut;
+        canvas.focus({ preventScroll: true });
+      }
+    });
+  };
+  const focusCanvas = () => canvas.focus({ preventScroll: true });
+  const resizeObserver = new ResizeObserver(layout);
+  resizeObserver.observe(canvas.parentElement ?? canvas);
+  canvas.addEventListener("keydown", keydown);
+  canvas.addEventListener("pointerdown", focusCanvas);
+  document.addEventListener("keydown", globalKeydown);
+  const reconcile = (candidate) => {
+    const next = toRunControlsState(candidate);
+    if (!next) return false;
+    const wasOpen = state.menuOpen;
+    state = next;
+    if (wasOpen && !state.menuOpen && previousFocus?.isConnected) {
+      previousFocus.focus({ preventScroll: true });
+      previousFocus = null;
+    }
+    layout();
+    return true;
+  };
+  if (initialState !== void 0) reconcile(initialState);
+  return {
+    reconcile,
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      resizeObserver.disconnect();
+      canvas.removeEventListener("keydown", keydown);
+      canvas.removeEventListener("pointerdown", focusCanvas);
+      document.removeEventListener("keydown", globalKeydown);
+      application.destroy({ removeView: false }, { children: true });
+    }
+  };
+}
+function toRunControlsState(value) {
+  if (typeof value !== "object" || value === null) return void 0;
+  const candidate = value;
+  const menuOpen = candidate.menuOpen ?? candidate.MenuOpen;
+  const actions = candidate.actions ?? candidate.Actions;
+  if (typeof menuOpen !== "boolean" || !Array.isArray(actions)) return void 0;
+  const validActions = [];
+  for (const item of actions) {
+    if (typeof item !== "object" || item === null) return void 0;
+    const entry = item;
+    const id = entry.id ?? entry.Id;
+    const label = entry.label ?? entry.Label;
+    const enabled = entry.enabled ?? entry.Enabled;
+    const primary = entry.primary ?? entry.Primary;
+    if (typeof id !== "string" || !actionIds.has(id) || typeof label !== "string" || typeof enabled !== "boolean" || typeof primary !== "boolean") return void 0;
+    validActions.push({ id, label, enabled, primary });
+  }
+  return { menuOpen, actions: validActions };
 }
 
 // src/pixi-encounter.ts
@@ -57768,6 +57944,7 @@ export {
   createMapRenderer,
   createRestRenderer,
   createRewardRenderer,
+  createRunControlsRenderer,
   createShopRenderer,
   createTreasureRenderer
 };
