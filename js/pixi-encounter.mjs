@@ -49142,15 +49142,20 @@ function assertResidency(definitions, expectedResidency) {
 }
 
 // src/run-asset-manifests.ts
+var runUiIconAssets = {
+  health: { url: "/img/Icons/Health.png", fallback: "\u2665" },
+  stamina: { url: "/img/Icons/Stamina.png", fallback: "\u2726" },
+  status: { url: "/img/Icons/Status.png", fallback: "\u25C6" }
+};
 var runAssetBundleManifest = {
   "core-ui": {
     id: "core-ui",
     residency: "run",
     optionalFontFamilies: ["Arial", "system-ui"],
     urls: [
-      "/img/Icons/Health.png",
-      "/img/Icons/Stamina.png",
-      "/img/Icons/Status.png"
+      runUiIconAssets.health.url,
+      runUiIconAssets.stamina.url,
+      runUiIconAssets.status.url
     ]
   },
   cards: {
@@ -49546,6 +49551,45 @@ var noOpAccessibilityOverlay = {
   }
 };
 
+// src/encounter-backdrop.ts
+var EncounterBackdrop = class extends Container {
+  atmosphere = new Graphics();
+  architecture = new Graphics();
+  floor = new Graphics();
+  /** Creates the reusable three-plane scene backdrop. */
+  constructor() {
+    super();
+    this.eventMode = "none";
+    this.addChild(this.atmosphere, this.architecture, this.floor);
+  }
+  /** Repaints all planes for the current viewport without moving gameplay elements. */
+  resize(width, height) {
+    const w2 = Math.max(0, Number.isFinite(width) ? width : 0);
+    const h2 = Math.max(0, Number.isFinite(height) ? height : 0);
+    const horizon = h2 * 0.64;
+    const pillarWidth = Math.max(20, w2 * 0.055);
+    this.atmosphere.clear().rect(0, 0, w2, h2).fill({ color: 529182 }).rect(0, 0, w2, horizon).fill({ color: 1586241, alpha: 0.46 }).rect(0, h2 * 0.18, w2, h2 * 0.25).fill({ color: 2646128, alpha: 0.12 }).rect(0, horizon - 3, w2, 6).fill({ color: 7444898, alpha: 0.24 });
+    this.architecture.clear();
+    this.floor.clear();
+    if (w2 === 0 || h2 === 0) {
+      return;
+    }
+    for (const x2 of [w2 * 0.07, w2 * 0.87]) {
+      this.architecture.roundRect(x2, h2 * 0.04, pillarWidth, horizon - h2 * 0.04, 7).fill({ color: 530982, alpha: 0.8 }).stroke({ color: 4550006, width: 2, alpha: 0.45 }).rect(x2 + pillarWidth * 0.18, h2 * 0.06, pillarWidth * 0.1, horizon - h2 * 0.09).fill({ color: 9812141, alpha: 0.1 }).rect(x2 - pillarWidth * 0.2, horizon - 12, pillarWidth * 1.4, 12).fill({ color: 1585466 });
+    }
+    this.floor.rect(0, horizon, w2, h2 - horizon).fill({ color: 1058352 }).rect(0, horizon + 8, w2, 2).fill({ color: 6323575, alpha: 0.32 });
+    for (let i2 = 1; i2 < 5; i2++) {
+      const y2 = horizon + (h2 - horizon) * (i2 / 5) ** 1.45;
+      this.floor.rect(0, y2, w2, 1).fill({ color: 7705226, alpha: 0.12 });
+    }
+    for (let i2 = 1; i2 < 8; i2++) {
+      const x2 = w2 * i2 / 8;
+      this.floor.rect(x2, horizon + 6, 1, h2 - horizon - 6).fill({ color: 7705226, alpha: 0.09 });
+    }
+    this.floor.roundRect(w2 * 0.12, horizon - 7, w2 * 0.27, 8, 4).fill({ color: 8500641, alpha: 0.16 }).roundRect(w2 * 0.62, horizon - 7, w2 * 0.27, 8, 4).fill({ color: 8500641, alpha: 0.16 });
+  }
+};
+
 // src/ui-component-contract.ts
 function normalizeUiComponentSize(size) {
   return {
@@ -49665,6 +49709,7 @@ var GamePanel = class extends Container {
   fill;
   stroke;
   cornerRadius;
+  surface;
   panelWidth;
   panelHeight;
   /**
@@ -49675,6 +49720,7 @@ var GamePanel = class extends Container {
     this.fill = options.fill ?? uiColors.panelFill;
     this.stroke = options.stroke ?? uiColors.panelStroke;
     this.cornerRadius = Math.max(0, options.cornerRadius ?? uiTokens.frame.panelCornerRadius);
+    this.surface = options.surface ?? "panel";
     this.panelWidth = normalizeSize(options.width);
     this.panelHeight = normalizeSize(options.height);
     this.addChild(this.shadow, this.background, this.innerFrame, this.ornaments, this.panelContent);
@@ -49709,8 +49755,16 @@ var GamePanel = class extends Container {
     const ornamentOffset = inset + uiTokens.frame.borderWidth;
     this.shadow.clear().roundRect(2, 4, Math.max(0, this.panelWidth - 2), Math.max(0, this.panelHeight - 2), this.cornerRadius).fill({ color: uiColors.panelShadow, alpha: 0.56 });
     this.background.clear().roundRect(0, 0, this.panelWidth, this.panelHeight, this.cornerRadius).fill({ color: this.fill }).stroke({ color: this.stroke, width: uiTokens.frame.borderWidth });
+    if (this.surface === "button") {
+      this.background.roundRect(3, 3, Math.max(0, this.panelWidth - 6), Math.max(0, this.panelHeight - 9), Math.max(0, this.cornerRadius - 2)).stroke({ color: 11129818, width: 1, alpha: 0.65 }).rect(12, 4, Math.max(0, this.panelWidth - 24), 2).fill({ color: 12968415, alpha: 0.44 }).rect(12, Math.max(0, this.panelHeight - 6), Math.max(0, this.panelWidth - 24), 2).fill({ color: uiColors.panelShadow, alpha: 0.75 });
+    } else {
+      this.background.rect(12, 4, Math.max(0, this.panelWidth - 24), 2).fill({ color: uiColors.panelOrnament, alpha: 0.38 });
+    }
     this.innerFrame.clear().roundRect(inset, inset, innerWidth, innerHeight, Math.max(0, this.cornerRadius - inset / 2)).stroke({ color: uiColors.panelInset, width: 1, alpha: 0.9 });
     this.ornaments.clear().roundRect(ornamentOffset, ornamentOffset, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.88 }).roundRect(this.panelWidth - ornamentOffset - ornamentLength, ornamentOffset, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.88 }).roundRect(ornamentOffset, this.panelHeight - ornamentOffset - ornamentThickness, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.62 }).roundRect(this.panelWidth - ornamentOffset - ornamentLength, this.panelHeight - ornamentOffset - ornamentThickness, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.62 });
+    if (this.surface === "button") {
+      this.ornaments.roundRect(4, Math.max(4, this.panelHeight / 2 - 4), 2, 8, 1).fill({ color: uiColors.panelOrnament, alpha: 0.82 }).roundRect(Math.max(4, this.panelWidth - 6), Math.max(4, this.panelHeight / 2 - 4), 2, 8, 1).fill({ color: uiColors.panelOrnament, alpha: 0.82 });
+    }
   }
 };
 var GameButton = class extends GamePanel {
@@ -49724,7 +49778,7 @@ var GameButton = class extends GamePanel {
    * Creates an interactive button.
    */
   constructor(options) {
-    super(options);
+    super({ ...options, surface: "button" });
     this.onPress = options.onPress;
     this.isEnabled = options.enabled ?? true;
     this.isFocused = this.isEnabled && (options.focused ?? false);
@@ -50978,7 +51032,7 @@ var EncounterScene = class {
     this.root.on("pointerup", (event) => this.releaseDrag(event));
     this.root.on("pointerupoutside", (event) => this.cancelDrag(event));
     this.root.on("pointercancel", (event) => this.cancelDrag(event));
-    this.backgroundLayer.addChild(this.background);
+    this.backgroundLayer.addChild(this.background, this.backdrop);
     this.effectsLayer.addChild(this.dragAimArrow, this.attackTrail);
     this.intentStatusLabel.anchor.set(0.5, 0.5);
     this.overlayLayer.addChild(this.runHud, this.intentStatusBackground, this.intentStatusLabel);
@@ -50998,6 +51052,7 @@ var EncounterScene = class {
   overlayLayer = new Container();
   runHud = new RunHud();
   background = new Graphics();
+  backdrop = new EncounterBackdrop();
   dragAimArrow = new Graphics();
   attackTrail = new Graphics();
   intentStatusBackground = new Graphics();
@@ -51241,6 +51296,7 @@ var EncounterScene = class {
   }
   repaintBackground(viewport) {
     this.background.clear().rect(0, 0, viewport.width, viewport.height).fill({ color: 726562 });
+    this.backdrop.resize(viewport.width, viewport.height);
   }
   /**
    * Positions the scene-owned pending-action feedback without participating in gameplay layout.
@@ -51309,7 +51365,8 @@ var EncounterScene = class {
     const health = `HP ${entity.health}/${entity.maxHealth} \xB7 B ${entity.block}`;
     const resources = entity.isPlayer ? `\u26A1 ${entity.energy} \xB7 \u2726 ${entity.mana}` : `Posture ${entity.posture}/${entity.maxPosture}`;
     const telegraph = formatEntityTelegraph(entity.telegraph);
-    tile.background.clear();
+    const frameColor = entity.isPlayer ? 12044691 : 7974576;
+    tile.background.clear().roundRect(-89, -57, 178, 113, 13).fill({ color: 728618, alpha: 0.74 }).stroke({ color: frameColor, width: 2, alpha: 0.68 }).roundRect(-78, -49, 156, 96, 9).stroke({ color: 12968147, width: 1, alpha: 0.27 }).rect(-34, -58, 68, 3).fill({ color: frameColor, alpha: 0.8 }).roundRect(-66, 52, 132, 5, 2).fill({ color: frameColor, alpha: 0.22 });
     tile.container.hitArea = new Rectangle(-entityHitHalfWidth, -entityHitHalfHeight, entityHitHalfWidth * 2, entityHitHalfHeight * 2);
     tile.accent.clear();
     this.updateArtwork(tile, entity.image, 164, 104);
@@ -52315,11 +52372,12 @@ ${resources}`;
     tile.targetHighlight.clear();
     tile.targetHighlight.visible = isTargeting;
     if (isTargeting) {
+      const cueColor = isFocused ? 16769155 : isValidTarget ? 11141006 : 14912909;
       tile.targetHighlight.roundRect(-entityHitHalfWidth, -entityHitHalfHeight, entityHitHalfWidth * 2, entityHitHalfHeight * 2, 12).stroke({
-        color: isFocused ? 16769155 : isValidTarget ? 11141006 : 14912909,
+        color: cueColor,
         width: isFocused || isValidTarget ? 4 : 2,
         alpha: isFocused ? 0.95 : isValidTarget ? 0.9 : 0.55
-      });
+      }).roundRect(-18, -entityHitHalfHeight - 4, 36, 4, 2).fill({ color: cueColor, alpha: 0.9 }).roundRect(-18, entityHitHalfHeight, 36, 4, 2).fill({ color: cueColor, alpha: 0.9 });
     }
   }
   refreshInteractionState() {
@@ -53328,6 +53386,26 @@ var transitionTextStyle = new TextStyle({
   wordWrap: true,
   wordWrapWidth: 1
 });
+
+// src/collection-overlay-host.ts
+var activeHost;
+function registerCollectionOverlayHost(host) {
+  activeHost = host;
+  return () => {
+    if (activeHost === host) activeHost = void 0;
+  };
+}
+function getCollectionOverlayHost() {
+  return activeHost?.canvas.isConnected ? activeHost : void 0;
+}
+function suspendRunControls(controls) {
+  if (!controls) return () => void 0;
+  const wasInert = controls.inert;
+  controls.inert = true;
+  return () => {
+    controls.inert = wasInert;
+  };
+}
 
 // src/relic-view.ts
 var defaultHeight = 92;
@@ -56662,83 +56740,251 @@ async function createLeaveRenderer(canvas, sink) {
 }
 
 // src/pixi-collection.ts
+function planCollectionLayout(width, height) {
+  const short = height < 440;
+  const compact = width < 700 || short;
+  const listTop = short ? 96 : 108;
+  return {
+    compact,
+    short,
+    listTop,
+    viewportHeight: short ? Math.max(44, height - listTop - 16) : Math.max(44, height - 190 - (compact ? 106 : 0)),
+    tabY: 54,
+    tabHeight: short ? 38 : 44,
+    closeY: short ? 8 : height - 54
+  };
+}
+function planCollectionDetailVisibility(plan, kind) {
+  if (plan.short) return { compactDetail: false, details: false };
+  if (!plan.compact) return { compactDetail: false, details: true };
+  return { compactDetail: kind === "card", details: kind !== "card" };
+}
+var fallbackRenderer;
+async function acquireFallbackRenderer() {
+  fallbackRenderer ??= (async () => {
+    const fallbackCanvas = document.createElement("canvas");
+    fallbackCanvas.className = "pixi-collection-fallback-canvas";
+    fallbackCanvas.style.cssText = "position:fixed;inset:0;width:100vw;height:100dvh;z-index:1399;display:none;touch-action:none";
+    document.body.appendChild(fallbackCanvas);
+    const application = new Application();
+    try {
+      await application.init({ antialias: true, autoDensity: true, background: 529183, canvas: fallbackCanvas, preference: "canvas" });
+      return { application, canvas: fallbackCanvas };
+    } catch (error) {
+      fallbackCanvas.remove();
+      fallbackRenderer = void 0;
+      throw error;
+    }
+  })();
+  const renderer = await fallbackRenderer;
+  renderer.canvas.style.display = "block";
+  renderer.application.ticker.start();
+  return renderer;
+}
 async function createCollectionRenderer(canvas, sink) {
-  const application = new Application();
-  await application.init({ antialias: true, autoDensity: true, background: 529183, canvas, preference: "canvas" });
-  canvas.tabIndex = 0;
+  const host = getCollectionOverlayHost();
+  const fallback = host ? void 0 : await acquireFallbackRenderer();
+  const application = fallback?.application;
+  const inputCanvas = host?.canvas ?? fallback.canvas;
+  const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const dialogElement = canvas.parentElement;
+  const restoreRunControls = suspendRunControls(document.querySelector(".pixi-run-controls-surface"));
+  dialogElement?.classList.add("shared-runtime");
+  inputCanvas.tabIndex = 0;
+  dialogElement?.focus({ preventScroll: true });
   const root = new Container();
   const background = new Graphics();
   const title = new Text({ text: "", style: { ...uiTokens.typography.panelTitle, fill: 16113563 } });
   const tabLayer = new Container();
   const entriesLayer = new Container();
+  const listMask = new Graphics();
+  const empty = new Text({ text: "", style: { ...uiTokens.typography.body, fill: 12109785 } });
+  const compactDetail = new Text({ text: "", style: { ...uiTokens.typography.body, fill: 14214126, wordWrap: true } });
   const close = new GameButton({ width: 1, height: 1, label: "Close", onPress: () => {
     void sink.invokeMethodAsync("HandleActionFromRendererAsync", "close");
   } });
-  root.addChild(background, title, tabLayer, entriesLayer, close);
-  application.stage.addChild(root);
+  root.addChild(background, title, tabLayer, entriesLayer, listMask, empty, compactDetail, close);
+  entriesLayer.mask = listMask;
+  (host?.layer ?? application.stage).addChild(root);
   title.anchor.set(0.5, 0);
   let state;
   let disposed = false;
   let scrollOffset = 0;
+  let selectedIndex = 0;
+  let generation = 0;
+  let viewportHeight = 1;
+  let rendererWidth = 0;
+  let rendererHeight = 0;
+  const details = new Container();
+  root.addChild(details);
+  const destroyChildren = (layer) => {
+    for (const child of layer.removeChildren()) child.destroy({ children: true });
+  };
+  const selectedEntry = () => state?.tabs[state.activeTabIndex]?.entries[selectedIndex];
+  const rebuildDetails = () => {
+    destroyChildren(details);
+    const entry = selectedEntry();
+    compactDetail.text = entry ? `${entry.name} \u2014 ${entry.description}` : "";
+    if (!entry) return;
+    if (entry.kind === "card") {
+      const card = new CardView({ cost: entry.cost ?? "0", name: entry.name, description: entry.description, type: "Card", rarity: toCardRarity3(entry.rarity), enabled: false });
+      details.addChild(card);
+      if (entry.image && isSafeImagePath(entry.image)) {
+        const currentGeneration = generation;
+        void Assets.load(entry.image).then((texture) => {
+          if (!disposed && currentGeneration === generation && !card.destroyed) card.setContent({ ...card.content, artTexture: texture });
+        }).catch(() => void 0);
+      }
+    } else {
+      const heading = new Text({ text: entry.name, style: { ...uiTokens.typography.panelTitle, fill: 16113563, wordWrap: true } });
+      const description = new Text({ text: entry.description, style: { ...uiTokens.typography.body, fill: 14214126, wordWrap: true } });
+      details.addChild(heading, description);
+    }
+  };
+  const selectEntry = (index) => {
+    const count2 = state?.tabs[state.activeTabIndex]?.entries.length ?? 0;
+    selectedIndex = Math.max(0, Math.min(count2 - 1, index));
+    if (selectedIndex * 88 < scrollOffset) scrollOffset = selectedIndex * 88;
+    if ((selectedIndex + 1) * 88 > scrollOffset + viewportHeight) scrollOffset = (selectedIndex + 1) * 88 - viewportHeight;
+    rebuildDetails();
+    layout();
+  };
   const rebuild = () => {
-    tabLayer.removeChildren();
-    entriesLayer.removeChildren();
+    generation++;
+    destroyChildren(tabLayer);
+    destroyChildren(entriesLayer);
+    destroyChildren(details);
     if (!state) return;
     title.text = state.title;
     const currentState = state;
-    scrollOffset = 0;
     currentState.tabs.forEach((tab2, index) => tabLayer.addChild(new GameButton({ width: 1, height: 1, label: `${tab2.label} ${tab2.entries.length}`, selected: index === currentState.activeTabIndex, onPress: () => {
       void sink.invokeMethodAsync("HandleActionFromRendererAsync", `tab:${index}`);
     } })));
     const tab = currentState.tabs[currentState.activeTabIndex];
     if (!tab) return;
-    tab.entries.forEach((entry) => {
+    empty.text = tab.entries.length === 0 ? "Nothing here yet." : "";
+    tab.entries.forEach((entry, index) => {
       const card = new Graphics();
-      const name = new Text({ text: entry.name, style: { ...uiTokens.typography.button, fill: 15856888, wordWrap: true, wordWrapWidth: 440 } });
+      const name = new Text({ text: entry.name, style: { ...uiTokens.typography.button, fill: 15856888, wordWrap: true } });
       const detail = new Text({ text: entry.detail, style: { ...uiTokens.typography.body, fill: 9425057 } });
-      const description = new Text({ text: entry.description, style: { ...uiTokens.typography.body, fill: 12109785, fontSize: 12, wordWrap: true, wordWrapWidth: 440 } });
+      const description = new Text({ text: entry.description, style: { ...uiTokens.typography.body, fill: 12109785, fontSize: 12, wordWrap: true } });
       card.eventMode = "static";
-      card.on("pointertap", () => {
-      });
+      card.cursor = "pointer";
+      card.on("pointertap", () => selectEntry(index));
       card.addChild(name, detail, description);
+      if (entry.image && isSafeImagePath(entry.image)) {
+        const image = new Sprite(Texture.EMPTY);
+        card.addChild(image);
+        const currentGeneration = generation;
+        void Assets.load(entry.image).then((texture) => {
+          if (disposed || currentGeneration !== generation || image.destroyed) return;
+          image.texture = texture;
+          layout();
+        }).catch(() => void 0);
+      }
       entriesLayer.addChild(card);
     });
+    rebuildDetails();
+  };
+  const layoutTabs = (width, plan) => {
+    const tabs = tabLayer.children.filter((child) => child instanceof GameButton);
+    const tabWidth = Math.max(44, (width - 40) / Math.max(1, tabs.length));
+    tabs.forEach((tab, index) => {
+      const tabState = state?.tabs[index];
+      if (tabState) tab.label = `${width < 500 ? compactTabLabel(tabState.label) : tabState.label} ${tabState.entries.length}`;
+      tab.resize(Math.max(44, tabWidth - 4), plan.tabHeight);
+      tab.position.set(20 + index * tabWidth, plan.tabY);
+    });
+  };
+  const layoutEntry = (child, index, plan, listWidth) => {
+    const y2 = plan.listTop + index * 88 - scrollOffset;
+    child.clear().roundRect(20, y2, listWidth, 76, 8).fill({ color: index === selectedIndex ? 2639453 : 1254710 }).stroke({ color: index === selectedIndex ? 16113563 : 3561587, width: 1 });
+    const [name, detail, description] = child.children.filter((entry) => entry instanceof Text);
+    const image = child.children.find((entry) => entry instanceof Sprite);
+    const textX = image ? 90 : 36;
+    if (name) {
+      name.style.wordWrapWidth = listWidth - (textX - 20) - 12;
+      name.position.set(textX, y2 + 8);
+    }
+    if (detail) {
+      detail.style.wordWrapWidth = listWidth - (textX - 20) - 12;
+      detail.position.set(textX, y2 + 34);
+    }
+    if (description) {
+      description.style.wordWrapWidth = listWidth - (textX - 20) - 12;
+      description.position.set(textX, y2 + 54);
+    }
+    if (image instanceof Sprite) fitImage(image, 56, 56, 28, y2 + 10);
+    child.visible = y2 >= plan.listTop - 88 && y2 < plan.listTop + plan.viewportHeight;
+  };
+  const layoutEntries = (plan, listWidth) => {
+    listMask.clear().rect(20, plan.listTop, listWidth, plan.viewportHeight).fill({ color: 16777215 });
+    entriesLayer.children.forEach((child, index) => {
+      if (child instanceof Graphics) layoutEntry(child, index, plan, listWidth);
+    });
+  };
+  const layoutDetails = (width, height, plan) => {
+    const entry = selectedEntry();
+    const visibility = planCollectionDetailVisibility(plan, entry?.kind);
+    const detailObject = details.children[0];
+    if (detailObject instanceof CardView) {
+      detailObject.visible = !plan.compact;
+      if (!plan.compact) detailObject.resize({ width: 180, height: Math.min(252, height - 190) });
+    }
+    details.position.set(plan.compact ? 30 : width - 220, plan.compact ? height - 164 : 110);
+    compactDetail.visible = visibility.compactDetail && entry !== void 0;
+    compactDetail.style.wordWrapWidth = width - 60;
+    compactDetail.position.set(30, height - 156);
+    details.visible = visibility.details && entry !== void 0;
+    if (plan.compact) {
+      details.children.forEach((child, index) => {
+        if (child instanceof Text) {
+          child.style.wordWrapWidth = width - 60;
+          child.position.set(0, index * 36);
+        }
+      });
+    } else {
+      details.visible = true;
+      details.children.forEach((child, index) => {
+        if (child instanceof Text) {
+          child.style.wordWrapWidth = 200;
+          child.position.set(0, index * 76);
+        }
+      });
+    }
   };
   const layout = () => {
     if (disposed) return;
-    const width = Math.max(1, canvas.parentElement?.clientWidth || canvas.clientWidth || 900);
-    const height = Math.max(1, canvas.parentElement?.clientHeight || canvas.clientHeight || 640);
-    application.renderer.resize(width, height);
-    background.clear().roundRect(0, 0, width, height, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
-    title.position.set(width / 2, 20);
-    const tabs = tabLayer.children.filter((child) => child instanceof GameButton);
-    const tabWidth = Math.max(40, Math.min(150, (width - 40) / Math.max(1, tabs.length)));
-    tabs.forEach((tab, index) => {
-      tab.resize(Math.max(34, tabWidth - 4), 40);
-      tab.position.set(20 + index * tabWidth, 62);
-    });
-    close.resize(104, 40);
-    close.position.set(width - 124, height - 56);
-    entriesLayer.children.forEach((child, index) => {
-      if (!(child instanceof Graphics)) return;
-      const y2 = 118 + index * 88 - scrollOffset;
-      child.clear().roundRect(20, y2, width - 40, 76, 8).fill({ color: 1254710 }).stroke({ color: 3561587, width: 1 });
-      const [name, detail, description] = child.children.filter((entry) => entry instanceof Text);
-      name?.position.set(36, y2 + 10);
-      detail?.position.set(width - 160, y2 + 12);
-      description?.position.set(36, y2 + 38);
-      child.visible = y2 >= 108 && y2 < height - 70;
-    });
+    const width = host?.width() ?? Math.max(1, window.innerWidth);
+    const height = host?.height() ?? Math.max(1, window.innerHeight);
+    if (application && (rendererWidth !== width || rendererHeight !== height)) {
+      application.renderer.resize(width, height);
+      rendererWidth = width;
+      rendererHeight = height;
+    }
+    const plan = planCollectionLayout(width, height);
+    const listWidth = plan.compact ? width - 40 : Math.max(240, width - 280);
+    viewportHeight = plan.viewportHeight;
+    background.clear().roundRect(0, 0, width, height, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill, alpha: 0.98 }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
+    background.eventMode = "static";
+    title.anchor.x = plan.short ? 0 : 0.5;
+    title.position.set(plan.short ? 20 : width / 2, 12);
+    empty.position.set(30, plan.listTop + 18);
+    close.resize(104, 44);
+    close.position.set(width - 124, plan.closeY);
+    layoutTabs(width, plan);
+    layoutEntries(plan, listWidth);
+    layoutDetails(width, height, plan);
   };
   const scroll = (amount) => {
     const entryCount = state?.tabs[state.activeTabIndex]?.entries.length ?? 0;
-    const viewportHeight = Math.max(0, application.renderer.height - 188);
     scrollOffset = Math.max(0, Math.min(Math.max(0, entryCount * 88 - viewportHeight), scrollOffset + amount));
     layout();
   };
   const wheel = (event) => {
     scroll(event.deltaY);
     event.preventDefault();
+    event.stopImmediatePropagation();
   };
   let scrollPointerId;
   let lastScrollPointerY = 0;
@@ -56759,50 +57005,100 @@ async function createCollectionRenderer(canvas, sink) {
     if (event.pointerId === scrollPointerId) scrollPointerId = void 0;
   };
   const keydown = (event) => {
-    if (event.key === "Escape") {
-      void sink.invokeMethodAsync("HandleActionFromRendererAsync", "close");
-      event.preventDefault();
+    if (event.key === "Tab" && dialogElement) {
+      const buttons = [...dialogElement.querySelectorAll("button")];
+      const next = event.shiftKey ? buttons.at(-1) : buttons[0];
+      if (document.activeElement === dialogElement || document.activeElement === (event.shiftKey ? buttons[0] : buttons.at(-1))) {
+        next?.focus();
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+      return;
     }
-    if (event.key === "PageDown") {
-      scroll(application.renderer.height * 0.7);
-      event.preventDefault();
-    }
-    if (event.key === "PageUp") {
-      scroll(-application.renderer.height * 0.7);
-      event.preventDefault();
-    }
+    if (event.key === "Escape") void sink.invokeMethodAsync("HandleActionFromRendererAsync", "close");
+    else if (event.key === "ArrowDown") selectEntry(selectedIndex + 1);
+    else if (event.key === "ArrowUp") selectEntry(selectedIndex - 1);
+    else if (event.key === "PageDown") scroll(viewportHeight * 0.7);
+    else if (event.key === "PageUp") scroll(-viewportHeight * 0.7);
+    else if (event.key === "ArrowRight") void sink.invokeMethodAsync("HandleActionFromRendererAsync", `tab:${Math.min((state?.tabs.length ?? 1) - 1, (state?.activeTabIndex ?? 0) + 1)}`);
+    else if (event.key === "ArrowLeft") void sink.invokeMethodAsync("HandleActionFromRendererAsync", `tab:${Math.max(0, (state?.activeTabIndex ?? 0) - 1)}`);
+    else return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
   };
-  canvas.addEventListener("keydown", keydown);
-  canvas.addEventListener("wheel", wheel, { passive: false });
-  canvas.addEventListener("pointerdown", pointerdown);
-  canvas.addEventListener("pointermove", pointermove, { passive: false });
-  canvas.addEventListener("pointerup", pointerend);
-  canvas.addEventListener("pointercancel", pointerend);
+  document.addEventListener("keydown", keydown, true);
+  inputCanvas.addEventListener("wheel", wheel, { capture: true, passive: false });
+  inputCanvas.addEventListener("pointerdown", pointerdown, true);
+  inputCanvas.addEventListener("pointermove", pointermove, { capture: true, passive: false });
+  inputCanvas.addEventListener("pointerup", pointerend, true);
+  inputCanvas.addEventListener("pointercancel", pointerend, true);
   window.addEventListener("resize", layout);
   const observer = new ResizeObserver(layout);
-  observer.observe(canvas.parentElement ?? canvas);
+  observer.observe(inputCanvas);
   return { reconcile(candidate) {
     if (!isState(candidate)) return false;
+    const changedTab = state?.activeTabIndex !== candidate.activeTabIndex || state?.title !== candidate.title;
     state = candidate;
+    if (changedTab) {
+      scrollOffset = 0;
+      selectedIndex = 0;
+    }
     rebuild();
     layout();
     return true;
   }, dispose() {
     if (disposed) return;
     disposed = true;
+    generation++;
     observer.disconnect();
     window.removeEventListener("resize", layout);
-    canvas.removeEventListener("keydown", keydown);
-    canvas.removeEventListener("wheel", wheel);
-    canvas.removeEventListener("pointerdown", pointerdown);
-    canvas.removeEventListener("pointermove", pointermove);
-    canvas.removeEventListener("pointerup", pointerend);
-    canvas.removeEventListener("pointercancel", pointerend);
-    application.destroy({ removeView: false }, { children: true });
+    document.removeEventListener("keydown", keydown, true);
+    inputCanvas.removeEventListener("wheel", wheel, true);
+    inputCanvas.removeEventListener("pointerdown", pointerdown, true);
+    inputCanvas.removeEventListener("pointermove", pointermove, true);
+    inputCanvas.removeEventListener("pointerup", pointerend, true);
+    inputCanvas.removeEventListener("pointercancel", pointerend, true);
+    if (!root.destroyed) {
+      root.parent?.removeChild(root);
+      root.destroy({ children: true });
+    }
+    if (fallback) {
+      fallback.application.ticker.stop();
+      fallback.canvas.style.display = "none";
+    }
+    restoreRunControls();
+    dialogElement?.classList.remove("shared-runtime");
+    if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    else if (host?.canvas.isConnected) host.canvas.focus({ preventScroll: true });
   } };
 }
 function isState(value) {
-  return typeof value === "object" && value !== null && typeof value.title === "string" && Array.isArray(value.tabs) && Number.isInteger(value.activeTabIndex);
+  if (typeof value !== "object" || value === null) return false;
+  const state = value;
+  return typeof state.title === "string" && Array.isArray(state.tabs) && Number.isInteger(state.activeTabIndex) && state.activeTabIndex >= 0 && state.activeTabIndex < state.tabs.length && state.tabs.every((tab) => typeof tab.label === "string" && Array.isArray(tab.entries) && tab.entries.every((entry) => {
+    if (typeof entry !== "object" || entry === null) return false;
+    const value2 = entry;
+    return typeof value2.name === "string" && typeof value2.description === "string" && typeof value2.detail === "string";
+  }));
+}
+function toCardRarity3(value) {
+  return value === "Uncommon" || value === "Rare" || value === "Special" ? value : "Common";
+}
+function compactTabLabel(label) {
+  if (label === "Equipment") return "Gear";
+  if (label === "Progression") return "XP";
+  if (label === "Discard") return "Used";
+  if (label === "Exhaust") return "Gone";
+  return label;
+}
+function isSafeImagePath(path2) {
+  return /^(\.\/)?img\/[a-zA-Z0-9/_ .-]+$/.test(path2) && !path2.includes("..");
+}
+function fitImage(sprite, width, height, x2, y2) {
+  if (sprite.texture.width <= 1 || sprite.texture.height <= 1) return;
+  const scale = Math.min(width / sprite.texture.width, height / sprite.texture.height);
+  sprite.scale.set(scale);
+  sprite.position.set(x2 + (width - sprite.texture.width * scale) / 2, y2 + (height - sprite.texture.height * scale) / 2);
 }
 
 // src/pixi-card-choice.ts
@@ -57196,6 +57492,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     }
   };
   const globalKeydown = (event) => {
+    if (canvas.parentElement?.inert) return;
     const target = event.target;
     if (event.code !== "KeyM" || event.repeat || event.altKey || event.ctrlKey || event.metaKey || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLButtonElement) return;
     if (state.actions.every((action) => !action.enabled)) return;
@@ -57313,6 +57610,12 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   const runtime = new RunPresentationRuntime(createRunRuntimeApplication(application), [], {
     transitionViewport: { width: application.renderer.width, height: application.renderer.height },
     announceTransition: accessibilityOverlay.announce
+  });
+  const unregisterCollectionOverlayHost = registerCollectionOverlayHost({
+    canvas,
+    layer: runtime.renderLayers.overlay,
+    width: () => application.renderer.width,
+    height: () => application.renderer.height
   });
   const animationDirector = new AnimationDirector(scene.createAnimationCommandExecutor());
   const particleEffects = new ParticleEffectManager(runtime.renderLayers.effect, {
@@ -57601,6 +57904,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     }
   };
   async function disposeEncounterRenderer() {
+    unregisterCollectionOverlayHost();
     cancelPendingAnimations("The encounter scene has been disposed.");
     resizeObserver.disconnect();
     window.removeEventListener("resize", handleViewportChange);

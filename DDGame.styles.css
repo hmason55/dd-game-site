@@ -89,6 +89,10 @@
 .pixi-collection-surface[b-16jlx61uh4] { background: rgba(3, 10, 18, .78); inset: 0; padding: clamp(1rem, 5vh, 4rem); position: fixed; z-index: 1400; }
 .pixi-collection-surface canvas[b-16jlx61uh4] { display: block; height: 100%; margin: auto; max-height: 48rem; max-width: 72rem; touch-action: none; width: 100%; }
 .pixi-collection-accessibility[b-16jlx61uh4] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
+.pixi-collection-surface.shared-runtime[b-16jlx61uh4] { background: transparent; pointer-events: none; }
+.pixi-collection-surface.shared-runtime canvas[b-16jlx61uh4] { display: none; }
+.pixi-collection-accessibility:focus-within[b-16jlx61uh4] { background: #0e2132; bottom: 1rem; color: #f1f4f8; height: auto; left: 1rem; max-height: 80dvh; max-width: min(38rem, calc(100vw - 2rem)); overflow: auto; padding: 1rem; pointer-events: auto; position: fixed; width: auto; }
+.pixi-collection-accessibility button[b-16jlx61uh4] { min-height: 44px; min-width: 44px; }
 
 /* /Components/PixiLeaveSurface.razor.rz.scp.css */
 .pixi-leave-surface[b-1eerug6m6b] { height: min(16rem, calc(100dvh - 8rem)); margin: 2rem auto; max-width: 28rem; width: min(100%, 28rem); }
