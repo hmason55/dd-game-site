@@ -49142,20 +49142,15 @@ function assertResidency(definitions, expectedResidency) {
 }
 
 // src/run-asset-manifests.ts
-var runUiIconAssets = {
-  health: { url: "/img/Icons/Health.png", fallback: "\u2665" },
-  stamina: { url: "/img/Icons/Stamina.png", fallback: "\u2726" },
-  status: { url: "/img/Icons/Status.png", fallback: "\u25C6" }
-};
 var runAssetBundleManifest = {
   "core-ui": {
     id: "core-ui",
     residency: "run",
     optionalFontFamilies: ["Arial", "system-ui"],
     urls: [
-      runUiIconAssets.health.url,
-      runUiIconAssets.stamina.url,
-      runUiIconAssets.status.url
+      "/img/Icons/Health.png",
+      "/img/Icons/Stamina.png",
+      "/img/Icons/Status.png"
     ]
   },
   cards: {
@@ -49551,45 +49546,6 @@ var noOpAccessibilityOverlay = {
   }
 };
 
-// src/encounter-backdrop.ts
-var EncounterBackdrop = class extends Container {
-  atmosphere = new Graphics();
-  architecture = new Graphics();
-  floor = new Graphics();
-  /** Creates the reusable three-plane scene backdrop. */
-  constructor() {
-    super();
-    this.eventMode = "none";
-    this.addChild(this.atmosphere, this.architecture, this.floor);
-  }
-  /** Repaints all planes for the current viewport without moving gameplay elements. */
-  resize(width, height) {
-    const w2 = Math.max(0, Number.isFinite(width) ? width : 0);
-    const h2 = Math.max(0, Number.isFinite(height) ? height : 0);
-    const horizon = h2 * 0.64;
-    const pillarWidth = Math.max(20, w2 * 0.055);
-    this.atmosphere.clear().rect(0, 0, w2, h2).fill({ color: 529182 }).rect(0, 0, w2, horizon).fill({ color: 1586241, alpha: 0.46 }).rect(0, h2 * 0.18, w2, h2 * 0.25).fill({ color: 2646128, alpha: 0.12 }).rect(0, horizon - 3, w2, 6).fill({ color: 7444898, alpha: 0.24 });
-    this.architecture.clear();
-    this.floor.clear();
-    if (w2 === 0 || h2 === 0) {
-      return;
-    }
-    for (const x2 of [w2 * 0.07, w2 * 0.87]) {
-      this.architecture.roundRect(x2, h2 * 0.04, pillarWidth, horizon - h2 * 0.04, 7).fill({ color: 530982, alpha: 0.8 }).stroke({ color: 4550006, width: 2, alpha: 0.45 }).rect(x2 + pillarWidth * 0.18, h2 * 0.06, pillarWidth * 0.1, horizon - h2 * 0.09).fill({ color: 9812141, alpha: 0.1 }).rect(x2 - pillarWidth * 0.2, horizon - 12, pillarWidth * 1.4, 12).fill({ color: 1585466 });
-    }
-    this.floor.rect(0, horizon, w2, h2 - horizon).fill({ color: 1058352 }).rect(0, horizon + 8, w2, 2).fill({ color: 6323575, alpha: 0.32 });
-    for (let i2 = 1; i2 < 5; i2++) {
-      const y2 = horizon + (h2 - horizon) * (i2 / 5) ** 1.45;
-      this.floor.rect(0, y2, w2, 1).fill({ color: 7705226, alpha: 0.12 });
-    }
-    for (let i2 = 1; i2 < 8; i2++) {
-      const x2 = w2 * i2 / 8;
-      this.floor.rect(x2, horizon + 6, 1, h2 - horizon - 6).fill({ color: 7705226, alpha: 0.09 });
-    }
-    this.floor.roundRect(w2 * 0.12, horizon - 7, w2 * 0.27, 8, 4).fill({ color: 8500641, alpha: 0.16 }).roundRect(w2 * 0.62, horizon - 7, w2 * 0.27, 8, 4).fill({ color: 8500641, alpha: 0.16 });
-  }
-};
-
 // src/ui-component-contract.ts
 function normalizeUiComponentSize(size) {
   return {
@@ -49709,7 +49665,6 @@ var GamePanel = class extends Container {
   fill;
   stroke;
   cornerRadius;
-  surface;
   panelWidth;
   panelHeight;
   /**
@@ -49720,7 +49675,6 @@ var GamePanel = class extends Container {
     this.fill = options.fill ?? uiColors.panelFill;
     this.stroke = options.stroke ?? uiColors.panelStroke;
     this.cornerRadius = Math.max(0, options.cornerRadius ?? uiTokens.frame.panelCornerRadius);
-    this.surface = options.surface ?? "panel";
     this.panelWidth = normalizeSize(options.width);
     this.panelHeight = normalizeSize(options.height);
     this.addChild(this.shadow, this.background, this.innerFrame, this.ornaments, this.panelContent);
@@ -49755,16 +49709,8 @@ var GamePanel = class extends Container {
     const ornamentOffset = inset + uiTokens.frame.borderWidth;
     this.shadow.clear().roundRect(2, 4, Math.max(0, this.panelWidth - 2), Math.max(0, this.panelHeight - 2), this.cornerRadius).fill({ color: uiColors.panelShadow, alpha: 0.56 });
     this.background.clear().roundRect(0, 0, this.panelWidth, this.panelHeight, this.cornerRadius).fill({ color: this.fill }).stroke({ color: this.stroke, width: uiTokens.frame.borderWidth });
-    if (this.surface === "button") {
-      this.background.roundRect(3, 3, Math.max(0, this.panelWidth - 6), Math.max(0, this.panelHeight - 9), Math.max(0, this.cornerRadius - 2)).stroke({ color: 11129818, width: 1, alpha: 0.65 }).rect(12, 4, Math.max(0, this.panelWidth - 24), 2).fill({ color: 12968415, alpha: 0.44 }).rect(12, Math.max(0, this.panelHeight - 6), Math.max(0, this.panelWidth - 24), 2).fill({ color: uiColors.panelShadow, alpha: 0.75 });
-    } else {
-      this.background.rect(12, 4, Math.max(0, this.panelWidth - 24), 2).fill({ color: uiColors.panelOrnament, alpha: 0.38 });
-    }
     this.innerFrame.clear().roundRect(inset, inset, innerWidth, innerHeight, Math.max(0, this.cornerRadius - inset / 2)).stroke({ color: uiColors.panelInset, width: 1, alpha: 0.9 });
     this.ornaments.clear().roundRect(ornamentOffset, ornamentOffset, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.88 }).roundRect(this.panelWidth - ornamentOffset - ornamentLength, ornamentOffset, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.88 }).roundRect(ornamentOffset, this.panelHeight - ornamentOffset - ornamentThickness, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.62 }).roundRect(this.panelWidth - ornamentOffset - ornamentLength, this.panelHeight - ornamentOffset - ornamentThickness, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.62 });
-    if (this.surface === "button") {
-      this.ornaments.roundRect(4, Math.max(4, this.panelHeight / 2 - 4), 2, 8, 1).fill({ color: uiColors.panelOrnament, alpha: 0.82 }).roundRect(Math.max(4, this.panelWidth - 6), Math.max(4, this.panelHeight / 2 - 4), 2, 8, 1).fill({ color: uiColors.panelOrnament, alpha: 0.82 });
-    }
   }
 };
 var GameButton = class extends GamePanel {
@@ -49778,7 +49724,7 @@ var GameButton = class extends GamePanel {
    * Creates an interactive button.
    */
   constructor(options) {
-    super({ ...options, surface: "button" });
+    super(options);
     this.onPress = options.onPress;
     this.isEnabled = options.enabled ?? true;
     this.isFocused = this.isEnabled && (options.focused ?? false);
@@ -51032,7 +50978,7 @@ var EncounterScene = class {
     this.root.on("pointerup", (event) => this.releaseDrag(event));
     this.root.on("pointerupoutside", (event) => this.cancelDrag(event));
     this.root.on("pointercancel", (event) => this.cancelDrag(event));
-    this.backgroundLayer.addChild(this.background, this.backdrop);
+    this.backgroundLayer.addChild(this.background);
     this.effectsLayer.addChild(this.dragAimArrow, this.attackTrail);
     this.intentStatusLabel.anchor.set(0.5, 0.5);
     this.overlayLayer.addChild(this.runHud, this.intentStatusBackground, this.intentStatusLabel);
@@ -51052,7 +50998,6 @@ var EncounterScene = class {
   overlayLayer = new Container();
   runHud = new RunHud();
   background = new Graphics();
-  backdrop = new EncounterBackdrop();
   dragAimArrow = new Graphics();
   attackTrail = new Graphics();
   intentStatusBackground = new Graphics();
@@ -51296,7 +51241,6 @@ var EncounterScene = class {
   }
   repaintBackground(viewport) {
     this.background.clear().rect(0, 0, viewport.width, viewport.height).fill({ color: 726562 });
-    this.backdrop.resize(viewport.width, viewport.height);
   }
   /**
    * Positions the scene-owned pending-action feedback without participating in gameplay layout.
@@ -51365,8 +51309,7 @@ var EncounterScene = class {
     const health = `HP ${entity.health}/${entity.maxHealth} \xB7 B ${entity.block}`;
     const resources = entity.isPlayer ? `\u26A1 ${entity.energy} \xB7 \u2726 ${entity.mana}` : `Posture ${entity.posture}/${entity.maxPosture}`;
     const telegraph = formatEntityTelegraph(entity.telegraph);
-    const frameColor = entity.isPlayer ? 12044691 : 7974576;
-    tile.background.clear().roundRect(-89, -57, 178, 113, 13).fill({ color: 728618, alpha: 0.74 }).stroke({ color: frameColor, width: 2, alpha: 0.68 }).roundRect(-78, -49, 156, 96, 9).stroke({ color: 12968147, width: 1, alpha: 0.27 }).rect(-34, -58, 68, 3).fill({ color: frameColor, alpha: 0.8 }).roundRect(-66, 52, 132, 5, 2).fill({ color: frameColor, alpha: 0.22 });
+    tile.background.clear();
     tile.container.hitArea = new Rectangle(-entityHitHalfWidth, -entityHitHalfHeight, entityHitHalfWidth * 2, entityHitHalfHeight * 2);
     tile.accent.clear();
     this.updateArtwork(tile, entity.image, 164, 104);
@@ -52372,12 +52315,11 @@ ${resources}`;
     tile.targetHighlight.clear();
     tile.targetHighlight.visible = isTargeting;
     if (isTargeting) {
-      const cueColor = isFocused ? 16769155 : isValidTarget ? 11141006 : 14912909;
       tile.targetHighlight.roundRect(-entityHitHalfWidth, -entityHitHalfHeight, entityHitHalfWidth * 2, entityHitHalfHeight * 2, 12).stroke({
-        color: cueColor,
+        color: isFocused ? 16769155 : isValidTarget ? 11141006 : 14912909,
         width: isFocused || isValidTarget ? 4 : 2,
         alpha: isFocused ? 0.95 : isValidTarget ? 0.9 : 0.55
-      }).roundRect(-18, -entityHitHalfHeight - 4, 36, 4, 2).fill({ color: cueColor, alpha: 0.9 }).roundRect(-18, entityHitHalfHeight, 36, 4, 2).fill({ color: cueColor, alpha: 0.9 });
+      });
     }
   }
   refreshInteractionState() {
