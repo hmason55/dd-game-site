@@ -50251,6 +50251,9 @@ var CardView = class extends Container {
   frame = new Graphics();
   artFallback = new Graphics();
   artwork = new Sprite(Texture.EMPTY);
+  artMask = new Graphics();
+  textScrims = new Graphics();
+  costPlate = new Graphics();
   stateOverlay = new Graphics();
   playabilityOutline = new Graphics();
   stateOutline = new Graphics();
@@ -50292,6 +50295,8 @@ var CardView = class extends Container {
     this.typeLabel.anchor.set(0.5, 0);
     this.descriptionLabel.anchor.set(0.5, 0);
     this.artwork.anchor.set(0.5, 0.5);
+    this.artwork.mask = this.artMask;
+    this.textScrims.mask = this.artMask;
     for (const label of [this.costLabel, this.nameLabel, this.typeLabel, this.descriptionLabel]) {
       label.resolution = 2;
     }
@@ -50299,6 +50304,9 @@ var CardView = class extends Container {
       this.frame,
       this.artFallback,
       this.artwork,
+      this.artMask,
+      this.textScrims,
+      this.costPlate,
       this.costLabel,
       this.nameLabel,
       this.typeLabel,
@@ -50343,7 +50351,7 @@ var CardView = class extends Container {
    * Gets whether the intentional fallback-art treatment is visible.
    */
   get usesFallbackArt() {
-    return this.cardContent.artTexture === void 0;
+    return this.artFallback.visible;
   }
   /**
    * Gets the current display dimensions.
@@ -50355,7 +50363,7 @@ var CardView = class extends Container {
    * Reconciles semantic display data without recreating the card display tree.
    */
   setContent(content) {
-    if (areCardContentsEqual(this.cardContent, content)) {
+    if (areCardContentsEqual(this.cardContent, content) && this.artwork.visible === isUsableCardTexture(content.artTexture)) {
       return;
     }
     this.cardContent = content;
@@ -50448,51 +50456,74 @@ var CardView = class extends Container {
   redraw() {
     const palette = getPalette(this.cardContent.rarity);
     const artBounds = getArtBounds(this.cardWidth, this.cardHeight);
+    const header = this.updateLabels(palette);
     this.frame.clear().roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: palette.frame }).roundRect(uiTokens.frame.borderWidth, uiTokens.frame.borderWidth, this.cardWidth - uiTokens.frame.borderWidth * 2, this.cardHeight - uiTokens.frame.borderWidth * 2, uiTokens.frame.panelCornerRadius - 1).fill({ color: uiTokens.color.panelFill });
-    this.drawFallbackArt(artBounds, palette);
+    this.drawFallbackArt(artBounds, palette, header);
+    this.artMask.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.frame.panelCornerRadius - 1).fill({ color: 16777215 });
     this.updateArtwork(artBounds);
-    this.updateLabels(palette);
+    this.drawTextScrims(artBounds, palette, header);
     this.statePresentationKey = "";
     this.applyStatePresentation(palette);
   }
-  drawFallbackArt(artBounds, palette) {
+  drawFallbackArt(artBounds, palette, header) {
     const medallionSize = Math.min(artBounds.width, artBounds.height) * 0.3;
     const medallionX = artBounds.x + (artBounds.width - medallionSize) / 2;
-    const medallionY = artBounds.y + (artBounds.height - medallionSize) / 2;
+    const headerBottom = artBounds.y + header.height;
+    const medallionY = headerBottom + (this.cardHeight * 0.59 - headerBottom - medallionSize) / 2;
     this.artFallback.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.spacing.xs).fill({ color: palette.artFill }).roundRect(artBounds.x + 3, artBounds.y + 3, artBounds.width - 6, artBounds.height - 6, uiTokens.spacing.xs - 1).stroke({ color: palette.accent, width: 1, alpha: 0.72 }).rect(artBounds.x, artBounds.y + artBounds.height * 0.56, artBounds.width, artBounds.height * 0.44).fill({ color: palette.accent, alpha: 0.4 }).roundRect(medallionX, medallionY, medallionSize, medallionSize, medallionSize / 2).fill({ color: palette.accent, alpha: 0.7 }).roundRect(medallionX + 4, medallionY + 4, medallionSize - 8, medallionSize - 8, Math.max(0, medallionSize / 2 - 4)).fill({ color: palette.artFill, alpha: 0.94 }).rect(artBounds.x + artBounds.width * 0.12, artBounds.y + artBounds.height * 0.16, artBounds.width * 0.18, 3).fill({ color: palette.accent, alpha: 0.74 }).rect(artBounds.x + artBounds.width * 0.7, artBounds.y + artBounds.height * 0.16, artBounds.width * 0.18, 3).fill({ color: palette.accent, alpha: 0.74 });
-    this.artFallback.visible = this.usesFallbackArt;
+    this.artFallback.visible = !isUsableCardTexture(this.cardContent.artTexture);
+  }
+  /** Reserves translucent top and bottom reading zones without covering the focal center of the art. */
+  drawTextScrims(artBounds, palette, header) {
+    const rulesY = this.cardHeight * 0.59;
+    this.textScrims.clear().rect(artBounds.x, artBounds.y, artBounds.width, header.height).fill({ color: 463132, alpha: 0.78 }).rect(artBounds.x, rulesY, artBounds.width, artBounds.y + artBounds.height - rulesY).fill({ color: 463132, alpha: 0.86 });
+    this.costPlate.clear();
+    if (header.hasCost) {
+      this.costPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.badgeWidth, header.badgeHeight, 7).fill({ color: 463132, alpha: 0.94 }).stroke({ color: palette.accent, width: 2 });
+    }
   }
   updateArtwork(artBounds) {
     const texture = this.cardContent.artTexture;
-    this.artwork.visible = texture !== void 0;
-    if (!texture) {
+    this.artwork.visible = isUsableCardTexture(texture);
+    if (!texture || !this.artwork.visible) {
       return;
     }
     this.artwork.texture = texture;
     this.artwork.position.set(artBounds.x + artBounds.width / 2, artBounds.y + artBounds.height / 2);
-    const textureAspectRatio = getTextureAspectRatio(texture);
-    const artAspectRatio = artBounds.width / Math.max(1, artBounds.height);
-    if (textureAspectRatio >= artAspectRatio) {
-      this.artwork.width = artBounds.width;
-      this.artwork.height = artBounds.width / textureAspectRatio;
-      return;
-    }
-    this.artwork.width = artBounds.height * textureAspectRatio;
-    this.artwork.height = artBounds.height;
+    const scale = Math.max(artBounds.width / texture.width, artBounds.height / texture.height);
+    this.artwork.width = texture.width * scale;
+    this.artwork.height = texture.height * scale;
   }
   updateLabels(palette) {
-    this.costLabel.text = String(this.cardContent.cost);
-    this.costLabel.position.set(textPadding * 2, textPadding * 2);
+    const textScale = Math.max(0.55, Math.min(this.cardWidth / defaultCardWidth, this.cardHeight / defaultCardHeight));
+    const badgeHeight = Math.min(38, Math.max(24, this.cardWidth * 0.21));
+    const rulesY = this.cardHeight * 0.59;
+    this.costStyle.fontSize = Math.max(12, 18 * textScale);
+    this.nameStyle.fontSize = Math.max(12, 18 * textScale);
+    this.typeStyle.fontSize = Math.max(10, 12 * textScale);
+    this.descriptionStyle.fontSize = Math.max(11, 14 * textScale);
+    const cost = String(this.cardContent.cost).trim();
+    this.costLabel.text = cost;
+    const hasCost = cost.length > 0;
+    const badgeWidth = hasCost ? Math.min(this.cardWidth - 14, Math.max(badgeHeight, this.costLabel.width + 14)) : 0;
+    const stacked = hasCost && badgeWidth > this.cardWidth * 0.35;
+    const headerHeight = stacked ? Math.max(82, this.cardHeight * 0.34) : Math.max(28, this.cardHeight * 0.22);
+    this.costLabel.visible = hasCost;
+    this.costLabel.position.set(uiTokens.frame.borderWidth + 5 + badgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
     this.nameLabel.text = this.cardContent.name;
-    this.nameLabel.position.set(this.cardWidth / 2, this.cardHeight * 0.5);
+    this.nameLabel.position.set(
+      stacked || !hasCost ? this.cardWidth / 2 : (this.cardWidth + badgeWidth + textPadding) / 2,
+      uiTokens.frame.borderWidth + (stacked ? badgeHeight + 11 : 9)
+    );
     this.typeLabel.text = `${this.cardContent.type} \xB7 ${this.cardContent.rarity}`;
-    this.typeLabel.position.set(this.cardWidth / 2, this.cardHeight * 0.61);
+    this.typeLabel.position.set(this.cardWidth / 2, rulesY + 8 * textScale);
     this.descriptionLabel.text = this.cardContent.description;
-    this.descriptionLabel.position.set(this.cardWidth / 2, this.cardHeight * 0.7);
-    this.nameStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
+    this.descriptionLabel.position.set(this.cardWidth / 2, rulesY + 31 * textScale);
+    this.nameStyle.wordWrapWidth = Math.max(0, this.cardWidth - (stacked || !hasCost ? textPadding * 2 : badgeWidth + textPadding * 3));
     this.typeStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
     this.descriptionStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
     this.costStyle.fill = palette.accent;
+    return { badgeWidth, badgeHeight, hasCost, height: headerHeight };
   }
   /** Applies mutable interaction state while caching the state graphics between semantic changes. */
   applyStatePresentation(palette) {
@@ -50525,13 +50556,13 @@ var CardView = class extends Container {
     }
   }
 };
-function getTextureAspectRatio(texture) {
+function isUsableCardTexture(texture) {
+  if (!texture || texture === Texture.EMPTY) {
+    return false;
+  }
   const width = texture.width;
   const height = texture.height;
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-    return 1;
-  }
-  return width / height;
+  return Number.isFinite(width) && Number.isFinite(height) && width > 1 && height > 1;
 }
 function toCardViewContent(options) {
   return {
