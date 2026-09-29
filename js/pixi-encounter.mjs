@@ -57366,6 +57366,11 @@ function fitImage(sprite, width, height, x2, y2) {
 function isMenuOverlayState(value) {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value;
+  const outcome = candidate.outcome;
+  if (typeof outcome === "object" && outcome !== null) {
+    const item2 = outcome;
+    return typeof item2.title === "string" && typeof item2.message === "string" && typeof item2.actionLabel === "string";
+  }
   const confirmation = candidate.confirmation;
   if (typeof confirmation === "object" && confirmation !== null) {
     const item2 = confirmation;
@@ -57497,6 +57502,13 @@ async function createMenuOverlayRenderer(canvas, sink) {
     addButton("Cancel", "cancel", 24, height - 70, buttonWidth);
     addButton("Confirm", `confirm:${confirmation.action}`, width - 24 - buttonWidth, height - 70, buttonWidth);
   };
+  const layoutOutcome = (outcome) => {
+    const title = addText(outcome.title, 24, Math.max(20, height / 3 - 50), 34);
+    title.style.fill = outcome.title === "Victory!" ? 16113563 : 15699855;
+    addText(outcome.message, 24, Math.max(78, height / 3 + 16), 18, width - 48);
+    const buttonWidth = Math.min(260, width - 48);
+    addButton(outcome.actionLabel, "outcome:continue", (width - buttonWidth) / 2, height - 78, buttonWidth, 48);
+  };
   const layout = () => {
     if (disposed || !state) return;
     width = Math.max(1, host?.width() ?? canvas.clientWidth ?? canvas.parentElement?.clientWidth ?? 800);
@@ -57505,7 +57517,8 @@ async function createMenuOverlayRenderer(canvas, sink) {
     backdrop.clear().rect(0, 0, width, height).fill({ color: uiColors.panelFill, alpha: 0.98 });
     backdrop.eventMode = "static";
     clearContent();
-    if (state.confirmation) layoutConfirmation(state.confirmation);
+    if (state.outcome) layoutOutcome(state.outcome);
+    else if (state.confirmation) layoutConfirmation(state.confirmation);
     else if (state.settings) layoutSettings(state.settings);
     selectedIndex = Math.min(selectedIndex, Math.max(0, controls.length - 1));
   };
@@ -57521,7 +57534,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
       return;
     }
     if (event.key === "Escape") {
-      void submit("cancel");
+      if (!state.outcome) void submit("cancel");
       event.preventDefault();
       event.stopImmediatePropagation();
       return;
