@@ -51003,6 +51003,26 @@ function layoutNarrowHand(count2, viewport) {
   });
 }
 
+// src/input-policy.ts
+var pointerDragSlopPixels = 8;
+function isPrimaryPointer(event) {
+  return event.isPrimary !== false;
+}
+function getPointerId(event) {
+  return Number.isInteger(event.pointerId) ? event.pointerId : 1;
+}
+function hasExceededPointerDragSlop(start, event) {
+  return Math.hypot(event.clientX - start.x, event.clientY - start.y) >= pointerDragSlopPixels;
+}
+function hasStartedCardDrag(start, event) {
+  const horizontalMovement = event.clientX - start.x;
+  const verticalMovement = event.clientY - start.y;
+  if (event.pointerType !== "touch") {
+    return Math.hypot(horizontalMovement, verticalMovement) >= pointerDragSlopPixels;
+  }
+  return verticalMovement <= -pointerDragSlopPixels && Math.abs(verticalMovement) >= Math.abs(horizontalMovement);
+}
+
 // src/motion-policy.ts
 var motionDurations = {
   instant: 0,
@@ -51597,7 +51617,11 @@ ${resources}`;
     tile.container.eventMode = this.isAnimationLocked(id) ? "none" : "static";
     tile.container.cursor = this.canSelectEntity(entity) ? "pointer" : "default";
     tile.container.removeAllListeners("pointertap");
-    tile.container.on("pointertap", () => this.handleEntitySelection(entity.id));
+    tile.container.on("pointertap", (event) => {
+      if (this.isPrimaryPointerTap(event)) {
+        this.handleEntitySelection(entity.id);
+      }
+    });
   }
   updateHandTile(id, entry, position) {
     const isCard = isCardPresentationState2(entry);
@@ -51631,7 +51655,11 @@ ${resources}`;
     tile.container.removeAllListeners("pointerover");
     tile.container.removeAllListeners("pointerout");
     if (isInteractive) {
-      tile.container.on("pointertap", () => this.handleEntrySelection(entry));
+      tile.container.on("pointertap", (event) => {
+        if (this.isPrimaryPointerTap(event)) {
+          this.handleEntrySelection(entry);
+        }
+      });
       tile.container.on("pointerdown", (event) => this.beginDrag(entry, tile, event));
     }
     if (isHoverable) {
@@ -51692,7 +51720,7 @@ ${resources}`;
     }
   }
   handleEntrySelection(entry) {
-    if (!this.isEntryInteractive(getEntrySceneId(entry), entry)) {
+    if (this.inputReleased || !this.isEntryInteractive(getEntrySceneId(entry), entry)) {
       return;
     }
     if (this.ignoredPointerTapEntryId === entry.id) {
@@ -51708,6 +51736,10 @@ ${resources}`;
     this.refreshHandInspection(previousSelectedTileId);
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
+  }
+  /** Returns whether a pointer tap may participate in the scene's single-pointer interaction policy. */
+  isPrimaryPointerTap(event) {
+    return event === void 0 || isPrimaryPointer({ isPrimary: event.isPrimary ?? true });
   }
   /** Draws a compact clamped status meter below an entity's numeric status. */
   drawMeter(graphic, value, maximum, x2, y2, width, height, fill) {
@@ -51735,7 +51767,7 @@ ${resources}`;
     this.refreshSelectionHighlights();
   }
   beginDrag(entry, tile, event) {
-    if (!entry.isDraggable || this.intentPending || this.activeDrag || this.isEntryInputLocked(getEntrySceneId(entry), entry.id) || isCardPresentationState2(entry) && entry.isInteractionLocked || this.isAnimationLockedForEntry(entry)) {
+    if (this.inputReleased || !isPrimaryPointer({ isPrimary: event.isPrimary ?? true }) || !entry.isDraggable || this.intentPending || this.activeDrag || this.isEntryInputLocked(getEntrySceneId(entry), entry.id) || isCardPresentationState2(entry) && entry.isInteractionLocked || this.isAnimationLockedForEntry(entry)) {
       return;
     }
     const tileId = getEntrySceneId(entry);
@@ -51747,6 +51779,7 @@ ${resources}`;
       origin: returningDrag?.destination ?? captureTransform(tile.container),
       pointerId: event.pointerId,
       pointerOrigin,
+      pointerType: event.pointerType,
       tile,
       selectionWasActive: this.selectedEntryId === entry.id,
       state: "tracking"
@@ -51767,7 +51800,15 @@ ${resources}`;
       return;
     }
     const position = event.getLocalPosition(this.root);
-    if (drag.state === "tracking" && Math.hypot(position.x - drag.pointerOrigin.x, position.y - drag.pointerOrigin.y) < 4) {
+    if (drag.state === "tracking" && !hasStartedCardDrag({
+      pointerId: drag.pointerId,
+      x: drag.pointerOrigin.x,
+      y: drag.pointerOrigin.y
+    }, {
+      clientX: position.x,
+      clientY: position.y,
+      pointerType: drag.pointerType
+    })) {
       return;
     }
     drag.state = "dragging";
@@ -51789,8 +51830,14 @@ ${resources}`;
     this.inputReleased = true;
     this.root.eventMode = "none";
     this.settleTransientDragOwnership();
+    this.ignoredPointerTapEntryId = void 0;
     this.hoveredEntryId = void 0;
     this.focusedEntryId = void 0;
+    this.intentPending = false;
+    this.pendingIntentSequence = void 0;
+    this.pendingIntentMessage = void 0;
+    this.rejectionFeedbackRemainingMs = 0;
+    this.updateFeedbackVisibility();
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
   }
@@ -52005,9 +52052,11 @@ ${resources}`;
     }
     if (drag.state === "tracking") {
       this.handLayer.addChild(drag.tile.container);
-      if (!drag.selectionWasActive) {
+      const matchingTapMayFollow = event.target === void 0 || event.target === drag.tile.container;
+      if (!drag.selectionWasActive && matchingTapMayFollow) {
         this.ignoredPointerTapEntryId = drag.entry.id;
       }
+      this.entryInteractionStates.delete(getEntrySceneId(drag.entry));
       this.releaseActiveDrag(false);
       return;
     }
@@ -52106,11 +52155,11 @@ ${resources}`;
    * Determines whether an entry can accept input and should be presented as enabled.
    */
   isEntryInteractive(tileId, entry) {
-    return entry.isDraggable && !(isCardPresentationState2(entry) && entry.isInteractionLocked) && !this.intentPending && !this.queuedEntryIds.has(entry.id) && !this.isEntryInteractionOwned(tileId, entry.id) && !this.isAnimationLocked(tileId);
+    return !this.inputReleased && entry.isDraggable && !(isCardPresentationState2(entry) && entry.isInteractionLocked) && !this.intentPending && !this.queuedEntryIds.has(entry.id) && !this.isEntryInteractionOwned(tileId, entry.id) && !this.isAnimationLocked(tileId);
   }
   /** Determines whether a card may be visually inspected without accepting gameplay input. */
   isEntryHoverable(tileId, entry) {
-    return isCardPresentationState2(entry) && !this.isEntryInteractionOwned(tileId, entry.id) && !this.isAnimationLocked(tileId);
+    return !this.inputReleased && isCardPresentationState2(entry) && !this.isEntryInteractionOwned(tileId, entry.id) && !this.isAnimationLocked(tileId);
   }
   clearDragMotion(tileId) {
     this.releasedDragPositions.delete(tileId);
@@ -52315,7 +52364,7 @@ ${resources}`;
   handleEntitySelection(entityId) {
     const entry = this.selectedEntryId ? this.selectableEntries.get(this.selectedEntryId) : void 0;
     const entity = this.entities.get(entityId);
-    if (!entry || !entity || this.intentPending || !this.canSelectEntity(entity)) {
+    if (this.inputReleased || !entry || !entity || this.intentPending || !this.canSelectEntity(entity)) {
       return;
     }
     this.submitEntryIntent(entry, entity.id);
@@ -52595,7 +52644,7 @@ ${resources}`;
     for (const [tileId, tile] of this.entityTiles) {
       const entityId = tileId.substring(tileId.indexOf(":") + 1);
       const entity = this.entities.get(entityId);
-      const isInteractive = entity !== void 0 && !this.isAnimationLocked(tileId) && this.canSelectEntity(entity);
+      const isInteractive = !this.inputReleased && entity !== void 0 && !this.isAnimationLocked(tileId) && this.canSelectEntity(entity);
       tile.container.eventMode = isInteractive ? "static" : "none";
       tile.container.cursor = isInteractive ? "pointer" : "default";
     }
@@ -52826,6 +52875,9 @@ ${resources}`;
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
     void this.emitIntent(intent).then((result) => {
+      if (this.inputReleased) {
+        return;
+      }
       if (!result.accepted) {
         this.returnReleasedEntry(intent.kind, intent.sourceId);
         this.releasePendingIntent();
@@ -52834,6 +52886,9 @@ ${resources}`;
         this.releasePendingIntent();
       }
     }).catch(() => {
+      if (this.inputReleased) {
+        return;
+      }
       this.returnReleasedEntry(intent.kind, intent.sourceId);
       this.releasePendingIntent();
       this.showRejectedIntent();
@@ -52853,10 +52908,16 @@ ${resources}`;
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
     void this.emitIntent(intent).then((result) => {
+      if (this.inputReleased) {
+        return;
+      }
       if (!result.accepted) {
         this.rejectQueuedEntry(sourceId, intent.sequence);
       }
     }).catch(() => {
+      if (this.inputReleased) {
+        return;
+      }
       this.rejectQueuedEntry(sourceId, intent.sequence);
     });
   }
@@ -55380,18 +55441,6 @@ var noOpRestAccessibilityOverlay = {
   dispose() {
   }
 };
-
-// src/input-policy.ts
-var pointerDragSlopPixels = 8;
-function isPrimaryPointer(event) {
-  return event.isPrimary !== false;
-}
-function getPointerId(event) {
-  return Number.isInteger(event.pointerId) ? event.pointerId : 1;
-}
-function hasExceededPointerDragSlop(start, event) {
-  return Math.hypot(event.clientX - start.x, event.clientY - start.y) >= pointerDragSlopPixels;
-}
 
 // src/pixi-shop.ts
 async function createShopRenderer(canvas, sink) {
