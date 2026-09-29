@@ -121,6 +121,17 @@
 
 .pixi-main-menu-surface canvas:focus-visible[b-22zhoaus0z] { outline: 3px solid var(--mud-palette-secondary); outline-offset: -3px; }
 .pixi-main-menu-help[b-22zhoaus0z] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
+/* /Components/PixiMenuOverlaySurface.razor.rz.scp.css */
+.pixi-menu-overlay-surface[b-vvhjhjzarl] { background: rgba(3, 10, 18, .82); inset: 0; padding: clamp(.5rem, 4vh, 3rem); position: fixed; z-index: 1450; }
+.pixi-menu-overlay-surface canvas[b-vvhjhjzarl] { display: block; height: 100%; margin: auto; max-height: 48rem; max-width: 60rem; touch-action: none; width: 100%; }
+.pixi-menu-overlay-accessibility[b-vvhjhjzarl] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
+.pixi-menu-overlay-surface.shared-runtime[b-vvhjhjzarl] { background: transparent; pointer-events: none; }
+.pixi-menu-overlay-surface.shared-runtime canvas[b-vvhjhjzarl] { display: none; }
+.pixi-menu-overlay-accessibility:focus-within[b-vvhjhjzarl] { background: #0e2132; bottom: 1rem; color: #f1f4f8; height: auto; left: 1rem; max-height: 80dvh; max-width: min(38rem, calc(100vw - 2rem)); overflow: auto; padding: 1rem; pointer-events: auto; position: fixed; width: auto; }
+.pixi-menu-overlay-surface.renderer-unavailable canvas[b-vvhjhjzarl] { display: none; }
+.pixi-menu-overlay-surface.renderer-unavailable.shared-runtime[b-vvhjhjzarl] { background: rgba(3, 10, 18, .95); pointer-events: auto; }
+.pixi-menu-overlay-surface.renderer-unavailable .pixi-menu-overlay-accessibility[b-vvhjhjzarl] { background: #0e2132; color: #f1f4f8; height: calc(100dvh - 2rem); inset: 1rem; max-width: 38rem; overflow: auto; padding: 1rem; pointer-events: auto; position: absolute; width: calc(100vw - 2rem); }
+.pixi-menu-overlay-accessibility button[b-vvhjhjzarl], .pixi-menu-overlay-accessibility input[b-vvhjhjzarl] { min-height: 44px; min-width: 44px; }
 /* /Components/PixiRunControlsSurface.razor.rz.scp.css */
 .pixi-run-controls-surface[b-2ntaig32y6] {
     bottom: 0;

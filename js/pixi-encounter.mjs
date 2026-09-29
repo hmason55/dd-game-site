@@ -57132,6 +57132,219 @@ function fitImage(sprite, width, height, x2, y2) {
   sprite.position.set(x2 + (width - sprite.texture.width * scale) / 2, y2 + (height - sprite.texture.height * scale) / 2);
 }
 
+// src/pixi-menu-overlay.ts
+function isMenuOverlayState(value) {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value;
+  const confirmation = candidate.confirmation;
+  if (typeof confirmation === "object" && confirmation !== null) {
+    const item2 = confirmation;
+    return typeof item2.action === "string" && typeof item2.title === "string" && typeof item2.message === "string";
+  }
+  const settings = candidate.settings;
+  if (typeof settings !== "object" || settings === null) return false;
+  const item = settings;
+  return Number.isInteger(item.tabIndex) && Number.isFinite(item.masterVolume) && Number.isFinite(item.sfxVolume) && Number.isFinite(item.musicVolume) && Number.isFinite(item.ambientVolume) && Number.isFinite(item.speed) && typeof item.cardTiltEnabled === "boolean" && typeof item.particleLevel === "string" && typeof item.debugProgressionEnabled === "boolean" && Number.isInteger(item.metaExperience) && Number.isInteger(item.unlockedMetaRewards);
+}
+function sliderAction(slider, requested) {
+  const clamped = Math.max(slider.min, Math.min(slider.max, requested));
+  const value = Math.round((clamped - slider.min) / slider.step) * slider.step + slider.min;
+  return `setting:${slider.key}:${Number(value.toFixed(2))}`;
+}
+async function createMenuOverlayRenderer(canvas, sink) {
+  const host = getCollectionOverlayHost();
+  const application = host ? void 0 : new Application();
+  if (application) await application.init({ antialias: true, autoDensity: true, background: 529183, canvas, preference: "canvas" });
+  const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const surface = canvas.parentElement;
+  const dialogElement = surface?.closest("[role='dialog']") ?? surface;
+  const keyboardTarget = host ? dialogElement ?? canvas : canvas;
+  if (host) surface?.classList.add("shared-runtime");
+  const restoreRunControls = suspendRunControls(document.querySelector(".pixi-run-controls-surface"));
+  keyboardTarget.tabIndex = 0;
+  keyboardTarget.focus({ preventScroll: true });
+  const root = new Container();
+  const backdrop = new Graphics();
+  const content = new Container();
+  root.addChild(backdrop, content);
+  (host?.layer ?? application.stage).addChild(root);
+  let state;
+  let controls = [];
+  let selectedIndex = 0;
+  let pending = false;
+  let disposed = false;
+  let width = 1;
+  let height = 1;
+  const submit = async (action) => {
+    if (pending || disposed) return;
+    pending = true;
+    try {
+      await sink.invokeMethodAsync("HandleActionFromRendererAsync", action);
+    } finally {
+      pending = false;
+    }
+  };
+  const clearContent = () => {
+    for (const child of content.removeChildren()) child.destroy({ children: true });
+    controls = [];
+  };
+  const addText = (value, x2, y2, fontSize = 18, wrap = width - 40) => {
+    const label = new Text({ text: value, style: { ...uiTokens.typography.body, fill: 15856888, fontSize, wordWrap: true, wordWrapWidth: Math.max(1, wrap) } });
+    label.position.set(x2, y2);
+    content.addChild(label);
+    return label;
+  };
+  const addButton = (label, action, x2, y2, buttonWidth, buttonHeight2 = 42) => {
+    const index = controls.length;
+    const activeTab = action.startsWith("tab:") && state?.settings?.tabIndex === Number(action.slice(4));
+    const button = new GameButton({ width: buttonWidth, height: buttonHeight2, label, selected: index === selectedIndex || activeTab, onPress: () => {
+      selectedIndex = index;
+      void submit(action);
+    } });
+    button.position.set(x2, y2);
+    content.addChild(button);
+    controls.push({ action, label });
+  };
+  const addSlider = (slider, y2) => {
+    const compact = width < 520;
+    const labelWidth = compact ? 92 : 160;
+    const trackX = labelWidth + 32;
+    const trackWidth = Math.max(74, width - trackX - 120);
+    const sliderLabel = addText(slider.label, 24, y2 + 8, compact ? 15 : 18, labelWidth);
+    if (controls.length === selectedIndex) sliderLabel.style.fill = 16113563;
+    const track = new Graphics();
+    track.roundRect(trackX, y2 + 18, trackWidth, 10, 5).fill({ color: 2640219 });
+    track.roundRect(trackX, y2 + 18, trackWidth * (slider.value - slider.min) / (slider.max - slider.min), 10, 5).fill({ color: 14989928 });
+    track.circle(trackX + trackWidth * (slider.value - slider.min) / (slider.max - slider.min), y2 + 23, 10).fill({ color: 16113563 });
+    track.eventMode = "static";
+    track.cursor = "pointer";
+    track.hitArea = { contains: (x2, pointerY) => x2 >= trackX && x2 <= trackX + trackWidth && pointerY >= y2 && pointerY <= y2 + 46 };
+    track.on("pointertap", (event) => {
+      void submit(sliderAction(slider, slider.min + (event.global.x - trackX) / trackWidth * (slider.max - slider.min)));
+    });
+    content.addChild(track);
+    addText(slider.value.toFixed(slider.key === "speed" ? 1 : 2), width - 94, y2 + 8, 16, 76);
+    controls.push({ action: sliderAction(slider, slider.value + slider.step), label: slider.label, slider });
+  };
+  const layoutSettings = (settings) => {
+    const short = height < 440;
+    const rowHeight = short ? 42 : 54;
+    addText("Settings", 24, 15, short ? 24 : 30);
+    const tabWidth = Math.min(180, (width - 56) / 2);
+    addButton("Audio", "tab:0", 24, short ? 48 : 60, tabWidth, 38);
+    addButton("Gameplay", "tab:1", 32 + tabWidth, short ? 48 : 60, tabWidth, 38);
+    const top = short ? 98 : 116;
+    if (settings.tabIndex === 0) {
+      const sliders = [
+        { key: "master", label: "Master", value: settings.masterVolume, min: 0, max: 1, step: 0.05 },
+        { key: "sfx", label: "SFX", value: settings.sfxVolume, min: 0, max: 1, step: 0.05 },
+        { key: "music", label: "Music", value: settings.musicVolume, min: 0, max: 1, step: 0.05 },
+        { key: "ambient", label: "Ambient", value: settings.ambientVolume, min: 0, max: 1, step: 0.05 }
+      ];
+      sliders.forEach((slider, index) => addSlider(slider, top + index * rowHeight));
+    } else {
+      addSlider({ key: "speed", label: "Speed", value: settings.speed, min: 0.5, max: 2, step: 0.1 }, top);
+      addButton(`Card tilt: ${settings.cardTiltEnabled ? "On" : "Off"}`, "toggle:tilt", 24, top + rowHeight, Math.min(240, width - 48));
+      const levels = ["Low", "Medium", "High", "Maximum"];
+      const next = levels[(levels.indexOf(settings.particleLevel) + 1) % levels.length] ?? "High";
+      addButton(`Particles: ${settings.particleLevel}`, `particle:${next}`, 24, top + rowHeight * 2, Math.min(240, width - 48));
+      if (settings.debugProgressionEnabled) {
+        addText(`Meta XP ${settings.metaExperience}  \u2022  Rewards ${settings.unlockedMetaRewards}`, 24, top + rowHeight * 3, 16);
+        const debugWidth = Math.min(210, (width - 64) / 3);
+        [["+25 XP", "debug:xp:25"], ["+100 XP", "debug:xp:100"], ["Reset unlocks", "debug:reset"]].forEach(([label, action], index) => addButton(label, action, 24 + index * (debugWidth + 8), top + rowHeight * 4, debugWidth, 40));
+      }
+    }
+    const footerY = height - (width < 520 && !short ? 102 : 50);
+    const twoRows = width < 520 && !short;
+    const buttonWidth = twoRows ? (width - 56) / 2 : (width - 56) / 4;
+    const footer = [["Defaults", "defaults"], ["Clear data", "clear"], ["Cancel", "cancel"], ["Save", "save"]];
+    footer.forEach(([label, action], index) => addButton(label, action, 24 + index % (twoRows ? 2 : 4) * (buttonWidth + 8), footerY + (twoRows ? Math.floor(index / 2) * 48 : 0), buttonWidth, 40));
+  };
+  const layoutConfirmation = (confirmation) => {
+    addText(confirmation.title, 24, Math.max(20, height / 3 - 50), 30);
+    addText(confirmation.message, 24, Math.max(70, height / 3 + 10), 18, width - 48);
+    const buttonWidth = Math.min(220, (width - 64) / 2);
+    addButton("Cancel", "cancel", 24, height - 70, buttonWidth);
+    addButton("Confirm", `confirm:${confirmation.action}`, width - 24 - buttonWidth, height - 70, buttonWidth);
+  };
+  const layout = () => {
+    if (disposed || !state) return;
+    width = Math.max(1, host?.width() ?? canvas.clientWidth ?? canvas.parentElement?.clientWidth ?? 800);
+    height = Math.max(1, host?.height() ?? canvas.clientHeight ?? canvas.parentElement?.clientHeight ?? 600);
+    application?.renderer.resize(width, height);
+    backdrop.clear().rect(0, 0, width, height).fill({ color: uiColors.panelFill, alpha: 0.98 });
+    backdrop.eventMode = "static";
+    clearContent();
+    if (state.confirmation) layoutConfirmation(state.confirmation);
+    else if (state.settings) layoutSettings(state.settings);
+    selectedIndex = Math.min(selectedIndex, Math.max(0, controls.length - 1));
+  };
+  const keydown = (event) => {
+    if (!state) return;
+    if (event.key === "Tab" && dialogElement) {
+      const focusable = [keyboardTarget, ...dialogElement.querySelectorAll("button, input")].filter((element) => element.isConnected);
+      const activeIndex = focusable.indexOf(document.activeElement);
+      const nextIndex = event.shiftKey ? activeIndex <= 0 ? focusable.length - 1 : activeIndex - 1 : activeIndex < 0 || activeIndex === focusable.length - 1 ? 0 : activeIndex + 1;
+      focusable[nextIndex]?.focus({ preventScroll: true });
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+    if (event.key === "Escape") {
+      void submit("cancel");
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+    if (document.activeElement !== keyboardTarget) return;
+    event.stopImmediatePropagation();
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      selectedIndex = (selectedIndex + (event.key === "ArrowDown" ? 1 : -1) + controls.length) % Math.max(1, controls.length);
+      layout();
+      event.preventDefault();
+    }
+    const control = controls[selectedIndex];
+    if (!control) return;
+    if (control.slider && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+      void submit(sliderAction(control.slider, control.slider.value + (event.key === "ArrowRight" ? 1 : -1) * control.slider.step));
+      event.preventDefault();
+    } else if (event.key === "Enter" || event.key === " ") {
+      void submit(control.action);
+      event.preventDefault();
+    }
+  };
+  const focusin = (event) => {
+    if (!disposed && dialogElement && event.target instanceof Node && !dialogElement.contains(event.target)) {
+      keyboardTarget.focus({ preventScroll: true });
+    }
+  };
+  document.addEventListener("keydown", keydown, true);
+  document.addEventListener("focusin", focusin, true);
+  window.addEventListener("resize", layout);
+  const observer = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(layout);
+  observer?.observe(canvas.parentElement ?? canvas);
+  return {
+    reconcile(candidate) {
+      if (!isMenuOverlayState(candidate)) return false;
+      state = candidate;
+      layout();
+      return true;
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      observer?.disconnect();
+      window.removeEventListener("resize", layout);
+      document.removeEventListener("keydown", keydown, true);
+      document.removeEventListener("focusin", focusin, true);
+      restoreRunControls();
+      root.destroy({ children: true });
+      application?.destroy({ removeView: false }, { children: true });
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    }
+  };
+}
+
 // src/pixi-card-choice.ts
 async function createCardChoiceRenderer(canvas, sink) {
   const application = new Application();
@@ -58230,6 +58443,7 @@ export {
   createLeaveRenderer,
   createMainMenuRenderer,
   createMapRenderer,
+  createMenuOverlayRenderer,
   createRestRenderer,
   createRewardRenderer,
   createRunControlsRenderer,
