@@ -50733,22 +50733,27 @@ function layoutEnemies(count2, viewport) {
   if (count2 === 0) {
     return [];
   }
+  if (isShortEncounter(viewport)) {
+    return layoutShortEnemies(count2, viewport);
+  }
   if (getEncounterLayoutMode(viewport) !== "Wide") {
     return layoutNarrowEnemies(count2, viewport);
   }
   const horizontalPadding = 24;
-  const verticalPadding = 76;
+  const verticalPadding = viewport.height >= 700 ? Math.min(144, viewport.height * 0.16) : 76;
   const entityWidth = 176;
   const entityHeight = 116;
   const entityGap = 12;
-  const maximumCombatWidth = Math.min(680, viewport.width - horizontalPadding * 2);
+  const maximumCombatWidth = Math.min(980, 680 + Math.max(0, viewport.width - 960) * 0.5, viewport.width - horizontalPadding * 2);
   const columns = Math.min(count2, 4);
   const rows = Math.ceil(count2 / columns);
   const availableWidth = Math.max(0, maximumCombatWidth);
-  const availableHeight = Math.max(entityHeight, layoutPlayer(viewport).y - 58 - verticalPadding - entityGap);
+  const player = layoutPlayer(viewport);
+  const availableHeight = Math.max(entityHeight, player.y - 58 * (player.scale ?? 1) - verticalPadding - entityGap);
   const horizontalScale = availableWidth / (columns * entityWidth);
   const verticalScale = (availableHeight - (rows - 1) * entityGap) / (rows * entityHeight);
-  const scale = Math.min(1, horizontalScale, verticalScale);
+  const maximumScale = viewport.width >= 1200 && viewport.height >= 700 ? 1.12 : 1;
+  const scale = Math.min(maximumScale, horizontalScale, verticalScale);
   const tileWidth = entityWidth * scale;
   const tileHeight = entityHeight * scale;
   const rowStep = tileHeight + entityGap;
@@ -50765,6 +50770,9 @@ function layoutEnemies(count2, viewport) {
   });
 }
 function layoutPlayer(viewport) {
+  if (isShortEncounter(viewport)) {
+    return layoutShortPlayer(viewport);
+  }
   const layoutMode = getEncounterLayoutMode(viewport);
   if (layoutMode === "MobilePortrait") {
     const scale = getMobileEntityScale(viewport);
@@ -50784,12 +50792,16 @@ function layoutPlayer(viewport) {
   }
   return {
     x: viewport.width / 2,
-    y: Math.min(Math.max(136, viewport.height * 0.58), viewport.height - 210)
+    y: Math.min(Math.max(136, viewport.height * (viewport.height >= 700 ? 0.56 : 0.58)), viewport.height - 210),
+    ...viewport.width >= 1200 && viewport.height >= 700 ? { scale: 1.12 } : {}
   };
 }
 function layoutHand(count2, viewport) {
   if (count2 === 0) {
     return [];
+  }
+  if (isShortEncounter(viewport)) {
+    return layoutShortHand(count2, viewport);
   }
   if (getEncounterLayoutMode(viewport) !== "Wide") {
     return layoutNarrowHand(count2, viewport);
@@ -50823,6 +50835,45 @@ function layoutHand(count2, viewport) {
       ...cardScale === 1 ? {} : { scale: cardScale }
     };
   });
+}
+function layoutShortEnemies(count2, viewport) {
+  const player = layoutShortPlayer(viewport);
+  const scale = Math.min(0.62, Math.max(0.4, (viewport.width - 32) / (Math.min(count2, 6) * 176)));
+  const halfHeight = 58 * scale;
+  const headerBottom = viewport.height < 320 ? 34 : getEncounterLayoutMode(viewport) === "MobilePortrait" ? 76 : 60;
+  const y2 = Math.max(headerBottom + halfHeight, player.y - 58 * (player.scale ?? 1) - 12 - halfHeight);
+  const tileWidth = 176 * scale;
+  const availableWidth = Math.max(tileWidth, viewport.width - 32);
+  const step = count2 === 1 ? 0 : Math.min(tileWidth + 8, (availableWidth - tileWidth) / (count2 - 1));
+  const rowWidth = tileWidth + step * (count2 - 1);
+  return Array.from({ length: count2 }, (_, index) => ({
+    x: (viewport.width - rowWidth) / 2 + tileWidth / 2 + index * step,
+    y: y2,
+    scale
+  }));
+}
+function layoutShortPlayer(viewport) {
+  const scale = Math.min(0.62, Math.max(0.4, (viewport.height - 160) / 240));
+  return { x: viewport.width / 2, y: viewport.height * 0.56, scale };
+}
+function layoutShortHand(count2, viewport) {
+  const player = layoutShortPlayer(viewport);
+  const playerBottom = player.y + 58 * (player.scale ?? 1);
+  const verticalScale = (viewport.height - 22 - playerBottom) / handCardVisualSize.height;
+  const scale = Math.max(0.4, Math.min(0.62, verticalScale));
+  const tileWidth = handCardVisualSize.width * scale;
+  const availableWidth = Math.max(tileWidth, viewport.width - 32);
+  const step = count2 === 1 ? 0 : Math.min(tileWidth + 4, (availableWidth - tileWidth) / (count2 - 1));
+  const rowWidth = tileWidth + step * (count2 - 1);
+  const y2 = viewport.height - 16 - handCardVisualSize.height * scale / 2;
+  return Array.from({ length: count2 }, (_, index) => ({
+    x: (viewport.width - rowWidth) / 2 + tileWidth / 2 + index * step,
+    y: y2,
+    scale
+  }));
+}
+function isShortEncounter(viewport) {
+  return viewport.height <= 440 && viewport.width >= 320;
 }
 function getWideHandCenterBounds(count2, maximumRotation, fanDepth, cardWidth, cardHeight, playerBottom, handClearance, viewportHeight) {
   let topExtent = 0;
@@ -51049,6 +51100,9 @@ var draggedCardScale = 1.32;
 var playedCardScale = 1.48;
 var entityHitHalfWidth = 94;
 var entityHitHalfHeight = 64;
+var shortEnemyPageSize = 5;
+var shortHandPageSize = 6;
+var pageControlInset = 52;
 var EncounterScene = class {
   /**
    * Creates the ordered layers that belong to this scene.
@@ -51066,7 +51120,15 @@ var EncounterScene = class {
     this.backgroundLayer.addChild(this.background, this.backdrop);
     this.effectsLayer.addChild(this.dragAimArrow, this.attackTrail);
     this.intentStatusLabel.anchor.set(0.5, 0.5);
-    this.overlayLayer.addChild(this.runHud, this.intentStatusBackground, this.intentStatusLabel);
+    this.overlayLayer.addChild(
+      this.runHud,
+      this.intentStatusBackground,
+      this.intentStatusLabel,
+      this.previousEnemyPage,
+      this.nextEnemyPage,
+      this.previousHandPage,
+      this.nextHandPage
+    );
     this.root.addChild(this.backgroundLayer, this.enemyLayer, this.playerLayer, this.handLayer, this.effectsLayer, this.overlayLayer, this.dragLayer);
   }
   emitIntent;
@@ -51088,6 +51150,10 @@ var EncounterScene = class {
   attackTrail = new Graphics();
   intentStatusBackground = new Graphics();
   intentStatusLabel = new Text({ text: "", style: { fill: 15856888, fontFamily: "Arial", fontSize: 13 } });
+  previousEnemyPage = createPageControl("\u2039", () => this.changePage("enemy", -1));
+  nextEnemyPage = createPageControl("\u203A", () => this.changePage("enemy", 1));
+  previousHandPage = createPageControl("\u2039", () => this.changePage("hand", -1));
+  nextHandPage = createPageControl("\u203A", () => this.changePage("hand", 1));
   entityTiles = /* @__PURE__ */ new Map();
   handTiles = /* @__PURE__ */ new Map();
   handLayoutPositions = /* @__PURE__ */ new Map();
@@ -51113,6 +51179,9 @@ var EncounterScene = class {
   pendingIntentMessage;
   rejectionFeedbackRemainingMs = 0;
   viewport;
+  latestSnapshot;
+  enemyPage = 0;
+  handPage = 0;
   animationStarts = /* @__PURE__ */ new Map();
   animationCommandHandlers = /* @__PURE__ */ new Map([
     ["idle", (_source, _target, tile, start, progress) => tile.container.scale.set(start.scale * (1 + Math.sin(progress * Math.PI * 2) * 0.015))],
@@ -51175,10 +51244,13 @@ var EncounterScene = class {
     this.refreshTextTexturesIn(this.root);
   }
   /**
-   * Determines whether a stable scene-object identifier is currently visible.
+   * Determines whether an animation source is present in the current snapshot, including objects paged out of view.
    */
   hasSceneObject(id) {
-    return this.entityTiles.has(id) || this.handTiles.has(id);
+    if (this.entityTiles.has(id) || this.handTiles.has(id)) return true;
+    const snapshot = this.latestSnapshot;
+    if (!snapshot) return false;
+    return snapshot.enemies.some((enemy) => `enemy:${enemy.id}` === id) || snapshot.hand.some((card) => `card:${card.id}` === id) || snapshot.items.some((item) => `item:${item.id}` === id);
   }
   /** Gets an entry's current presentation ownership state. */
   getEntryInteractionState(entryId) {
@@ -51238,6 +51310,9 @@ var EncounterScene = class {
     if (this.intentPending) {
       return false;
     }
+    if (event.key === "PageDown" || event.key === "PageUp") {
+      return this.changePage(this.selectedEntryId ? "enemy" : "hand", event.key === "PageDown" ? 1 : -1);
+    }
     if (event.key === "Tab") {
       this.focusEntry(1);
       return true;
@@ -51266,8 +51341,10 @@ var EncounterScene = class {
     const shouldReleasePendingIntent = this.intentPending && this.pendingIntentSequence !== void 0 && snapshot.sequence > this.pendingIntentSequence;
     if (this.hasViewportChanged(viewport)) {
       this.resetTransientLayoutState();
+      this.alignPagesToFocusedObjects(snapshot, viewport);
     }
     this.viewport = { width: viewport.width, height: viewport.height };
+    this.latestSnapshot = snapshot;
     this.currentSequence = snapshot.sequence;
     this.repaintBackground(viewport);
     this.layoutInputLockFeedback(viewport);
@@ -51283,6 +51360,7 @@ var EncounterScene = class {
     this.reconcileQueuedEntries(snapshot);
     this.reconcileEntities(snapshot.player, snapshot.enemies, viewport);
     this.reconcileHand(snapshot, viewport);
+    this.layoutPageControls(snapshot, viewport);
     if (shouldReleasePendingIntent) {
       this.releasePendingIntent();
     }
@@ -51316,6 +51394,7 @@ var EncounterScene = class {
    */
   dispose() {
     this.releaseInput();
+    this.latestSnapshot = void 0;
     this.releasedDragPositions.clear();
     this.root.destroy({ children: true });
     this.entityTiles.clear();
@@ -51340,14 +51419,69 @@ var EncounterScene = class {
     this.intentStatusBackground.visible = this.intentPending || this.rejectionFeedbackRemainingMs > 0;
     this.intentStatusLabel.position.set(x2, y2 + 14);
   }
+  /** Keeps the currently inspected object visible when a resize introduces paging. */
+  alignPagesToFocusedObjects(snapshot, viewport) {
+    if (!isShortEncounter(viewport)) return;
+    const entries = snapshot.inventoryMode ? snapshot.items : snapshot.hand;
+    const handIndex = entries.findIndex((entry) => entry.id === (this.selectedEntryId ?? this.focusedEntryId));
+    const enemyIndex = snapshot.enemies.findIndex((enemy) => enemy.id === this.focusedEntityId);
+    if (handIndex >= 0) this.handPage = Math.floor(handIndex / getShortPageSize("hand", viewport));
+    if (enemyIndex >= 0) this.enemyPage = Math.floor(enemyIndex / getShortPageSize("enemy", viewport));
+  }
+  /** Returns only the page with exposed, tappable targets on short canvases. */
+  visiblePage(entries, viewport, kind) {
+    if (!isShortEncounter(viewport)) return entries;
+    const pageSize = getShortPageSize(kind, viewport);
+    const maximumPage = Math.max(0, Math.ceil(entries.length / pageSize) - 1);
+    const page = Math.min(kind === "enemy" ? this.enemyPage : this.handPage, maximumPage);
+    if (kind === "enemy") this.enemyPage = page;
+    else this.handPage = page;
+    return entries.slice(page * pageSize, (page + 1) * pageSize);
+  }
+  /** Pages locally without changing the authoritative gameplay snapshot or scene IDs. */
+  changePage(kind, direction) {
+    if (!this.latestSnapshot || !this.viewport || !isShortEncounter(this.viewport) || this.activeDrag || this.intentPending) return false;
+    const count2 = kind === "enemy" ? this.latestSnapshot.enemies.length : (this.latestSnapshot.inventoryMode ? this.latestSnapshot.items : this.latestSnapshot.hand).length;
+    const pageSize = getShortPageSize(kind, this.viewport);
+    const pageCount = Math.ceil(count2 / pageSize);
+    if (pageCount <= 1) return false;
+    if (kind === "enemy") this.enemyPage = (this.enemyPage + direction + pageCount) % pageCount;
+    else this.handPage = (this.handPage + direction + pageCount) % pageCount;
+    if (kind === "enemy") this.focusedEntityId = void 0;
+    this.reconcile(this.latestSnapshot, this.viewport);
+    const page = kind === "enemy" ? this.enemyPage : this.handPage;
+    this.announceInteraction?.(`${kind === "enemy" ? "Enemy" : "Hand"} page ${page + 1} of ${pageCount}.`);
+    return true;
+  }
+  /** Positions 44-pixel page controls beside compact target and hand bands. */
+  layoutPageControls(snapshot, viewport) {
+    const entryCount = snapshot.inventoryMode ? snapshot.items.length : snapshot.hand.length;
+    const showEnemies = isShortEncounter(viewport) && snapshot.enemies.length > getShortPageSize("enemy", viewport);
+    const showHand = isShortEncounter(viewport) && entryCount > getShortPageSize("hand", viewport);
+    this.previousEnemyPage.visible = this.nextEnemyPage.visible = showEnemies;
+    this.previousHandPage.visible = this.nextHandPage.visible = showHand;
+    if (showEnemies) {
+      const y2 = layoutEnemies(1, viewport)[0]?.y ?? 80;
+      this.previousEnemyPage.position.set(8, y2 - 22);
+      this.nextEnemyPage.position.set(viewport.width - 52, y2 - 22);
+    }
+    if (showHand) {
+      const y2 = layoutHand(1, viewport)[0]?.y ?? viewport.height - 60;
+      this.previousHandPage.position.set(8, y2 - 22);
+      this.nextHandPage.position.set(viewport.width - 52, y2 - 22);
+    }
+  }
   reconcileEntities(player, enemies, viewport) {
     const expectedIds = /* @__PURE__ */ new Set();
     const playerId = `player:${player.id}`;
     expectedIds.add(playerId);
     this.entities.set(player.id, player);
     this.updateEntityTile(playerId, player, this.playerLayer, layoutPlayer(viewport));
-    const enemyPositions = layoutEnemies(enemies.length, viewport);
-    enemies.forEach((enemy, index) => {
+    const visibleEnemies = this.visiblePage(enemies, viewport, "enemy");
+    const paged = isShortEncounter(viewport) && enemies.length > getShortPageSize("enemy", viewport);
+    const enemyViewport = paged ? { width: viewport.width - pageControlInset * 2, height: viewport.height } : viewport;
+    const enemyPositions = layoutEnemies(visibleEnemies.length, enemyViewport);
+    visibleEnemies.forEach((enemy, index) => {
       const position = enemyPositions[index];
       if (!position) {
         return;
@@ -51355,15 +51489,23 @@ var EncounterScene = class {
       const enemyId = `enemy:${enemy.id}`;
       expectedIds.add(enemyId);
       this.entities.set(enemy.id, enemy);
-      this.updateEntityTile(enemyId, enemy, this.enemyLayer, position);
+      this.updateEntityTile(
+        enemyId,
+        enemy,
+        this.enemyLayer,
+        paged ? { ...position, x: position.x + pageControlInset } : position
+      );
     });
     this.removeMissingTiles(this.entityTiles, expectedIds);
     this.removeMissingEntities(expectedIds);
   }
   reconcileHand(snapshot, viewport) {
-    const entries = snapshot.inventoryMode ? snapshot.items : snapshot.hand;
+    const allEntries = snapshot.inventoryMode ? snapshot.items : snapshot.hand;
+    const entries = this.visiblePage(allEntries, viewport, "hand");
     const expectedIds = /* @__PURE__ */ new Set();
-    const positions = layoutHand(entries.length, viewport);
+    const paged = isShortEncounter(viewport) && allEntries.length > getShortPageSize("hand", viewport);
+    const handViewport = paged ? { width: viewport.width - pageControlInset * 2, height: viewport.height } : viewport;
+    const positions = layoutHand(entries.length, handViewport);
     this.selectableEntries.clear();
     this.handLayoutPositions.clear();
     entries.forEach((entry, index) => {
@@ -51373,8 +51515,9 @@ var EncounterScene = class {
       }
       const id = snapshot.inventoryMode ? `item:${entry.id}` : `card:${entry.id}`;
       expectedIds.add(id);
-      this.handLayoutPositions.set(id, position);
-      this.updateHandTile(id, entry, position);
+      const actualPosition = paged ? { ...position, x: position.x + pageControlInset } : position;
+      this.handLayoutPositions.set(id, actualPosition);
+      this.updateHandTile(id, entry, actualPosition);
       this.selectableEntries.set(entry.id, entry);
     });
     this.retargetDragReturns();
@@ -52447,15 +52590,17 @@ ${resources}`;
   /** Builds the final hand transform for either a resting or inspected entry. */
   getHandLayoutTransform(tileId, position) {
     const isInspected = this.isHandEntryInspected(tileId);
+    const lift = this.viewport && isShortEncounter(this.viewport) ? 0 : focusedHandLift * (position.scale ?? 1);
     return {
       x: position.x,
-      y: position.y - (isInspected ? focusedHandLift * (position.scale ?? 1) : 0),
+      y: position.y - (isInspected ? lift : 0),
       rotation: isInspected ? 0 : position.rotation ?? 0,
       scale: (position.scale ?? 1) * (isInspected ? this.getHandInspectionScale(position) : 1)
     };
   }
   /** Scales constrained layouts modestly so inspection remains readable without crowding combat space. */
   getHandInspectionScale(position) {
+    if (this.viewport && isShortEncounter(this.viewport)) return 1.1;
     return position.rotation !== void 0 ? focusedHandScale : constrainedHandInspectionScale;
   }
   /** Determines whether an entry should remain enlarged for hover, selection, or keyboard inspection. */
@@ -52584,21 +52729,31 @@ ${resources}`;
   }
   focusTarget(direction) {
     const entry = this.selectedEntryId ? this.selectableEntries.get(this.selectedEntryId) : void 0;
-    if (!entry) {
+    const snapshot = this.latestSnapshot;
+    if (!entry || !snapshot) {
       return;
     }
-    const targetIds = [...this.entities.values()].filter((entity2) => !this.isAnimationLockedForEntity(entity2) && this.isValidTarget(entry.targetMode, entity2)).map((entity2) => entity2.id);
+    const targetIds = [snapshot.player, ...snapshot.enemies].filter((entity2) => !this.isAnimationLockedForEntity(entity2) && this.isValidTarget(entry.targetMode, entity2)).map((entity2) => entity2.id);
     if (targetIds.length === 0) {
       return;
     }
     const currentIndex = this.focusedEntityId ? targetIds.indexOf(this.focusedEntityId) : -1;
-    const nextIndex = (currentIndex + direction + targetIds.length) % targetIds.length;
-    const focusedEntityId = targetIds[nextIndex];
+    const pageSize = this.viewport && isShortEncounter(this.viewport) ? getShortPageSize("enemy", this.viewport) : snapshot.enemies.length;
+    const pageTargets = snapshot.enemies.slice(this.enemyPage * pageSize, (this.enemyPage + 1) * pageSize).map((entity2) => entity2.id).filter((id) => targetIds.includes(id));
+    const focusedEntityId = currentIndex < 0 && this.enemyPage > 0 && pageTargets.length > 0 ? pageTargets[direction > 0 ? 0 : pageTargets.length - 1] : targetIds[(currentIndex + direction + targetIds.length) % targetIds.length];
     if (!focusedEntityId) {
       return;
     }
     this.focusedEntityId = focusedEntityId;
-    const entity = this.entities.get(this.focusedEntityId);
+    const entity = [snapshot.player, ...snapshot.enemies].find((candidate) => candidate.id === focusedEntityId);
+    const enemyIndex = snapshot.enemies.findIndex((candidate) => candidate.id === focusedEntityId);
+    if (enemyIndex >= 0 && this.viewport && isShortEncounter(this.viewport)) {
+      const page = Math.floor(enemyIndex / getShortPageSize("enemy", this.viewport));
+      if (page !== this.enemyPage) {
+        this.enemyPage = page;
+        this.reconcile(snapshot, this.viewport);
+      }
+    }
     this.announceInteraction?.(`Focused ${entity?.name ?? "target"}. Press Enter to activate the selected action.`);
     this.refreshSelectionHighlights();
   }
@@ -52842,6 +52997,25 @@ function formatCardDescription(description) {
     const replacement = cardDescriptionTokens[tokenName.toLowerCase()];
     return replacement ?? token;
   });
+}
+function createPageControl(label, onPress) {
+  const button = new Container();
+  const background = new Graphics().roundRect(0, 0, 44, 44, 8).fill({ color: 2111564, alpha: 0.96 }).stroke({ color: 10271433, width: 1 });
+  const text = new Text({ text: label, style: { fill: 16113563, fontFamily: "Arial", fontSize: 28 } });
+  text.anchor.set(0.5);
+  text.position.set(22, 22);
+  button.addChild(background, text);
+  button.hitArea = new Rectangle(0, 0, 44, 44);
+  button.eventMode = "static";
+  button.cursor = "pointer";
+  button.on("pointertap", onPress);
+  return button;
+}
+function getShortPageSize(kind, viewport) {
+  const availableWidth = Math.max(0, viewport.width - pageControlInset * 2 - 32);
+  const tileWidth = kind === "enemy" ? 176 * 0.4 : handCardVisualSize.width * (layoutHand(1, viewport)[0]?.scale ?? 0.4);
+  const capacity = Math.max(1, Math.floor((availableWidth - tileWidth) / 44) + 1);
+  return Math.min(kind === "enemy" ? shortEnemyPageSize : shortHandPageSize, capacity);
 }
 var cardDescriptionTokens = {
   aoe: "Area",
@@ -56785,6 +56959,9 @@ function planCollectionLayout(width, height) {
     closeY: short ? 8 : height - 54
   };
 }
+function planCollectionContentBounds(width, height, safeArea = emptySafeAreaInsets) {
+  return describeViewport({ width, height }, { safeArea }).contentBounds;
+}
 function planCollectionDetailVisibility(plan, kind) {
   if (plan.short) return { compactDetail: false, details: false };
   if (!plan.compact) return { compactDetail: false, details: true };
@@ -56834,7 +57011,10 @@ async function createCollectionRenderer(canvas, sink) {
   const close = new GameButton({ width: 1, height: 1, label: "Close", onPress: () => {
     void sink.invokeMethodAsync("HandleActionFromRendererAsync", "close");
   } });
-  root.addChild(background, title, tabLayer, entriesLayer, listMask, empty, compactDetail, close);
+  const content = new Container();
+  const details = new Container();
+  content.addChild(title, tabLayer, entriesLayer, listMask, empty, compactDetail, close, details);
+  root.addChild(background, content);
   entriesLayer.mask = listMask;
   (host?.layer ?? application.stage).addChild(root);
   title.anchor.set(0.5, 0);
@@ -56846,8 +57026,6 @@ async function createCollectionRenderer(canvas, sink) {
   let viewportHeight = 1;
   let rendererWidth = 0;
   let rendererHeight = 0;
-  const details = new Container();
-  root.addChild(details);
   const destroyChildren = (layer) => {
     for (const child of layer.removeChildren()) child.destroy({ children: true });
   };
@@ -56993,19 +57171,25 @@ async function createCollectionRenderer(canvas, sink) {
       rendererWidth = width;
       rendererHeight = height;
     }
-    const plan = planCollectionLayout(width, height);
-    const listWidth = plan.compact ? width - 40 : Math.max(240, width - 280);
+    const bounds = planCollectionContentBounds(width, height, readCollectionSafeArea(inputCanvas));
+    const contentWidth = Math.max(1, bounds.width);
+    const contentHeight = Math.max(1, bounds.height);
+    const plan = planCollectionLayout(contentWidth, contentHeight);
+    const listWidth = plan.compact ? contentWidth - 40 : Math.max(240, contentWidth - 280);
     viewportHeight = plan.viewportHeight;
+    const entryCount = state?.tabs[state.activeTabIndex]?.entries.length ?? 0;
+    scrollOffset = Math.min(scrollOffset, Math.max(0, entryCount * 88 - viewportHeight));
     background.clear().roundRect(0, 0, width, height, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill, alpha: 0.98 }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
     background.eventMode = "static";
+    content.position.set(bounds.x, bounds.y);
     title.anchor.x = plan.short ? 0 : 0.5;
-    title.position.set(plan.short ? 20 : width / 2, 12);
+    title.position.set(plan.short ? 20 : contentWidth / 2, 12);
     empty.position.set(30, plan.listTop + 18);
     close.resize(104, 44);
-    close.position.set(width - 124, plan.closeY);
-    layoutTabs(width, plan);
+    close.position.set(contentWidth - 124, plan.closeY);
+    layoutTabs(contentWidth, plan);
     layoutEntries(plan, listWidth);
-    layoutDetails(width, height, plan);
+    layoutDetails(contentWidth, contentHeight, plan);
   };
   const scroll = (amount) => {
     const entryCount = state?.tabs[state.activeTabIndex]?.entries.length ?? 0;
@@ -57102,6 +57286,23 @@ async function createCollectionRenderer(canvas, sink) {
     if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     else if (host?.canvas.isConnected) host.canvas.focus({ preventScroll: true });
   } };
+}
+function readCollectionSafeArea(canvas) {
+  const ownerDocument = canvas.ownerDocument;
+  const probe = ownerDocument.createElement("div");
+  probe.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)";
+  ownerDocument.body.appendChild(probe);
+  try {
+    const style = getComputedStyle(probe);
+    return {
+      top: Number.parseFloat(style.paddingTop) || 0,
+      right: Number.parseFloat(style.paddingRight) || 0,
+      bottom: Number.parseFloat(style.paddingBottom) || 0,
+      left: Number.parseFloat(style.paddingLeft) || 0
+    };
+  } finally {
+    probe.remove();
+  }
 }
 function isState(value) {
   if (typeof value !== "object" || value === null) return false;
@@ -57930,12 +58131,12 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     width: viewportDescriptor?.width ?? application.renderer.width,
     height: viewportDescriptor?.height ?? application.renderer.height
   });
-  const resizeRenderer = (forceRendererResize = false, viewportOverride) => {
+  const resizeRenderer = (forceRendererResize = false) => {
     if (disposed) {
       return;
     }
     safeArea = readBrowserSafeAreaInsets(canvas);
-    const viewportUpdate = planViewportUpdate(viewportDescriptor, viewportOverride ?? getBrowserViewport(canvas), {
+    const viewportUpdate = planViewportUpdate(viewportDescriptor, getBrowserViewport(canvas), {
       safeArea,
       devicePixelRatio: window.devicePixelRatio
     });
@@ -57953,7 +58154,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     resizeRenderer();
   };
   const handleVisualViewportChange = () => {
-    resizeRenderer(false, getVisualViewport(canvas, visualViewport));
+    resizeRenderer();
   };
   const resizeObserver = new ResizeObserver(handleViewportChange);
   resizeObserver.observe(canvas.parentElement ?? canvas);
@@ -58264,16 +58465,6 @@ function getBrowserViewport(canvas) {
   return {
     width: host?.clientWidth ?? window.innerWidth,
     height: host?.clientHeight ?? window.innerHeight
-  };
-}
-function getVisualViewport(canvas, visualViewport) {
-  const hostViewport = getBrowserViewport(canvas);
-  if (!visualViewport || !Number.isFinite(visualViewport.width) || !Number.isFinite(visualViewport.height)) {
-    return hostViewport;
-  }
-  return {
-    width: Math.min(hostViewport.width, Math.max(1, visualViewport.width)),
-    height: Math.min(hostViewport.height, Math.max(1, visualViewport.height))
   };
 }
 function createDevicePixelRatioWatcher(onChange) {

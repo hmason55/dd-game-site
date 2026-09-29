@@ -213,7 +213,7 @@
     .pixi-encounter-surface[b-9jzg35z109] {
         min-height: 0;
         aspect-ratio: auto;
-        height: min(72vh, 42rem);
+        height: min(calc(100dvh - 8rem), 48rem);
     }
 }
 
@@ -221,6 +221,9 @@
     .pixi-encounter-surface[b-9jzg35z109] {
         --encounter-available-height: calc(100dvh - 5rem);
         min-height: 0;
+        width: 100%;
+        height: var(--encounter-available-height);
+        aspect-ratio: auto;
     }
 }
 
