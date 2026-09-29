@@ -47874,8 +47874,19 @@ var AnimationDirector = class {
     if (invalidResult) {
       return Promise.resolve(invalidResult);
     }
+    const scheduledCommands = this.createSchedule(request, commands);
+    const completionMs = Math.max(...scheduledCommands.map((command) => command.startMs + command.durationMs));
+    if (completionMs === 0) {
+      try {
+        for (const command of scheduledCommands) this.executor.execute(command.command, 1);
+        this.completeCommands(scheduledCommands);
+        return Promise.resolve(this.createResult(request.id, "completed", null));
+      } catch {
+        this.cancelCommands(scheduledCommands);
+        return Promise.resolve(this.createResult(request.id, "failed", "The animation command failed."));
+      }
+    }
     return new Promise((resolve) => {
-      const scheduledCommands = this.createSchedule(request, commands);
       const lockedObjectIds = /* @__PURE__ */ new Set();
       for (const command of commands) {
         if (command.sourceId) {
@@ -47889,7 +47900,7 @@ var AnimationDirector = class {
         id: request.id,
         interruptible: isVisualAnimationGroup(request) ? request.interruptible ?? true : true,
         commands: scheduledCommands,
-        completionMs: Math.max(...scheduledCommands.map((command) => command.startMs + command.durationMs)),
+        completionMs,
         lockedObjectIds,
         resolve,
         elapsedMs: 0
@@ -47903,18 +47914,7 @@ var AnimationDirector = class {
     if (this.disposed || !Number.isFinite(deltaMs) || deltaMs < 0) {
       return;
     }
-    for (const timeline of [...this.activeTimelines.values()]) {
-      timeline.elapsedMs += deltaMs;
-      for (const scheduledCommand of timeline.commands) {
-        const progress = getCommandProgress(timeline.elapsedMs, scheduledCommand);
-        if (progress !== void 0) {
-          this.executor.execute(scheduledCommand.command, progress);
-        }
-      }
-      if (timeline.elapsedMs >= timeline.completionMs) {
-        this.complete(timeline, "completed", null);
-      }
-    }
+    for (const timeline of [...this.activeTimelines.values()]) this.advanceTimeline(timeline, deltaMs);
   }
   /**
    * Cancels a timeline when it is marked interruptible.
@@ -47987,6 +47987,20 @@ var AnimationDirector = class {
       this.complete(timeline, "cancelled", "The encounter scene has been disposed.");
     }
   }
+  /** Advances one timeline and settles failed visual work without retaining its input locks. */
+  advanceTimeline(timeline, deltaMs) {
+    timeline.elapsedMs += deltaMs;
+    try {
+      for (const scheduledCommand of timeline.commands) {
+        const progress = getCommandProgress(timeline.elapsedMs, scheduledCommand);
+        if (progress !== void 0) this.executor.execute(scheduledCommand.command, progress);
+      }
+    } catch {
+      this.complete(timeline, "failed", "The animation command failed.");
+      return;
+    }
+    if (timeline.elapsedMs >= timeline.completionMs) this.complete(timeline, "completed", null);
+  }
   createSchedule(request, commands) {
     const mode = isVisualAnimationGroup(request) ? request.mode : "sequential";
     const staggerMs = isVisualAnimationGroup(request) ? Math.max(0, request.staggerMs ?? 0) : 0;
@@ -48022,12 +48036,27 @@ var AnimationDirector = class {
     if (!this.activeTimelines.delete(timeline.id)) {
       return;
     }
-    if (state !== "completed") {
-      for (const command of timeline.commands) {
+    if (state === "completed") this.completeCommands(timeline.commands);
+    else this.cancelCommands(timeline.commands);
+    timeline.resolve(this.createResult(timeline.id, state, message));
+  }
+  /** Attempts every visual cleanup even when one callback itself fails. */
+  cancelCommands(commands) {
+    for (const command of commands) {
+      try {
         this.executor.cancel(command.command);
+      } catch {
       }
     }
-    timeline.resolve(this.createResult(timeline.id, state, message));
+  }
+  /** Releases completed visual snapshots without changing the terminal timeline result. */
+  completeCommands(commands) {
+    for (const command of commands) {
+      try {
+        this.executor.complete?.(command.command);
+      } catch {
+      }
+    }
   }
   createResult(id, state, message) {
     return { id, state, message };
@@ -51276,7 +51305,10 @@ var EncounterScene = class {
     return {
       supports: (command) => supportedAnimationNames.has(command.name),
       execute: (command, progress) => this.executeAnimationCommand(command, progress),
-      cancel: (command) => this.cancelAnimationCommand(command)
+      cancel: (command) => this.cancelAnimationCommand(command),
+      complete: (command) => {
+        this.animationStarts.delete(command.id);
+      }
     };
   }
   /**
@@ -52316,9 +52348,6 @@ ${resources}`;
       this.clearDragMotion(command.sourceId);
     }
     this.animationCommandHandlers.get(command.name)?.(source3, target, animatedTile, start, progress);
-    if (progress === 1) {
-      this.animationStarts.delete(command.id);
-    }
   }
   cancelAnimationCommand(command) {
     const source3 = command.sourceId ? this.getSceneTile(command.sourceId) : void 0;
