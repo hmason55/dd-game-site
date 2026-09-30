@@ -49538,17 +49538,18 @@ function createEncounterAccessibilityOverlay(canvas) {
   };
 }
 function describeEncounter(snapshot) {
-  const playerStatuses = describeStatuses(snapshot.player.statuses);
-  const rituals = snapshot.player.rituals.length === 0 ? "" : `; active rituals ${snapshot.player.rituals.map((ritual) => ritual.name).join(", ")}`;
-  const player = `${snapshot.player.name}: ${snapshot.player.health} of ${snapshot.player.maxHealth} health, ${snapshot.player.block} block${playerStatuses}${rituals}.`;
-  const enemies = snapshot.enemies.map((enemy) => {
-    const statuses = describeStatuses(enemy.statuses);
-    const telegraph = enemy.telegraph ? ` Intent: ${enemy.telegraph}.` : "";
-    return `${enemy.name}: ${enemy.health} of ${enemy.maxHealth} health, ${enemy.block} block${statuses}.${telegraph}`;
-  }).join(" ");
+  const player = describeCombatant(snapshot.player);
+  const enemies = snapshot.enemies.map(describeCombatant).join(" ");
   const entries = snapshot.inventoryMode ? snapshot.items.map((item) => `${item.name}: ${item.uses} uses. ${expandKeywords(item.description)}.`).join(" ") : snapshot.hand.map((card) => `${card.name}: ${expandKeywords(card.description)}${card.unavailableReason ? ` ${card.unavailableReason}` : ""}.`).join(" ");
   const entryLabel = snapshot.inventoryMode ? "Items" : "Cards";
   return `${describeTurnPhase(snapshot.phase)}. ${player} ${enemies} ${entryLabel}: ${entries}`.trim();
+}
+function describeCombatant(entity) {
+  const statuses = describeStatuses(entity.statuses);
+  const rituals = entity.rituals.length === 0 ? "" : `; active rituals ${entity.rituals.map((ritual) => ritual.name).join(", ")}`;
+  const targetability = !entity.isPlayer && entity.isTargetable ? "; targetable" : "";
+  const telegraph = entity.telegraph ? ` Intent: ${entity.telegraph}.` : "";
+  return `${entity.name}: ${entity.health} of ${entity.maxHealth} health, ${entity.block} block${statuses}${rituals}${targetability}.${telegraph}`;
 }
 function describeTurnPhase(phase) {
   switch (phase) {
@@ -49596,12 +49597,27 @@ var noOpAccessibilityOverlay = {
 var foldCombatSceneTreatment = {
   id: "fold",
   regionId: "fold",
+  assetBundleId: "treatment:fold",
+  enemyArtSetId: "fold-neutral",
+  cardArtSetId: "fold-neutral",
   atmosphere: "pale-reach",
+  distantLightAlpha: 0.46,
   foregroundSilhouetteCount: 3,
   mistAlpha: 0.14
 };
+var shatteredFoldCombatSceneTreatment = {
+  ...foldCombatSceneTreatment,
+  id: "fold-shattered",
+  settingId: "shattered",
+  enemyArtSetId: "fold-displaced",
+  cardArtSetId: "fold-displaced",
+  distantLightAlpha: 0.36,
+  foregroundSilhouetteCount: 5,
+  mistAlpha: 0.2
+};
 var combatSceneTreatmentRegistry = {
-  fold: foldCombatSceneTreatment
+  fold: foldCombatSceneTreatment,
+  "fold-shattered": shatteredFoldCombatSceneTreatment
 };
 function getCombatSceneTreatment(value) {
   return typeof value === "string" && Object.hasOwn(combatSceneTreatmentRegistry, value) ? combatSceneTreatmentRegistry[value] ?? foldCombatSceneTreatment : foldCombatSceneTreatment;
@@ -50360,7 +50376,7 @@ var EncounterBackdrop = class extends Container {
     const horizon = h2 * 0.64;
     const pillarWidth = Math.max(20, w2 * 0.055);
     const colors = this.atmosphereTokens;
-    this.atmosphere.clear().rect(0, 0, w2, h2).fill({ color: colors.canvas }).rect(0, 0, w2, horizon).fill({ color: colors.distantSurface, alpha: 0.46 }).rect(0, h2 * 0.18, w2, h2 * 0.25).fill({ color: colors.platform, alpha: 0.12 }).rect(0, horizon - 3, w2, 6).fill({ color: colors.line, alpha: 0.24 });
+    this.atmosphere.clear().rect(0, 0, w2, h2).fill({ color: colors.canvas }).rect(0, 0, w2, horizon).fill({ color: colors.distantSurface, alpha: this.treatment.distantLightAlpha }).rect(0, h2 * 0.18, w2, h2 * 0.25).fill({ color: colors.platform, alpha: 0.12 }).rect(0, horizon - 3, w2, 6).fill({ color: colors.line, alpha: 0.24 });
     this.architecture.clear();
     this.floor.clear();
     if (w2 === 0 || h2 === 0) {
@@ -50949,6 +50965,34 @@ var handCardVisualSize = {
   width: 108,
   height: 144
 };
+function getCombatCardPreviewRegion(viewport) {
+  const normalizedViewport = Object.freeze({
+    width: normalizeLayoutDimension(viewport.width),
+    height: normalizeLayoutDimension(viewport.height)
+  });
+  const mode = getEncounterLayoutMode(normalizedViewport);
+  const headerHeight = Math.min(normalizedViewport.height, mode === "MobilePortrait" ? 76 : isShortEncounter(normalizedViewport) ? 34 : 60);
+  const endTurnHeight = Math.min(52, Math.max(0, normalizedViewport.height - headerHeight));
+  const verticalInset = Math.min(16, Math.max(0, normalizedViewport.height - headerHeight) / 2);
+  const endTurnY = Math.max(headerHeight, normalizedViewport.height - endTurnHeight - verticalInset);
+  const combatBottom = Math.max(headerHeight, Math.min(endTurnY - 12, normalizedViewport.height));
+  const availableCombatHeight = Math.max(0, combatBottom - headerHeight);
+  const enemyHeight = Math.min(availableCombatHeight, Math.max(0, availableCombatHeight * 0.4));
+  const playerHeight = Math.min(
+    Math.max(0, availableCombatHeight - enemyHeight),
+    Math.max(0, availableCombatHeight * 0.24)
+  );
+  const handY = headerHeight + enemyHeight + playerHeight;
+  return calculateCombatCardPreviewRegion(normalizedViewport, headerHeight, handY);
+}
+function getShortEncounterPageSize(kind, viewport) {
+  const width = normalizeLayoutDimension(viewport.width);
+  const pageControlInset2 = 52;
+  const availableWidth = Math.max(0, width - pageControlInset2 * 2 - 32);
+  const tileWidth = kind === "enemy" ? 176 * 0.4 : handCardVisualSize.width * (layoutHand(1, { width, height: normalizeLayoutDimension(viewport.height) })[0]?.scale ?? 0.4);
+  const capacity = Math.max(1, Math.floor((availableWidth - tileWidth) / 44) + 1);
+  return Math.min(kind === "enemy" ? 5 : 6, capacity);
+}
 function layoutEnemies(count2, viewport) {
   if (count2 === 0) {
     return [];
@@ -51094,6 +51138,26 @@ function layoutShortHand(count2, viewport) {
 }
 function isShortEncounter(viewport) {
   return viewport.height <= shortEncounterMaximumHeight && viewport.width >= minimumEncounterContentWidth;
+}
+function createLayoutRectangle(x2, y2, width, height) {
+  return Object.freeze({ x: x2, y: y2, width: Math.max(0, width), height: Math.max(0, height) });
+}
+function calculateCombatCardPreviewRegion(viewport, headerHeight, handY) {
+  const horizontalInset = Math.min(16, viewport.width / 2);
+  const top = Math.min(viewport.height, headerHeight + 12);
+  const bottom = Math.max(top, Math.min(viewport.height, handY - 12));
+  const availableHeight = Math.max(0, bottom - top);
+  const height = Math.min(300, availableHeight);
+  const width = Math.min(360, Math.max(0, viewport.width - horizontalInset * 2));
+  return createLayoutRectangle(
+    Math.max(horizontalInset, (viewport.width - width) / 2),
+    top + (availableHeight - height) / 2,
+    width,
+    height
+  );
+}
+function normalizeLayoutDimension(value) {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
 }
 function getWideHandCenterBounds(count2, maximumRotation, fanDepth, cardWidth, cardHeight, playerBottom, handClearance, viewportHeight) {
   let topExtent = 0;
@@ -51309,6 +51373,17 @@ function getMotionIntensity(value, reducedMotion) {
 // src/run-hud.ts
 var relicRailLimit = 24;
 var RunHud = class extends Container {
+  constructor(requestRelicCollection) {
+    super();
+    this.requestRelicCollection = requestRelicCollection;
+    this.addChild(this.health, this.healthBar, this.currency, this.deck, this.relics, this.turn, this.stamina, this.mana, this.pinnedRelics);
+    this.relics.on("pointertap", () => {
+      if (this.relicCollectionAvailable) {
+        this.requestRelicCollection?.();
+      }
+    });
+  }
+  requestRelicCollection;
   health = new ResourceCounter({ icon: "\u2665", label: "", value: "0/0", valueLayout: "inline" });
   healthBar = new ProgressIndicator({ width: 64, height: 5, value: 0, maximum: 1, fill: uiTokens.color.health });
   stamina = new ResourceCounter({ icon: "\u26A1", label: "Stamina", value: "0 / 0", valueLayout: "stacked" });
@@ -51318,10 +51393,7 @@ var RunHud = class extends Container {
   relics = new ResourceCounter({ icon: "\u2726", label: "Relics", value: 0 });
   pinnedRelics = new Text({ text: "", style: getUiTextStyle("Caption") });
   turn = new Text({ text: "", style: getUiTextStyle("Body") });
-  constructor() {
-    super();
-    this.addChild(this.health, this.healthBar, this.currency, this.deck, this.relics, this.turn, this.stamina, this.mana, this.pinnedRelics);
-  }
+  relicCollectionAvailable = false;
   /** Reconciles resource values and a concise, human-readable phase label. */
   reconcile(state, viewport) {
     this.health.setValue(`${state.health}/${state.maximumHealth}`);
@@ -51339,6 +51411,9 @@ var RunHud = class extends Container {
     this.currency.setValue(state.currency);
     this.deck.setValue(state.deckCount);
     this.relics.setValue(formatRelicRailCount(state.relicCount));
+    this.relicCollectionAvailable = state.relicCount > 0;
+    this.relics.eventMode = this.relicCollectionAvailable ? "static" : "none";
+    this.relics.cursor = this.relicCollectionAvailable ? "pointer" : "default";
     this.pinnedRelics.text = formatPinnedRelics(state.pinnedRelics);
     this.pinnedRelics.visible = this.pinnedRelics.text.length > 0;
     this.turn.text = describeTurnPhase(state.phase);
@@ -51359,7 +51434,7 @@ var RunHud = class extends Container {
       this.deck.position.set(viewport.width - 132, padding);
       this.relics.position.set(viewport.width - 68, padding);
       this.pinnedRelics.visible = false;
-      this.turn.position.set(padding, 82);
+      this.turn.position.set(228, 44);
       return;
     }
     if (getViewportLayoutMode(viewport) === "Compact") {
@@ -51434,8 +51509,6 @@ var draggedCardScale = 1.32;
 var playedCardScale = 1.48;
 var entityHitHalfWidth = 94;
 var entityHitHalfHeight = 64;
-var shortEnemyPageSize = 5;
-var shortHandPageSize = 6;
 var pageControlInset = 52;
 var EncounterScene = class {
   /**
@@ -51446,6 +51519,7 @@ var EncounterScene = class {
     this.assetLoader = assetLoader;
     this.announceInteraction = announceInteraction;
     this.reducedMotion = reducedMotion;
+    this.runHud = new RunHud(() => this.requestRelicCollection());
     this.root.eventMode = "static";
     this.root.on("globalpointermove", (event) => this.moveDrag(event));
     this.root.on("pointerup", (event) => this.releaseDrag(event));
@@ -51477,7 +51551,7 @@ var EncounterScene = class {
   dragLayer = new Container();
   effectsLayer = new Container();
   overlayLayer = new Container();
-  runHud = new RunHud();
+  runHud;
   background = new Graphics();
   backdrop = new EncounterBackdrop();
   dragAimArrow = new Graphics();
@@ -51647,6 +51721,10 @@ var EncounterScene = class {
     if (this.intentPending) {
       return false;
     }
+    if (event.key.toLowerCase() === "r" && (this.latestSnapshot?.relicCount ?? 0) > 0) {
+      this.requestRelicCollection();
+      return true;
+    }
     if (event.key === "PageDown" || event.key === "PageUp") {
       return this.changePage(this.selectedEntryId ? "enemy" : "hand", event.key === "PageDown" ? 1 : -1);
     }
@@ -51768,13 +51846,13 @@ var EncounterScene = class {
     const entries = snapshot.inventoryMode ? snapshot.items : snapshot.hand;
     const handIndex = entries.findIndex((entry) => entry.id === (this.selectedEntryId ?? this.focusedEntryId));
     const enemyIndex = snapshot.enemies.findIndex((enemy) => enemy.id === this.focusedEntityId);
-    if (handIndex >= 0) this.handPage = Math.floor(handIndex / getShortPageSize("hand", viewport));
-    if (enemyIndex >= 0) this.enemyPage = Math.floor(enemyIndex / getShortPageSize("enemy", viewport));
+    if (handIndex >= 0) this.handPage = Math.floor(handIndex / getShortEncounterPageSize("hand", viewport));
+    if (enemyIndex >= 0) this.enemyPage = Math.floor(enemyIndex / getShortEncounterPageSize("enemy", viewport));
   }
   /** Returns only the page with exposed, tappable targets on short canvases. */
   visiblePage(entries, viewport, kind) {
     if (!isShortEncounter(viewport)) return entries;
-    const pageSize = getShortPageSize(kind, viewport);
+    const pageSize = getShortEncounterPageSize(kind, viewport);
     const maximumPage = Math.max(0, Math.ceil(entries.length / pageSize) - 1);
     const page = Math.min(kind === "enemy" ? this.enemyPage : this.handPage, maximumPage);
     if (kind === "enemy") this.enemyPage = page;
@@ -51785,7 +51863,7 @@ var EncounterScene = class {
   changePage(kind, direction) {
     if (!this.latestSnapshot || !this.viewport || !isShortEncounter(this.viewport) || this.activeDrag || this.intentPending) return false;
     const count2 = kind === "enemy" ? this.latestSnapshot.enemies.length : (this.latestSnapshot.inventoryMode ? this.latestSnapshot.items : this.latestSnapshot.hand).length;
-    const pageSize = getShortPageSize(kind, this.viewport);
+    const pageSize = getShortEncounterPageSize(kind, this.viewport);
     const pageCount = Math.ceil(count2 / pageSize);
     if (pageCount <= 1) return false;
     if (kind === "enemy") this.enemyPage = (this.enemyPage + direction + pageCount) % pageCount;
@@ -51799,8 +51877,8 @@ var EncounterScene = class {
   /** Positions 44-pixel page controls beside compact target and hand bands. */
   layoutPageControls(snapshot, viewport) {
     const entryCount = snapshot.inventoryMode ? snapshot.items.length : snapshot.hand.length;
-    const showEnemies = isShortEncounter(viewport) && snapshot.enemies.length > getShortPageSize("enemy", viewport);
-    const showHand = isShortEncounter(viewport) && entryCount > getShortPageSize("hand", viewport);
+    const showEnemies = isShortEncounter(viewport) && snapshot.enemies.length > getShortEncounterPageSize("enemy", viewport);
+    const showHand = isShortEncounter(viewport) && entryCount > getShortEncounterPageSize("hand", viewport);
     this.previousEnemyPage.visible = this.nextEnemyPage.visible = showEnemies;
     this.previousHandPage.visible = this.nextHandPage.visible = showHand;
     if (showEnemies) {
@@ -51821,7 +51899,7 @@ var EncounterScene = class {
     this.entities.set(player.id, player);
     this.updateEntityTile(playerId, player, this.playerLayer, layoutPlayer(viewport));
     const visibleEnemies = this.visiblePage(enemies, viewport, "enemy");
-    const paged = isShortEncounter(viewport) && enemies.length > getShortPageSize("enemy", viewport);
+    const paged = isShortEncounter(viewport) && enemies.length > getShortEncounterPageSize("enemy", viewport);
     const enemyViewport = paged ? { width: viewport.width - pageControlInset * 2, height: viewport.height } : viewport;
     const enemyPositions = layoutEnemies(visibleEnemies.length, enemyViewport);
     visibleEnemies.forEach((enemy, index) => {
@@ -51846,7 +51924,7 @@ var EncounterScene = class {
     const allEntries = snapshot.inventoryMode ? snapshot.items : snapshot.hand;
     const entries = this.visiblePage(allEntries, viewport, "hand");
     const expectedIds = /* @__PURE__ */ new Set();
-    const paged = isShortEncounter(viewport) && allEntries.length > getShortPageSize("hand", viewport);
+    const paged = isShortEncounter(viewport) && allEntries.length > getShortEncounterPageSize("hand", viewport);
     const handViewport = paged ? { width: viewport.width - pageControlInset * 2, height: viewport.height } : viewport;
     const positions = layoutHand(entries.length, handViewport);
     this.selectableEntries.clear();
@@ -52961,6 +53039,19 @@ ${resources}`;
       sceneId: encounterSceneId
     });
   }
+  /** Opens the existing collection overlay at the authoritative relic inventory. */
+  requestRelicCollection() {
+    if (this.inputReleased || this.intentPending || !this.latestSnapshot || this.latestSnapshot.relicCount <= 0) {
+      return;
+    }
+    this.submitIntent({
+      kind: "previewRelics",
+      sourceId: null,
+      targetId: null,
+      sequence: this.currentSequence,
+      sceneId: encounterSceneId
+    });
+  }
   /** Applies the current hand layout and inspection treatment for a card. */
   applyHandLayoutTransform(tileId, tile, position) {
     if (!position) {
@@ -52971,6 +53062,9 @@ ${resources}`;
   /** Builds the final hand transform for either a resting or inspected entry. */
   getHandLayoutTransform(tileId, position) {
     const isInspected = this.isHandEntryInspected(tileId);
+    if (this.isHandEntryPreviewed(tileId) && this.viewport && !isShortEncounter(this.viewport)) {
+      return getCardPreviewTransform(this.viewport);
+    }
     const lift = this.viewport && isShortEncounter(this.viewport) ? 0 : focusedHandLift * (position.scale ?? 1);
     return {
       x: position.x,
@@ -52987,6 +53081,10 @@ ${resources}`;
   /** Determines whether an entry should remain enlarged for hover, selection, or keyboard inspection. */
   isHandEntryInspected(tileId) {
     return tileId === this.getFocusedHandTileId() || tileId === this.getSelectedHandTileId() || tileId === this.getHoveredHandTileId();
+  }
+  /** Determines whether keyboard focus or selection, rather than hover, owns the remote preview slot. */
+  isHandEntryPreviewed(tileId) {
+    return tileId === this.getFocusedHandTileId() || tileId === this.getSelectedHandTileId();
   }
   /** Starts a short return to the resting hand transform after inspection ends. */
   startHandLayoutTransition(tileId) {
@@ -53119,7 +53217,7 @@ ${resources}`;
       return;
     }
     const currentIndex = this.focusedEntityId ? targetIds.indexOf(this.focusedEntityId) : -1;
-    const pageSize = this.viewport && isShortEncounter(this.viewport) ? getShortPageSize("enemy", this.viewport) : snapshot.enemies.length;
+    const pageSize = this.viewport && isShortEncounter(this.viewport) ? getShortEncounterPageSize("enemy", this.viewport) : snapshot.enemies.length;
     const pageTargets = snapshot.enemies.slice(this.enemyPage * pageSize, (this.enemyPage + 1) * pageSize).map((entity2) => entity2.id).filter((id) => targetIds.includes(id));
     const focusedEntityId = currentIndex < 0 && this.enemyPage > 0 && pageTargets.length > 0 ? pageTargets[direction > 0 ? 0 : pageTargets.length - 1] : targetIds[(currentIndex + direction + targetIds.length) % targetIds.length];
     if (!focusedEntityId) {
@@ -53129,7 +53227,7 @@ ${resources}`;
     const entity = [snapshot.player, ...snapshot.enemies].find((candidate) => candidate.id === focusedEntityId);
     const enemyIndex = snapshot.enemies.findIndex((candidate) => candidate.id === focusedEntityId);
     if (enemyIndex >= 0 && this.viewport && isShortEncounter(this.viewport)) {
-      const page = Math.floor(enemyIndex / getShortPageSize("enemy", this.viewport));
+      const page = Math.floor(enemyIndex / getShortEncounterPageSize("enemy", this.viewport));
       if (page !== this.enemyPage) {
         this.enemyPage = page;
         this.reconcile(snapshot, this.viewport);
@@ -53186,7 +53284,7 @@ ${resources}`;
         this.returnReleasedEntry(intent.kind, intent.sourceId);
         this.releasePendingIntent();
         this.showRejectedIntent();
-      } else if (intent.kind === "previewDeck") {
+      } else if (intent.kind === "previewDeck" || intent.kind === "previewRelics") {
         this.releasePendingIntent();
       }
     }).catch(() => {
@@ -53329,6 +53427,8 @@ function getPendingIntentMessage(kind) {
       return "Ending turn\u2026";
     case "previewDeck":
       return "Opening deck\u2026";
+    case "previewRelics":
+      return "Opening relics\u2026";
     case "useItem":
       return "Using item\u2026";
     default:
@@ -53408,11 +53508,18 @@ function createPageControl(label, onPress) {
   button.on("pointertap", onPress);
   return button;
 }
-function getShortPageSize(kind, viewport) {
-  const availableWidth = Math.max(0, viewport.width - pageControlInset * 2 - 32);
-  const tileWidth = kind === "enemy" ? 176 * 0.4 : handCardVisualSize.width * (layoutHand(1, viewport)[0]?.scale ?? 0.4);
-  const capacity = Math.max(1, Math.floor((availableWidth - tileWidth) / 44) + 1);
-  return Math.min(kind === "enemy" ? shortEnemyPageSize : shortHandPageSize, capacity);
+function getCardPreviewTransform(viewport) {
+  const preview = getCombatCardPreviewRegion(viewport);
+  const inset = Math.min(8, preview.width / 2, preview.height / 2);
+  const availableWidth = Math.max(0, preview.width - inset * 2);
+  const availableHeight = Math.max(0, preview.height - inset * 2);
+  const scale = Math.max(0, Math.min(availableWidth / handCardVisualSize.width, availableHeight / handCardVisualSize.height));
+  return {
+    x: preview.x + preview.width / 2,
+    y: preview.y + preview.height / 2,
+    rotation: 0,
+    scale
+  };
 }
 var cardDescriptionTokens = {
   aoe: "Area",
