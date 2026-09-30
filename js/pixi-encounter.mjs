@@ -47778,10 +47778,10 @@ init_eventemitter3();
 extensions.add(browserExt, webworkerExt);
 
 // src/protocol.ts
-var encounterRendererProtocolVersion = 3;
+var encounterRendererProtocolVersion = 4;
 var encounterSceneId = "encounter";
 function isEncounterPresentationSnapshot(value) {
-  if (!isRecord(value) || value.protocolVersion !== encounterRendererProtocolVersion || value.sceneId !== encounterSceneId || !isFiniteNumber(value.sequence) || !isString(value.phase) || typeof value.inventoryMode !== "boolean" || !isEntityPresentationState(value.player) || !isArrayOf(value.enemies, isEntityPresentationState) || !isArrayOf(value.hand, isCardPresentationState) || !isArrayOf(value.items, isItemPresentationState) || !isFiniteNumber(value.currency) || !isFiniteNumber(value.deckCount) || !isFiniteNumber(value.relicCount) || value.sceneTreatmentId !== void 0 && !isString(value.sceneTreatmentId)) {
+  if (!isRecord(value) || value.protocolVersion !== encounterRendererProtocolVersion || value.sceneId !== encounterSceneId || !isFiniteNumber(value.sequence) || !isString(value.phase) || typeof value.inventoryMode !== "boolean" || !isEntityPresentationState(value.player) || !isArrayOf(value.enemies, isEntityPresentationState) || !isArrayOf(value.hand, isCardPresentationState) || !isArrayOf(value.items, isItemPresentationState) || !isFiniteNumber(value.currency) || !isFiniteNumber(value.deckCount) || !isFiniteNumber(value.relicCount) || value.pinnedRelics !== void 0 && !isArrayOf(value.pinnedRelics, isRelicPresentationState) || value.sceneTreatmentId !== void 0 && !isString(value.sceneTreatmentId)) {
     return false;
   }
   return true;
@@ -47790,7 +47790,10 @@ function canApplySnapshot(lastSequence, candidateSequence) {
   return candidateSequence > lastSequence;
 }
 function isEntityPresentationState(value) {
-  return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.image) && isFiniteNumber(value.health) && isFiniteNumber(value.maxHealth) && isFiniteNumber(value.block) && isFiniteNumber(value.energy) && isFiniteNumber(value.mana) && isFiniteNumber(value.posture) && isFiniteNumber(value.maxPosture) && typeof value.isPlayer === "boolean" && typeof value.isTargetable === "boolean" && (value.telegraph === null || isString(value.telegraph)) && isArrayOf(value.statuses, isEntityStatusPresentationState) && isArrayOf(value.rituals, isRitualPresentationState);
+  return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.image) && isFiniteNumber(value.health) && isFiniteNumber(value.maxHealth) && isFiniteNumber(value.block) && isFiniteNumber(value.energy) && (value.turnStartEnergy === void 0 || isFiniteNumber(value.turnStartEnergy)) && isFiniteNumber(value.mana) && (value.turnStartMana === void 0 || isFiniteNumber(value.turnStartMana)) && isFiniteNumber(value.posture) && isFiniteNumber(value.maxPosture) && typeof value.isPlayer === "boolean" && typeof value.isTargetable === "boolean" && (value.telegraph === null || isString(value.telegraph)) && isArrayOf(value.statuses, isEntityStatusPresentationState) && isArrayOf(value.rituals, isRitualPresentationState);
+}
+function isRelicPresentationState(value) {
+  return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.description) && isString(value.image);
 }
 function isEntityStatusPresentationState(value) {
   return isRecord(value) && isString(value.name) && isFiniteNumber(value.stacks);
@@ -47799,7 +47802,7 @@ function isRitualPresentationState(value) {
   return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.image);
 }
 function isCardPresentationState(value) {
-  return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.description) && isString(value.image) && isString(value.cardType) && isString(value.rarity) && isString(value.character) && isCardTargetMode(value.targetMode) && isFiniteNumber(value.energyCost) && isFiniteNumber(value.manaCost) && typeof value.isDraggable === "boolean" && typeof value.isInteractionLocked === "boolean" && typeof value.isQueued === "boolean";
+  return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.description) && isString(value.image) && isString(value.cardType) && isString(value.rarity) && isString(value.character) && isCardTargetMode(value.targetMode) && isFiniteNumber(value.energyCost) && isFiniteNumber(value.manaCost) && typeof value.isDraggable === "boolean" && typeof value.isInteractionLocked === "boolean" && typeof value.isQueued === "boolean" && (value.unavailableReason === void 0 || value.unavailableReason === null || isString(value.unavailableReason));
 }
 function isItemPresentationState(value) {
   return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.description) && isString(value.image) && isFiniteNumber(value.uses) && isCardTargetMode(value.targetMode) && typeof value.isDraggable === "boolean";
@@ -49543,7 +49546,7 @@ function describeEncounter(snapshot) {
     const telegraph = enemy.telegraph ? ` Intent: ${enemy.telegraph}.` : "";
     return `${enemy.name}: ${enemy.health} of ${enemy.maxHealth} health, ${enemy.block} block${statuses}.${telegraph}`;
   }).join(" ");
-  const entries = snapshot.inventoryMode ? snapshot.items.map((item) => `${item.name}: ${item.uses} uses. ${expandKeywords(item.description)}.`).join(" ") : snapshot.hand.map((card) => `${card.name}: ${expandKeywords(card.description)}.`).join(" ");
+  const entries = snapshot.inventoryMode ? snapshot.items.map((item) => `${item.name}: ${item.uses} uses. ${expandKeywords(item.description)}.`).join(" ") : snapshot.hand.map((card) => `${card.name}: ${expandKeywords(card.description)}${card.unavailableReason ? ` ${card.unavailableReason}` : ""}.`).join(" ");
   const entryLabel = snapshot.inventoryMode ? "Items" : "Cards";
   return `${describeTurnPhase(snapshot.phase)}. ${player} ${enemies} ${entryLabel}: ${entries}`.trim();
 }
@@ -50429,6 +50432,8 @@ var CardView = class extends Container {
   artMask = new Graphics();
   textScrims = new Graphics();
   costPlate = new Graphics();
+  energyCostPlate = new Graphics();
+  manaCostPlate = new Graphics();
   stateOverlay = new Graphics();
   playabilityOutline = new Graphics();
   stateOutline = new Graphics();
@@ -50437,6 +50442,8 @@ var CardView = class extends Container {
   typeStyle = new TextStyle({ ...uiTokens.typography.body, align: "center", fontSize: 13, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true });
   descriptionStyle = new TextStyle({ ...uiTokens.typography.cardEffect, align: "center", fontSize: 15, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true });
   costLabel = new Text({ text: "", style: this.costStyle });
+  energyCostLabel = new Text({ text: "", style: this.costStyle });
+  manaCostLabel = new Text({ text: "", style: this.costStyle });
   nameLabel = new Text({ text: "", style: this.nameStyle });
   typeLabel = new Text({ text: "", style: this.typeStyle });
   descriptionLabel = new Text({ text: "", style: this.descriptionStyle });
@@ -50466,13 +50473,15 @@ var CardView = class extends Container {
     this.motionState = options.motionState ?? "idle";
     this.playability = options.playability ?? "playable";
     this.costLabel.anchor.set(0.5);
+    this.energyCostLabel.anchor.set(0.5);
+    this.manaCostLabel.anchor.set(0.5);
     this.nameLabel.anchor.set(0.5, 0);
     this.typeLabel.anchor.set(0.5, 0);
     this.descriptionLabel.anchor.set(0.5, 0);
     this.artwork.anchor.set(0.5, 0.5);
     this.artwork.mask = this.artMask;
     this.textScrims.mask = this.artMask;
-    for (const label of [this.costLabel, this.nameLabel, this.typeLabel, this.descriptionLabel]) {
+    for (const label of [this.costLabel, this.energyCostLabel, this.manaCostLabel, this.nameLabel, this.typeLabel, this.descriptionLabel]) {
       label.resolution = 2;
     }
     this.addChild(
@@ -50482,7 +50491,11 @@ var CardView = class extends Container {
       this.artMask,
       this.textScrims,
       this.costPlate,
+      this.energyCostPlate,
+      this.manaCostPlate,
       this.costLabel,
+      this.energyCostLabel,
+      this.manaCostLabel,
       this.nameLabel,
       this.typeLabel,
       this.descriptionLabel,
@@ -50653,8 +50666,16 @@ var CardView = class extends Container {
     const rulesY = this.cardHeight * 0.59;
     this.textScrims.clear().rect(artBounds.x, artBounds.y, artBounds.width, header.height).fill({ color: uiTokens.color.panelShadow, alpha: 0.78 }).rect(artBounds.x, rulesY, artBounds.width, artBounds.y + artBounds.height - rulesY).fill({ color: uiTokens.color.panelShadow });
     this.costPlate.clear();
-    if (header.hasCost) {
+    this.energyCostPlate.clear();
+    this.manaCostPlate.clear();
+    if (header.hasLegacyCost) {
       this.costPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.badgeWidth, header.badgeHeight, 7).fill({ color: uiTokens.color.panelShadow, alpha: 0.94 }).stroke({ color: palette.accent, width: 2 });
+    }
+    if (header.hasEnergyCost) {
+      this.energyCostPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.energyBadgeWidth, header.badgeHeight, 7).fill({ color: uiTokens.color.stamina, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
+    }
+    if (header.hasManaCost) {
+      this.manaCostPlate.roundRect(artBounds.x + 9 + header.energyBadgeWidth, artBounds.y + 5, header.manaBadgeWidth, header.badgeHeight, 7).fill({ color: uiTokens.color.mana, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
     }
   }
   updateArtwork(artBounds) {
@@ -50677,28 +50698,43 @@ var CardView = class extends Container {
     this.nameStyle.fontSize = Math.max(12, 18 * textScale);
     this.typeStyle.fontSize = Math.max(10, 12 * textScale);
     this.descriptionStyle.fontSize = Math.max(11, 14 * textScale);
-    const cost = String(this.cardContent.cost).trim();
+    const cost = this.cardContent.cost === void 0 ? "" : String(this.cardContent.cost).trim();
+    const energyCost = getVisibleResourceCost(this.cardContent.energyCost);
+    const manaCost = getVisibleResourceCost(this.cardContent.manaCost);
     this.costLabel.text = cost;
-    const hasCost = cost.length > 0;
-    const badgeWidth = hasCost ? Math.min(this.cardWidth - 14, Math.max(badgeHeight, this.costLabel.width + 14)) : 0;
-    const stacked = hasCost && badgeWidth > this.cardWidth * 0.35;
+    this.energyCostLabel.text = energyCost === void 0 ? "" : `\u26A1 ${energyCost}`;
+    this.manaCostLabel.text = manaCost === void 0 ? "" : `\u2726 ${manaCost}`;
+    const hasLegacyCost = cost.length > 0;
+    const hasEnergyCost = energyCost !== void 0;
+    const hasManaCost = manaCost !== void 0;
+    const badgeWidth = hasLegacyCost ? Math.min(this.cardWidth - 14, Math.max(badgeHeight, this.costLabel.width + 14)) : 0;
+    const energyBadgeWidth = hasEnergyCost ? Math.max(badgeHeight, this.energyCostLabel.width + 14) : 0;
+    const manaBadgeWidth = hasManaCost ? Math.max(badgeHeight, this.manaCostLabel.width + 14) : 0;
+    const resourceBadgeWidth = energyBadgeWidth + manaBadgeWidth + (hasEnergyCost && hasManaCost ? 4 : 0);
+    const activeBadgeWidth = Math.max(badgeWidth, resourceBadgeWidth);
+    const hasCost = hasLegacyCost || hasEnergyCost || hasManaCost;
+    const stacked = hasCost && Math.max(badgeWidth, resourceBadgeWidth) > this.cardWidth * 0.35;
     const headerHeight = stacked ? Math.max(82, this.cardHeight * 0.34) : Math.max(28, this.cardHeight * 0.22);
-    this.costLabel.visible = hasCost;
+    this.costLabel.visible = hasLegacyCost;
+    this.energyCostLabel.visible = hasEnergyCost;
+    this.manaCostLabel.visible = hasManaCost;
     this.costLabel.position.set(uiTokens.frame.borderWidth + 5 + badgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
+    this.energyCostLabel.position.set(uiTokens.frame.borderWidth + 5 + energyBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
+    this.manaCostLabel.position.set(uiTokens.frame.borderWidth + 9 + energyBadgeWidth + manaBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
     this.nameLabel.text = this.cardContent.name;
     this.nameLabel.position.set(
-      stacked || !hasCost ? this.cardWidth / 2 : (this.cardWidth + badgeWidth + textPadding) / 2,
+      stacked || !hasCost ? this.cardWidth / 2 : (this.cardWidth + activeBadgeWidth + textPadding) / 2,
       uiTokens.frame.borderWidth + (stacked ? badgeHeight + 11 : 9)
     );
     this.typeLabel.text = `${this.cardContent.type} \xB7 ${this.cardContent.rarity}`;
     this.typeLabel.position.set(this.cardWidth / 2, rulesY + 8 * textScale);
     this.descriptionLabel.text = this.cardContent.description;
     this.descriptionLabel.position.set(this.cardWidth / 2, rulesY + 31 * textScale);
-    this.nameStyle.wordWrapWidth = Math.max(0, this.cardWidth - (stacked || !hasCost ? textPadding * 2 : badgeWidth + textPadding * 3));
+    this.nameStyle.wordWrapWidth = Math.max(0, this.cardWidth - (stacked || !hasCost ? textPadding * 2 : activeBadgeWidth + textPadding * 3));
     this.typeStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
     this.descriptionStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
     this.costStyle.fill = palette.accent;
-    return { badgeWidth, badgeHeight, hasCost, height: headerHeight };
+    return { badgeWidth, badgeHeight, hasLegacyCost, hasEnergyCost, hasManaCost, energyBadgeWidth, manaBadgeWidth, height: headerHeight };
   }
   /** Applies mutable interaction state while caching the state graphics between semantic changes. */
   applyStatePresentation(palette) {
@@ -50741,7 +50777,10 @@ function isUsableCardTexture(texture) {
 }
 function toCardViewContent(options) {
   return {
-    cost: options.cost,
+    ...options.cost === void 0 ? {} : { cost: options.cost },
+    ...options.energyCost === void 0 ? {} : { energyCost: options.energyCost },
+    ...options.manaCost === void 0 ? {} : { manaCost: options.manaCost },
+    ...options.unavailableReason === void 0 ? {} : { unavailableReason: options.unavailableReason },
     name: options.name,
     description: options.description,
     type: options.type,
@@ -50750,7 +50789,10 @@ function toCardViewContent(options) {
   };
 }
 function areCardContentsEqual(left, right) {
-  return left.cost === right.cost && left.name === right.name && left.description === right.description && left.type === right.type && left.rarity === right.rarity && left.artTexture === right.artTexture;
+  return left.cost === right.cost && left.energyCost === right.energyCost && left.manaCost === right.manaCost && left.unavailableReason === right.unavailableReason && left.name === right.name && left.description === right.description && left.type === right.type && left.rarity === right.rarity && left.artTexture === right.artTexture;
+}
+function getVisibleResourceCost(cost) {
+  return cost !== void 0 && Number.isFinite(cost) && cost > 0 ? cost : void 0;
 }
 function areInteractionStatesEqual(left, right) {
   return left.enabled === right.enabled && left.focused === right.focused && left.selected === right.selected;
@@ -50807,6 +50849,9 @@ var emptySafeAreaInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 }
 var mobilePortraitMaximumWidth = 600;
 var wideMinimumWidth = 1024;
 var wideMinimumHeight = 640;
+var encounterReferenceViewport = Object.freeze({ width: 960, height: 540 });
+var minimumEncounterContentWidth = 320;
+var shortEncounterMaximumHeight = 440;
 function describeViewport(viewport, options = {}) {
   const normalizedViewport = normalizeViewport(viewport);
   const safeArea = normalizeSafeArea(options.safeArea ?? emptySafeAreaInsets, normalizedViewport);
@@ -51048,7 +51093,7 @@ function layoutShortHand(count2, viewport) {
   }));
 }
 function isShortEncounter(viewport) {
-  return viewport.height <= 440 && viewport.width >= 320;
+  return viewport.height <= shortEncounterMaximumHeight && viewport.width >= minimumEncounterContentWidth;
 }
 function getWideHandCenterBounds(count2, maximumRotation, fanDepth, cardWidth, cardHeight, playerBottom, handClearance, viewportHeight) {
   let topExtent = 0;
@@ -51266,21 +51311,36 @@ var relicRailLimit = 24;
 var RunHud = class extends Container {
   health = new ResourceCounter({ icon: "\u2665", label: "", value: "0/0", valueLayout: "inline" });
   healthBar = new ProgressIndicator({ width: 64, height: 5, value: 0, maximum: 1, fill: uiTokens.color.health });
+  stamina = new ResourceCounter({ icon: "\u26A1", label: "Stamina", value: "0 / 0", valueLayout: "stacked" });
+  mana = new ResourceCounter({ icon: "\u2726", label: "Mana", value: "0 / 0", valueLayout: "stacked" });
   currency = new ResourceCounter({ icon: "\u25C6", label: "Vein", value: 0 });
   deck = new ResourceCounter({ icon: "\u25A3", label: "Deck", value: 0 });
   relics = new ResourceCounter({ icon: "\u2726", label: "Relics", value: 0 });
+  pinnedRelics = new Text({ text: "", style: getUiTextStyle("Caption") });
   turn = new Text({ text: "", style: getUiTextStyle("Body") });
   constructor() {
     super();
-    this.addChild(this.health, this.healthBar, this.currency, this.deck, this.relics, this.turn);
+    this.addChild(this.health, this.healthBar, this.currency, this.deck, this.relics, this.turn, this.stamina, this.mana, this.pinnedRelics);
   }
   /** Reconciles resource values and a concise, human-readable phase label. */
   reconcile(state, viewport) {
     this.health.setValue(`${state.health}/${state.maximumHealth}`);
     this.healthBar.setProgress(state.health, state.maximumHealth);
+    const staminaValue = getResourceValue(state.energy, state.turnStartEnergy);
+    const manaValue = getResourceValue(state.mana, state.turnStartMana);
+    this.stamina.visible = staminaValue !== void 0;
+    this.mana.visible = manaValue !== void 0;
+    if (staminaValue !== void 0) {
+      this.stamina.setValue(staminaValue);
+    }
+    if (manaValue !== void 0) {
+      this.mana.setValue(manaValue);
+    }
     this.currency.setValue(state.currency);
     this.deck.setValue(state.deckCount);
     this.relics.setValue(formatRelicRailCount(state.relicCount));
+    this.pinnedRelics.text = formatPinnedRelics(state.pinnedRelics);
+    this.pinnedRelics.visible = this.pinnedRelics.text.length > 0;
     this.turn.text = describeTurnPhase(state.phase);
     this.layout(viewport);
   }
@@ -51294,19 +51354,46 @@ var RunHud = class extends Container {
     this.healthBar.position.set(padding + 20, padding + 20);
     this.currency.position.set(92, padding);
     if (getViewportLayoutMode(viewport) === "MobilePortrait") {
+      this.stamina.position.set(padding, 44);
+      this.mana.position.set(116, 44);
       this.deck.position.set(viewport.width - 132, padding);
       this.relics.position.set(viewport.width - 68, padding);
-      this.turn.position.set(padding, 44);
+      this.pinnedRelics.visible = false;
+      this.turn.position.set(padding, 82);
       return;
     }
+    if (getViewportLayoutMode(viewport) === "Compact") {
+      this.stamina.position.set(padding, 44);
+      this.mana.position.set(116, 44);
+      this.deck.position.set(viewport.width - 132, padding);
+      this.relics.position.set(viewport.width - 68, padding);
+      this.pinnedRelics.visible = false;
+      this.turn.position.set(228, 44);
+      return;
+    }
+    this.stamina.position.set(192, padding);
+    this.mana.position.set(304, padding);
     this.deck.position.set(viewport.width - 190, padding);
     this.relics.position.set(viewport.width - 96, padding);
-    this.turn.position.set(192, padding);
+    this.pinnedRelics.position.set(Math.max(8, viewport.width - 286), padding + 22);
+    this.turn.position.set(416, padding);
   }
 };
 function formatRelicRailCount(relicCount) {
   const normalizedCount = Math.max(0, Math.floor(relicCount));
   return normalizedCount >= relicRailLimit ? `${relicRailLimit}+` : normalizedCount;
+}
+function formatResourceValue(current, available) {
+  return `${Math.trunc(current)} / ${Math.trunc(available)}`;
+}
+function getResourceValue(current, available) {
+  return typeof current === "number" && Number.isFinite(current) && typeof available === "number" && Number.isFinite(available) ? formatResourceValue(current, available) : void 0;
+}
+function formatPinnedRelics(relics) {
+  if (!relics || relics.length === 0) {
+    return "";
+  }
+  return relics.map((relic) => relic.name).join(" \xB7 ");
 }
 
 // src/encounter-scene.ts
@@ -51605,6 +51692,11 @@ var EncounterScene = class {
       currency: snapshot.currency,
       deckCount: snapshot.deckCount,
       relicCount: snapshot.relicCount,
+      energy: snapshot.player.energy,
+      turnStartEnergy: snapshot.player.turnStartEnergy,
+      mana: snapshot.player.mana,
+      turnStartMana: snapshot.player.turnStartMana,
+      ...snapshot.pinnedRelics === void 0 ? {} : { pinnedRelics: snapshot.pinnedRelics },
       phase: snapshot.phase
     }, viewport);
     this.runHud.setFeedbackVisible(this.intentPending || this.rejectionFeedbackRemainingMs > 0, viewport);
@@ -51787,8 +51879,8 @@ var EncounterScene = class {
   }
   updateEntityTile(id, entity, layer, position) {
     const tile = this.getOrCreateTile(this.entityTiles, id, layer);
-    const health = `HP ${entity.health}/${entity.maxHealth} \xB7 B ${entity.block}`;
-    const resources = entity.isPlayer ? `\u26A1 ${entity.energy} \xB7 \u2726 ${entity.mana}` : `Posture ${entity.posture}/${entity.maxPosture}`;
+    const health = `HP ${entity.health} / ${entity.maxHealth} \xB7 BLOCK ${entity.block}`;
+    const resources = entity.isPlayer ? `STAMINA ${entity.energy} \xB7 MANA ${entity.mana}` : `POSTURE ${entity.posture} / ${entity.maxPosture}`;
     const telegraph = formatEntityTelegraph(entity.telegraph);
     const frameColor = entity.isPlayer ? uiTokens.color.stamina : uiTokens.color.panelStroke;
     tile.background.clear().roundRect(-89, -57, 178, 113, 13).fill({ color: uiTokens.color.surface, alpha: 0.9 }).stroke({ color: frameColor, width: 2, alpha: 0.68 }).roundRect(-78, -49, 156, 96, 9).stroke({ color: uiTokens.color.textMuted, width: 1, alpha: 0.4 }).rect(-34, -58, 68, 3).fill({ color: frameColor, alpha: 0.8 }).roundRect(-66, 52, 132, 5, 2).fill({ color: frameColor, alpha: 0.22 });
@@ -51796,7 +51888,7 @@ var EncounterScene = class {
     tile.accent.clear();
     this.updateArtwork(tile, entity.image, 164, 104);
     tile.title.text = entity.name;
-    tile.description.text = telegraph;
+    tile.description.text = telegraph ? `INTENT ${telegraph}` : "";
     tile.detail.text = `${health}
 ${resources}`;
     tile.effects.text = formatEntityEffects(entity);
@@ -52139,7 +52231,8 @@ ${resources}`;
     }
     const tile = this.getOrCreateTile(this.handTiles, id, this.handLayer);
     const cardView = new CardView({
-      cost: formatCardCost(entry),
+      energyCost: entry.energyCost,
+      manaCost: entry.manaCost,
       name: entry.name,
       description: formatCardDescription(entry.description),
       type: entry.cardType,
@@ -52170,9 +52263,10 @@ ${resources}`;
       return;
     }
     cardView.setContent({
-      cost: formatCardCost(entry),
+      energyCost: entry.energyCost,
+      manaCost: entry.manaCost,
       name: entry.name,
-      description: formatCardDescription(entry.description),
+      description: formatCardDescription(entry.description, entry.unavailableReason),
       type: entry.cardType,
       rarity: toCardViewRarity(entry.rarity),
       ...tile.cardArtwork === void 0 ? {} : { artTexture: tile.cardArtwork }
@@ -53275,9 +53369,6 @@ function getRarityColor(rarity) {
 function getCharacterColor(character) {
   return character === "Hollowblade" ? 11623797 : character === "Gravetender" ? 7518106 : character === "Dredgecaller" ? 8745910 : character === "Oathbound" ? 13935439 : 8623272;
 }
-function formatCardCost(card) {
-  return card.manaCost > 0 ? `\u26A1 ${card.energyCost}  \u2726 ${card.manaCost}` : `\u26A1 ${card.energyCost}`;
-}
 function formatEntityTelegraph(telegraph) {
   if (!telegraph) {
     return "";
@@ -53285,18 +53376,24 @@ function formatEntityTelegraph(telegraph) {
   return telegraph.replace(/^Intent:\s*/i, "").replace(/\s+damage\b/i, "").trim();
 }
 function formatEntityEffects(entity) {
-  const statuses = entity.statuses.map((status) => `${status.name} ${status.stacks}`);
+  const visibleStatuses = entity.statuses.slice(0, 3);
+  const statuses = visibleStatuses.map((status) => `${status.name} ${status.stacks}`);
+  if (entity.statuses.length > visibleStatuses.length) {
+    statuses.push(`+${entity.statuses.length - visibleStatuses.length} statuses`);
+  }
   const rituals = entity.rituals.map((ritual) => `Ritual: ${ritual.name}`);
   return [...statuses, ...rituals].join(" \xB7 ");
 }
 function toCardViewRarity(rarity) {
   return rarity === "Uncommon" || rarity === "Rare" || rarity === "Special" ? rarity : "Common";
 }
-function formatCardDescription(description) {
-  return description.replace(/\{([a-z0-9]+)\}/gi, (token, tokenName) => {
+function formatCardDescription(description, unavailableReason) {
+  const resolvedDescription = description.replace(/\{([a-z0-9]+)\}/gi, (token, tokenName) => {
     const replacement = cardDescriptionTokens[tokenName.toLowerCase()];
     return replacement ?? token;
   });
+  return unavailableReason ? `${resolvedDescription}
+${unavailableReason}` : resolvedDescription;
 }
 function createPageControl(label, onPress) {
   const button = new Container();
