@@ -121,6 +121,23 @@
 
 .pixi-main-menu-surface canvas:focus-visible[b-22zhoaus0z] { outline: 3px solid var(--mud-palette-secondary); outline-offset: -3px; }
 .pixi-main-menu-help[b-22zhoaus0z] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
+/* /Components/PixiMapOverlaySurface.razor.rz.scp.css */
+.pixi-map-overlay-surface[b-n5mvjv5rxk] {
+    align-items: center;
+    background: rgba(3, 10, 18, .86);
+    display: flex;
+    inset: 0;
+    justify-content: center;
+    padding: clamp(1rem, 5vh, 4rem);
+    position: fixed;
+    z-index: 1400;
+}
+
+.pixi-map-overlay-surface[b-n5mvjv5rxk]  .pixi-map-surface {
+    height: min(82dvh, 48rem);
+    margin: 0;
+    width: min(92vw, 76rem);
+}
 /* /Components/PixiMenuOverlaySurface.razor.rz.scp.css */
 .pixi-menu-overlay-surface[b-vvhjhjzarl] { background: rgba(3, 10, 18, .82); inset: 0; padding: clamp(.5rem, 4vh, 3rem); position: fixed; z-index: 1450; }
 .pixi-menu-overlay-surface canvas[b-vvhjhjzarl] { display: block; height: 100%; margin: auto; max-height: 48rem; max-width: 60rem; touch-action: none; width: 100%; }

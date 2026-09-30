@@ -56239,10 +56239,21 @@ async function createMapRenderer(canvas, sink) {
   let updatedConnectionCount = 0;
   let eligibleNodeUpdateCount = 0;
   let eligibleConnectionUpdateCount = 0;
+  let previousPreviewFocus;
   const reducedMotion = prefersReducedMotion4();
   const announce = (message) => {
     feedback.text = message;
     accessibility.update(message);
+  };
+  const focusPreview = () => {
+    if (previousPreviewFocus !== void 0) return;
+    previousPreviewFocus = typeof document !== "undefined" && typeof HTMLElement !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    canvasFocus.focus();
+  };
+  const restorePreviewFocus = () => {
+    const target = previousPreviewFocus;
+    previousPreviewFocus = void 0;
+    if (target?.isConnected) target.focus({ preventScroll: true });
   };
   const selectableNodes = () => state?.nodes ?? [];
   const selectedNode = () => state?.nodes.find((node) => node.id === selectedNodeId);
@@ -56257,7 +56268,7 @@ async function createMapRenderer(canvas, sink) {
   };
   const submit = async (name, sourceId) => {
     if (pending) return;
-    pending = name === "commitTravel";
+    pending = name === "commitTravel" || name === "close";
     if (pending) acceptedActionAwaitingReconcile = true;
     try {
       const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", {
@@ -56321,6 +56332,11 @@ async function createMapRenderer(canvas, sink) {
     announce("Location selection cancelled.");
     layout();
   };
+  const close = () => {
+    if (pending || travelTransition || state?.isPreview !== true) return;
+    void submit("close", null);
+    announce("Closing map preview.");
+  };
   const centerOnCurrentNode = () => {
     const current = state?.nodes.find((node) => node.isCurrent);
     if (!current || disposed) {
@@ -56341,7 +56357,8 @@ async function createMapRenderer(canvas, sink) {
   const keydown = (event) => {
     const nodes = selectableNodes();
     if (event.key === "Escape") {
-      cancel();
+      if (state?.isPreview === true) close();
+      else cancel();
       event.preventDefault();
       return;
     }
@@ -56473,6 +56490,9 @@ async function createMapRenderer(canvas, sink) {
     feedback.anchor.set(0.5, 0);
     const selected = selectedNode();
     controls.removeChildren();
+    if (state?.isPreview === true) {
+      addControl("Close", "Close map preview", !pending && !travelTransition, width - 104, 12, 88, close);
+    }
     contextPanel.visible = metrics.contextVisible;
     contextTitle.visible = metrics.contextVisible;
     contextDetails.visible = metrics.contextVisible;
@@ -56562,6 +56582,7 @@ async function createMapRenderer(canvas, sink) {
     reconcile(nextSequence, candidate) {
       if (!isMapState(candidate) || nextSequence <= sequence) return false;
       sequence = nextSequence;
+      const wasPreview = state?.isPreview === true;
       const cancelledTravelTransition = travelTransition && !isTravelTransitionValid(travelTransition, candidate);
       state = candidate;
       reconcileViews(candidate);
@@ -56579,6 +56600,8 @@ async function createMapRenderer(canvas, sink) {
         accessibility.update(`${candidate.title}. ${candidate.regionName}. ${candidate.nodes.length} locations.`);
       }
       layout();
+      if (candidate.isPreview && !wasPreview) focusPreview();
+      else if (!candidate.isPreview && wasPreview) restorePreviewFocus();
       return true;
     },
     getDiagnostics() {
@@ -56611,6 +56634,7 @@ async function createMapRenderer(canvas, sink) {
       canvasFocus.dispose();
       accessibility.dispose();
       application.destroy({ removeView: false }, { children: true });
+      restorePreviewFocus();
     }
   };
 }
