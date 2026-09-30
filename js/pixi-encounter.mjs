@@ -49580,103 +49580,54 @@ var noOpAccessibilityOverlay = {
   }
 };
 
-// src/encounter-backdrop.ts
-var EncounterBackdrop = class extends Container {
-  atmosphere = new Graphics();
-  architecture = new Graphics();
-  floor = new Graphics();
-  /** Creates the reusable three-plane scene backdrop. */
-  constructor() {
-    super();
-    this.eventMode = "none";
-    this.addChild(this.atmosphere, this.architecture, this.floor);
-  }
-  /** Repaints all planes for the current viewport without moving gameplay elements. */
-  resize(width, height) {
-    const w2 = Math.max(0, Number.isFinite(width) ? width : 0);
-    const h2 = Math.max(0, Number.isFinite(height) ? height : 0);
-    const horizon = h2 * 0.64;
-    const pillarWidth = Math.max(20, w2 * 0.055);
-    this.atmosphere.clear().rect(0, 0, w2, h2).fill({ color: 529182 }).rect(0, 0, w2, horizon).fill({ color: 1586241, alpha: 0.46 }).rect(0, h2 * 0.18, w2, h2 * 0.25).fill({ color: 2646128, alpha: 0.12 }).rect(0, horizon - 3, w2, 6).fill({ color: 7444898, alpha: 0.24 });
-    this.architecture.clear();
-    this.floor.clear();
-    if (w2 === 0 || h2 === 0) {
-      return;
-    }
-    for (const x2 of [w2 * 0.07, w2 * 0.87]) {
-      this.architecture.roundRect(x2, h2 * 0.04, pillarWidth, horizon - h2 * 0.04, 7).fill({ color: 530982, alpha: 0.8 }).stroke({ color: 4550006, width: 2, alpha: 0.45 }).rect(x2 + pillarWidth * 0.18, h2 * 0.06, pillarWidth * 0.1, horizon - h2 * 0.09).fill({ color: 9812141, alpha: 0.1 }).rect(x2 - pillarWidth * 0.2, horizon - 12, pillarWidth * 1.4, 12).fill({ color: 1585466 });
-    }
-    this.floor.rect(0, horizon, w2, h2 - horizon).fill({ color: 1058352 }).rect(0, horizon + 8, w2, 2).fill({ color: 6323575, alpha: 0.32 });
-    for (let i2 = 1; i2 < 5; i2++) {
-      const y2 = horizon + (h2 - horizon) * (i2 / 5) ** 1.45;
-      this.floor.rect(0, y2, w2, 1).fill({ color: 7705226, alpha: 0.12 });
-    }
-    for (let i2 = 1; i2 < 8; i2++) {
-      const x2 = w2 * i2 / 8;
-      this.floor.rect(x2, horizon + 6, 1, h2 - horizon - 6).fill({ color: 7705226, alpha: 0.09 });
-    }
-    this.floor.roundRect(w2 * 0.12, horizon - 7, w2 * 0.27, 8, 4).fill({ color: 8500641, alpha: 0.16 }).roundRect(w2 * 0.62, horizon - 7, w2 * 0.27, 8, 4).fill({ color: 8500641, alpha: 0.16 });
-  }
-};
-
-// src/ui-component-contract.ts
-function normalizeUiComponentSize(size) {
-  return {
-    width: normalizeDimension(size.width),
-    height: normalizeDimension(size.height)
-  };
-}
-function createUiComponentPresentationState(options) {
-  const enabled = options.enabled ?? true;
-  return {
-    size: normalizeUiComponentSize(options.size),
-    interaction: {
-      enabled,
-      focused: enabled && (options.focused ?? false),
-      selected: enabled && (options.selected ?? false)
-    },
-    reducedMotion: options.reducedMotion ?? false
-  };
-}
-function transitionUiComponentLifecycle(state, event) {
-  if (state === "disposed" || event === "dispose") {
-    return "disposed";
-  }
-  if (event === "suspend") {
-    return "suspended";
-  }
-  return "active";
-}
-function normalizeDimension(value) {
-  return Number.isFinite(value) ? Math.max(0, value) : 0;
-}
-
 // src/ui-primitives.ts
 var uiTokens = {
   color: {
-    panelFill: 1450552,
-    panelStroke: 6262197,
-    panelShadow: 463132,
-    panelInset: 792616,
-    panelOrnament: 14202982,
-    buttonFocus: 8047615,
-    buttonSelected: 16769155,
-    progressFill: 8047477,
-    progressBackground: 2504267,
-    buttonText: 16120063,
-    panelTitleText: 16769155,
-    bodyText: 14016750
+    canvas: 1186592,
+    surface: 1845293,
+    surfaceRaised: 2503738,
+    text: 15920868,
+    textMuted: 12897224,
+    health: 14844014,
+    stamina: 9488295,
+    mana: 9685480,
+    block: 13678460,
+    dangerIntent: 14844014,
+    focus: 15920868,
+    selected: 13678460,
+    valid: 9488295,
+    invalid: 14844014,
+    disabled: 12897224,
+    panelFill: 1845293,
+    panelStroke: 7439754,
+    panelShadow: 594197,
+    panelInset: 1186592,
+    panelOrnament: 13678460,
+    buttonFocus: 15920868,
+    buttonSelected: 13678460,
+    progressFill: 9488295,
+    progressBackground: 2503738,
+    buttonText: 15920868,
+    panelTitleText: 15920868,
+    bodyText: 12897224
   },
   typography: {
-    button: { fill: 16120063, fontFamily: "Arial", fontSize: 16, fontWeight: "bold", align: "center" },
-    panelTitle: { fill: 16769155, fontFamily: "Arial", fontSize: 18, fontWeight: "bold" },
-    body: { fill: 14016750, fontFamily: "Arial", fontSize: 14 }
+    button: { fill: 15920868, fontFamily: "Arial", fontSize: 16, fontWeight: "bold", align: "center" },
+    panelTitle: { fill: 15920868, fontFamily: "Arial", fontSize: 18, fontWeight: "bold" },
+    body: { fill: 12897224, fontFamily: "Arial", fontSize: 14 },
+    caption: { fill: 12897224, fontFamily: "Arial", fontSize: 12 },
+    intent: { fill: 15920868, fontFamily: "Arial", fontSize: 13, fontWeight: "bold" }
   },
   spacing: {
     xs: 4,
     sm: 8,
     md: 12,
     lg: 16
+  },
+  safeArea: {
+    edge: 8,
+    compactEdge: 4,
+    controlGap: 8
   },
   frame: {
     panelCornerRadius: 10,
@@ -49702,6 +49653,44 @@ var uiTokens = {
     disabledAlpha: 0.5
   }
 };
+var semanticColors = {
+  canvas: uiTokens.color.canvas,
+  surface: uiTokens.color.surface,
+  surfaceRaised: uiTokens.color.surfaceRaised,
+  text: uiTokens.color.text,
+  textMuted: uiTokens.color.textMuted,
+  health: uiTokens.color.health,
+  stamina: uiTokens.color.stamina,
+  mana: uiTokens.color.mana,
+  block: uiTokens.color.block,
+  dangerIntent: uiTokens.color.dangerIntent,
+  focus: uiTokens.color.focus,
+  selected: uiTokens.color.selected,
+  valid: uiTokens.color.valid,
+  invalid: uiTokens.color.invalid,
+  disabled: uiTokens.color.disabled
+};
+var areaAtmospheres = {
+  neutral: {
+    canvas: uiTokens.color.canvas,
+    distantSurface: 2503738,
+    architecture: 1581864,
+    floor: 1516842,
+    line: 7439754,
+    platform: 4810077
+  },
+  "pale-reach": {
+    canvas: uiTokens.color.canvas,
+    distantSurface: 2638152,
+    architecture: 1386285,
+    floor: 1649971,
+    line: 8297365,
+    platform: 5405549
+  }
+};
+function getAreaAtmosphere(name) {
+  return name === "pale-reach" ? areaAtmospheres["pale-reach"] : areaAtmospheres.neutral;
+}
 var uiColors = {
   panelFill: uiTokens.color.panelFill,
   panelStroke: uiTokens.color.panelStroke,
@@ -49918,6 +49907,7 @@ var GameButton = class extends GamePanel {
     const outlineHeight = Math.max(0, height - 4);
     this.stateOutline.clear();
     if (!this.isEnabled) {
+      this.stateOutline.roundRect(uiTokens.frame.selectedInset, uiTokens.frame.selectedInset, outlineWidth, outlineHeight, uiTokens.frame.selectedCornerRadius).stroke({ color: uiTokens.color.disabled, width: uiTokens.frame.borderWidth });
       return;
     }
     if (this.isSelected) {
@@ -50263,6 +50253,10 @@ function getTextStyleOptions(kind) {
       return uiTokens.typography.panelTitle;
     case "Body":
       return uiTokens.typography.body;
+    case "Caption":
+      return uiTokens.typography.caption;
+    case "Intent":
+      return uiTokens.typography.intent;
   }
 }
 function normalizeSize(value) {
@@ -50270,6 +50264,89 @@ function normalizeSize(value) {
 }
 function normalizeCoordinate(value) {
   return Number.isFinite(value) ? value : 0;
+}
+
+// src/encounter-backdrop.ts
+var EncounterBackdrop = class extends Container {
+  atmosphere = new Graphics();
+  architecture = new Graphics();
+  floor = new Graphics();
+  atmosphereTokens;
+  viewport;
+  /** Creates the reusable three-plane scene backdrop. */
+  constructor(atmosphere = "neutral") {
+    super();
+    this.atmosphereTokens = getAreaAtmosphere(atmosphere);
+    this.eventMode = "none";
+    this.addChild(this.atmosphere, this.architecture, this.floor);
+  }
+  /** Selects a restricted decorative atmosphere with a neutral fallback. */
+  setAtmosphere(atmosphere) {
+    this.atmosphereTokens = getAreaAtmosphere(atmosphere);
+    if (this.viewport) {
+      this.resize(this.viewport.width, this.viewport.height);
+    }
+  }
+  /** Repaints all planes for the current viewport without moving gameplay elements. */
+  resize(width, height) {
+    const w2 = Math.max(0, Number.isFinite(width) ? width : 0);
+    const h2 = Math.max(0, Number.isFinite(height) ? height : 0);
+    this.viewport = { width: w2, height: h2 };
+    const horizon = h2 * 0.64;
+    const pillarWidth = Math.max(20, w2 * 0.055);
+    const colors = this.atmosphereTokens;
+    this.atmosphere.clear().rect(0, 0, w2, h2).fill({ color: colors.canvas }).rect(0, 0, w2, horizon).fill({ color: colors.distantSurface, alpha: 0.46 }).rect(0, h2 * 0.18, w2, h2 * 0.25).fill({ color: colors.platform, alpha: 0.12 }).rect(0, horizon - 3, w2, 6).fill({ color: colors.line, alpha: 0.24 });
+    this.architecture.clear();
+    this.floor.clear();
+    if (w2 === 0 || h2 === 0) {
+      return;
+    }
+    for (const x2 of [w2 * 0.07, w2 * 0.87]) {
+      this.architecture.roundRect(x2, h2 * 0.04, pillarWidth, horizon - h2 * 0.04, 7).fill({ color: colors.architecture, alpha: 0.8 }).stroke({ color: colors.line, width: 2, alpha: 0.45 }).rect(x2 + pillarWidth * 0.18, h2 * 0.06, pillarWidth * 0.1, horizon - h2 * 0.09).fill({ color: colors.line, alpha: 0.1 }).rect(x2 - pillarWidth * 0.2, horizon - 12, pillarWidth * 1.4, 12).fill({ color: colors.distantSurface });
+    }
+    this.floor.rect(0, horizon, w2, h2 - horizon).fill({ color: colors.floor }).rect(0, horizon + 8, w2, 2).fill({ color: colors.line, alpha: 0.32 });
+    for (let i2 = 1; i2 < 5; i2++) {
+      const y2 = horizon + (h2 - horizon) * (i2 / 5) ** 1.45;
+      this.floor.rect(0, y2, w2, 1).fill({ color: colors.line, alpha: 0.12 });
+    }
+    for (let i2 = 1; i2 < 8; i2++) {
+      const x2 = w2 * i2 / 8;
+      this.floor.rect(x2, horizon + 6, 1, h2 - horizon - 6).fill({ color: colors.line, alpha: 0.09 });
+    }
+    this.floor.roundRect(w2 * 0.12, horizon - 7, w2 * 0.27, 8, 4).fill({ color: colors.platform, alpha: 0.16 }).roundRect(w2 * 0.62, horizon - 7, w2 * 0.27, 8, 4).fill({ color: colors.platform, alpha: 0.16 });
+  }
+};
+
+// src/ui-component-contract.ts
+function normalizeUiComponentSize(size) {
+  return {
+    width: normalizeDimension(size.width),
+    height: normalizeDimension(size.height)
+  };
+}
+function createUiComponentPresentationState(options) {
+  const enabled = options.enabled ?? true;
+  return {
+    size: normalizeUiComponentSize(options.size),
+    interaction: {
+      enabled,
+      focused: enabled && (options.focused ?? false),
+      selected: enabled && (options.selected ?? false)
+    },
+    reducedMotion: options.reducedMotion ?? false
+  };
+}
+function transitionUiComponentLifecycle(state, event) {
+  if (state === "disposed" || event === "dispose") {
+    return "disposed";
+  }
+  if (event === "suspend") {
+    return "suspended";
+  }
+  return "active";
+}
+function normalizeDimension(value) {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
 }
 
 // src/card-view.ts
@@ -50286,10 +50363,10 @@ var CardView = class extends Container {
   stateOverlay = new Graphics();
   playabilityOutline = new Graphics();
   stateOutline = new Graphics();
-  costStyle = new TextStyle({ ...uiTokens.typography.button, stroke: { color: 463132, width: 3 } });
-  nameStyle = new TextStyle({ ...uiTokens.typography.panelTitle, align: "center", fontSize: 20, stroke: { color: 463132, width: 4 }, wordWrap: true });
-  typeStyle = new TextStyle({ ...uiTokens.typography.body, align: "center", fontSize: 13, stroke: { color: 463132, width: 3 }, wordWrap: true });
-  descriptionStyle = new TextStyle({ ...uiTokens.typography.body, align: "center", fontSize: 15, stroke: { color: 463132, width: 3 }, wordWrap: true });
+  costStyle = new TextStyle({ ...uiTokens.typography.button, stroke: { color: uiTokens.color.panelShadow, width: 3 } });
+  nameStyle = new TextStyle({ ...uiTokens.typography.panelTitle, align: "center", fontSize: 20, stroke: { color: uiTokens.color.panelShadow, width: 4 }, wordWrap: true });
+  typeStyle = new TextStyle({ ...uiTokens.typography.body, align: "center", fontSize: 13, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true });
+  descriptionStyle = new TextStyle({ ...uiTokens.typography.body, align: "center", fontSize: 15, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true });
   costLabel = new Text({ text: "", style: this.costStyle });
   nameLabel = new Text({ text: "", style: this.nameStyle });
   typeLabel = new Text({ text: "", style: this.typeStyle });
@@ -50505,10 +50582,10 @@ var CardView = class extends Container {
   /** Reserves translucent top and bottom reading zones without covering the focal center of the art. */
   drawTextScrims(artBounds, palette, header) {
     const rulesY = this.cardHeight * 0.59;
-    this.textScrims.clear().rect(artBounds.x, artBounds.y, artBounds.width, header.height).fill({ color: 463132, alpha: 0.78 }).rect(artBounds.x, rulesY, artBounds.width, artBounds.y + artBounds.height - rulesY).fill({ color: 463132, alpha: 0.86 });
+    this.textScrims.clear().rect(artBounds.x, artBounds.y, artBounds.width, header.height).fill({ color: uiTokens.color.panelShadow, alpha: 0.78 }).rect(artBounds.x, rulesY, artBounds.width, artBounds.y + artBounds.height - rulesY).fill({ color: uiTokens.color.panelShadow, alpha: 0.86 });
     this.costPlate.clear();
     if (header.hasCost) {
-      this.costPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.badgeWidth, header.badgeHeight, 7).fill({ color: 463132, alpha: 0.94 }).stroke({ color: palette.accent, width: 2 });
+      this.costPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.badgeWidth, header.badgeHeight, 7).fill({ color: uiTokens.color.panelShadow, alpha: 0.94 }).stroke({ color: palette.accent, width: 2 });
     }
   }
   updateArtwork(artBounds) {
@@ -50629,9 +50706,9 @@ function getPalette(rarity) {
   }
 }
 function getStatePresentation(motionState, playability, interaction) {
-  const basePresentation = !interaction.enabled ? { alpha: uiTokens.interaction.disabledAlpha, overlayAlpha: 0.35, overlayColor: 1711912 } : playability === "unplayable" ? { alpha: 0.65, overlayAlpha: 0.3, overlayColor: 2568253 } : { alpha: 1, overlayAlpha: 0, overlayColor: 0 };
+  const basePresentation = !interaction.enabled ? { alpha: uiTokens.interaction.disabledAlpha, overlayAlpha: 0.35, overlayColor: uiTokens.color.canvas } : playability === "unplayable" ? { alpha: 0.65, overlayAlpha: 0.3, overlayColor: uiTokens.color.surfaceRaised } : { alpha: 1, overlayAlpha: 0, overlayColor: 0 };
   const dropOutlineColor = motionState === "valid-drop" || motionState === "invalid-drop" ? getMotionOutlineColor(motionState) : void 0;
-  const outlineColor = dropOutlineColor ?? (interaction.focused ? uiTokens.color.buttonFocus : interaction.selected ? uiTokens.color.buttonSelected : getMotionOutlineColor(motionState));
+  const outlineColor = dropOutlineColor ?? (interaction.focused ? uiTokens.color.focus : interaction.selected ? uiTokens.color.selected : getMotionOutlineColor(motionState));
   return { ...basePresentation, outlineColor };
 }
 function getMotionOutlineColor(state) {
@@ -50639,15 +50716,15 @@ function getMotionOutlineColor(state) {
     case "idle":
       return void 0;
     case "hovered":
-      return 16120063;
+      return uiTokens.color.focus;
     case "dragging":
-      return 16777215;
+      return uiTokens.color.text;
     case "valid-drop":
-      return 11141006;
+      return uiTokens.color.valid;
     case "invalid-drop":
-      return 14912909;
+      return uiTokens.color.invalid;
     case "returning":
-      return 12109785;
+      return uiTokens.color.textMuted;
     case "resolving":
       return void 0;
   }
@@ -51071,7 +51148,7 @@ function getMotionIntensity(value, reducedMotion) {
 // src/run-hud.ts
 var RunHud = class extends Container {
   health = new ResourceCounter({ icon: "\u2665", label: "", value: "0/0", valueLayout: "inline" });
-  healthBar = new ProgressIndicator({ width: 64, height: 5, value: 0, maximum: 1, fill: 13127512 });
+  healthBar = new ProgressIndicator({ width: 64, height: 5, value: 0, maximum: 1, fill: uiTokens.color.health });
   currency = new ResourceCounter({ icon: "\u25C6", label: "Vein", value: 0 });
   deck = new ResourceCounter({ icon: "\u25A3", label: "Deck", value: 0 });
   relics = new ResourceCounter({ icon: "\u2726", label: "Relics", value: 0 });
@@ -51198,7 +51275,7 @@ var EncounterScene = class {
   dragAimArrow = new Graphics();
   attackTrail = new Graphics();
   intentStatusBackground = new Graphics();
-  intentStatusLabel = new Text({ text: "", style: { fill: 15856888, fontFamily: "Arial", fontSize: 13 } });
+  intentStatusLabel = new Text({ text: "", style: uiTokens.typography.intent });
   previousEnemyPage = createPageControl("\u2039", () => this.changePage("enemy", -1));
   nextEnemyPage = createPageControl("\u203A", () => this.changePage("enemy", 1));
   previousHandPage = createPageControl("\u2039", () => this.changePage("hand", -1));
@@ -51242,8 +51319,8 @@ var EncounterScene = class {
     ["attack", (source3, target, _tile, start, progress) => this.attack(source3, target, start, progress)],
     ["hit", (_source, _target, tile, start, progress) => this.hit(tile, start, progress)],
     ["block", (_source, _target, tile, start, progress) => this.pulseScale(tile, start, progress, 0.12)],
-    ["buff", (_source, _target, tile, _start, progress) => this.pulseAccent(tile, progress, 7657120)],
-    ["debuff", (_source, _target, tile, _start, progress) => this.pulseAccent(tile, progress, 14709105)],
+    ["buff", (_source, _target, tile, _start, progress) => this.pulseAccent(tile, progress, uiTokens.color.valid)],
+    ["debuff", (_source, _target, tile, _start, progress) => this.pulseAccent(tile, progress, uiTokens.color.invalid)],
     ["stagger", (_source, _target, tile, start, progress) => this.stagger(tile, start, progress)],
     ["death", (_source, _target, tile, start, progress) => this.exit(tile, start, progress)],
     ["exit", (_source, _target, tile, start, progress) => this.exit(tile, start, progress)],
@@ -51457,7 +51534,7 @@ var EncounterScene = class {
     this.committedCardSequences.clear();
   }
   repaintBackground(viewport) {
-    this.background.clear().rect(0, 0, viewport.width, viewport.height).fill({ color: 726562 });
+    this.background.clear().rect(0, 0, viewport.width, viewport.height).fill({ color: uiTokens.color.canvas });
     this.backdrop.resize(viewport.width, viewport.height);
   }
   /**
@@ -51467,7 +51544,7 @@ var EncounterScene = class {
     const width = Math.min(240, Math.max(160, viewport.width - 32));
     const x2 = viewport.width / 2;
     const y2 = getViewportLayoutMode(viewport) === "MobilePortrait" ? 42 : 30;
-    this.intentStatusBackground.clear().roundRect(x2 - width / 2, y2, width, 28, 8).fill({ color: 1452091, alpha: 0.94 }).stroke({ color: 8299977, width: 1 });
+    this.intentStatusBackground.clear().roundRect(x2 - width / 2, y2, width, 28, 8).fill({ color: uiTokens.color.surface, alpha: 0.94 }).stroke({ color: uiTokens.color.panelStroke, width: 1 });
     this.intentStatusBackground.visible = this.intentPending || this.rejectionFeedbackRemainingMs > 0;
     this.intentStatusLabel.position.set(x2, y2 + 14);
   }
@@ -51591,8 +51668,8 @@ var EncounterScene = class {
     const health = `HP ${entity.health}/${entity.maxHealth} \xB7 B ${entity.block}`;
     const resources = entity.isPlayer ? `\u26A1 ${entity.energy} \xB7 \u2726 ${entity.mana}` : `Posture ${entity.posture}/${entity.maxPosture}`;
     const telegraph = formatEntityTelegraph(entity.telegraph);
-    const frameColor = entity.isPlayer ? 12044691 : 7974576;
-    tile.background.clear().roundRect(-89, -57, 178, 113, 13).fill({ color: 728618, alpha: 0.74 }).stroke({ color: frameColor, width: 2, alpha: 0.68 }).roundRect(-78, -49, 156, 96, 9).stroke({ color: 12968147, width: 1, alpha: 0.27 }).rect(-34, -58, 68, 3).fill({ color: frameColor, alpha: 0.8 }).roundRect(-66, 52, 132, 5, 2).fill({ color: frameColor, alpha: 0.22 });
+    const frameColor = entity.isPlayer ? uiTokens.color.stamina : uiTokens.color.panelStroke;
+    tile.background.clear().roundRect(-89, -57, 178, 113, 13).fill({ color: uiTokens.color.surface, alpha: 0.9 }).stroke({ color: frameColor, width: 2, alpha: 0.68 }).roundRect(-78, -49, 156, 96, 9).stroke({ color: uiTokens.color.textMuted, width: 1, alpha: 0.4 }).rect(-34, -58, 68, 3).fill({ color: frameColor, alpha: 0.8 }).roundRect(-66, 52, 132, 5, 2).fill({ color: frameColor, alpha: 0.22 });
     tile.container.hitArea = new Rectangle(-entityHitHalfWidth, -entityHitHalfHeight, entityHitHalfWidth * 2, entityHitHalfHeight * 2);
     tile.accent.clear();
     this.updateArtwork(tile, entity.image, 164, 104);
@@ -51605,9 +51682,9 @@ ${resources}`;
     tile.description.position.set(0, -24);
     tile.detail.position.set(0, 7);
     tile.effects.position.set(0, 38);
-    this.drawMeter(tile.healthBar, entity.health, entity.maxHealth, -78, -9, 156, 5, 13127512);
+    this.drawMeter(tile.healthBar, entity.health, entity.maxHealth, -78, -9, 156, 5, uiTokens.color.health);
     tile.healthBar.visible = entity.maxHealth > 0;
-    this.drawMeter(tile.postureBar, entity.posture, entity.maxPosture, -78, 29, 156, 4, 14264667);
+    this.drawMeter(tile.postureBar, entity.posture, entity.maxPosture, -78, 29, 156, 4, uiTokens.color.block);
     tile.postureBar.visible = !entity.isPlayer && entity.maxPosture > 0;
     if (!this.isDragPositionManaged(id)) {
       tile.container.position.set(position.x, position.y);
@@ -51678,10 +51755,10 @@ ${resources}`;
     targetHighlight.visible = false;
     const artwork = new Sprite(Texture.EMPTY);
     artwork.anchor.set(0.5, 0.5);
-    const title = new Text({ text: "", style: { align: "center", fill: 16777215, fontFamily: "Arial, system-ui", fontSize: 18, stroke: { color: 463132, width: 3 }, wordWrap: true, wordWrapWidth: 156 } });
-    const description = new Text({ text: "", style: { align: "center", fill: 15856888, fontFamily: "Arial, system-ui", fontSize: 13, stroke: { color: 463132, width: 3 } } });
-    const detail = new Text({ text: "", style: { align: "center", fill: 14148078, fontFamily: "Arial, system-ui", fontSize: 13, stroke: { color: 463132, width: 3 } } });
-    const effects = new Text({ text: "", style: { align: "center", fill: 16769155, fontFamily: "Arial, system-ui", fontSize: 12, stroke: { color: 463132, width: 3 }, wordWrap: true, wordWrapWidth: 156 } });
+    const title = new Text({ text: "", style: { ...uiTokens.typography.panelTitle, align: "center", stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true, wordWrapWidth: 156 } });
+    const description = new Text({ text: "", style: { ...uiTokens.typography.intent, align: "center", stroke: { color: uiTokens.color.panelShadow, width: 3 } } });
+    const detail = new Text({ text: "", style: { ...uiTokens.typography.body, align: "center", fontSize: 13, stroke: { color: uiTokens.color.panelShadow, width: 3 } } });
+    const effects = new Text({ text: "", style: { ...uiTokens.typography.caption, align: "center", fill: uiTokens.color.block, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true, wordWrapWidth: 156 } });
     const healthBar = new Graphics();
     const postureBar = new Graphics();
     const container = new Container();
@@ -51744,7 +51821,7 @@ ${resources}`;
   /** Draws a compact clamped status meter below an entity's numeric status. */
   drawMeter(graphic, value, maximum, x2, y2, width, height, fill) {
     const ratio = maximum > 0 ? Math.max(0, Math.min(1, value / maximum)) : 0;
-    graphic.clear().roundRect(x2, y2, width, height, height / 2).fill({ color: 1452091, alpha: 0.94 });
+    graphic.clear().roundRect(x2, y2, width, height, height / 2).fill({ color: uiTokens.color.surfaceRaised, alpha: 0.94 });
     if (ratio > 0) {
       graphic.roundRect(x2, y2, width * ratio, height, height / 2).fill(fill);
     }
@@ -52231,7 +52308,7 @@ ${resources}`;
     if (!this.dragAimArrow.visible) {
       return;
     }
-    const color = isValidDrop ? 11141006 : 14912909;
+    const color = isValidDrop ? uiTokens.color.valid : uiTokens.color.invalid;
     const perpendicular = { x: -direction.y, y: direction.x };
     const headLength = 15;
     const headWidth = 8;
@@ -52482,7 +52559,7 @@ ${resources}`;
     if (progress >= 1 || this.reducedMotion) {
       return;
     }
-    this.attackTrail.moveTo(start.x, start.y).lineTo(source3.container.x, source3.container.y).stroke({ color: 16769155, width: 3, alpha: Math.sin(progress * Math.PI) * 0.55 });
+    this.attackTrail.moveTo(start.x, start.y).lineTo(source3.container.x, source3.container.y).stroke({ color: uiTokens.color.selected, width: 3, alpha: Math.sin(progress * Math.PI) * 0.55 });
   }
   /**
    * Pulls an attacker slightly away from its target before the attack lunge begins.
@@ -52579,7 +52656,7 @@ ${resources}`;
     for (const [id, tile] of this.handTiles) {
       const entryId = id.substring(id.indexOf(":") + 1);
       const entry = this.selectableEntries.get(entryId);
-      tile.background.tint = entry && !isCardPresentationState2(entry) ? entryId === this.focusedEntryId ? 10476287 : entryId === this.selectedEntryId ? 16769155 : 16777215 : 16777215;
+      tile.background.tint = entry && !isCardPresentationState2(entry) ? entryId === this.focusedEntryId ? uiTokens.color.focus : entryId === this.selectedEntryId ? uiTokens.color.selected : 16777215 : 16777215;
       if (entry && isCardPresentationState2(entry) && tile.cardView) {
         tile.cardView.setInteractionState({
           enabled: this.isEntryInteractive(id, entry),
@@ -52624,7 +52701,7 @@ ${resources}`;
     tile.targetHighlight.clear();
     tile.targetHighlight.visible = isTargeting;
     if (isTargeting) {
-      const cueColor = isFocused ? 16769155 : isValidTarget ? 11141006 : 14912909;
+      const cueColor = isFocused ? uiTokens.color.focus : isValidTarget ? uiTokens.color.valid : uiTokens.color.invalid;
       tile.targetHighlight.roundRect(-entityHitHalfWidth, -entityHitHalfHeight, entityHitHalfWidth * 2, entityHitHalfHeight * 2, 12).stroke({
         color: cueColor,
         width: isFocused || isValidTarget ? 4 : 2,
@@ -53090,8 +53167,8 @@ function formatCardDescription(description) {
 }
 function createPageControl(label, onPress) {
   const button = new Container();
-  const background = new Graphics().roundRect(0, 0, 44, 44, 8).fill({ color: 2111564, alpha: 0.96 }).stroke({ color: 10271433, width: 1 });
-  const text = new Text({ text: label, style: { fill: 16113563, fontFamily: "Arial", fontSize: 28 } });
+  const background = new Graphics().roundRect(0, 0, 44, 44, 8).fill({ color: uiTokens.color.surfaceRaised, alpha: 0.96 }).stroke({ color: uiTokens.color.panelStroke, width: 1 });
+  const text = new Text({ text: label, style: { ...uiTokens.typography.panelTitle, fontSize: 28 } });
   text.anchor.set(0.5);
   text.position.set(22, 22);
   button.addChild(background, text);
