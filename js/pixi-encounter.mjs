@@ -56603,10 +56603,12 @@ async function createMapRenderer(canvas, sink) {
     }
     layout();
   };
-  const submit = async (name, sourceId) => {
-    if (pending) return;
-    pending = name === "commitTravel" || name === "close";
-    if (pending) acceptedActionAwaitingReconcile = true;
+  const submit = async (name, sourceId, alreadyPending = false) => {
+    if (pending && !alreadyPending) return;
+    if (!alreadyPending) {
+      pending = name === "commitTravel" || name === "close";
+      if (pending) acceptedActionAwaitingReconcile = true;
+    }
     try {
       const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", {
         protocolVersion: mapSceneProtocolVersion,
@@ -56671,8 +56673,13 @@ async function createMapRenderer(canvas, sink) {
   };
   const close = () => {
     if (pending || travelTransition || state?.isPreview !== true) return;
-    void submit("close", null);
+    pending = true;
+    acceptedActionAwaitingReconcile = true;
     announce("Closing map preview.");
+    layout();
+    globalThis.setTimeout(() => {
+      if (!disposed) void submit("close", null, true);
+    }, 0);
   };
   const centerOnCurrentNode = () => {
     const current = state?.nodes.find((node) => node.isCurrent);
