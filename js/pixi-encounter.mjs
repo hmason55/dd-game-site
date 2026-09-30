@@ -51834,12 +51834,16 @@ ${resources}`;
       this.ignoredPointerTapEntryId = void 0;
       return;
     }
-    if (entry.targetMode === "none") {
+    const previousSelectedTileId = this.getSelectedHandTileId();
+    if (entry.targetMode === "none" && this.selectedEntryId === entry.id) {
       this.submitEntryIntent(entry, null);
       return;
     }
-    const previousSelectedTileId = this.getSelectedHandTileId();
     this.selectedEntryId = this.selectedEntryId === entry.id ? void 0 : entry.id;
+    if (entry.targetMode === "none" && this.selectedEntryId === entry.id) {
+      this.focusedEntityId = void 0;
+      this.announceInteraction?.(`Selected ${entry.name}. Activate again to use it, or press Escape to cancel.`);
+    }
     this.refreshHandInspection(previousSelectedTileId);
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
@@ -51897,6 +51901,12 @@ ${resources}`;
     }
     const previousSelectedTileId = this.getSelectedHandTileId();
     this.selectedEntryId = entry.id;
+    if (entry.targetMode === "none") {
+      this.focusedEntityId = void 0;
+      if (!this.activeDrag?.selectionWasActive) {
+        this.announceInteraction?.(`Selected ${entry.name}. Activate again to use it, or press Escape to cancel.`);
+      }
+    }
     this.refreshHandInspection(previousSelectedTileId);
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
@@ -52943,7 +52953,8 @@ ${resources}`;
     this.refreshSelectionHighlights();
   }
   activateKeyboardFocus() {
-    if (this.focusedEntityId && this.selectedEntryId) {
+    const selectedEntry = this.selectedEntryId ? this.selectableEntries.get(this.selectedEntryId) : void 0;
+    if (this.focusedEntityId && selectedEntry && selectedEntry.targetMode !== "none") {
       this.handleEntitySelection(this.focusedEntityId);
       return;
     }
