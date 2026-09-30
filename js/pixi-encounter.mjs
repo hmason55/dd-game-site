@@ -47781,7 +47781,7 @@ extensions.add(browserExt, webworkerExt);
 var encounterRendererProtocolVersion = 3;
 var encounterSceneId = "encounter";
 function isEncounterPresentationSnapshot(value) {
-  if (!isRecord(value) || value.protocolVersion !== encounterRendererProtocolVersion || value.sceneId !== encounterSceneId || !isFiniteNumber(value.sequence) || !isString(value.phase) || typeof value.inventoryMode !== "boolean" || !isEntityPresentationState(value.player) || !isArrayOf(value.enemies, isEntityPresentationState) || !isArrayOf(value.hand, isCardPresentationState) || !isArrayOf(value.items, isItemPresentationState) || !isFiniteNumber(value.currency) || !isFiniteNumber(value.deckCount) || !isFiniteNumber(value.relicCount)) {
+  if (!isRecord(value) || value.protocolVersion !== encounterRendererProtocolVersion || value.sceneId !== encounterSceneId || !isFiniteNumber(value.sequence) || !isString(value.phase) || typeof value.inventoryMode !== "boolean" || !isEntityPresentationState(value.player) || !isArrayOf(value.enemies, isEntityPresentationState) || !isArrayOf(value.hand, isCardPresentationState) || !isArrayOf(value.items, isItemPresentationState) || !isFiniteNumber(value.currency) || !isFiniteNumber(value.deckCount) || !isFiniteNumber(value.relicCount) || value.sceneTreatmentId !== void 0 && !isString(value.sceneTreatmentId)) {
     return false;
   }
   return true;
@@ -49589,6 +49589,21 @@ var noOpAccessibilityOverlay = {
   }
 };
 
+// src/combat-scene-treatment.ts
+var foldCombatSceneTreatment = {
+  id: "fold",
+  regionId: "fold",
+  atmosphere: "pale-reach",
+  foregroundSilhouetteCount: 3,
+  mistAlpha: 0.14
+};
+var combatSceneTreatmentRegistry = {
+  fold: foldCombatSceneTreatment
+};
+function getCombatSceneTreatment(value) {
+  return typeof value === "string" && Object.hasOwn(combatSceneTreatmentRegistry, value) ? combatSceneTreatmentRegistry[value] ?? foldCombatSceneTreatment : foldCombatSceneTreatment;
+}
+
 // src/ui-primitives.ts
 var uiTokens = {
   color: {
@@ -50302,17 +50317,34 @@ var EncounterBackdrop = class extends Container {
   architecture = new Graphics();
   floor = new Graphics();
   atmosphereTokens;
+  treatment;
+  activeTreatmentId;
   viewport;
   /** Creates the reusable three-plane scene backdrop. */
   constructor(atmosphere = "neutral") {
     super();
+    this.treatment = getCombatSceneTreatment("fold");
     this.atmosphereTokens = getAreaAtmosphere(atmosphere);
     this.eventMode = "none";
     this.addChild(this.atmosphere, this.architecture, this.floor);
   }
   /** Selects a restricted decorative atmosphere with a neutral fallback. */
   setAtmosphere(atmosphere) {
+    this.activeTreatmentId = void 0;
     this.atmosphereTokens = getAreaAtmosphere(atmosphere);
+    if (this.viewport) {
+      this.resize(this.viewport.width, this.viewport.height);
+    }
+  }
+  /** Selects bounded scenery while retaining the neutral Fold fallback for unknown treatment IDs. */
+  setTreatment(treatmentId) {
+    const treatment = getCombatSceneTreatment(treatmentId);
+    if (this.activeTreatmentId === treatment.id) {
+      return;
+    }
+    this.treatment = treatment;
+    this.activeTreatmentId = treatment.id;
+    this.atmosphereTokens = getAreaAtmosphere(this.treatment.atmosphere);
     if (this.viewport) {
       this.resize(this.viewport.width, this.viewport.height);
     }
@@ -50334,7 +50366,14 @@ var EncounterBackdrop = class extends Container {
     for (const x2 of [w2 * 0.07, w2 * 0.87]) {
       this.architecture.roundRect(x2, h2 * 0.04, pillarWidth, horizon - h2 * 0.04, 7).fill({ color: colors.architecture, alpha: 0.8 }).stroke({ color: colors.line, width: 2, alpha: 0.45 }).rect(x2 + pillarWidth * 0.18, h2 * 0.06, pillarWidth * 0.1, horizon - h2 * 0.09).fill({ color: colors.line, alpha: 0.1 }).rect(x2 - pillarWidth * 0.2, horizon - 12, pillarWidth * 1.4, 12).fill({ color: colors.distantSurface });
     }
+    for (let index = 0; index < this.treatment.foregroundSilhouetteCount; index++) {
+      const x2 = w2 * ((index + 1) / (this.treatment.foregroundSilhouetteCount + 1));
+      const width2 = Math.max(18, w2 * 0.035);
+      const top = horizon - h2 * (0.08 + index % 2 * 0.04);
+      this.architecture.roundRect(x2 - width2 / 2, top, width2, horizon - top, 5).fill({ color: colors.architecture, alpha: 0.48 });
+    }
     this.floor.rect(0, horizon, w2, h2 - horizon).fill({ color: colors.floor }).rect(0, horizon + 8, w2, 2).fill({ color: colors.line, alpha: 0.32 });
+    this.floor.rect(0, horizon - h2 * 0.06, w2, h2 * 0.1).fill({ color: colors.distantSurface, alpha: this.treatment.mistAlpha });
     for (let i2 = 1; i2 < 5; i2++) {
       const y2 = horizon + (h2 - horizon) * (i2 / 5) ** 1.45;
       this.floor.rect(0, y2, w2, 1).fill({ color: colors.line, alpha: 0.12 });
@@ -50609,10 +50648,10 @@ var CardView = class extends Container {
     this.artFallback.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.spacing.xs).fill({ color: palette.artFill }).roundRect(artBounds.x + 3, artBounds.y + 3, artBounds.width - 6, artBounds.height - 6, uiTokens.spacing.xs - 1).stroke({ color: palette.accent, width: 1, alpha: 0.72 }).rect(artBounds.x, artBounds.y + artBounds.height * 0.56, artBounds.width, artBounds.height * 0.44).fill({ color: palette.accent, alpha: 0.4 }).roundRect(medallionX, medallionY, medallionSize, medallionSize, medallionSize / 2).fill({ color: palette.accent, alpha: 0.7 }).roundRect(medallionX + 4, medallionY + 4, medallionSize - 8, medallionSize - 8, Math.max(0, medallionSize / 2 - 4)).fill({ color: palette.artFill, alpha: 0.94 }).rect(artBounds.x + artBounds.width * 0.12, artBounds.y + artBounds.height * 0.16, artBounds.width * 0.18, 3).fill({ color: palette.accent, alpha: 0.74 }).rect(artBounds.x + artBounds.width * 0.7, artBounds.y + artBounds.height * 0.16, artBounds.width * 0.18, 3).fill({ color: palette.accent, alpha: 0.74 });
     this.artFallback.visible = !isUsableCardTexture(this.cardContent.artTexture);
   }
-  /** Reserves translucent top and bottom reading zones without covering the focal center of the art. */
+  /** Reserves a translucent title zone and an opaque lower caption without covering the focal center of the art. */
   drawTextScrims(artBounds, palette, header) {
     const rulesY = this.cardHeight * 0.59;
-    this.textScrims.clear().rect(artBounds.x, artBounds.y, artBounds.width, header.height).fill({ color: uiTokens.color.panelShadow, alpha: 0.78 }).rect(artBounds.x, rulesY, artBounds.width, artBounds.y + artBounds.height - rulesY).fill({ color: uiTokens.color.panelShadow, alpha: 0.86 });
+    this.textScrims.clear().rect(artBounds.x, artBounds.y, artBounds.width, header.height).fill({ color: uiTokens.color.panelShadow, alpha: 0.78 }).rect(artBounds.x, rulesY, artBounds.width, artBounds.y + artBounds.height - rulesY).fill({ color: uiTokens.color.panelShadow });
     this.costPlate.clear();
     if (header.hasCost) {
       this.costPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.badgeWidth, header.badgeHeight, 7).fill({ color: uiTokens.color.panelShadow, alpha: 0.94 }).stroke({ color: palette.accent, width: 2 });
@@ -51076,6 +51115,9 @@ function getCompactEntityScale(viewport) {
   return Math.max(0, Math.min(0.82, (availableWidth - entityGap) / (entityWidth * 2)));
 }
 function layoutNarrowHand(count2, viewport) {
+  if (canUseMobilePortraitHandGrid(count2, viewport)) {
+    return layoutMobilePortraitHand(count2, viewport);
+  }
   const cardWidth = handCardVisualSize.width;
   const cardHeight = handCardVisualSize.height;
   const horizontalPadding = 16;
@@ -51093,6 +51135,50 @@ function layoutNarrowHand(count2, viewport) {
   const rows = Math.min(Math.ceil(count2 / maximumColumns), maximumRows);
   const columns = Math.ceil(count2 / rows);
   const scale = Math.max(0, Math.min(initialScale, (availableWidth - (columns - 1) * cardGap) / (columns * cardWidth)));
+  const tileWidth = cardWidth * scale;
+  const tileHeight = cardHeight * scale;
+  const bottomRowY = viewport.height - bottomPadding - tileHeight / 2;
+  const firstRowY = bottomRowY - (rows - 1) * (tileHeight + cardGap);
+  return Array.from({ length: count2 }, (_, index) => {
+    const row = Math.floor(index / columns);
+    const column = index % columns;
+    const entriesInRow = Math.min(columns, count2 - row * columns);
+    const rowWidth = entriesInRow * tileWidth + (entriesInRow - 1) * cardGap;
+    return {
+      x: (viewport.width - rowWidth) / 2 + tileWidth / 2 + column * (tileWidth + cardGap),
+      y: firstRowY + row * (tileHeight + cardGap),
+      scale
+    };
+  });
+}
+function canUseMobilePortraitHandGrid(count2, viewport) {
+  if (getEncounterLayoutMode(viewport) !== "MobilePortrait" || viewport.width < 320 || count2 > 10) {
+    return false;
+  }
+  const columns = 5;
+  const cardGap = 8;
+  const horizontalPadding = 16;
+  const bottomPadding = 16;
+  const rows = Math.ceil(count2 / columns);
+  const availableWidth = Math.max(0, viewport.width - horizontalPadding * 2);
+  const scale = Math.max(0, Math.min(0.76, (availableWidth - (columns - 1) * cardGap) / (columns * handCardVisualSize.width)));
+  const tileHeight = handCardVisualSize.height * scale;
+  const bottomRowY = viewport.height - bottomPadding - tileHeight / 2;
+  const firstRowTop = bottomRowY - (rows - 1) * (tileHeight + cardGap) - tileHeight / 2;
+  const player = layoutPlayer(viewport);
+  const playerBottom = player.y + (player.scale ?? 1) * 58;
+  return firstRowTop >= playerBottom + 16;
+}
+function layoutMobilePortraitHand(count2, viewport) {
+  const cardWidth = handCardVisualSize.width;
+  const cardHeight = handCardVisualSize.height;
+  const horizontalPadding = 16;
+  const bottomPadding = 16;
+  const cardGap = 8;
+  const columns = 5;
+  const rows = Math.ceil(count2 / columns);
+  const availableWidth = Math.max(0, viewport.width - horizontalPadding * 2);
+  const scale = Math.max(0, Math.min(0.76, (availableWidth - (columns - 1) * cardGap) / (columns * cardWidth)));
   const tileWidth = cardWidth * scale;
   const tileHeight = cardHeight * scale;
   const bottomRowY = viewport.height - bottomPadding - tileHeight / 2;
@@ -51176,6 +51262,7 @@ function getMotionIntensity(value, reducedMotion) {
 }
 
 // src/run-hud.ts
+var relicRailLimit = 24;
 var RunHud = class extends Container {
   health = new ResourceCounter({ icon: "\u2665", label: "", value: "0/0", valueLayout: "inline" });
   healthBar = new ProgressIndicator({ width: 64, height: 5, value: 0, maximum: 1, fill: uiTokens.color.health });
@@ -51193,7 +51280,7 @@ var RunHud = class extends Container {
     this.healthBar.setProgress(state.health, state.maximumHealth);
     this.currency.setValue(state.currency);
     this.deck.setValue(state.deckCount);
-    this.relics.setValue(state.relicCount);
+    this.relics.setValue(formatRelicRailCount(state.relicCount));
     this.turn.text = describeTurnPhase(state.phase);
     this.layout(viewport);
   }
@@ -51217,6 +51304,10 @@ var RunHud = class extends Container {
     this.turn.position.set(192, padding);
   }
 };
+function formatRelicRailCount(relicCount) {
+  const normalizedCount = Math.max(0, Math.floor(relicCount));
+  return normalizedCount >= relicRailLimit ? `${relicRailLimit}+` : normalizedCount;
+}
 
 // src/encounter-scene.ts
 var supportedAnimationNames = /* @__PURE__ */ new Set([
@@ -51505,6 +51596,7 @@ var EncounterScene = class {
     this.viewport = { width: viewport.width, height: viewport.height };
     this.latestSnapshot = snapshot;
     this.currentSequence = snapshot.sequence;
+    this.backdrop.setTreatment(snapshot.sceneTreatmentId);
     this.repaintBackground(viewport);
     this.layoutInputLockFeedback(viewport);
     this.runHud.reconcile({
