@@ -1,0 +1,31 @@
+@font-face {
+    font-family: "Alegreya";
+    src: url("/fonts/Alegreya-Variable.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Atkinson Hyperlegible Next";
+    src: url("/fonts/AtkinsonHyperlegibleNext-Regular.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Atkinson Hyperlegible Next";
+    src: url("/fonts/AtkinsonHyperlegibleNext-SemiBold.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Atkinson Hyperlegible Next";
+    src: url("/fonts/AtkinsonHyperlegibleNext-Bold.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+}

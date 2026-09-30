@@ -49176,12 +49176,19 @@ var runUiIconAssets = {
   stamina: { url: "/img/Icons/Stamina.png", fallback: "\u2726" },
   status: { url: "/img/Icons/Status.png", fallback: "\u25C6" }
 };
+var runUiFontAssets = {
+  alegreya: "/fonts/Alegreya-Variable.ttf",
+  atkinsonRegular: "/fonts/AtkinsonHyperlegibleNext-Regular.ttf",
+  atkinsonSemiBold: "/fonts/AtkinsonHyperlegibleNext-SemiBold.ttf",
+  atkinsonBold: "/fonts/AtkinsonHyperlegibleNext-Bold.ttf"
+};
 var runAssetBundleManifest = {
   "core-ui": {
     id: "core-ui",
     residency: "run",
-    optionalFontFamilies: ["Arial", "system-ui"],
+    optionalFontFamilies: ["Alegreya", "Atkinson Hyperlegible Next"],
     urls: [
+      ...Object.values(runUiFontAssets),
       runUiIconAssets.health.url,
       runUiIconAssets.stamina.url,
       runUiIconAssets.status.url
@@ -49486,7 +49493,9 @@ async function loadFont(font) {
   if (typeof document === "undefined" || !document.fonts) {
     return;
   }
-  await document.fonts.load(`12px ${font}`);
+  const escapedFont = font.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+  const weights = font === "Atkinson Hyperlegible Next" ? [400, 600, 700] : [600, 700];
+  await Promise.all(weights.map((weight) => document.fonts.load(`${weight} 12px "${escapedFont}"`)));
 }
 function getEncounterAssetUrls(snapshot) {
   return [...new Set([
@@ -49612,11 +49621,18 @@ var uiTokens = {
     bodyText: 12897224
   },
   typography: {
-    button: { fill: 15920868, fontFamily: "Arial", fontSize: 16, fontWeight: "bold", align: "center" },
-    panelTitle: { fill: 15920868, fontFamily: "Arial", fontSize: 18, fontWeight: "bold" },
-    body: { fill: 12897224, fontFamily: "Arial", fontSize: 14 },
-    caption: { fill: 12897224, fontFamily: "Arial", fontSize: 12 },
-    intent: { fill: 15920868, fontFamily: "Arial", fontSize: 13, fontWeight: "bold" }
+    button: { fill: 15920868, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 16, fontWeight: "700", align: "center" },
+    panelTitle: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "700" },
+    body: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 14 },
+    caption: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 12 },
+    intent: { fill: 15920868, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 13, fontWeight: "700" },
+    cardTitle: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "600" },
+    cardEffect: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 14 },
+    enemyName: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "700" },
+    numericResource: { fill: 15920868, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 16, fontWeight: "700" },
+    endTurn: { fill: 15920868, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 16, fontWeight: "700", align: "center" },
+    secondaryHud: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 12, fontWeight: "600" },
+    relicDetail: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 13 }
   },
   spacing: {
     xs: 4,
@@ -50257,6 +50273,20 @@ function getTextStyleOptions(kind) {
       return uiTokens.typography.caption;
     case "Intent":
       return uiTokens.typography.intent;
+    case "CardTitle":
+      return uiTokens.typography.cardTitle;
+    case "CardEffect":
+      return uiTokens.typography.cardEffect;
+    case "EnemyName":
+      return uiTokens.typography.enemyName;
+    case "NumericResource":
+      return uiTokens.typography.numericResource;
+    case "EndTurn":
+      return uiTokens.typography.endTurn;
+    case "SecondaryHud":
+      return uiTokens.typography.secondaryHud;
+    case "RelicDetail":
+      return uiTokens.typography.relicDetail;
   }
 }
 function normalizeSize(value) {
@@ -50364,9 +50394,9 @@ var CardView = class extends Container {
   playabilityOutline = new Graphics();
   stateOutline = new Graphics();
   costStyle = new TextStyle({ ...uiTokens.typography.button, stroke: { color: uiTokens.color.panelShadow, width: 3 } });
-  nameStyle = new TextStyle({ ...uiTokens.typography.panelTitle, align: "center", fontSize: 20, stroke: { color: uiTokens.color.panelShadow, width: 4 }, wordWrap: true });
+  nameStyle = new TextStyle({ ...uiTokens.typography.cardTitle, align: "center", fontSize: 20, stroke: { color: uiTokens.color.panelShadow, width: 4 }, wordWrap: true });
   typeStyle = new TextStyle({ ...uiTokens.typography.body, align: "center", fontSize: 13, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true });
-  descriptionStyle = new TextStyle({ ...uiTokens.typography.body, align: "center", fontSize: 15, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true });
+  descriptionStyle = new TextStyle({ ...uiTokens.typography.cardEffect, align: "center", fontSize: 15, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true });
   costLabel = new Text({ text: "", style: this.costStyle });
   nameLabel = new Text({ text: "", style: this.nameStyle });
   typeLabel = new Text({ text: "", style: this.typeStyle });
@@ -53783,7 +53813,7 @@ function suspendRunControls(controls) {
 var defaultHeight = 92;
 var defaultWidth = 184;
 var RelicView = class extends GamePanel {
-  descriptionTextStyle = new TextStyle({ ...uiTokens.typography.body, breakWords: true, wordWrap: true });
+  descriptionTextStyle = new TextStyle({ ...uiTokens.typography.relicDetail, breakWords: true, wordWrap: true });
   descriptionLabel = new Text({ text: "", style: this.descriptionTextStyle });
   iconLabel = new Text({ text: "", style: getUiTextStyle("PanelTitle") });
   nameTextStyle = new TextStyle({ ...uiTokens.typography.panelTitle, breakWords: true, wordWrap: true });
