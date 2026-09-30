@@ -57646,9 +57646,27 @@ function fitImage(sprite, width, height, x2, y2) {
 }
 
 // src/pixi-menu-overlay.ts
+function nextEnabledControlIndex(controls, current, direction, includeCurrent = true) {
+  for (let step = 0; step < controls.length; step++) {
+    const offset = step + (includeCurrent ? 0 : 1);
+    const index = (current + offset * direction + controls.length) % Math.max(1, controls.length);
+    if (controls[index]?.enabled !== false) return index;
+  }
+  return 0;
+}
 function isMenuOverlayState(value) {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value;
+  const progression = value.progression;
+  if (typeof progression === "object" && progression !== null) {
+    const item2 = progression;
+    return Number.isInteger(item2.experience) && Number.isInteger(item2.selectedPageIndex) && Array.isArray(item2.nodes) && item2.nodes.every(isProgressionNode);
+  }
+  const history = value.history;
+  if (typeof history === "object" && history !== null) {
+    const item2 = history;
+    return Array.isArray(item2.runs) && (typeof item2.selectedRunId === "string" || item2.selectedRunId === null) && Number.isInteger(item2.selectedSectionIndex) && item2.runs.every(isHistoryEntry);
+  }
   const outcome = candidate.outcome;
   if (typeof outcome === "object" && outcome !== null) {
     const item2 = outcome;
@@ -57664,6 +57682,21 @@ function isMenuOverlayState(value) {
   const item = settings;
   return Number.isInteger(item.tabIndex) && Number.isFinite(item.masterVolume) && Number.isFinite(item.sfxVolume) && Number.isFinite(item.musicVolume) && Number.isFinite(item.ambientVolume) && Number.isFinite(item.speed) && typeof item.cardTiltEnabled === "boolean" && typeof item.particleLevel === "string" && typeof item.debugProgressionEnabled === "boolean" && Number.isInteger(item.metaExperience) && Number.isInteger(item.unlockedMetaRewards);
 }
+function isProgressionNode(value) {
+  if (typeof value !== "object" || value === null) return false;
+  const item = value;
+  return typeof item.id === "string" && typeof item.name === "string" && typeof item.description === "string" && typeof item.stat === "string" && Number.isInteger(item.cost) && typeof item.isUnlocked === "boolean" && typeof item.isAvailable === "boolean" && typeof item.isAffordable === "boolean" && Array.isArray(item.prerequisites) && item.prerequisites.every((label) => typeof label === "string") && typeof item.status === "string";
+}
+function isHistoryEntry(value) {
+  if (typeof value !== "object" || value === null) return false;
+  const item = value;
+  return typeof item.id === "string" && typeof item.title === "string" && typeof item.subtitle === "string" && typeof item.outcome === "string" && Array.isArray(item.summary) && item.summary.every((line) => typeof line === "string") && Array.isArray(item.sections) && item.sections.every(isHistorySection);
+}
+function isHistorySection(value) {
+  if (typeof value !== "object" || value === null) return false;
+  const item = value;
+  return typeof item.title === "string" && Array.isArray(item.lines) && item.lines.every((line) => typeof line === "string");
+}
 function sliderAction(slider, requested) {
   const clamped = Math.max(slider.min, Math.min(slider.max, requested));
   const value = Math.round((clamped - slider.min) / slider.step) * slider.step + slider.min;
@@ -57672,7 +57705,11 @@ function sliderAction(slider, requested) {
 async function createMenuOverlayRenderer(canvas, sink) {
   const host = getCollectionOverlayHost();
   const application = host ? void 0 : new Application();
-  if (application) await application.init({ antialias: true, autoDensity: true, background: 529183, canvas, preference: "canvas" });
+  if (application) {
+    await application.init({ antialias: true, autoDensity: true, background: 529183, canvas, preference: "canvas" });
+    canvas.style.width = "100%";
+    canvas.style.height = "100%";
+  }
   const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const surface = canvas.parentElement;
   const dialogElement = surface?.closest("[role='dialog']") ?? surface;
@@ -57712,16 +57749,16 @@ async function createMenuOverlayRenderer(canvas, sink) {
     content.addChild(label);
     return label;
   };
-  const addButton = (label, action, x2, y2, buttonWidth, buttonHeight2 = 42) => {
+  const addButton = (label, action, x2, y2, buttonWidth, buttonHeight2 = 42, enabled = true) => {
     const index = controls.length;
     const activeTab = action.startsWith("tab:") && state?.settings?.tabIndex === Number(action.slice(4));
-    const button = new GameButton({ width: buttonWidth, height: buttonHeight2, label, selected: index === selectedIndex || activeTab, onPress: () => {
+    const button = new GameButton({ width: buttonWidth, height: buttonHeight2, label, enabled, selected: index === selectedIndex || activeTab, onPress: () => {
       selectedIndex = index;
       void submit(action);
     } });
     button.position.set(x2, y2);
     content.addChild(button);
-    controls.push({ action, label });
+    controls.push({ action, label, enabled });
   };
   const addSlider = (slider, y2) => {
     const compact = width < 520;
@@ -57802,8 +57839,82 @@ async function createMenuOverlayRenderer(canvas, sink) {
     clearContent();
     if (state.outcome) layoutOutcome(state.outcome);
     else if (state.confirmation) layoutConfirmation(state.confirmation);
+    else if (state.history) layoutHistory(state.history);
+    else if (state.progression) layoutProgression(state.progression);
     else if (state.settings) layoutSettings(state.settings);
-    selectedIndex = Math.min(selectedIndex, Math.max(0, controls.length - 1));
+    selectedIndex = nextEnabledControlIndex(controls, Math.min(selectedIndex, Math.max(0, controls.length - 1)), 1);
+  };
+  const layoutHistory = (history) => {
+    const runIndex = Math.max(0, history.runs.findIndex((run2) => run2.id === history.selectedRunId));
+    const run = history.runs[runIndex];
+    addText("Run History", 24, 18, 28);
+    if (!run) {
+      addText("No runs have been recorded yet. Complete a run or enter a room to start building history.", 24, 78, 18, width - 48);
+      addButton("Close", "history:close", 24, height - 66, Math.min(220, width - 48));
+      return;
+    }
+    addText(`${run.title} \xB7 ${run.outcome}`, 24, 62, 21, width - 48);
+    addText(run.subtitle, 24, 94, 15, width - 48).style.fill = 12175571;
+    const compact = width < 500;
+    const short = height < 440;
+    run.summary.forEach((line, index) => {
+      const columns = compact && !short ? 1 : 3;
+      addText(line, 24 + index % columns * ((width - 56) / columns), 124 + Math.floor(index / columns) * 24, 14, (width - 64) / columns);
+    });
+    const sectionIndex = Math.max(0, history.selectedSectionIndex);
+    const section = run.sections[sectionIndex];
+    if (section) {
+      const detailsY = compact && !short ? 270 : 190;
+      addText(section.title, 24, detailsY, 19, width - 48);
+      section.lines.forEach((line, index) => addText(`\u2022 ${line}`, 30, detailsY + 32 + index * 40, 14, width - 60));
+    }
+    const stackedButtons = compact || short;
+    const buttonWidth = stackedButtons ? (width - 56) / 2 : (width - 80) / 4;
+    const y2 = height - (stackedButtons ? 108 : 66);
+    addButton("Previous run", "history:run:previous", 24, y2, buttonWidth, 42, history.runs.length > 1);
+    addButton("Next run", "history:run:next", 32 + buttonWidth, y2, buttonWidth, 42, history.runs.length > 1);
+    addButton("Next section", "history:section:next", stackedButtons ? 24 : 40 + buttonWidth * 2, y2 + (stackedButtons ? 48 : 0), buttonWidth);
+    addButton("Close", "history:close", stackedButtons ? 32 + buttonWidth : width - 24 - buttonWidth, y2 + (stackedButtons ? 48 : 0), buttonWidth);
+  };
+  const layoutProgression = (progression) => {
+    addText("Progression", 24, 16, 27);
+    addText(`Available experience: ${progression.experience} XP`, 24, 52, 16);
+    const compact = width < 520;
+    const short = height < 440;
+    const columns = compact && !short ? 1 : 2;
+    const itemHeight = short ? 62 : 88;
+    const rows = Math.max(1, Math.floor((height - 240) / itemHeight));
+    const pageSize = columns * rows;
+    const pageCount = Math.max(1, Math.ceil(progression.nodes.length / pageSize));
+    const page = Math.max(0, Math.min(pageCount - 1, progression.selectedPageIndex));
+    if (page !== progression.selectedPageIndex) void submit(`progression:page:${page}`);
+    const pageNodes = progression.nodes.slice(page * pageSize, (page + 1) * pageSize);
+    const itemWidth = (width - 56 - 8 * (columns - 1)) / columns;
+    const top = short ? 88 : 104;
+    pageNodes.forEach((node, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const x2 = 24 + column * (itemWidth + 8);
+      const y2 = top + row * itemHeight;
+      const enabled = !node.isUnlocked && node.isAvailable && node.isAffordable;
+      const label = `${node.name}
+${node.cost} XP \xB7 ${node.stat}`;
+      addButton(label, `progression:unlock:${node.id}`, x2, y2, itemWidth, itemHeight - 20, enabled);
+      addText(
+        `${node.isUnlocked ? "Unlocked" : node.status}${node.prerequisites.length > 0 ? ` \xB7 Requires ${node.prerequisites.join(", ")}` : ""}`,
+        x2 + 4,
+        y2 + itemHeight - 20,
+        itemWidth - 8 < 80 ? 12 : 13,
+        itemWidth - 8
+      );
+    });
+    addText(`Page ${page + 1} of ${pageCount}`, 24, height - 112, 14);
+    const stacked = compact || short;
+    const buttonWidth = stacked ? (width - 56) / 2 : Math.min(180, (width - 80) / 4);
+    const buttonY = height - (stacked ? 100 : 66);
+    addButton("Previous", `progression:page:${page - 1}`, 24, buttonY, buttonWidth, 40, page > 0);
+    addButton("Next", `progression:page:${page + 1}`, stacked ? 32 + buttonWidth : 40 + buttonWidth, buttonY, buttonWidth, 40, page < pageCount - 1);
+    addButton("Close", "progression:close", stacked ? (width - buttonWidth) / 2 : width - 24 - buttonWidth, buttonY + (stacked ? 44 : 0), buttonWidth, 40);
   };
   const keydown = (event) => {
     if (!state) return;
@@ -57817,7 +57928,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
       return;
     }
     if (event.key === "Escape") {
-      if (!state.outcome) void submit("cancel");
+      if (!state.outcome) void submit(state.history ? "history:close" : state.progression ? "progression:close" : "cancel");
       event.preventDefault();
       event.stopImmediatePropagation();
       return;
@@ -57825,12 +57936,12 @@ async function createMenuOverlayRenderer(canvas, sink) {
     if (document.activeElement !== keyboardTarget) return;
     event.stopImmediatePropagation();
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      selectedIndex = (selectedIndex + (event.key === "ArrowDown" ? 1 : -1) + controls.length) % Math.max(1, controls.length);
+      selectedIndex = nextEnabledControlIndex(controls, selectedIndex, event.key === "ArrowDown" ? 1 : -1, false);
       layout();
       event.preventDefault();
     }
     const control = controls[selectedIndex];
-    if (!control) return;
+    if (!control || control.enabled === false) return;
     if (control.slider && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
       void submit(sliderAction(control.slider, control.slider.value + (event.key === "ArrowRight" ? 1 : -1) * control.slider.step));
       event.preventDefault();
@@ -58329,6 +58440,34 @@ function toRunControlsState(value) {
 }
 
 // src/pixi-encounter.ts
+function activateModalFocus(dialog) {
+  const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const focusTarget = dialog.querySelector("canvas, button, [tabindex]") ?? dialog;
+  focusTarget.tabIndex = focusTarget.tabIndex < 0 ? 0 : focusTarget.tabIndex;
+  focusTarget.focus({ preventScroll: true });
+  const focusable = () => [...dialog.querySelectorAll("button:not(:disabled), canvas, [tabindex]:not([tabindex='-1'])")];
+  const keydown = (event) => {
+    if (event.key !== "Tab") return;
+    const items = focusable();
+    const index = items.indexOf(document.activeElement);
+    const next = event.shiftKey ? index <= 0 ? items.length - 1 : index - 1 : index < 0 || index === items.length - 1 ? 0 : index + 1;
+    items[next]?.focus({ preventScroll: true });
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  const focusin = (event) => {
+    if (event.target instanceof Node && !dialog.contains(event.target)) focusTarget.focus({ preventScroll: true });
+  };
+  document.addEventListener("keydown", keydown, true);
+  document.addEventListener("focusin", focusin, true);
+  return {
+    dispose() {
+      document.removeEventListener("keydown", keydown, true);
+      document.removeEventListener("focusin", focusin, true);
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    }
+  };
+}
 async function createEncounterRenderer(canvas, intentSink, initialization) {
   if (!isVersionedOperation(initialization)) {
     throw new Error("The renderer initialization request has an incompatible protocol version.");
@@ -58951,6 +59090,7 @@ function isRecord4(value) {
   return typeof value === "object" && value !== null;
 }
 export {
+  activateModalFocus,
   createCardChoiceRenderer,
   createCharacterSelectRenderer,
   createCollectionRenderer,
