@@ -49593,14 +49593,77 @@ var noOpAccessibilityOverlay = {
   }
 };
 
+// src/combat-treatments/caerleth.ts
+var caerlethForestCombatSceneTreatment = {
+  id: "caerleth-forest",
+  regionId: "caerleth",
+  settingId: "forest",
+  atmosphere: "pale-reach",
+  sceneryKind: "grove",
+  distantLightAlpha: 0.38,
+  foregroundSilhouetteCount: 3,
+  mistAlpha: 0.16
+};
+var caerlethSnowCombatSceneTreatment = {
+  id: "caerleth-snow",
+  regionId: "caerleth",
+  settingId: "snow",
+  atmosphere: "pale-reach",
+  sceneryKind: "snow-grove",
+  distantLightAlpha: 0.5,
+  foregroundSilhouetteCount: 3,
+  mistAlpha: 0.22
+};
+var caerlethCombatSceneTreatments = {
+  "caerleth-forest": caerlethForestCombatSceneTreatment,
+  "caerleth-snow": caerlethSnowCombatSceneTreatment
+};
+
+// src/combat-treatments/irrigal.ts
+var irrigalCombatSceneTreatment = {
+  id: "irrigal",
+  regionId: "irrigal",
+  sceneryKind: "observatory",
+  atmosphere: "pale-reach",
+  distantLightAlpha: 0.34,
+  foregroundSilhouetteCount: 3,
+  mistAlpha: 0.1
+};
+var kaavrelCombatSceneTreatment = {
+  ...irrigalCombatSceneTreatment,
+  id: "irrigal-kaavrel",
+  settingId: "kaavrel",
+  mistAlpha: 0.12
+};
+
+// src/combat-treatments/keshorun.ts
+var keshorunCombatSceneTreatment = {
+  id: "keshorun",
+  regionId: "keshorun",
+  atmosphere: "pale-reach",
+  distantLightAlpha: 0.42,
+  foregroundSilhouetteCount: 4,
+  mistAlpha: 0.1,
+  sceneryKind: "archive"
+};
+
+// src/combat-treatments/sil.ts
+var silCombatSceneTreatment = {
+  id: "sil",
+  regionId: "sil",
+  atmosphere: "pale-reach",
+  sceneryKind: "monolith",
+  distantLightAlpha: 0.2,
+  foregroundSilhouetteCount: 2,
+  mistAlpha: 0.06
+};
+
 // src/combat-scene-treatment.ts
 var foldCombatSceneTreatment = {
   id: "fold",
   regionId: "fold",
-  assetBundleId: "treatment:fold",
-  enemyArtSetId: "fold-neutral",
-  cardArtSetId: "fold-neutral",
   atmosphere: "pale-reach",
+  sceneryKind: "ruins",
   distantLightAlpha: 0.46,
   foregroundSilhouetteCount: 3,
   mistAlpha: 0.14
@@ -49609,15 +49672,18 @@ var shatteredFoldCombatSceneTreatment = {
   ...foldCombatSceneTreatment,
   id: "fold-shattered",
   settingId: "shattered",
-  enemyArtSetId: "fold-displaced",
-  cardArtSetId: "fold-displaced",
   distantLightAlpha: 0.36,
   foregroundSilhouetteCount: 5,
   mistAlpha: 0.2
 };
 var combatSceneTreatmentRegistry = {
   fold: foldCombatSceneTreatment,
-  "fold-shattered": shatteredFoldCombatSceneTreatment
+  "fold-shattered": shatteredFoldCombatSceneTreatment,
+  keshorun: keshorunCombatSceneTreatment,
+  irrigal: irrigalCombatSceneTreatment,
+  "irrigal-kaavrel": kaavrelCombatSceneTreatment,
+  ...caerlethCombatSceneTreatments,
+  sil: silCombatSceneTreatment
 };
 function getCombatSceneTreatment(value) {
   return typeof value === "string" && Object.hasOwn(combatSceneTreatmentRegistry, value) ? combatSceneTreatmentRegistry[value] ?? foldCombatSceneTreatment : foldCombatSceneTreatment;
@@ -50385,6 +50451,7 @@ var EncounterBackdrop = class extends Container {
     for (const x2 of [w2 * 0.07, w2 * 0.87]) {
       this.architecture.roundRect(x2, h2 * 0.04, pillarWidth, horizon - h2 * 0.04, 7).fill({ color: colors.architecture, alpha: 0.8 }).stroke({ color: colors.line, width: 2, alpha: 0.45 }).rect(x2 + pillarWidth * 0.18, h2 * 0.06, pillarWidth * 0.1, horizon - h2 * 0.09).fill({ color: colors.line, alpha: 0.1 }).rect(x2 - pillarWidth * 0.2, horizon - 12, pillarWidth * 1.4, 12).fill({ color: colors.distantSurface });
     }
+    this.drawTreatmentScenery(w2, h2, horizon, colors);
     for (let index = 0; index < this.treatment.foregroundSilhouetteCount; index++) {
       const x2 = w2 * ((index + 1) / (this.treatment.foregroundSilhouetteCount + 1));
       const width2 = Math.max(18, w2 * 0.035);
@@ -50402,6 +50469,34 @@ var EncounterBackdrop = class extends Container {
       this.floor.rect(x2, horizon + 6, 1, h2 - horizon - 6).fill({ color: colors.line, alpha: 0.09 });
     }
     this.floor.roundRect(w2 * 0.12, horizon - 7, w2 * 0.27, 8, 4).fill({ color: colors.platform, alpha: 0.16 }).roundRect(w2 * 0.62, horizon - 7, w2 * 0.27, 8, 4).fill({ color: colors.platform, alpha: 0.16 });
+  }
+  /** Draws bounded, non-semantic treatment geometry behind the stable combat composition. */
+  drawTreatmentScenery(width, height, horizon, colors) {
+    const centerX = width / 2;
+    switch (this.treatment.sceneryKind) {
+      case "archive":
+        for (let index = -2; index <= 2; index++) {
+          const x2 = centerX + index * width * 0.09;
+          this.architecture.rect(x2, height * 0.18, width * 0.045, horizon - height * 0.18).fill({ color: colors.architecture, alpha: 0.32 }).rect(x2 + 4, height * 0.23, width * 0.037, 2).fill({ color: colors.line, alpha: 0.22 });
+        }
+        return;
+      case "observatory":
+        this.architecture.roundRect(centerX - width * 0.095, height * 0.2, width * 0.19, height * 0.18, 999).stroke({ color: colors.line, width: 2, alpha: 0.34 }).roundRect(centerX - width * 0.048, height * 0.245, width * 0.096, height * 0.09, 999).stroke({ color: colors.architecture, width: 3, alpha: 0.34 });
+        return;
+      case "grove":
+      case "snow-grove":
+        for (const x2 of [width * 0.2, width * 0.8]) {
+          this.architecture.rect(x2, height * 0.16, Math.max(5, width * 0.012), horizon - height * 0.16).fill({ color: colors.architecture, alpha: 0.42 });
+          this.architecture.roundRect(x2 + width * 0.01, height * 0.11, width * 0.08, height * 0.08, 999).fill({ color: colors.distantSurface, alpha: this.treatment.sceneryKind === "snow-grove" ? 0.3 : 0.2 });
+        }
+        return;
+      case "monolith":
+        this.architecture.roundRect(centerX - width * 0.035, height * 0.1, width * 0.07, horizon - height * 0.1, 4).fill({ color: colors.architecture, alpha: 0.5 }).rect(centerX - 1, height * 0.16, 2, horizon - height * 0.25).fill({ color: colors.line, alpha: 0.28 });
+        return;
+      case "ruins":
+        this.architecture.rect(width * 0.43, height * 0.25, width * 0.025, horizon - height * 0.25).fill({ color: colors.line, alpha: 0.2 }).rect(width * 0.55, height * 0.19, width * 0.025, horizon - height * 0.19).fill({ color: colors.line, alpha: 0.2 });
+        return;
+    }
   }
 };
 
