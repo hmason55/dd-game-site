@@ -53157,19 +53157,21 @@ ${resources}`;
   /** Builds the final hand transform for either a resting or inspected entry. */
   getHandLayoutTransform(tileId, position) {
     const isInspected = this.isHandEntryInspected(tileId);
-    if (this.isHandEntryPreviewed(tileId) && this.viewport && !isShortEncounter(this.viewport)) {
+    const isMobilePortrait = this.viewport !== void 0 && getViewportLayoutMode(this.viewport) === "MobilePortrait";
+    if (this.isHandEntryPreviewed(tileId) && this.viewport && !isShortEncounter(this.viewport) && !isMobilePortrait) {
       return getCardPreviewTransform(this.viewport);
     }
-    const lift = this.viewport && isShortEncounter(this.viewport) ? 0 : focusedHandLift * (position.scale ?? 1);
+    const lift = this.viewport && (isShortEncounter(this.viewport) || isMobilePortrait) ? 0 : focusedHandLift * (position.scale ?? 1);
     return {
       x: position.x,
       y: position.y - (isInspected ? lift : 0),
       rotation: isInspected ? 0 : position.rotation ?? 0,
-      scale: (position.scale ?? 1) * (isInspected ? this.getHandInspectionScale(position) : 1)
+      scale: (position.scale ?? 1) * (isInspected ? this.getHandInspectionScale(position, isMobilePortrait) : 1)
     };
   }
   /** Scales constrained layouts modestly so inspection remains readable without crowding combat space. */
-  getHandInspectionScale(position) {
+  getHandInspectionScale(position, isMobilePortrait) {
+    if (isMobilePortrait) return 1;
     if (this.viewport && isShortEncounter(this.viewport)) return 1.1;
     return position.rotation !== void 0 ? focusedHandScale : constrainedHandInspectionScale;
   }
@@ -55182,6 +55184,7 @@ async function createEventRenderer(canvas, sink) {
   let nestedPage = 0;
   let pending = false;
   let acceptedActionAwaitingReconcile = false;
+  let activeSubmissionGeneration = 0;
   let narrativeProgress = 0;
   let effectName;
   let effectElapsedMs = 0;
@@ -55219,16 +55222,23 @@ async function createEventRenderer(canvas, sink) {
   const submit = async (name, choiceId, selectionIds = null) => {
     if (pending) return;
     pending = true;
+    const submissionGeneration = ++activeSubmissionGeneration;
+    acceptedActionAwaitingReconcile = true;
     try {
       const optionIndex = name === "chooseOption" && choiceId !== null ? state?.options.findIndex((option) => option.id === choiceId) ?? -1 : null;
       const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: eventSceneProtocolVersion, sceneId: "event", name, sequence, sourceId: null, targetId: null, optionIndex: optionIndex !== null && optionIndex >= 0 ? optionIndex : null, choiceId, selectionIds });
       announce(result.accepted ? "Resolved." : "That choice is no longer available.");
       playEffect(result.accepted ? "choice-confirmed" : "choice-rejected");
-      if (result.accepted) acceptedActionAwaitingReconcile = true;
-      else pending = false;
+      if (!result.accepted && submissionGeneration === activeSubmissionGeneration) {
+        acceptedActionAwaitingReconcile = false;
+        pending = false;
+      }
     } catch {
       announce("The choice could not be completed. Please try again.");
-      pending = false;
+      if (submissionGeneration === activeSubmissionGeneration) {
+        acceptedActionAwaitingReconcile = false;
+        pending = false;
+      }
       playEffect("choice-rejected");
     } finally {
       layout();
