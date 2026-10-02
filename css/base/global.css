@@ -129,6 +129,7 @@ html, body, #app {
 .pixi-reward-accessibility-overlay,
 .pixi-event-accessibility-overlay,
 .pixi-rest-accessibility-overlay,
+.pixi-shop-accessibility-overlay,
 .pixi-map-accessibility-overlay {
     position: absolute;
     width: 1px;

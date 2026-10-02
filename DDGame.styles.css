@@ -6,9 +6,10 @@
 .pixi-card-choice-overlay.renderer-unavailable canvas[b-kqbmtuwmtl] { display: none; }
 /* /Components/Dialogs/PixiRewardSurface.razor.rz.scp.css */
 .pixi-reward-surface[b-lxd0nfvn0m] {
+    box-sizing: border-box;
     width: min(100%, 68rem);
-    min-height: min(34rem, calc(95dvh - 8rem));
-    aspect-ratio: 16 / 9;
+    min-height: 0;
+    height: min(calc(100dvh - 7rem), 44rem);
     margin: 0 auto;
     overflow: hidden;
     overscroll-behavior: contain;
@@ -16,8 +17,8 @@
     user-select: none;
     -webkit-user-select: none;
     background: #0b1622;
-    border: 1px solid var(--mud-palette-lines-default);
-    border-radius: var(--mud-default-borderradius);
+    border: 1px solid #536d72;
+    border-radius: 4px;
 }
 
 .pixi-reward-surface canvas[b-lxd0nfvn0m] {
@@ -49,19 +50,12 @@
     width: auto;
 }
 
-@media (max-width: 600px) {
-    .pixi-reward-surface[b-lxd0nfvn0m] {
-        min-height: 0;
-        aspect-ratio: auto;
-        height: min(76dvh, calc(100dvh - 8rem));
-    }
+@media (max-width: 600px) and (orientation: portrait) {
+    .pixi-reward-surface[b-lxd0nfvn0m] { height: calc(100dvh - 7rem - env(safe-area-inset-bottom)); min-height: 0; }
 }
 
 @media (orientation: landscape) and (max-height: 540px) {
-    .pixi-reward-surface[b-lxd0nfvn0m] {
-        height: calc(100dvh - 5rem);
-        min-height: 0;
-    }
+    .pixi-reward-surface[b-lxd0nfvn0m] { height: calc(100dvh - 5rem - env(safe-area-inset-bottom)); min-height: 0; }
 }
 
 /* /Components/PixiCharacterSelectSurface.razor.rz.scp.css */
@@ -259,25 +253,26 @@
     -webkit-user-drag: none;
 }
 /* /Components/Rooms/PixiEventSurface.razor.rz.scp.css */
-.pixi-event-surface[b-999uhjpgcf] { height: min(76vh, 640px); min-height: 360px; overflow: hidden; position: relative; width: 100%; }
+.pixi-event-surface[b-999uhjpgcf] { box-sizing: border-box; height: min(calc(100dvh - 7rem), 48rem); min-height: 0; border: 1px solid #536d72; border-radius: 4px; overflow: hidden; position: relative; width: 100%; }
 .pixi-event-surface canvas[b-999uhjpgcf] { display: block; height: 100%; outline: none; touch-action: manipulation; width: 100%; }
 .pixi-event-accessibility-controls[b-999uhjpgcf], .pixi-event-keyboard-help[b-999uhjpgcf] { position: absolute; height: 1px; overflow: hidden; width: 1px; clip: rect(0 0 0 0); white-space: nowrap; }
 .pixi-event-surface.renderer-unavailable[b-999uhjpgcf] { height: auto; min-height: 0; overflow: visible; }
 .pixi-event-surface.renderer-unavailable canvas[b-999uhjpgcf], .pixi-event-surface.renderer-unavailable .pixi-event-keyboard-help[b-999uhjpgcf] { display: none; }
 .pixi-event-surface.renderer-unavailable .pixi-event-accessibility-controls[b-999uhjpgcf] { clip: auto; height: auto; overflow: visible; position: static; white-space: normal; width: auto; }
 
-@media (max-width: 600px) {
-    .pixi-event-surface[b-999uhjpgcf] { height: min(72dvh, 42rem); min-height: min(22rem, calc(100dvh - 8rem)); }
+/* Keep portrait canvases above the fixed mobile toolbar. */
+@media (max-width: 600px) and (orientation: portrait) {
+    .pixi-event-surface[b-999uhjpgcf] { height: calc(100dvh - 7rem - env(safe-area-inset-bottom)); min-height: 0; width: 100%; }
 }
-
 @media (orientation: landscape) and (max-height: 540px) {
-    .pixi-event-surface[b-999uhjpgcf] { height: calc(100dvh - 5rem); min-height: 18rem; }
+    .pixi-event-surface[b-999uhjpgcf] { height: calc(100dvh - 5rem - env(safe-area-inset-bottom)); min-height: 0; }
 }
 /* /Components/Rooms/PixiMapSurface.razor.rz.scp.css */
 .pixi-map-surface[b-1kmtvgocsf] {
     background: #08131f;
-    border: 1px solid var(--mud-palette-lines-default);
-    border-radius: var(--mud-default-borderradius);
+    box-sizing: border-box;
+    border: 1px solid #536d72;
+    border-radius: 4px;
     height: calc(100dvh - 5.5rem - env(safe-area-inset-bottom));
     margin: 0 auto;
     overflow: hidden;
@@ -303,21 +298,13 @@
 .pixi-map-surface.renderer-unavailable .pixi-map-accessibility-controls[b-1kmtvgocsf] { height: auto; overflow: visible; position: static; width: auto; }
 
 @media (max-width: 600px) {
-    .pixi-map-surface[b-1kmtvgocsf] {
-        height: calc(100dvh - 5.5rem - env(safe-area-inset-bottom));
-        min-height: 0;
-        width: 100%;
-    }
+    .pixi-map-surface[b-1kmtvgocsf] { height: calc(100dvh - 5.5rem - env(safe-area-inset-bottom)); min-height: 0; width: 100%; }
 }
-
 @media (orientation: landscape) and (max-height: 540px) {
-    .pixi-map-surface[b-1kmtvgocsf] {
-        height: calc(100dvh - 5rem);
-        min-height: 0;
-    }
+    .pixi-map-surface[b-1kmtvgocsf] { height: calc(100dvh - 5rem - env(safe-area-inset-bottom)); min-height: 0; }
 }
 /* /Components/Rooms/PixiRestSurface.razor.rz.scp.css */
-.pixi-rest-surface[b-her48madf3] { height: clamp(22rem, 68dvh, 35rem); overflow: hidden; position: relative; width: 100%; }
+.pixi-rest-surface[b-her48madf3] { box-sizing: border-box; height: min(calc(100dvh - 7rem), 48rem); min-height: 0; border: 1px solid #536d72; border-radius: 4px; overflow: hidden; position: relative; width: 100%; }
 .pixi-rest-surface canvas[b-her48madf3] { display: block; height: 100%; width: 100%; }
 .pixi-rest-surface canvas:focus-visible[b-her48madf3] { outline: 3px solid var(--mud-palette-secondary); outline-offset: -3px; }
 .pixi-rest-keyboard-help[b-her48madf3] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
@@ -326,15 +313,15 @@
 .pixi-rest-surface.renderer-unavailable canvas[b-her48madf3], .pixi-rest-surface.renderer-unavailable .pixi-rest-keyboard-help[b-her48madf3] { display: none; }
 .pixi-rest-surface.renderer-unavailable .pixi-rest-accessibility-controls[b-her48madf3] { height: auto; overflow: visible; position: static; width: auto; }
 
-@media (max-width: 600px) {
-    .pixi-rest-surface[b-her48madf3] { height: min(72dvh, 42rem); min-height: min(22rem, calc(100dvh - 8rem)); }
+/* Keep portrait canvases above the fixed mobile toolbar. */
+@media (max-width: 600px) and (orientation: portrait) {
+    .pixi-rest-surface[b-her48madf3] { height: calc(100dvh - 7rem - env(safe-area-inset-bottom)); min-height: 0; width: 100%; }
 }
-
 @media (orientation: landscape) and (max-height: 540px) {
-    .pixi-rest-surface[b-her48madf3] { height: calc(100dvh - 5rem); min-height: 18rem; }
+    .pixi-rest-surface[b-her48madf3] { height: calc(100dvh - 5rem - env(safe-area-inset-bottom)); min-height: 0; }
 }
 /* /Components/Rooms/PixiShopSurface.razor.rz.scp.css */
-.pixi-shop-surface[b-lr5mek7nhb] { background: #0b1622; border: 1px solid var(--mud-palette-lines-default); border-radius: var(--mud-default-borderradius); height: min(calc(100dvh - 7rem), 48rem); margin: 0 auto 1rem; min-height: 30rem; overflow: hidden; position: relative; touch-action: none; width: min(calc(100vw - 2rem), 90rem); }
+.pixi-shop-surface[b-lr5mek7nhb] { box-sizing: border-box; background: #0b1622; border: 1px solid #536d72; border-radius: 4px; height: min(calc(100dvh - 7rem), 48rem); margin: 0 auto 1rem; min-height: 0; overflow: hidden; position: relative; touch-action: none; width: min(calc(100vw - 2rem), 90rem); }
 .pixi-shop-surface canvas[b-lr5mek7nhb] { display: block; height: 100%; width: 100%; }
 .pixi-shop-surface canvas:focus-visible[b-lr5mek7nhb] { outline: 3px solid var(--mud-palette-secondary); outline-offset: -3px; }
 .pixi-shop-keyboard-help[b-lr5mek7nhb], .pixi-shop-accessibility-controls[b-lr5mek7nhb] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
@@ -342,14 +329,13 @@
 .pixi-shop-surface.renderer-unavailable canvas[b-lr5mek7nhb], .pixi-shop-surface.renderer-unavailable .pixi-shop-keyboard-help[b-lr5mek7nhb] { display: none; }
 .pixi-shop-surface.renderer-unavailable .pixi-shop-accessibility-controls[b-lr5mek7nhb] { height: auto; overflow: visible; position: static; width: auto; }
 
-@media (max-width: 600px) {
-    .pixi-shop-surface[b-lr5mek7nhb] { height: min(76dvh, 44rem); min-height: min(22rem, calc(100dvh - 8rem)); width: calc(100vw - 1rem); }
+/* Keep portrait canvases above the fixed mobile toolbar. */
+@media (max-width: 600px) and (orientation: portrait) {
+    .pixi-shop-surface[b-lr5mek7nhb] { height: calc(100dvh - 7rem - env(safe-area-inset-bottom)); min-height: 0; width: 100%; }
 }
-
 @media (orientation: landscape) and (max-height: 540px) {
-    .pixi-shop-surface[b-lr5mek7nhb] { height: calc(100dvh - 5rem); min-height: 18rem; }
+    .pixi-shop-surface[b-lr5mek7nhb] { height: calc(100dvh - 5rem - env(safe-area-inset-bottom)); min-height: 0; }
 }
-
 /* /Components/Rooms/PixiTreasureSurface.razor.rz.scp.css */
 .pixi-treasure-surface[b-d4ng9ktinb] { background: #0b1622; border: 1px solid var(--mud-palette-lines-default); border-radius: var(--mud-default-borderradius); height: min(calc(100dvh - 7rem), 36rem); margin: 0 auto 1rem; min-height: 22rem; overflow: hidden; position: relative; width: min(calc(100vw - 2rem), 56rem); }
 .pixi-treasure-surface canvas[b-d4ng9ktinb] { display: block; height: 100%; width: 100%; }
