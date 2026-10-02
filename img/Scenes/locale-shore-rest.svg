@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
+  <title>Shore — rest placeholder</title>
+  <rect x="0" y="0" width="1536" height="1024" fill="#2b424b" />
+  <circle cx="1090" cy="220" r="76" fill="#718681" />
+  <rect x="0" y="530" width="1536" height="240" fill="#49636b" />
+  <rect x="0" y="770" width="1536" height="254" fill="#20343e" />
+  <polygon points="0,660 450,585 1030,780 1536,820 1536,1024 0,1024" fill="#718681" />
+  <polygon points="80,640 390,570 360,420 180,530" fill="#20343e" />
+  <rect x="320" y="270" width="38" height="350" fill="#20343e" />
+  <polygon points="1230,425 1410,500 1536,705 1170,705" fill="#49636b" />
+  <polygon points="330,600 470,425 650,640" fill="#ab9870" />
+  <polygon points="465,445 550,620 400,620" fill="#20343e" />
+  <rect x="710" y="700" width="210" height="65" fill="#49636b" />
+  <ellipse cx="790" cy="640" rx="80" ry="34" fill="#ab9870" />
+  <circle cx="1160" cy="635" r="30" fill="#718681" />
+  <polygon points="1150,655 1220,790 1080,790" fill="#718681" />
+</svg>

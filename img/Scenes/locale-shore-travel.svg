@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
+  <title>Shore — travel placeholder</title>
+  <rect x="0" y="0" width="1536" height="1024" fill="#2b424b" />
+  <circle cx="1090" cy="220" r="76" fill="#718681" />
+  <rect x="0" y="530" width="1536" height="240" fill="#49636b" />
+  <rect x="0" y="770" width="1536" height="254" fill="#20343e" />
+  <polygon points="0,660 450,585 1030,780 1536,820 1536,1024 0,1024" fill="#718681" />
+  <polygon points="80,640 390,570 360,420 180,530" fill="#20343e" />
+  <rect x="320" y="270" width="38" height="350" fill="#20343e" />
+  <polygon points="1230,425 1410,500 1536,705 1170,705" fill="#49636b" />
+  <rect x="250" y="660" width="180" height="90" fill="#49636b" />
+  <polygon points="1190,710 1310,655 1400,765 1230,790" fill="#20343e" />
+</svg>

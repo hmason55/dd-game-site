@@ -71990,8 +71990,78 @@ var noOpAccessibilityOverlay = {
   }
 };
 
+// src/scene-environment.ts
+var backgroundPattern = /^\/img\/Scenes\/locale-(crossroads|ruins|grove|shore|depths|vault|observatory|threshold)-(travel|rest|shop)\.svg$/;
+function getSceneEnvironment(value) {
+  if (typeof value !== "object" || value === null) return void 0;
+  const candidate = value;
+  if (typeof candidate.localeId !== "string" || !/^[a-z-]{1,64}$/.test(candidate.localeId) || typeof candidate.localeName !== "string" || candidate.localeName.length > 80 || typeof candidate.chunkIndex !== "number" || !Number.isInteger(candidate.chunkIndex) || candidate.chunkIndex < 0 || typeof candidate.backgroundUrl !== "string" || !backgroundPattern.test(candidate.backgroundUrl)) return void 0;
+  return candidate;
+}
+function getSnapshotEnvironment(snapshot) {
+  if (typeof snapshot !== "object" || snapshot === null) return void 0;
+  return getSceneEnvironment(snapshot.environment);
+}
+function getJourneyBackground(scene, environment) {
+  return getSceneEnvironment(environment)?.backgroundUrl ?? `/img/Scenes/journey-${scene === "rest" || scene === "shop" ? scene : "ruins"}.svg`;
+}
+
 // src/encounter-scene.ts
 init_lib();
+
+// src/journey-artwork.ts
+init_lib();
+async function loadJourneyTexture(url) {
+  if (!url || typeof Image === "undefined") return void 0;
+  try {
+    const { Assets: Assets2 } = await Promise.resolve().then(() => (init_lib(), lib_exports));
+    return await Assets2.load(url);
+  } catch {
+    return void 0;
+  }
+}
+var JourneyArtwork = class extends Container {
+  image = new Sprite(Texture.EMPTY);
+  crop = new Graphics();
+  imageUrl = "";
+  generation = 0;
+  frameWidth = 1;
+  frameHeight = 1;
+  /** Creates one retained image and clipping mask. */
+  constructor() {
+    super();
+    this.eventMode = "none";
+    this.image.mask = this.crop;
+    this.image.visible = false;
+    this.addChild(this.image, this.crop);
+  }
+  /** Replaces the image only after the requested URL has loaded and remains current. */
+  setImage(url) {
+    if (url === this.imageUrl) return;
+    this.imageUrl = url;
+    const generation = ++this.generation;
+    this.image.visible = false;
+    if (!url || typeof Image === "undefined") return;
+    void loadJourneyTexture(url).then((texture) => {
+      if (!texture || this.destroyed || generation !== this.generation) return;
+      this.image.texture = texture;
+      this.image.visible = true;
+      this.resize(this.frameWidth, this.frameHeight);
+    }).catch(() => {
+    });
+  }
+  /** Fits art inside a clipped frame without stretching its aspect ratio. */
+  resize(width, height) {
+    this.frameWidth = Math.max(1, width);
+    this.frameHeight = Math.max(1, height);
+    this.crop.clear().roundRect(0, 0, this.frameWidth, this.frameHeight, 3).fill(16777215);
+    if (!this.image.visible) return;
+    const scale = Math.max(this.frameWidth / this.image.texture.width, this.frameHeight / this.image.texture.height);
+    this.image.width = this.image.texture.width * scale;
+    this.image.height = this.image.texture.height * scale;
+    this.image.position.set((this.frameWidth - this.image.width) / 2, (this.frameHeight - this.image.height) / 2);
+  }
+};
 
 // src/encounter-backdrop.ts
 init_lib();
@@ -72806,6 +72876,7 @@ var EncounterBackdrop = class extends Container {
   atmosphere = new Graphics();
   architecture = new Graphics();
   floor = new Graphics();
+  localeArtwork = new JourneyArtwork();
   atmosphereTokens;
   treatment;
   activeTreatmentId;
@@ -72816,7 +72887,7 @@ var EncounterBackdrop = class extends Container {
     this.treatment = getCombatSceneTreatment("fold");
     this.atmosphereTokens = getAreaAtmosphere(atmosphere);
     this.eventMode = "none";
-    this.addChild(this.atmosphere, this.architecture, this.floor);
+    this.addChild(this.atmosphere, this.architecture, this.floor, this.localeArtwork);
   }
   /** Adds deterministic broken masonry and floor stones, keeping the central silhouettes readable. */
   drawRubble(width, height, horizon, colors2) {
@@ -72831,6 +72902,10 @@ var EncounterBackdrop = class extends Container {
       const y2 = horizon + index * 83 % 977 / 977 * (height - horizon);
       this.floor.rect(x2, y2, 5 + index % 8 * 4, 2 + index % 3).fill({ color: colors2.line, alpha: 0.12 + index % 3 * 0.03 });
     }
+  }
+  /** Applies saved locale artwork above the retained fallback planes. */
+  setEnvironment(environment) {
+    this.localeArtwork.setImage(getSceneEnvironment(environment)?.backgroundUrl ?? "");
   }
   /** Selects a restricted decorative atmosphere with a neutral fallback. */
   setAtmosphere(atmosphere) {
@@ -72858,6 +72933,7 @@ var EncounterBackdrop = class extends Container {
     const w2 = Math.max(0, Number.isFinite(width) ? width : 0);
     const h2 = Math.max(0, Number.isFinite(height) ? height : 0);
     this.viewport = { width: w2, height: h2 };
+    this.localeArtwork.resize(w2, h2);
     const horizon = h2 * 0.64;
     const pillarWidth = Math.max(20, w2 * 0.055);
     const colors2 = this.atmosphereTokens;
@@ -74435,11 +74511,12 @@ var EncounterScene = class {
     this.latestSnapshot = snapshot;
     this.currentSequence = snapshot.sequence;
     this.backdrop.setTreatment(snapshot.sceneTreatmentId);
+    this.backdrop.setEnvironment(snapshot.environment);
     this.repaintBackground(viewport);
     this.layoutInputLockFeedback(viewport);
     this.runHud.reconcile({
       block: snapshot.player.block,
-      title: `THE ${getCombatSceneTreatment(snapshot.sceneTreatmentId).regionId.replaceAll("-", " ").toUpperCase()}`,
+      title: getSceneEnvironment(snapshot.environment)?.localeName.toUpperCase() ?? `THE ${getCombatSceneTreatment(snapshot.sceneTreatmentId).regionId.replaceAll("-", " ").toUpperCase()}`,
       health: snapshot.player.health,
       maximumHealth: snapshot.player.maxHealth,
       currency: snapshot.currency,
@@ -76895,6 +76972,10 @@ function suspendRunControls(controls) {
 }
 
 // src/journey-layout.ts
+function updateJourneyBackdrop(canvas, scene, environment) {
+  if (!canvas.style) return;
+  canvas.style.backgroundImage = `url('${getJourneyBackground(scene, environment)}')`;
+}
 function clearJourneyLayer(layer) {
   for (const child of [...layer.children]) child.destroy({ children: true });
   layer.removeChildren();
@@ -76932,60 +77013,6 @@ function installJourneyBackdrop(canvas, scene) {
 
 // src/pixi-reward.ts
 init_lib();
-
-// src/journey-artwork.ts
-init_lib();
-async function loadJourneyTexture(url) {
-  if (!url || typeof Image === "undefined") return void 0;
-  try {
-    const { Assets: Assets2 } = await Promise.resolve().then(() => (init_lib(), lib_exports));
-    return await Assets2.load(url);
-  } catch {
-    return void 0;
-  }
-}
-var JourneyArtwork = class extends Container {
-  image = new Sprite(Texture.EMPTY);
-  crop = new Graphics();
-  imageUrl = "";
-  generation = 0;
-  frameWidth = 1;
-  frameHeight = 1;
-  /** Creates one retained image and clipping mask. */
-  constructor() {
-    super();
-    this.eventMode = "none";
-    this.image.mask = this.crop;
-    this.image.visible = false;
-    this.addChild(this.image, this.crop);
-  }
-  /** Replaces the image only after the requested URL has loaded and remains current. */
-  setImage(url) {
-    if (url === this.imageUrl) return;
-    this.imageUrl = url;
-    const generation = ++this.generation;
-    this.image.visible = false;
-    if (!url || typeof Image === "undefined") return;
-    void loadJourneyTexture(url).then((texture) => {
-      if (!texture || this.destroyed || generation !== this.generation) return;
-      this.image.texture = texture;
-      this.image.visible = true;
-      this.resize(this.frameWidth, this.frameHeight);
-    }).catch(() => {
-    });
-  }
-  /** Fits art inside a clipped frame without stretching its aspect ratio. */
-  resize(width, height) {
-    this.frameWidth = Math.max(1, width);
-    this.frameHeight = Math.max(1, height);
-    this.crop.clear().roundRect(0, 0, this.frameWidth, this.frameHeight, 3).fill(16777215);
-    if (!this.image.visible) return;
-    const scale = Math.max(this.frameWidth / this.image.texture.width, this.frameHeight / this.image.texture.height);
-    this.image.width = this.image.texture.width * scale;
-    this.image.height = this.image.texture.height * scale;
-    this.image.position.set((this.frameWidth - this.image.width) / 2, (this.frameHeight - this.image.height) / 2);
-  }
-};
 
 // src/reward-scene.ts
 init_lib();
@@ -77829,7 +77856,9 @@ async function createRewardRenderer(canvas, actionSink) {
       if (disposed) {
         return false;
       }
-      return scene.reconcile(snapshot, getCanvasViewport(canvas));
+      const accepted = scene.reconcile(snapshot, getCanvasViewport(canvas));
+      if (accepted) updateJourneyBackdrop(canvas, "reward", getSnapshotEnvironment(snapshot));
+      return accepted;
     },
     dispose() {
       if (disposed) {
@@ -78382,6 +78411,7 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
       if (!isEventState(candidate) || nextSequence <= sequence) return false;
       sequence = nextSequence;
       state = candidate;
+      updateJourneyBackdrop(canvas, "event", candidate.environment);
       selectedIndex = 0;
       selectedOptionId = void 0;
       nestedChoiceOpen = false;
@@ -78661,7 +78691,7 @@ async function createRestRenderer(canvas, sink) {
     sceneArt.position.set(scene.art.x, scene.art.y);
     const effectAlpha = effectName === void 0 ? 0 : Math.max(0, 1 - effectElapsedMs / 360) * 0.2;
     sceneEffect.clear().rect(scene.art.x, scene.art.y, scene.art.width, scene.mobile ? scene.art.height : actionY - scene.art.y - 12).fill({ color: effectName === "rejected" ? 14972757 : effectName === "training" ? 6333946 : 10999984, alpha: effectAlpha });
-    title.text = state?.title ?? "Camp";
+    title.text = getSceneEnvironment(state?.environment)?.localeName ?? state?.title ?? "Camp";
     title.style.fontSize = scene.mobile ? 24 : 30;
     title.position.set(scene.art.x + 16, scene.art.y + 12);
     title.anchor.set(0, 0);
@@ -78684,7 +78714,7 @@ async function createRestRenderer(canvas, sink) {
     contextTitle.position.set(panel.x + 18, detailY + 14);
     const recovery = state ? Math.min(state.maximumHealth, state.health + Math.floor(state.maximumHealth / 3)) : 0;
     actionArt.visible = !scene.mobile && !scene.short;
-    actionArt.setImage("/img/Scenes/journey-" + (preview?.id === "rest" && preview.isAvailable ? "rest" : "ruins") + ".svg");
+    actionArt.setImage(getJourneyBackground(preview?.id === "rest" && preview.isAvailable ? "rest" : "event", state?.environment));
     const artHeight = Math.max(1, detailHeight - 310);
     actionArt.resize(panel.width - 36, artHeight);
     actionArt.position.set(panel.x + 18, detailY + 102);
@@ -78717,6 +78747,8 @@ async function createRestRenderer(canvas, sink) {
       if (!isRestState(candidate) || nextSequence <= sequence) return false;
       sequence = nextSequence;
       state = candidate;
+      updateJourneyBackdrop(canvas, "rest", candidate.environment);
+      sceneArt.setImage(getJourneyBackground("rest", candidate.environment));
       selectedIndex = 0;
       selectedActionId = void 0;
       if (pending && acceptedActionAwaitingReconcile) {
@@ -79032,7 +79064,7 @@ async function createShopRenderer(canvas, sink) {
     merchant.clear();
     sceneArt.resize(merchandiseLayout.compact ? width : merchandiseLayout.panelX - 16, Math.max(1, merchandiseLayout.gridTop - 36));
     sceneArt.position.set(0, 0);
-    title.text = state?.title ?? "Shop";
+    title.text = getSceneEnvironment(state?.environment)?.localeName ?? state?.title ?? "Shop";
     title.position.set(24, 20);
     title.style.fontSize = merchandiseLayout.compact ? 20 : 30;
     title.style.wordWrap = true;
@@ -79170,6 +79202,8 @@ async function createShopRenderer(canvas, sink) {
       const purchasedMerchandiseId = pendingPurchaseMerchandiseId;
       sequence = nextSequence;
       state = candidate;
+      updateJourneyBackdrop(canvas, "shop", candidate.environment);
+      sceneArt.setImage(getJourneyBackground("shop", candidate.environment));
       selectedIndex = 0;
       selectedMerchandiseId = void 0;
       if (pending && acceptedActionAwaitingReconcile) {
@@ -79445,7 +79479,8 @@ var cardBodyStyle = { fill: 13358561, fontFamily: "Alegreya, Georgia, serif", fo
 init_lib();
 async function createTreasureRenderer(canvas, sink) {
   const application = new Application();
-  await application.init({ antialias: true, autoDensity: true, background: 726562, backgroundAlpha: 1, canvas, preference: "canvas" });
+  await application.init({ antialias: true, autoDensity: true, background: 726562, backgroundAlpha: 0, canvas, preference: "canvas" });
+  const restoreBackdrop = installJourneyBackdrop(canvas, "reward");
   canvas.tabIndex = 0;
   const canvasFocus = createCanvasFocusCoordinator(canvas);
   const accessibility = createTreasureAccessibilityOverlay(canvas);
@@ -79540,6 +79575,7 @@ async function createTreasureRenderer(canvas, sink) {
       if (!isTreasureState(candidate) || nextSequence <= sequence) return false;
       sequence = nextSequence;
       state = candidate;
+      updateJourneyBackdrop(canvas, "treasure", candidate.environment);
       pending = false;
       focusedIndex = state.canCollect ? 0 : 1;
       feedback.text = "";
@@ -79553,6 +79589,7 @@ async function createTreasureRenderer(canvas, sink) {
       canvas.removeEventListener("keydown", keydown);
       window.removeEventListener("resize", resize);
       canvasFocus.dispose();
+      restoreBackdrop();
       accessibility.dispose();
       application.destroy({ removeView: false }, { children: true });
     }
@@ -79646,6 +79683,9 @@ async function createMapRenderer(canvas, sink) {
   const root = new Container();
   const background = new Graphics();
   const graph = new Container();
+  const localeLayer = new Container();
+  localeLayer.eventMode = "none";
+  const localeBands = [];
   const connectionLayer = new Container();
   const nodeLayer = new Container();
   const travelMarker = new Graphics();
@@ -79895,7 +79935,9 @@ async function createMapRenderer(canvas, sink) {
     background.clear().rect(0, 0, width, height).fill({ color: 530204, alpha: 0.16 }).rect(0, 0, width, Math.min(height * 0.18, 84)).fill({ color: 1520456, alpha: 0.38 });
     graphMask.clear().rect(metrics.graphBounds.left, metrics.graphBounds.top, metrics.graphBounds.width, metrics.graphBounds.height).fill(16777215);
     graph.removeChildren();
+    if (localeBands.length > 0) graph.addChild(localeLayer);
     graph.addChild(connectionLayer, nodeLayer, travelMarker);
+    layoutLocaleBands(pointFor, rowStep);
     let nextVisibleConnectionCount = 0;
     for (const [key, connectionView] of connectionViews) {
       const source8 = nodes.find((node) => node.id === key.split(":")[0]);
@@ -79934,7 +79976,7 @@ async function createMapRenderer(canvas, sink) {
     visibleConnectionCount = nextVisibleConnectionCount;
     visibleNodeCount = nextVisibleNodeCount;
     drawTravelMarker(travelMarker, travelTransition, nodes, pointFor, reducedMotion);
-    region.text = state?.regionName ?? "";
+    region.text = getSceneEnvironment(state?.environment)?.localeName ?? state?.regionName ?? "";
     region.position.set(20, 14);
     region.anchor.set(0, 0);
     feedback.position.set(contextBounds.left + contextBounds.width / 2, metrics.contextVisible ? contextBounds.top - 22 : height - 28);
@@ -79951,11 +79993,12 @@ async function createMapRenderer(canvas, sink) {
     if (selected && metrics.contextVisible) {
       contextPanel.clear().roundRect(contextBounds.left, contextBounds.top, contextBounds.width, contextBounds.height, 4).fill({ color: 530204, alpha: 0.97 }).roundRect(contextBounds.left, contextBounds.top, contextBounds.width, contextBounds.height, 12).stroke({ color: 9549506, width: 2 }).rect(contextBounds.left + 2, contextBounds.top + 14, 4, Math.max(1, contextBounds.height - 28)).fill({ color: selected.isReachable ? 7854502 : 16113563, alpha: 0.9 });
       contextTitle.text = selected.kind.toUpperCase();
-      contextDetails.text = `${selected.description} ${selected.isReachable ? "" : selected.isCurrent ? "Current location." : selected.isVisited ? "Visited." : "Route locked."}`;
+      const localeName = getSceneEnvironment(selected.environment)?.localeName;
+      contextDetails.text = `${localeName ? localeName + ". " : ""}${selected.description} ${selected.isReachable ? "" : selected.isCurrent ? "Current location." : selected.isVisited ? "Visited." : "Route locked."}`;
       const wide = metrics.mode === "Wide";
       const artHeight = wide ? Math.min(240, contextBounds.height * 0.4) : 98;
       const artWidth = wide ? contextBounds.width - 32 : 80;
-      destinationArt.setImage("/img/Scenes/journey-" + (selected.kind === "Rest" ? "rest" : selected.kind === "Shop" ? "shop" : "ruins") + ".svg");
+      destinationArt.setImage(getJourneyBackground(selected.kind.toLowerCase(), selected.environment));
       destinationArt.resize(artWidth, artHeight);
       destinationArt.position.set(contextBounds.left + 16, contextBounds.top + 12);
       const textX = contextBounds.left + (wide ? 16 : 108);
@@ -79999,7 +80042,37 @@ async function createMapRenderer(canvas, sink) {
     control.position.set(x2, y2);
     controls.addChild(control);
   }
+  function reconcileLocaleBands(next) {
+    clearJourneyLayer(localeLayer);
+    localeBands.length = 0;
+    const chunks = /* @__PURE__ */ new Map();
+    for (const node of next.nodes) {
+      const environment = getSceneEnvironment(node.environment);
+      if (!environment) continue;
+      const nodes = chunks.get(environment.chunkIndex) ?? [];
+      nodes.push(node);
+      chunks.set(environment.chunkIndex, nodes);
+    }
+    for (const nodes of chunks.values()) {
+      const label = new Text({ text: getSceneEnvironment(nodes[0]?.environment)?.localeName ?? "", style: { fontFamily: "Georgia", fontSize: 15, fill: 12699836 } });
+      const shape = new Graphics();
+      localeLayer.addChild(shape, label);
+      localeBands.push({ nodes, shape, label });
+    }
+  }
+  function layoutLocaleBands(pointFor, rowStep) {
+    for (const band of localeBands) {
+      const points = band.nodes.map(pointFor);
+      const left = Math.min(...points.map((point) => point.x)) - 38;
+      const top = Math.min(...points.map((point) => point.y)) - rowStep * 0.44;
+      const right = Math.max(...points.map((point) => point.x)) + 38;
+      const bottom = Math.max(...points.map((point) => point.y)) + rowStep * 0.44;
+      band.shape.clear().roundRect(left, top, right - left, bottom - top, 24).fill({ color: 8229253, alpha: 0.09 }).stroke({ color: 10202011, width: 1, alpha: 0.2 });
+      band.label.position.set(left + 14, top + 8);
+    }
+  }
   function reconcileViews(next) {
+    reconcileLocaleBands(next);
     const nodeIds = new Set(next.nodes.map((node) => node.id));
     for (const [id, view] of nodeViews) {
       if (!nodeIds.has(id)) {
@@ -80046,6 +80119,7 @@ async function createMapRenderer(canvas, sink) {
       const wasPreview = state?.isPreview === true;
       const cancelledTravelTransition = travelTransition && !isTravelTransitionValid(travelTransition, candidate);
       state = candidate;
+      updateJourneyBackdrop(canvas, "map", candidate.environment);
       reconcileViews(candidate);
       selectedNodeId = void 0;
       focusedIndex = 0;

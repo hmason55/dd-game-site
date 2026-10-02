@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
+  <title>Ruins — shop placeholder</title>
+  <rect x="0" y="0" width="1536" height="1024" fill="#30343d" />
+  <circle cx="1070" cy="205" r="64" fill="#92735b" />
+  <rect x="0" y="655" width="1536" height="369" fill="#232930" />
+  <rect x="90" y="270" width="230" height="390" fill="#44454b" />
+  <rect x="325" y="415" width="165" height="245" fill="#69645a" />
+  <polygon points="870,280 1220,280 1320,465 1030,465" fill="#69645a" />
+  <rect x="1080" y="425" width="110" height="240" fill="#44454b" />
+  <rect x="1350" y="370" width="186" height="310" fill="#44454b" />
+  <polygon points="620,660 830,660 1110,1024 320,1024" fill="#44454b" />
+  <rect x="300" y="400" width="38" height="400" fill="#69645a" />
+  <rect x="1110" y="400" width="38" height="400" fill="#69645a" />
+  <polygon points="250,400 1140,400 1230,580 200,580" fill="#92735b" />
+  <ellipse cx="750" cy="640" rx="52" ry="66" fill="#44454b" />
+  <polygon points="695,690 815,690 855,835 655,835" fill="#44454b" />
+  <rect x="330" y="760" width="750" height="135" fill="#232930" />
+</svg>

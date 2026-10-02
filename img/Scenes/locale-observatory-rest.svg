@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
+  <title>Observatory — rest placeholder</title>
+  <rect x="0" y="0" width="1536" height="1024" fill="#323749" />
+  <circle cx="1050" cy="185" r="100" fill="#818897" />
+  <polygon points="180,370 580,340 670,450 230,485" fill="#515866" />
+  <polygon points="1030,480 1360,415 1536,545 1060,580" fill="#818897" />
+  <rect x="240" y="170" width="90" height="190" fill="#515866" />
+  <rect x="450" y="230" width="70" height="120" fill="#818897" />
+  <polygon points="0,800 590,630 960,680 1536,930 1536,1024 0,1024" fill="#252a3d" />
+  <polygon points="560,630 710,580 930,655 800,710" fill="#818897" />
+  <polygon points="1060,720 1220,680 1390,745 1190,790" fill="#515866" />
+  <polygon points="330,600 470,425 650,640" fill="#b39b78" />
+  <polygon points="465,445 550,620 400,620" fill="#252a3d" />
+  <rect x="710" y="700" width="210" height="65" fill="#515866" />
+  <ellipse cx="790" cy="640" rx="80" ry="34" fill="#b39b78" />
+  <circle cx="1160" cy="635" r="30" fill="#818897" />
+  <polygon points="1150,655 1220,790 1080,790" fill="#818897" />
+</svg>

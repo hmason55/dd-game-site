@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
+  <title>Threshold — travel placeholder</title>
+  <rect x="0" y="0" width="1536" height="1024" fill="#342d3e" />
+  <circle cx="840" cy="250" r="90" fill="#847486" />
+  <rect x="0" y="720" width="1536" height="304" fill="#241d2d" />
+  <polygon points="190,120 420,160 420,720 230,720" fill="#514053" />
+  <polygon points="1120,155 1330,110 1300,720 1120,720" fill="#514053" />
+  <polygon points="180,120 710,110 680,245 230,260" fill="#847486" />
+  <polygon points="800,110 1360,110 1300,260 850,245" fill="#847486" />
+  <polygon points="650,720 890,720 1100,1024 410,1024" fill="#514053" />
+  <polygon points="735,100 785,100 865,690 800,720" fill="#241d2d" />
+  <rect x="250" y="660" width="180" height="90" fill="#514053" />
+  <polygon points="1190,710 1310,655 1400,765 1230,790" fill="#241d2d" />
+</svg>

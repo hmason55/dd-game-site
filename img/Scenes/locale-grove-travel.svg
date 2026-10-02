@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
+  <title>Grove — travel placeholder</title>
+  <rect x="0" y="0" width="1536" height="1024" fill="#243f3b" />
+  <polygon points="0,620 500,460 1000,600 1536,470 1536,1024 0,1024" fill="#1a302c" />
+  <rect x="170" y="170" width="145" height="510" fill="#385649" />
+  <ellipse cx="220" cy="130" rx="360" ry="190" fill="#60725b" />
+  <rect x="1250" y="100" width="120" height="580" fill="#385649" />
+  <ellipse cx="1280" cy="150" rx="340" ry="220" fill="#385649" />
+  <polygon points="210,560 320,570 630,860 330,745" fill="#385649" />
+  <polygon points="1330,530 1220,630 1020,750 1170,730" fill="#385649" />
+  <polygon points="670,580 790,580 1110,1024 420,1024" fill="#385649" />
+  <rect x="250" y="660" width="180" height="90" fill="#385649" />
+  <polygon points="1190,710 1310,655 1400,765 1230,790" fill="#1a302c" />
+</svg>

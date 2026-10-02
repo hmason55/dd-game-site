@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
+  <title>Depths — travel placeholder</title>
+  <rect x="0" y="0" width="1536" height="1024" fill="#1d2934" />
+  <polygon points="0,0 1536,0 1536,300 1230,220 1020,400 660,275 300,410 0,300" fill="#131e28" />
+  <polygon points="0,300 300,390 420,670 270,1024 0,1024" fill="#343c49" />
+  <polygon points="1536,280 1230,350 1170,650 1340,1024 1536,1024" fill="#343c49" />
+  <polygon points="530,400 920,400 1090,720 420,720" fill="#555566" />
+  <rect x="0" y="740" width="1536" height="284" fill="#131e28" />
+  <polygon points="600,740 800,740 1110,1024 300,1024" fill="#343c49" />
+  <ellipse cx="820" cy="850" rx="220" ry="64" fill="#1d2934" />
+  <rect x="250" y="660" width="180" height="90" fill="#343c49" />
+  <polygon points="1190,710 1310,655 1400,765 1230,790" fill="#131e28" />
+</svg>

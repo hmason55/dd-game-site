@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
+  <title>Depths — shop placeholder</title>
+  <rect x="0" y="0" width="1536" height="1024" fill="#1d2934" />
+  <polygon points="0,0 1536,0 1536,300 1230,220 1020,400 660,275 300,410 0,300" fill="#131e28" />
+  <polygon points="0,300 300,390 420,670 270,1024 0,1024" fill="#343c49" />
+  <polygon points="1536,280 1230,350 1170,650 1340,1024 1536,1024" fill="#343c49" />
+  <polygon points="530,400 920,400 1090,720 420,720" fill="#555566" />
+  <rect x="0" y="740" width="1536" height="284" fill="#131e28" />
+  <polygon points="600,740 800,740 1110,1024 300,1024" fill="#343c49" />
+  <ellipse cx="820" cy="850" rx="220" ry="64" fill="#1d2934" />
+  <rect x="300" y="400" width="38" height="400" fill="#555566" />
+  <rect x="1110" y="400" width="38" height="400" fill="#555566" />
+  <polygon points="250,400 1140,400 1230,580 200,580" fill="#84777c" />
+  <ellipse cx="750" cy="640" rx="52" ry="66" fill="#343c49" />
+  <polygon points="695,690 815,690 855,835 655,835" fill="#343c49" />
+  <rect x="330" y="760" width="750" height="135" fill="#131e28" />
+</svg>

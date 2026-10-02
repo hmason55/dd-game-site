@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
+  <title>Crossroads — rest placeholder</title>
+  <rect x="0" y="0" width="1536" height="1024" fill="#263942" />
+  <circle cx="1130" cy="180" r="68" fill="#52616a" />
+  <polygon points="0,600 420,330 710,630 1130,430 1536,640" fill="#35484e" />
+  <rect x="0" y="660" width="1536" height="364" fill="#1c2b32" />
+  <polygon points="610,660 790,660 1536,1024 1060,1024" fill="#35484e" />
+  <polygon points="630,660 750,660 390,1024 0,1024" fill="#52616a" />
+  <rect x="240" y="425" width="70" height="280" fill="#35484e" />
+  <rect x="174" y="425" width="220" height="44" fill="#8b7658" />
+  <polygon points="330,600 470,425 650,640" fill="#8b7658" />
+  <polygon points="465,445 550,620 400,620" fill="#1c2b32" />
+  <rect x="710" y="700" width="210" height="65" fill="#35484e" />
+  <ellipse cx="790" cy="640" rx="80" ry="34" fill="#8b7658" />
+  <circle cx="1160" cy="635" r="30" fill="#52616a" />
+  <polygon points="1150,655 1220,790 1080,790" fill="#52616a" />
+</svg>
