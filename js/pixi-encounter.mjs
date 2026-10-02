@@ -73630,6 +73630,7 @@ var CardView = class extends Container {
   typeLabel = new Text({ text: "", style: this.typeStyle });
   descriptionLabel = new Text({ text: "", style: this.descriptionStyle });
   handPresentation;
+  rewardPresentation;
   cardWidth;
   cardHeight;
   cardContent;
@@ -73644,11 +73645,13 @@ var CardView = class extends Container {
   constructor(options) {
     super();
     this.handPresentation = options.presentation === "hand";
-    if (this.handPresentation) {
+    this.rewardPresentation = options.presentation === "reward";
+    if (this.handPresentation || this.rewardPresentation) {
       this.nameStyle.fontFamily = uiTokens.typography.button.fontFamily;
       this.nameStyle.fontWeight = "700";
       this.nameStyle.stroke = { color: uiTokens.color.panelShadow, width: 1 };
       this.descriptionStyle.stroke = { color: uiTokens.color.panelShadow, width: 1 };
+      this.typeStyle.stroke = { color: uiTokens.color.panelShadow, width: 0 };
     }
     this.cardWidth = normalizeDimension3(options.width ?? defaultCardWidth, defaultCardWidth);
     this.cardHeight = normalizeDimension3(options.height ?? defaultCardHeight, defaultCardHeight);
@@ -73672,7 +73675,7 @@ var CardView = class extends Container {
     this.artwork.mask = this.artMask;
     this.textScrims.mask = this.artMask;
     for (const label of [this.costLabel, this.energyCostLabel, this.manaCostLabel, this.nameLabel, this.typeLabel, this.descriptionLabel]) {
-      label.resolution = 2;
+      label.resolution = Math.max(2, typeof window === "undefined" ? 1 : window.devicePixelRatio || 1);
     }
     this.addChild(
       this.frame,
@@ -73886,9 +73889,9 @@ var CardView = class extends Container {
     const badgeHeight = Math.min(38, Math.max(24, this.cardWidth * 0.21));
     const rulesY = this.cardHeight * (this.handPresentation ? 0.65 : 0.59);
     this.costStyle.fontSize = Math.max(12, 18 * textScale);
-    this.nameStyle.fontSize = Math.max(12, 18 * textScale);
+    this.nameStyle.fontSize = Math.max(this.rewardPresentation ? 14 : 12, 18 * textScale);
     this.typeStyle.fontSize = Math.max(10, 12 * textScale);
-    this.descriptionStyle.fontSize = Math.max(11, 14 * textScale);
+    this.descriptionStyle.fontSize = Math.max(this.rewardPresentation ? 12 : 11, 14 * textScale);
     const cost = this.cardContent.cost === void 0 ? "" : String(this.cardContent.cost).trim();
     const energyCost = getVisibleResourceCost(this.cardContent.energyCost);
     const manaCost = getVisibleResourceCost(this.cardContent.manaCost);
@@ -73905,7 +73908,7 @@ var CardView = class extends Container {
     const activeBadgeWidth = Math.max(badgeWidth, resourceBadgeWidth);
     const hasCost = hasLegacyCost || hasEnergyCost || hasManaCost;
     const stacked = hasCost && Math.max(badgeWidth, resourceBadgeWidth) > this.cardWidth * 0.35;
-    const headerHeight = stacked ? Math.max(82, this.cardHeight * 0.34) : Math.max(28, this.cardHeight * 0.22);
+    const headerHeight = this.rewardPresentation ? Math.max(50, this.cardHeight * 0.25) : stacked ? Math.max(82, this.cardHeight * 0.34) : Math.max(28, this.cardHeight * 0.22);
     this.costLabel.visible = hasLegacyCost;
     this.energyCostLabel.visible = hasEnergyCost;
     this.manaCostLabel.visible = hasManaCost;
@@ -73924,6 +73927,17 @@ var CardView = class extends Container {
     this.nameStyle.wordWrapWidth = Math.max(0, this.cardWidth - (stacked || !hasCost ? textPadding * 2 : activeBadgeWidth + textPadding * 3));
     this.typeStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
     this.descriptionStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
+    if (this.rewardPresentation) {
+      fitTextToBox(this.nameLabel, this.nameStyle.wordWrapWidth, headerHeight - 12, this.nameStyle.fontSize, 14);
+      this.typeLabel.text = this.cardContent.rarity;
+      fitTextToBox(
+        this.descriptionLabel,
+        this.descriptionStyle.wordWrapWidth,
+        this.cardHeight - this.descriptionLabel.y - 8,
+        this.descriptionStyle.fontSize,
+        12
+      );
+    }
     this.costStyle.fill = palette.accent;
     return { badgeWidth, badgeHeight, hasLegacyCost, hasEnergyCost, hasManaCost, energyBadgeWidth, manaBadgeWidth, height: headerHeight };
   }
@@ -75786,11 +75800,14 @@ var EncounterScene = class {
     if (this.activeDrag) {
       return this.activeDrag.entry;
     }
+    if (this.selectedEntryId) {
+      return this.selectableEntries.get(this.selectedEntryId);
+    }
     if (this.hoveredEntryId) {
       const hoveredEntry = this.selectableEntries.get(this.hoveredEntryId);
       return hoveredEntry && this.isEntryInteractive(getEntrySceneId(hoveredEntry), hoveredEntry) ? hoveredEntry : void 0;
     }
-    return this.selectedEntryId ? this.selectableEntries.get(this.selectedEntryId) : void 0;
+    return void 0;
   }
   /**
    * Moves a card below the encounter while shrinking and fading it so it is gone at the destination.
@@ -75947,7 +75964,7 @@ var EncounterScene = class {
     for (const [id, tile] of this.entityTiles) {
       const entityId = id.substring(id.indexOf(":") + 1);
       const entity = this.entities.get(entityId);
-      this.refreshTargetPresentation(tile, entityId, entity);
+      this.refreshTargetPresentation(tile, entity);
     }
   }
   /**
@@ -75962,13 +75979,12 @@ var EncounterScene = class {
   /**
    * Gives targetable entities a clear, low-obstruction visual treatment while an action is selected.
    */
-  refreshTargetPresentation(tile, entityId, entity) {
+  refreshTargetPresentation(tile, entity) {
     const targetingEntry = this.getTargetingEntry();
     const isTargeting = targetingEntry !== void 0 && targetingEntry.targetMode !== "none";
-    const isValidTarget = entity !== void 0 && targetingEntry !== void 0 && !this.intentPending && !this.isAnimationLockedForEntry(targetingEntry) && !this.isAnimationLockedForEntity(entity) && this.isValidTarget(targetingEntry.targetMode, entity);
-    const isFocused = entityId === this.focusedEntityId;
+    const isValidTarget = !this.inputReleased && entity !== void 0 && targetingEntry !== void 0 && !this.intentPending && !this.isAnimationLockedForEntry(targetingEntry) && !this.isAnimationLockedForEntity(entity) && this.isValidTarget(targetingEntry.targetMode, entity);
     const artwork = tile.artwork;
-    const presentationKey = `${isTargeting}:${isValidTarget}:${isFocused}:${artwork.visible}:${tile.artworkImage}:${artwork.x}:${artwork.y}:${artwork.width}:${artwork.height}`;
+    const presentationKey = `${isTargeting}:${isValidTarget}:${artwork.visible}:${tile.artworkImage}:${artwork.x}:${artwork.y}:${artwork.width}:${artwork.height}`;
     if (tile.targetPresentationKey === presentationKey) {
       return;
     }
@@ -75977,14 +75993,8 @@ var EncounterScene = class {
     tile.accent.clear();
     tile.accent.alpha = 0;
     tile.targetHighlight.visible = false;
-    if (isTargeting) {
-      const cueColor = isFocused ? uiTokens.color.focus : isValidTarget ? uiTokens.color.valid : uiTokens.color.invalid;
-      tile.targetHighlight.show(
-        tile.artwork,
-        cueColor,
-        isFocused || isValidTarget ? 3 : 2,
-        isFocused ? 0.95 : isValidTarget ? 0.9 : 0.55
-      );
+    if (isTargeting && isValidTarget) {
+      tile.targetHighlight.show(tile.artwork, uiTokens.color.text, 3, 0.9);
     }
   }
   refreshInteractionState() {
@@ -76047,6 +76057,9 @@ var EncounterScene = class {
   }
   /** Builds the final hand transform for either a resting or inspected entry. */
   getHandLayoutTransform(tileId, position) {
+    if (tileId === this.getSelectedHandTileId() && this.getTargetingEntry()?.targetMode !== "none") {
+      return { x: position.x, y: position.y, rotation: position.rotation ?? 0, scale: position.scale ?? 1 };
+    }
     const isInspected = this.isHandEntryInspected(tileId);
     const isMobilePortrait = this.viewport !== void 0 && getViewportLayoutMode(this.viewport) === "MobilePortrait";
     if (this.isHandEntryPreviewed(tileId) && this.viewport && !isShortEncounter(this.viewport) && (!isMobilePortrait || this.viewport.height >= 650)) {
@@ -77839,6 +77852,7 @@ var RewardOptionView = class extends Container {
     this.choice = choice;
     if (choice.kind === "card") {
       this.card = new CardView({
+        presentation: "reward",
         cost: "",
         name: choice.name,
         description: choice.description,
@@ -77893,8 +77907,8 @@ var RewardOptionView = class extends Container {
   }
   resize(width, height) {
     if (this.card !== void 0) {
-      this.card.resize({ width: 180, height: 252 });
-      this.card.scale.set(Math.min(width / 180, height / 252));
+      this.card.resize({ width, height });
+      this.card.scale.set(1);
       return;
     }
     this.relic?.resize(width, height);
@@ -77949,6 +77963,7 @@ async function createRewardRenderer(canvas, actionSink) {
   await application.init({
     antialias: true,
     autoDensity: true,
+    resolution: Math.max(1, window.devicePixelRatio || 1),
     background: 726562,
     backgroundAlpha: 0,
     canvas,
@@ -77968,7 +77983,7 @@ async function createRewardRenderer(canvas, actionSink) {
   application.stage.addChild(scene.displayObject);
   const resize = () => {
     const viewport = getCanvasViewport(canvas);
-    application.renderer.resize(viewport.width, viewport.height);
+    application.renderer.resize(viewport.width, viewport.height, Math.max(1, window.devicePixelRatio || 1));
     scene.resize(viewport);
   };
   const tick = () => scene.advance(application.ticker.deltaMS);
@@ -79833,6 +79848,7 @@ async function createMapRenderer(canvas, sink) {
   let focusedIndex = 0;
   let pending = false;
   let acceptedActionAwaitingReconcile = false;
+  let actionQueue = Promise.resolve();
   let panX = 0;
   let panY = 0;
   let pointerStart;
@@ -79875,11 +79891,20 @@ async function createMapRenderer(canvas, sink) {
   };
   const submit = async (name, sourceId, alreadyPending = false) => {
     if (pending && !alreadyPending) return;
-    if (!alreadyPending) {
-      pending = name === "commitTravel" || name === "close";
-      if (pending) acceptedActionAwaitingReconcile = true;
+    const ownsPending = name === "commitTravel" || name === "close";
+    if (ownsPending) {
+      pending = true;
     }
+    const precedingAction = actionQueue;
+    let releaseAction = () => {
+    };
+    actionQueue = new Promise((resolve) => {
+      releaseAction = resolve;
+    });
+    await precedingAction;
     try {
+      if (disposed) return;
+      const submittedSequence = sequence;
       const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", {
         protocolVersion: mapSceneProtocolVersion,
         sceneId: "map",
@@ -79891,17 +79916,15 @@ async function createMapRenderer(canvas, sink) {
         choiceId: null,
         selectionIds: null
       });
-      if (!result.accepted) {
+      applyActionResult(name, result, submittedSequence, ownsPending);
+    } catch {
+      if (ownsPending) {
         pending = false;
         acceptedActionAwaitingReconcile = false;
-        announce(name === "commitTravel" ? "That route is no longer available." : "That map action is no longer available.");
-      } else if (name === "commitTravel") {
-        announce("Traveling to the selected location.");
       }
-    } catch {
-      pending = false;
-      acceptedActionAwaitingReconcile = false;
       announce("The map could not complete that request. Please try again.");
+    } finally {
+      releaseAction();
     }
     layout();
   };
@@ -79930,6 +79953,19 @@ async function createMapRenderer(canvas, sink) {
     beginTravel(current, node);
     layout();
   };
+  function applyActionResult(name, result, submittedSequence, ownsPending) {
+    if (!result.accepted) {
+      if (ownsPending) {
+        pending = false;
+        acceptedActionAwaitingReconcile = false;
+      }
+      announce(name === "commitTravel" ? "That route is no longer available." : "That map action is no longer available.");
+    } else if (name === "commitTravel") {
+      acceptedActionAwaitingReconcile = sequence === submittedSequence;
+      pending = acceptedActionAwaitingReconcile;
+      announce("Traveling to the selected location.");
+    }
+  }
   const cancel = () => {
     if (pending || travelTransition) return;
     selectedNodeId = void 0;
