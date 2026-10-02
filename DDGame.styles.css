@@ -138,6 +138,14 @@
     margin: 0;
     width: min(92vw, 76rem);
 }
+
+@media (max-width: 600px) {
+    .pixi-map-overlay-surface[b-n5mvjv5rxk] { padding: .5rem; }
+    .pixi-map-overlay-surface[b-n5mvjv5rxk]  .pixi-map-surface {
+        height: calc(100dvh - 1rem - env(safe-area-inset-bottom));
+        width: 100%;
+    }
+}
 /* /Components/PixiMenuOverlaySurface.razor.rz.scp.css */
 .pixi-menu-overlay-surface[b-vvhjhjzarl] { background: rgba(3, 10, 18, .82); inset: 0; padding: clamp(.5rem, 4vh, 3rem); position: fixed; z-index: 1450; }
 .pixi-menu-overlay-surface canvas[b-vvhjhjzarl] { display: block; height: 100%; margin: auto; max-height: 48rem; max-width: 60rem; touch-action: none; width: 100%; }
@@ -211,11 +219,11 @@
 /* /Components/Rooms/PixiEncounterSurface.razor.rz.scp.css */
 .pixi-encounter-surface[b-9jzg35z109] {
     position: relative;
-    --encounter-available-height: calc(100dvh - 8rem);
-    width: min(100%, calc(var(--encounter-available-height) * 16 / 9));
-    min-height: min(24rem, var(--encounter-available-height));
-    aspect-ratio: 16 / 9;
-    margin: 0 auto 1rem;
+    --encounter-available-height: calc(100dvh - 5.5rem - env(safe-area-inset-bottom));
+    width: 100%;
+    min-height: 0;
+    height: var(--encounter-available-height);
+    margin: 0 auto;
     overflow: hidden;
     overscroll-behavior: contain;
     touch-action: none;
@@ -230,7 +238,7 @@
     .pixi-encounter-surface[b-9jzg35z109] {
         min-height: 0;
         aspect-ratio: auto;
-        height: min(calc(100dvh - 8rem), 48rem);
+        height: var(--encounter-available-height);
     }
 }
 
@@ -270,8 +278,8 @@
     background: #08131f;
     border: 1px solid var(--mud-palette-lines-default);
     border-radius: var(--mud-default-borderradius);
-    height: clamp(22rem, 76dvh, 40rem);
-    margin: 0 auto 1rem;
+    height: calc(100dvh - 5.5rem - env(safe-area-inset-bottom));
+    margin: 0 auto;
     overflow: hidden;
     overscroll-behavior: contain;
     position: relative;
@@ -296,8 +304,8 @@
 
 @media (max-width: 600px) {
     .pixi-map-surface[b-1kmtvgocsf] {
-        height: min(72dvh, 42rem);
-        min-height: min(22rem, calc(100dvh - 8rem));
+        height: calc(100dvh - 5.5rem - env(safe-area-inset-bottom));
+        min-height: 0;
         width: 100%;
     }
 }
@@ -305,7 +313,7 @@
 @media (orientation: landscape) and (max-height: 540px) {
     .pixi-map-surface[b-1kmtvgocsf] {
         height: calc(100dvh - 5rem);
-        min-height: 18rem;
+        min-height: 0;
     }
 }
 /* /Components/Rooms/PixiRestSurface.razor.rz.scp.css */

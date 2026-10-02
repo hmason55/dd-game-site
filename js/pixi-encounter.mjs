@@ -49281,6 +49281,7 @@ function getRunAssetBundle(name) {
 // src/encounter-assets.ts
 var encounterAssetManifest = {
   textures: [
+    "/img/Player/HoodedTraveler.svg",
     "/img/Icons/Attack.png",
     "/img/Icons/Block.png",
     "/img/Icons/Bleed.png",
@@ -49796,12 +49797,12 @@ var areaAtmospheres = {
     platform: 4810077
   },
   "pale-reach": {
-    canvas: uiTokens.color.canvas,
-    distantSurface: 2638152,
-    architecture: 1386285,
-    floor: 1649971,
-    line: 8297365,
-    platform: 5405549
+    canvas: 1380891,
+    distantSurface: 3681087,
+    architecture: 2432557,
+    floor: 2103589,
+    line: 10060187,
+    platform: 6836847
   }
 };
 function getAreaAtmosphere(name) {
@@ -50109,7 +50110,8 @@ var ResourceCounter = class extends Container {
     const labelText = new Text({ text: options.label, style: getUiTextStyle("Body") });
     labelText.position.set(offsetX, 0);
     this.valueText = new Text({ text: String(options.value), style: getUiTextStyle("Button") });
-    this.valueText.position.set(offsetX, options.valueLayout === "inline" ? 0 : 18);
+    const valueX = offsetX + (options.label && options.valueLayout === "inline" ? labelText.width + 8 : 0);
+    this.valueText.position.set(options.valueOffsetX ?? valueX, options.valueLayout === "inline" ? 0 : 18);
     if (options.label) {
       this.addChild(labelText);
     }
@@ -50413,6 +50415,20 @@ var EncounterBackdrop = class extends Container {
     this.eventMode = "none";
     this.addChild(this.atmosphere, this.architecture, this.floor);
   }
+  /** Adds deterministic broken masonry and floor stones, keeping the central silhouettes readable. */
+  drawRubble(width, height, horizon, colors) {
+    for (let index = 0; index < 52; index++) {
+      const x2 = (index * 193 + 37) % 997 / 997 * width;
+      const stoneWidth = 8 + index % 7 * 4;
+      const top = horizon - 20 - index * 31 % 113;
+      this.architecture.rect(x2, top, stoneWidth, horizon - top).fill({ color: index % 3 === 0 ? colors.line : colors.architecture, alpha: 0.2 }).rect(x2 + 2, top, stoneWidth - 4, 3).fill({ color: colors.line, alpha: 0.32 });
+    }
+    for (let index = 0; index < 90; index++) {
+      const x2 = (index * 137 + 41) % 991 / 991 * width;
+      const y2 = horizon + index * 83 % 977 / 977 * (height - horizon);
+      this.floor.rect(x2, y2, 5 + index % 8 * 4, 2 + index % 3).fill({ color: colors.line, alpha: 0.12 + index % 3 * 0.03 });
+    }
+  }
   /** Selects a restricted decorative atmosphere with a neutral fallback. */
   setAtmosphere(atmosphere) {
     this.activeTreatmentId = void 0;
@@ -50460,6 +50476,7 @@ var EncounterBackdrop = class extends Container {
     }
     this.floor.rect(0, horizon, w2, h2 - horizon).fill({ color: colors.floor }).rect(0, horizon + 8, w2, 2).fill({ color: colors.line, alpha: 0.32 });
     this.floor.rect(0, horizon - h2 * 0.06, w2, h2 * 0.1).fill({ color: colors.distantSurface, alpha: this.treatment.mistAlpha });
+    this.drawRubble(w2, h2, horizon, colors);
     for (let i2 = 1; i2 < 5; i2++) {
       const y2 = horizon + (h2 - horizon) * (i2 / 5) ** 1.45;
       this.floor.rect(0, y2, w2, 1).fill({ color: colors.line, alpha: 0.12 });
@@ -50494,8 +50511,34 @@ var EncounterBackdrop = class extends Container {
         this.architecture.roundRect(centerX - width * 0.035, height * 0.1, width * 0.07, horizon - height * 0.1, 4).fill({ color: colors.architecture, alpha: 0.5 }).rect(centerX - 1, height * 0.16, 2, horizon - height * 0.25).fill({ color: colors.line, alpha: 0.28 });
         return;
       case "ruins":
-        this.architecture.rect(width * 0.43, height * 0.25, width * 0.025, horizon - height * 0.25).fill({ color: colors.line, alpha: 0.2 }).rect(width * 0.55, height * 0.19, width * 0.025, horizon - height * 0.19).fill({ color: colors.line, alpha: 0.2 });
+        this.drawRuins(width, height, horizon, colors);
         return;
+    }
+  }
+  /** Draws the moon, broken arch and steps of the Fold using a bounded set of stones. */
+  drawRuins(width, height, horizon, colors) {
+    const moonSize = Math.min(64, width * 0.095);
+    this.atmosphere.roundRect(width * 0.73, height * 0.1, moonSize, moonSize, moonSize / 2).fill({ color: 15062967, alpha: 0.85 });
+    const radius = Math.min(90, width * 0.18);
+    const centerX = width * 0.5;
+    const archY = height * 0.26;
+    for (let index = 0; index < 13; index++) {
+      const angle = Math.PI + index * Math.PI / 12;
+      const x2 = centerX + Math.cos(angle) * radius;
+      const y2 = archY + Math.sin(angle) * radius;
+      this.architecture.rect(x2 - 9, y2 - 8, 17, 15).fill({ color: colors.line, alpha: 0.38 + index % 3 * 0.08 });
+    }
+    for (let row = 0; row < 6; row++) {
+      const y2 = archY + row * 18;
+      for (const x2 of [centerX - radius, centerX + radius]) {
+        this.architecture.rect(x2 - 9, y2, 17, 16).fill({ color: colors.line, alpha: 0.35 });
+      }
+      this.architecture.rect(
+        centerX - radius - row * 7,
+        horizon - 36 + row * 6,
+        radius * 2 + row * 14,
+        4
+      ).fill({ color: colors.line, alpha: 0.18 });
     }
   }
 };
@@ -50558,6 +50601,7 @@ var CardView = class extends Container {
   nameLabel = new Text({ text: "", style: this.nameStyle });
   typeLabel = new Text({ text: "", style: this.typeStyle });
   descriptionLabel = new Text({ text: "", style: this.descriptionStyle });
+  handPresentation;
   cardWidth;
   cardHeight;
   cardContent;
@@ -50571,6 +50615,7 @@ var CardView = class extends Container {
    */
   constructor(options) {
     super();
+    this.handPresentation = options.presentation === "hand";
     this.cardWidth = normalizeDimension2(options.width ?? defaultCardWidth, defaultCardWidth);
     this.cardHeight = normalizeDimension2(options.height ?? defaultCardHeight, defaultCardHeight);
     this.cardContent = toCardViewContent(options);
@@ -50774,19 +50819,19 @@ var CardView = class extends Container {
   }
   /** Reserves a translucent title zone and an opaque lower caption without covering the focal center of the art. */
   drawTextScrims(artBounds, palette, header) {
-    const rulesY = this.cardHeight * 0.59;
+    const rulesY = this.cardHeight * (this.handPresentation ? 0.65 : 0.59);
     this.textScrims.clear().rect(artBounds.x, artBounds.y, artBounds.width, header.height).fill({ color: uiTokens.color.panelShadow, alpha: 0.78 }).rect(artBounds.x, rulesY, artBounds.width, artBounds.y + artBounds.height - rulesY).fill({ color: uiTokens.color.panelShadow });
     this.costPlate.clear();
     this.energyCostPlate.clear();
     this.manaCostPlate.clear();
     if (header.hasLegacyCost) {
-      this.costPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.badgeWidth, header.badgeHeight, 7).fill({ color: uiTokens.color.panelShadow, alpha: 0.94 }).stroke({ color: palette.accent, width: 2 });
+      this.costPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.badgeWidth, header.badgeHeight, this.handPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.panelShadow, alpha: 0.94 }).stroke({ color: palette.accent, width: 2 });
     }
     if (header.hasEnergyCost) {
-      this.energyCostPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.energyBadgeWidth, header.badgeHeight, 7).fill({ color: uiTokens.color.stamina, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
+      this.energyCostPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.energyBadgeWidth, header.badgeHeight, this.handPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.stamina, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
     }
     if (header.hasManaCost) {
-      this.manaCostPlate.roundRect(artBounds.x + 9 + header.energyBadgeWidth, artBounds.y + 5, header.manaBadgeWidth, header.badgeHeight, 7).fill({ color: uiTokens.color.mana, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
+      this.manaCostPlate.roundRect(this.handPresentation ? artBounds.x + artBounds.width - header.manaBadgeWidth - 5 : artBounds.x + 9 + header.energyBadgeWidth, artBounds.y + 5, header.manaBadgeWidth, header.badgeHeight, this.handPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.mana, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
     }
   }
   updateArtwork(artBounds) {
@@ -50802,9 +50847,10 @@ var CardView = class extends Container {
     this.artwork.height = texture.height * scale;
   }
   updateLabels(palette) {
+    if (this.handPresentation) return this.updateHandLabels();
     const textScale = Math.max(0.55, Math.min(this.cardWidth / defaultCardWidth, this.cardHeight / defaultCardHeight));
     const badgeHeight = Math.min(38, Math.max(24, this.cardWidth * 0.21));
-    const rulesY = this.cardHeight * 0.59;
+    const rulesY = this.cardHeight * (this.handPresentation ? 0.65 : 0.59);
     this.costStyle.fontSize = Math.max(12, 18 * textScale);
     this.nameStyle.fontSize = Math.max(12, 18 * textScale);
     this.typeStyle.fontSize = Math.max(10, 12 * textScale);
@@ -50846,6 +50892,42 @@ var CardView = class extends Container {
     this.descriptionStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
     this.costStyle.fill = palette.accent;
     return { badgeWidth, badgeHeight, hasLegacyCost, hasEnergyCost, hasManaCost, energyBadgeWidth, manaBadgeWidth, height: headerHeight };
+  }
+  /** Places readable names/effects below the illustration and resource costs in opposite corners. */
+  updateHandLabels() {
+    const scale = this.cardWidth / defaultCardWidth;
+    const badgeHeight = 38 * scale;
+    const rulesY = this.cardHeight * 0.65;
+    const energy = getVisibleResourceCost(this.cardContent.energyCost);
+    const mana = getVisibleResourceCost(this.cardContent.manaCost);
+    this.costStyle.fontSize = 30 * scale;
+    this.costStyle.fill = uiTokens.color.text;
+    this.costLabel.visible = false;
+    this.energyCostLabel.visible = energy !== void 0;
+    this.manaCostLabel.visible = mana !== void 0;
+    this.energyCostLabel.text = energy === void 0 ? "" : String(energy);
+    this.manaCostLabel.text = mana === void 0 ? "" : String(mana);
+    this.energyCostLabel.position.set(uiTokens.frame.borderWidth + 5 + badgeHeight / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
+    this.manaCostLabel.position.set(this.cardWidth - uiTokens.frame.borderWidth - 5 - badgeHeight / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
+    this.nameLabel.text = this.cardContent.name.toUpperCase();
+    this.nameStyle.fontSize = Math.min(26 * scale, Math.max(14 * scale, (this.cardWidth - 16) / Math.max(1, this.cardContent.name.length * 0.62)));
+    this.nameStyle.wordWrap = false;
+    this.nameLabel.position.set(this.cardWidth / 2, rulesY + 5);
+    this.typeLabel.visible = false;
+    this.descriptionStyle.fontSize = 20 * scale;
+    this.descriptionStyle.wordWrapWidth = this.cardWidth - 16;
+    this.descriptionLabel.text = this.cardContent.description;
+    this.descriptionLabel.position.set(this.cardWidth / 2, rulesY + 38 * scale);
+    return {
+      badgeWidth: 0,
+      badgeHeight,
+      hasLegacyCost: false,
+      hasEnergyCost: energy !== void 0,
+      hasManaCost: mana !== void 0,
+      energyBadgeWidth: energy === void 0 ? 0 : badgeHeight,
+      manaBadgeWidth: mana === void 0 ? 0 : badgeHeight,
+      height: 0
+    };
   }
   /** Applies mutable interaction state while caching the state graphics between semantic changes. */
   applyStatePresentation(palette) {
@@ -51058,27 +51140,52 @@ function normalizeDimension3(value) {
 // src/layout.ts
 var handCardVisualSize = {
   width: 108,
-  height: 144
+  height: 176
 };
-function getCombatCardPreviewRegion(viewport) {
-  const normalizedViewport = Object.freeze({
-    width: normalizeLayoutDimension(viewport.width),
-    height: normalizeLayoutDimension(viewport.height)
-  });
+var combatLayoutReferenceViewport = encounterReferenceViewport;
+function calculateCombatLayout(viewport) {
+  const width = normalizeLayoutDimension(viewport.width);
+  const height = normalizeLayoutDimension(viewport.height);
+  const normalizedViewport = Object.freeze({ width, height });
   const mode = getEncounterLayoutMode(normalizedViewport);
-  const headerHeight = Math.min(normalizedViewport.height, mode === "MobilePortrait" ? 76 : isShortEncounter(normalizedViewport) ? 34 : 60);
-  const endTurnHeight = Math.min(52, Math.max(0, normalizedViewport.height - headerHeight));
-  const verticalInset = Math.min(16, Math.max(0, normalizedViewport.height - headerHeight) / 2);
-  const endTurnY = Math.max(headerHeight, normalizedViewport.height - endTurnHeight - verticalInset);
-  const combatBottom = Math.max(headerHeight, Math.min(endTurnY - 12, normalizedViewport.height));
-  const availableCombatHeight = Math.max(0, combatBottom - headerHeight);
-  const enemyHeight = Math.min(availableCombatHeight, Math.max(0, availableCombatHeight * 0.4));
-  const playerHeight = Math.min(
-    Math.max(0, availableCombatHeight - enemyHeight),
-    Math.max(0, availableCombatHeight * 0.24)
-  );
-  const handY = headerHeight + enemyHeight + playerHeight;
-  return calculateCombatCardPreviewRegion(normalizedViewport, headerHeight, handY);
+  const isShortFallback = isShortEncounter(normalizedViewport);
+  const headerHeight = Math.min(height, mode === "MobilePortrait" ? 76 : isShortFallback ? 34 : 60);
+  const handPositions = [...layoutHand(1, normalizedViewport), ...layoutHand(10, normalizedViewport)];
+  const handY = Math.max(headerHeight, Math.min(...handPositions.map((card) => card.y - handCardVisualSize.height * (card.scale ?? 1) / 2)));
+  const horizontalInset = Math.min(16, width / 2);
+  const portrait = mode === "MobilePortrait" && !isShortFallback;
+  const endTurnHeight = Math.min(44, Math.max(0, height - headerHeight));
+  const endTurnWidth = Math.max(0, portrait ? width - horizontalInset * 2 : Math.min(144, width - horizontalInset * 2));
+  const endTurnX = Math.max(0, width - endTurnWidth - horizontalInset);
+  const endTurnY = portrait || isShortFallback ? Math.max(headerHeight, height - endTurnHeight - 12) : Math.max(headerHeight, handY - endTurnHeight - 16);
+  const combatBottom = portrait ? Math.max(handY, endTurnY - 12) : height - 12;
+  const enemyHeight = Math.max(0, (handY - headerHeight) * 0.56);
+  const playerHeight = Math.max(0, handY - headerHeight - enemyHeight);
+  const cardPreview = calculateCombatCardPreviewRegion(normalizedViewport, headerHeight, handY);
+  const regions = Object.freeze({
+    header: createLayoutRectangle(0, 0, width, headerHeight),
+    enemies: createLayoutRectangle(0, headerHeight, width, enemyHeight),
+    player: createLayoutRectangle(0, headerHeight + enemyHeight, width, playerHeight),
+    hand: createLayoutRectangle(16, handY, Math.max(0, width - 32), Math.max(0, combatBottom - handY)),
+    endTurn: createLayoutRectangle(endTurnX, endTurnY, endTurnWidth, endTurnHeight),
+    cardPreview
+  });
+  return Object.freeze({
+    referenceViewport: combatLayoutReferenceViewport,
+    viewport: normalizedViewport,
+    mode,
+    isShortFallback,
+    regions,
+    protectedRegions: Object.freeze({
+      header: regions.header,
+      hand: regions.hand,
+      endTurn: regions.endTurn
+    }),
+    hitRegions: Object.freeze({ endTurn: regions.endTurn })
+  });
+}
+function getCombatCardPreviewRegion(viewport) {
+  return calculateCombatLayout(viewport).regions.cardPreview;
 }
 function getShortEncounterPageSize(kind, viewport) {
   const width = normalizeLayoutDimension(viewport.width);
@@ -51165,6 +51272,9 @@ function layoutHand(count2, viewport) {
   if (getEncounterLayoutMode(viewport) !== "Wide") {
     return layoutNarrowHand(count2, viewport);
   }
+  if (count2 <= 10) {
+    return layoutFlatHand(count2, viewport);
+  }
   const cardWidth = handCardVisualSize.width;
   const cardVisualWidth = handCardVisualSize.width;
   const cardVisualHeight = handCardVisualSize.height;
@@ -51195,6 +51305,25 @@ function layoutHand(count2, viewport) {
     };
   });
 }
+function layoutFlatHand(count2, viewport) {
+  const gap = 6;
+  const availableWidth = Math.max(0, viewport.width - 32);
+  const player = layoutPlayer(viewport);
+  const playerBottom = player.y + 72 * (player.scale ?? 1);
+  const scale = Math.max(0, Math.min(
+    1,
+    (availableWidth - (count2 - 1) * gap) / (count2 * handCardVisualSize.width),
+    (viewport.height - playerBottom - 8) / handCardVisualSize.height
+  ));
+  const cardWidth = handCardVisualSize.width * scale;
+  const rowWidth = count2 * cardWidth + (count2 - 1) * gap;
+  return Array.from({ length: count2 }, (_, index) => ({
+    x: (viewport.width - rowWidth) / 2 + cardWidth / 2 + index * (cardWidth + gap),
+    y: viewport.height - 4 - handCardVisualSize.height * scale / 2,
+    scale,
+    rotation: 0
+  }));
+}
 function layoutShortEnemies(count2, viewport) {
   const player = layoutShortPlayer(viewport);
   const scale = Math.min(0.62, Math.max(0.4, (viewport.width - 32) / (Math.min(count2, 6) * 176)));
@@ -51224,7 +51353,7 @@ function layoutShortHand(count2, viewport) {
   const availableWidth = Math.max(tileWidth, viewport.width - 32);
   const step = count2 === 1 ? 0 : Math.min(tileWidth + 4, (availableWidth - tileWidth) / (count2 - 1));
   const rowWidth = tileWidth + step * (count2 - 1);
-  const y2 = viewport.height - 16 - handCardVisualSize.height * scale / 2;
+  const y2 = viewport.height - 4 - handCardVisualSize.height * scale / 2;
   return Array.from({ length: count2 }, (_, index) => ({
     x: (viewport.width - rowWidth) / 2 + tileWidth / 2 + index * step,
     y: y2,
@@ -51242,11 +51371,11 @@ function calculateCombatCardPreviewRegion(viewport, headerHeight, handY) {
   const top = Math.min(viewport.height, headerHeight + 12);
   const bottom = Math.max(top, Math.min(viewport.height, handY - 12));
   const availableHeight = Math.max(0, bottom - top);
-  const height = Math.min(300, availableHeight);
+  const height = Math.min(180, availableHeight);
   const width = Math.min(360, Math.max(0, viewport.width - horizontalInset * 2));
   return createLayoutRectangle(
     Math.max(horizontalInset, (viewport.width - width) / 2),
-    top + (availableHeight - height) / 2,
+    bottom - height,
     width,
     height
   );
@@ -51275,14 +51404,14 @@ function layoutNarrowEnemies(count2, viewport) {
   const entityWidth = 176;
   const entityHeight = 116;
   const entityGap = 8;
-  const columns = Math.min(count2, 2);
+  const columns = Math.min(count2, 3);
   const rows = Math.ceil(count2 / columns);
   const player = layoutPlayer(viewport);
   const verticalPadding = getEncounterLayoutMode(viewport) === "MobilePortrait" ? Math.min(84, Math.max(76, player.y * 0.24)) : 60;
   const playerScale = player.scale ?? 1;
   const availableWidth = Math.max(0, viewport.width - horizontalPadding * 2);
   const availableHeight = Math.max(0, player.y - entityHeight * playerScale / 2 - entityGap - verticalPadding);
-  const horizontalScale = columns === 1 ? Math.min(0.72, availableWidth / entityWidth) : Math.min(0.72, (availableWidth - entityGap) / (columns * entityWidth));
+  const horizontalScale = columns === 1 ? Math.min(0.72, availableWidth / entityWidth) : Math.min(0.72, (availableWidth - (columns - 1) * entityGap) / (columns * entityWidth));
   const verticalScale = (availableHeight - (rows - 1) * entityGap) / (rows * entityHeight);
   const scale = Math.max(0, Math.min(horizontalScale, verticalScale));
   const tileWidth = entityWidth * scale;
@@ -51325,20 +51454,16 @@ function layoutNarrowHand(count2, viewport) {
   const cardWidth = handCardVisualSize.width;
   const cardHeight = handCardVisualSize.height;
   const horizontalPadding = 16;
-  const bottomPadding = 16;
+  const bottomPadding = getEncounterLayoutMode(viewport) === "MobilePortrait" ? 68 : 16;
   const cardGap = 8;
   const player = layoutPlayer(viewport);
   const playerBottom = player.y + (player.scale ?? 1) * 58;
   const availableWidth = Math.max(0, viewport.width - horizontalPadding * 2);
-  const maximumCardScale = Math.min(0.76, (availableWidth - cardGap * 2) / (cardWidth * 3));
-  const initialScale = Math.max(0, maximumCardScale);
-  const initialCardHeight = cardHeight * initialScale;
   const availableHeight = Math.max(0, viewport.height - bottomPadding - playerBottom - 16);
-  const maximumRows = Math.max(1, Math.floor((availableHeight + cardGap) / (initialCardHeight + cardGap)));
-  const maximumColumns = Math.max(1, Math.floor((availableWidth + cardGap) / (cardWidth * initialScale + cardGap)));
-  const rows = Math.min(Math.ceil(count2 / maximumColumns), maximumRows);
-  const columns = Math.ceil(count2 / rows);
-  const scale = Math.max(0, Math.min(initialScale, (availableWidth - (columns - 1) * cardGap) / (columns * cardWidth)));
+  const grid = fitHandGrid(count2, availableWidth, availableHeight, cardGap);
+  const columns = grid.columns;
+  const rows = Math.ceil(count2 / columns);
+  const scale = grid.scale;
   const tileWidth = cardWidth * scale;
   const tileHeight = cardHeight * scale;
   const bottomRowY = viewport.height - bottomPadding - tileHeight / 2;
@@ -51355,6 +51480,19 @@ function layoutNarrowHand(count2, viewport) {
     };
   });
 }
+function fitHandGrid(count2, width, height, gap) {
+  let best = { columns: count2, scale: 0 };
+  for (let columns = 1; columns <= count2; columns++) {
+    const rows = Math.ceil(count2 / columns);
+    const scale = Math.max(0, Math.min(
+      0.76,
+      (width - (columns - 1) * gap) / (columns * handCardVisualSize.width),
+      (height - (rows - 1) * gap) / (rows * handCardVisualSize.height)
+    ));
+    if (scale > best.scale) best = { columns, scale };
+  }
+  return best;
+}
 function canUseMobilePortraitHandGrid(count2, viewport) {
   if (getEncounterLayoutMode(viewport) !== "MobilePortrait" || viewport.width < 320 || count2 > 10) {
     return false;
@@ -51362,8 +51500,8 @@ function canUseMobilePortraitHandGrid(count2, viewport) {
   const columns = 5;
   const cardGap = 8;
   const horizontalPadding = 16;
-  const bottomPadding = 16;
-  const rows = Math.ceil(count2 / columns);
+  const bottomPadding = getEncounterLayoutMode(viewport) === "MobilePortrait" ? 68 : 16;
+  const rows = Math.max(2, Math.ceil(count2 / columns));
   const availableWidth = Math.max(0, viewport.width - horizontalPadding * 2);
   const scale = Math.max(0, Math.min(0.76, (availableWidth - (columns - 1) * cardGap) / (columns * handCardVisualSize.width)));
   const tileHeight = handCardVisualSize.height * scale;
@@ -51377,10 +51515,10 @@ function layoutMobilePortraitHand(count2, viewport) {
   const cardWidth = handCardVisualSize.width;
   const cardHeight = handCardVisualSize.height;
   const horizontalPadding = 16;
-  const bottomPadding = 16;
+  const bottomPadding = getEncounterLayoutMode(viewport) === "MobilePortrait" ? 68 : 16;
   const cardGap = 8;
   const columns = 5;
-  const rows = Math.ceil(count2 / columns);
+  const rows = Math.max(2, Math.ceil(count2 / columns));
   const availableWidth = Math.max(0, viewport.width - horizontalPadding * 2);
   const scale = Math.max(0, Math.min(0.76, (availableWidth - (columns - 1) * cardGap) / (columns * cardWidth)));
   const tileWidth = cardWidth * scale;
@@ -51471,7 +51609,7 @@ var RunHud = class extends Container {
   constructor(requestRelicCollection) {
     super();
     this.requestRelicCollection = requestRelicCollection;
-    this.addChild(this.health, this.healthBar, this.currency, this.deck, this.relics, this.turn, this.stamina, this.mana, this.pinnedRelics);
+    this.addChild(this.health, this.healthBar, this.currency, this.deck, this.relics, this.turn, this.stamina, this.mana, this.pinnedRelics, this.block, this.sceneTitle, this.frame, this.staminaPips, this.manaPips);
     this.relics.on("pointertap", () => {
       if (this.relicCollectionAvailable) {
         this.requestRelicCollection?.();
@@ -51481,16 +51619,24 @@ var RunHud = class extends Container {
   requestRelicCollection;
   health = new ResourceCounter({ icon: "\u2665", label: "", value: "0/0", valueLayout: "inline" });
   healthBar = new ProgressIndicator({ width: 64, height: 5, value: 0, maximum: 1, fill: uiTokens.color.health });
-  stamina = new ResourceCounter({ icon: "\u26A1", label: "Stamina", value: "0 / 0", valueLayout: "stacked" });
-  mana = new ResourceCounter({ icon: "\u2726", label: "Mana", value: "0 / 0", valueLayout: "stacked" });
-  currency = new ResourceCounter({ icon: "\u25C6", label: "Vein", value: 0 });
-  deck = new ResourceCounter({ icon: "\u25A3", label: "Deck", value: 0 });
-  relics = new ResourceCounter({ icon: "\u2726", label: "Relics", value: 0 });
+  stamina = new ResourceCounter({ label: "STAMINA", value: "0 / 0", valueLayout: "stacked", valueOffsetX: 78 });
+  mana = new ResourceCounter({ label: "MANA", value: "0 / 0", valueLayout: "stacked", valueOffsetX: 78 });
+  currency = new ResourceCounter({ icon: "\u25C6", label: "", value: 0, valueLayout: "inline" });
+  deck = new ResourceCounter({ icon: "\u25A3", label: "", value: 0, valueLayout: "inline" });
+  relics = new ResourceCounter({ icon: "\u2726", label: "Relics", value: 0, valueLayout: "inline" });
   pinnedRelics = new Text({ text: "", style: getUiTextStyle("Caption") });
   turn = new Text({ text: "", style: getUiTextStyle("Body") });
+  block = new ResourceCounter({ icon: "\u25C7", label: "", value: 0, valueLayout: "inline" });
+  sceneTitle = new Text({ text: "", style: { ...getUiTextStyle("Caption"), letterSpacing: 3 } });
+  frame = new Graphics();
+  staminaPips = new Graphics();
+  manaPips = new Graphics();
   relicCollectionAvailable = false;
   /** Reconciles resource values and a concise, human-readable phase label. */
   reconcile(state, viewport) {
+    this.block.setValue(state.block ?? 0);
+    this.block.visible = state.block !== void 0;
+    this.sceneTitle.text = state.title ?? "";
     this.health.setValue(`${state.health}/${state.maximumHealth}`);
     this.healthBar.setProgress(state.health, state.maximumHealth);
     const staminaValue = getResourceValue(state.energy, state.turnStartEnergy);
@@ -51503,6 +51649,8 @@ var RunHud = class extends Container {
     if (manaValue !== void 0) {
       this.mana.setValue(manaValue);
     }
+    this.drawResourcePips(this.staminaPips, state.energy, state.turnStartEnergy, uiTokens.color.stamina);
+    this.drawResourcePips(this.manaPips, state.mana, state.turnStartMana, uiTokens.color.mana);
     this.currency.setValue(state.currency);
     this.deck.setValue(state.deckCount);
     this.relics.setValue(formatRelicRailCount(state.relicCount));
@@ -51518,35 +51666,49 @@ var RunHud = class extends Container {
   setFeedbackVisible(visible, viewport) {
     this.turn.visible = !visible || getViewportLayoutMode(viewport) !== "MobilePortrait";
   }
+  /** Bounds decorative pips to five while preserving the exact resource totals in text. */
+  drawResourcePips(graphic, current, allowance, color) {
+    graphic.clear();
+    if (current === void 0 || allowance === void 0) return;
+    const count2 = Math.min(5, Math.max(0, Math.trunc(allowance)));
+    for (let index = 0; index < count2; index++) {
+      graphic.roundRect(1 + index * 14, -5, 10, 10, 5).fill({ color, alpha: index < current ? 0.85 : 0.12 }).stroke({ color, width: 1 });
+    }
+  }
+  /** Shares the hand boundary between resource counters and the scene-owned controls. */
   layout(viewport) {
-    const padding = uiTokens.spacing.sm;
-    this.health.position.set(padding, padding);
-    this.healthBar.position.set(padding + 20, padding + 20);
-    this.currency.position.set(92, padding);
-    if (getViewportLayoutMode(viewport) === "MobilePortrait") {
-      this.stamina.position.set(padding, 44);
-      this.mana.position.set(116, 44);
-      this.deck.position.set(viewport.width - 132, padding);
-      this.relics.position.set(viewport.width - 68, padding);
-      this.pinnedRelics.visible = false;
-      this.turn.position.set(228, 44);
-      return;
-    }
-    if (getViewportLayoutMode(viewport) === "Compact") {
-      this.stamina.position.set(padding, 44);
-      this.mana.position.set(116, 44);
-      this.deck.position.set(viewport.width - 132, padding);
-      this.relics.position.set(viewport.width - 68, padding);
-      this.pinnedRelics.visible = false;
-      this.turn.position.set(228, 44);
-      return;
-    }
-    this.stamina.position.set(192, padding);
-    this.mana.position.set(304, padding);
-    this.deck.position.set(viewport.width - 190, padding);
-    this.relics.position.set(viewport.width - 96, padding);
-    this.pinnedRelics.position.set(Math.max(8, viewport.width - 286), padding + 22);
-    this.turn.position.set(416, padding);
+    const portrait = getViewportLayoutMode(viewport) === "MobilePortrait";
+    const short = isShortEncounter(viewport);
+    const layout = calculateCombatLayout(viewport);
+    const resourceY = short ? 44 : layout.regions.hand.y - 48;
+    this.stamina.position.set(16, resourceY);
+    this.mana.position.set(portrait ? viewport.width - 156 : 190, resourceY);
+    this.staminaPips.position.set(16, resourceY + 25);
+    this.manaPips.position.set(portrait ? viewport.width - 156 : 190, resourceY + 25);
+    this.turn.position.set(portrait ? 16 : 240, portrait ? 44 : 38);
+    this.layoutHealth(portrait || short);
+    this.layoutMetadata(viewport, portrait, short);
+    this.frame.clear().roundRect(4, 4, Math.max(0, viewport.width - 8), 30, 3).stroke({ color: uiTokens.color.textMuted, width: 1, alpha: 0.65 });
+    this.frame.eventMode = "none";
+  }
+  /** Keeps health and block together in the header on narrow and short canvases. */
+  layoutHealth(compact) {
+    const y2 = compact ? 8 : 38;
+    this.health.position.set(12, y2);
+    this.healthBar.position.set(34, y2 + 20);
+    this.block.position.set(120, y2);
+  }
+  /** Fits collection counters and optional location details into the remaining header space. */
+  layoutMetadata(viewport, portrait, short) {
+    this.currency.position.set(portrait ? 174 : viewport.width - 286, 8);
+    this.deck.position.set(viewport.width - 174, 8);
+    this.relics.position.set(viewport.width - 112, 8);
+    this.currency.visible = !portrait || viewport.width >= 420;
+    this.deck.visible = !portrait || viewport.width >= 360;
+    this.pinnedRelics.visible = !portrait && !short && this.pinnedRelics.text.length > 0;
+    this.pinnedRelics.position.set(Math.max(8, viewport.width - 286), 38);
+    this.sceneTitle.visible = !portrait && !short;
+    this.sceneTitle.position.set(16, 10);
   }
 };
 function formatRelicRailCount(relicCount) {
@@ -51630,7 +51792,8 @@ var EncounterScene = class {
       this.previousEnemyPage,
       this.nextEnemyPage,
       this.previousHandPage,
-      this.nextHandPage
+      this.nextHandPage,
+      this.endTurn
     );
     this.root.addChild(this.backgroundLayer, this.enemyLayer, this.playerLayer, this.handLayer, this.effectsLayer, this.overlayLayer, this.dragLayer);
   }
@@ -51647,6 +51810,14 @@ var EncounterScene = class {
   effectsLayer = new Container();
   overlayLayer = new Container();
   runHud;
+  endTurn = new GameButton({
+    width: 144,
+    height: 44,
+    label: "END TURN",
+    fill: 6697017,
+    stroke: uiTokens.color.dangerIntent,
+    onPress: () => this.requestEndTurn()
+  });
   background = new Graphics();
   backdrop = new EncounterBackdrop();
   dragAimArrow = new Graphics();
@@ -51860,6 +52031,8 @@ var EncounterScene = class {
     this.repaintBackground(viewport);
     this.layoutInputLockFeedback(viewport);
     this.runHud.reconcile({
+      block: snapshot.player.block,
+      title: `THE ${getCombatSceneTreatment(snapshot.sceneTreatmentId).regionId.replaceAll("-", " ").toUpperCase()}`,
       health: snapshot.player.health,
       maximumHealth: snapshot.player.maxHealth,
       currency: snapshot.currency,
@@ -51877,6 +52050,10 @@ var EncounterScene = class {
     this.reconcileEntities(snapshot.player, snapshot.enemies, viewport);
     this.reconcileHand(snapshot, viewport);
     this.layoutPageControls(snapshot, viewport);
+    const endTurnBounds = calculateCombatLayout(viewport).regions.endTurn;
+    this.endTurn.resize(endTurnBounds.width, endTurnBounds.height);
+    this.endTurn.position.set(endTurnBounds.x, endTurnBounds.y);
+    this.endTurn.visible = !isShortEncounter(viewport);
     if (shouldReleasePendingIntent) {
       this.releasePendingIntent();
     }
@@ -52052,27 +52229,8 @@ var EncounterScene = class {
   }
   updateEntityTile(id, entity, layer, position) {
     const tile = this.getOrCreateTile(this.entityTiles, id, layer);
-    const health = `HP ${entity.health} / ${entity.maxHealth} \xB7 BLOCK ${entity.block}`;
-    const resources = entity.isPlayer ? `STAMINA ${entity.energy} \xB7 MANA ${entity.mana}` : `POSTURE ${entity.posture} / ${entity.maxPosture}`;
-    const telegraph = formatEntityTelegraph(entity.telegraph);
-    const frameColor = entity.isPlayer ? uiTokens.color.stamina : uiTokens.color.panelStroke;
-    tile.background.clear().roundRect(-89, -57, 178, 113, 13).fill({ color: uiTokens.color.surface, alpha: 0.9 }).stroke({ color: frameColor, width: 2, alpha: 0.68 }).roundRect(-78, -49, 156, 96, 9).stroke({ color: uiTokens.color.textMuted, width: 1, alpha: 0.4 }).rect(-34, -58, 68, 3).fill({ color: frameColor, alpha: 0.8 }).roundRect(-66, 52, 132, 5, 2).fill({ color: frameColor, alpha: 0.22 });
-    tile.container.hitArea = new Rectangle(-entityHitHalfWidth, -entityHitHalfHeight, entityHitHalfWidth * 2, entityHitHalfHeight * 2);
-    tile.accent.clear();
-    this.updateArtwork(tile, entity.image, 164, 104);
-    tile.title.text = entity.name;
-    tile.description.text = telegraph ? `INTENT ${telegraph}` : "";
-    tile.detail.text = `${health}
-${resources}`;
-    tile.effects.text = formatEntityEffects(entity);
-    tile.title.position.set(0, -44);
-    tile.description.position.set(0, -24);
-    tile.detail.position.set(0, 7);
-    tile.effects.position.set(0, 38);
-    this.drawMeter(tile.healthBar, entity.health, entity.maxHealth, -78, -9, 156, 5, uiTokens.color.health);
-    tile.healthBar.visible = entity.maxHealth > 0;
-    this.drawMeter(tile.postureBar, entity.posture, entity.maxPosture, -78, 29, 156, 4, uiTokens.color.block);
-    tile.postureBar.visible = !entity.isPlayer && entity.maxPosture > 0;
+    this.drawEntityPresentation(tile, entity, position);
+    delete tile.targetPresentationKey;
     if (!this.isDragPositionManaged(id)) {
       tile.container.position.set(position.x, position.y);
     }
@@ -52086,6 +52244,78 @@ ${resources}`;
         this.handleEntitySelection(entity.id);
       }
     });
+  }
+  /** Separates combat labels from the battlefield figures on roomy canvases. */
+  drawEntityPresentation(tile, entity, position) {
+    if (this.useCompactEntityPresentation()) {
+      this.drawCompactEntityPresentation(tile, entity);
+      return;
+    }
+    const art = this.getBattlefieldArtworkBounds(entity, position);
+    const artHeight = art.height;
+    const artY = art.y;
+    tile.background.clear().roundRect(-62, artY + artHeight / 2 - 6, 124, 9, 4).fill({ color: uiTokens.color.panelShadow, alpha: 0.45 });
+    tile.container.hitArea = new Rectangle(-entityHitHalfWidth, -86, entityHitHalfWidth * 2, entity.isPlayer ? 166 : artY + artHeight / 2 + 106);
+    tile.accent.clear();
+    this.updateArtwork(tile, entity.image || (entity.isPlayer ? "/img/Player/HoodedTraveler.svg" : ""), 176, artHeight);
+    tile.artwork.position.set(0, artY);
+    this.updateBattlefieldLabels(tile, entity, artY, artHeight);
+  }
+  /** Fits the enemy sprite below its intent and above the player's figure. */
+  getBattlefieldArtworkBounds(entity, position) {
+    const viewport = this.viewport;
+    if (!viewport) return { height: 104, y: 0 };
+    const roomy = viewport.height >= 650;
+    const playerHeight = roomy ? 144 : 104;
+    if (entity.isPlayer) return { height: playerHeight, y: 0 };
+    const player = layoutPlayer(viewport);
+    const playerTop = player.y - playerHeight * (player.scale ?? 1) / 2;
+    const availableHeight = (playerTop - position.y - 16) / Math.max(0.01, position.scale ?? 1);
+    const height = Math.max(32, Math.min(roomy ? 160 : 104, availableHeight));
+    return { height, y: height / 2 };
+  }
+  /** Keeps dense formations and short windows within the established compact tile bounds. */
+  useCompactEntityPresentation() {
+    if (!this.viewport || isShortEncounter(this.viewport)) return true;
+    const count2 = this.latestSnapshot?.enemies.length ?? 0;
+    return count2 > 4 || getViewportLayoutMode(this.viewport) === "MobilePortrait" && count2 > 3;
+  }
+  /** Retains the compact fallback when multiple rows cannot accommodate full battlefield figures. */
+  drawCompactEntityPresentation(tile, entity) {
+    tile.background.clear().roundRect(-89, -57, 178, 113, 13).fill({ color: uiTokens.color.surface, alpha: 0.92 }).stroke({ color: uiTokens.color.panelStroke, width: 1 });
+    tile.container.hitArea = new Rectangle(-94, -64, 188, 128);
+    tile.accent.clear();
+    this.updateArtwork(tile, entity.image || (entity.isPlayer ? "/img/Player/HoodedTraveler.svg" : ""), 164, 104);
+    tile.artwork.position.set(0, 0);
+    tile.title.text = entity.name;
+    tile.description.text = formatEntityTelegraph(entity.telegraph);
+    tile.description.visible = !entity.isPlayer;
+    tile.detail.text = `HP ${entity.health} / ${entity.maxHealth} \xB7 BLOCK ${entity.block}`;
+    tile.effects.text = formatEntityEffects(entity);
+    tile.title.position.set(0, -44);
+    tile.description.position.set(0, -24);
+    tile.detail.position.set(0, 7);
+    tile.effects.position.set(0, 38);
+    this.drawMeter(tile.healthBar, entity.health, entity.maxHealth, -78, -9, 156, 5, uiTokens.color.health);
+    tile.healthBar.visible = entity.maxHealth > 0;
+    this.drawMeter(tile.postureBar, entity.posture, entity.maxPosture, -78, 29, 156, 4, uiTokens.color.block);
+    tile.postureBar.visible = !entity.isPlayer && entity.maxPosture > 0;
+  }
+  /** Positions enemy names, numeric health, intent and status rows clear of their artwork. */
+  updateBattlefieldLabels(tile, entity, artY, artHeight) {
+    tile.title.text = entity.isPlayer ? "" : entity.name;
+    tile.description.text = formatEntityTelegraph(entity.telegraph);
+    tile.description.visible = !entity.isPlayer;
+    tile.detail.text = entity.isPlayer ? "" : `\u2665 ${entity.health} / ${entity.maxHealth}${entity.block > 0 ? ` \xB7 \u25C7 ${entity.block}` : ""}`;
+    tile.effects.text = formatEntityEffects(entity);
+    tile.title.position.set(0, -80);
+    tile.detail.position.set(0, -60);
+    tile.description.position.set(0, -34);
+    tile.effects.position.set(0, artY + artHeight / 2 + 8);
+    this.drawMeter(tile.healthBar, entity.health, entity.maxHealth, -70, -49, 140, 5, uiTokens.color.health);
+    tile.healthBar.visible = !entity.isPlayer && entity.maxHealth > 0;
+    this.drawMeter(tile.postureBar, entity.posture, entity.maxPosture, -70, artY + artHeight / 2, 140, 3, uiTokens.color.block);
+    tile.postureBar.visible = !entity.isPlayer && entity.maxPosture > 0;
   }
   updateHandTile(id, entry, position) {
     const isCard = isCardPresentationState2(entry);
@@ -52192,10 +52422,7 @@ ${resources}`;
       return;
     }
     const previousSelectedTileId = this.getSelectedHandTileId();
-    if (entry.targetMode === "none" && this.selectedEntryId === entry.id) {
-      this.submitEntryIntent(entry, null);
-      return;
-    }
+    if (this.activateSelectedUntargetedEntry(entry)) return;
     this.selectedEntryId = this.selectedEntryId === entry.id ? void 0 : entry.id;
     if (entry.targetMode === "none" && this.selectedEntryId === entry.id) {
       this.focusedEntityId = void 0;
@@ -52204,6 +52431,18 @@ ${resources}`;
     this.refreshHandInspection(previousSelectedTileId);
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
+  }
+  /** Lets a second tap play self-targeting cards even while their preview covers the player. */
+  activateSelectedUntargetedEntry(entry) {
+    if (this.selectedEntryId !== entry.id || entry.targetMode !== "none" && entry.targetMode !== "player") return false;
+    if (entry.targetMode === "player") {
+      const player = this.getPlayerEntity();
+      if (!player) return false;
+      this.submitEntryIntent(entry, player.id);
+    } else {
+      this.submitEntryIntent(entry, null);
+    }
+    return true;
   }
   /** Returns whether a pointer tap may participate in the scene's single-pointer interaction policy. */
   isPrimaryPointerTap(event) {
@@ -52404,6 +52643,7 @@ ${resources}`;
     }
     const tile = this.getOrCreateTile(this.handTiles, id, this.handLayer);
     const cardView = new CardView({
+      presentation: "hand",
       energyCost: entry.energyCost,
       manaCost: entry.manaCost,
       name: entry.name,
@@ -52728,11 +52968,19 @@ ${resources}`;
     for (const entity of this.entities.values()) {
       const tile = this.entityTiles.get(`${entity.isPlayer ? "player" : "enemy"}:${entity.id}`);
       const scale = tile?.container.scale.x ?? 1;
-      if (tile && Math.abs(position.x - tile.container.x) <= entityHitHalfWidth * scale && Math.abs(position.y - tile.container.y) <= entityHitHalfHeight * scale) {
+      if (tile && this.isPointOverEntity(position, tile, scale)) {
         return entity;
       }
     }
     return entry.targetMode === "enemy" && this.isPositionInEnemyDropArea(position) ? this.findClosestTargetableEnemy(position) : void 0;
+  }
+  /** Uses the same local figure bounds for pointer taps and drag drops. */
+  isPointOverEntity(point, tile, scale) {
+    const bounds = tile.container.hitArea;
+    if (!(bounds instanceof Rectangle) || scale <= 0) return false;
+    const x2 = (point.x - tile.container.x) / scale;
+    const y2 = (point.y - tile.container.y) / scale;
+    return x2 >= bounds.x && x2 <= bounds.x + bounds.width && y2 >= bounds.y && y2 <= bounds.y + bounds.height;
   }
   /**
    * Gets the player presentation state without exposing the internal entity map to callers.
@@ -52808,6 +53056,7 @@ ${resources}`;
     return closestEnemy;
   }
   updateArtwork(tile, image, width, height) {
+    tile.artworkBounds = { width, height };
     if (!image || !this.assetLoader) {
       delete tile.artworkImage;
       delete tile.artworkRequestImage;
@@ -52818,7 +53067,11 @@ ${resources}`;
       tile.artworkImage = image;
       tile.artwork.visible = false;
     }
-    if (tile.artwork.visible || tile.artworkRequestImage === image) {
+    if (tile.artwork.visible) {
+      this.fitArtwork(tile);
+      return;
+    }
+    if (tile.artworkRequestImage === image) {
       return;
     }
     tile.artworkRequestImage = image;
@@ -52830,12 +53083,19 @@ ${resources}`;
         return;
       }
       tile.artwork.texture = texture;
-      const scale = Math.min(width / Math.max(1, texture.width), height / Math.max(1, texture.height));
-      tile.artwork.width = texture.width * scale;
-      tile.artwork.height = texture.height * scale;
+      this.fitArtwork(tile);
       tile.artwork.visible = true;
       this.refreshSelectionHighlights();
     });
+  }
+  /** Fits a retained texture to the latest layout, including a resize during its asynchronous load. */
+  fitArtwork(tile) {
+    const texture = tile.artwork.texture;
+    const bounds = tile.artworkBounds;
+    if (!bounds) return;
+    const scale = Math.min(bounds.width / Math.max(1, texture.width), bounds.height / Math.max(1, texture.height));
+    tile.artwork.width = texture.width * scale;
+    tile.artwork.height = texture.height * scale;
   }
   handleEntitySelection(entityId) {
     const entry = this.selectedEntryId ? this.selectableEntries.get(this.selectedEntryId) : void 0;
@@ -53101,14 +53361,16 @@ ${resources}`;
     tile.targetHighlight.visible = isTargeting;
     if (isTargeting) {
       const cueColor = isFocused ? uiTokens.color.focus : isValidTarget ? uiTokens.color.valid : uiTokens.color.invalid;
-      tile.targetHighlight.roundRect(-entityHitHalfWidth, -entityHitHalfHeight, entityHitHalfWidth * 2, entityHitHalfHeight * 2, 12).stroke({
+      const bounds = tile.container.hitArea instanceof Rectangle ? tile.container.hitArea : new Rectangle(-94, -64, 188, 128);
+      tile.targetHighlight.roundRect(bounds.x, bounds.y, bounds.width, bounds.height, 12).stroke({
         color: cueColor,
         width: isFocused || isValidTarget ? 4 : 2,
         alpha: isFocused ? 0.95 : isValidTarget ? 0.9 : 0.55
-      }).roundRect(-18, -entityHitHalfHeight - 4, 36, 4, 2).fill({ color: cueColor, alpha: 0.9 }).roundRect(-18, entityHitHalfHeight, 36, 4, 2).fill({ color: cueColor, alpha: 0.9 });
+      }).roundRect(-18, bounds.y - 4, 36, 4, 2).fill({ color: cueColor, alpha: 0.9 }).roundRect(-18, bounds.y + bounds.height, 36, 4, 2).fill({ color: cueColor, alpha: 0.9 });
     }
   }
   refreshInteractionState() {
+    this.endTurn.setEnabled(!this.inputReleased && !this.intentPending && !this.activeDrag && this.queuedEntryIds.size === 0 && this.latestSnapshot?.phase === "WaitingForInput");
     for (const [tileId, tile] of this.handTiles) {
       const entryId = tileId.substring(tileId.indexOf(":") + 1);
       const entry = this.selectableEntries.get(entryId);
@@ -53124,6 +53386,17 @@ ${resources}`;
       tile.container.eventMode = isInteractive ? "static" : "none";
       tile.container.cursor = isInteractive ? "pointer" : "default";
     }
+  }
+  /** Dispatches End Turn through the existing authoritative intent boundary. */
+  requestEndTurn() {
+    if (!this.endTurn.enabled) return;
+    this.submitIntent({
+      kind: "endTurn",
+      sourceId: null,
+      targetId: null,
+      sequence: this.currentSequence,
+      sceneId: encounterSceneId
+    });
   }
   submitEntryIntent(entry, targetId) {
     this.submitIntent({
@@ -53158,7 +53431,7 @@ ${resources}`;
   getHandLayoutTransform(tileId, position) {
     const isInspected = this.isHandEntryInspected(tileId);
     const isMobilePortrait = this.viewport !== void 0 && getViewportLayoutMode(this.viewport) === "MobilePortrait";
-    if (this.isHandEntryPreviewed(tileId) && this.viewport && !isShortEncounter(this.viewport) && !isMobilePortrait) {
+    if (this.isHandEntryPreviewed(tileId) && this.viewport && !isShortEncounter(this.viewport) && (!isMobilePortrait || this.viewport.height >= 650)) {
       return getCardPreviewTransform(this.viewport);
     }
     const lift = this.viewport && (isShortEncounter(this.viewport) || isMobilePortrait) ? 0 : focusedHandLift * (position.scale ?? 1);
@@ -56633,10 +56906,54 @@ var noOpTreasureAccessibilityOverlay = {
   }
 };
 
-// src/pixi-map.ts
-var mapSceneProtocolVersion = 2;
+// src/map-layout.ts
 var minimumMapColumnSpacing = 142;
 var minimumMapRowSpacing = 132;
+function getMapLayoutMetrics(width, height, nodes, selectedNodeId) {
+  const mode = getViewportLayoutMode({ width, height });
+  const contextVisible = selectedNodeId !== void 0;
+  const contextBounds = getContextBounds(width, height, mode, selectedNodeId);
+  const graphBounds = getGraphBounds(width, height, mode, contextVisible, contextBounds);
+  const minColumn = Math.min(...nodes.map((node) => node.column), 0);
+  const maxColumn = Math.max(...nodes.map((node) => node.column), 1);
+  const minRow = Math.min(...nodes.map((node) => node.row), 0);
+  const maxRow = Math.max(...nodes.map((node) => node.row), 1);
+  const availableGraphWidth = Math.max(0, graphBounds.width - 68);
+  const fittedColumnStep = availableGraphWidth / Math.max(1, maxColumn - minColumn);
+  const columnStep = mode === "MobilePortrait" ? fittedColumnStep : Math.max(minimumMapColumnSpacing, fittedColumnStep);
+  const rowStep = Math.max(minimumMapRowSpacing, graphBounds.height / Math.max(1, maxRow - minRow));
+  const mapWidth = (maxColumn - minColumn) * columnStep;
+  const mapHeight = (maxRow - minRow) * rowStep;
+  return {
+    mode,
+    graphBounds,
+    contextBounds,
+    contextVisible,
+    minColumn,
+    minRow,
+    columnStep,
+    rowStep,
+    mapLeft: graphBounds.left + 34 + Math.max(0, (availableGraphWidth - mapWidth) / 2),
+    mapTop: graphBounds.top + Math.max(0, (graphBounds.height - mapHeight) / 2)
+  };
+}
+function getContextBounds(width, height, mode, selectedNodeId) {
+  if (selectedNodeId === void 0) return { left: width / 2, top: height - 18, width: 0, height: 0 };
+  if (mode === "Wide") {
+    return { left: Math.max(16, width - 340), top: 58, width: Math.min(324, Math.max(180, width - 32)), height: Math.max(160, height - 82) };
+  }
+  const contextHeight = mode === "MobilePortrait" ? 164 : 124;
+  return { left: 16, top: height - contextHeight - 18, width: Math.max(1, width - 32), height: contextHeight };
+}
+function getGraphBounds(width, height, mode, contextVisible, context2) {
+  if (contextVisible && mode === "Wide") {
+    return { left: 28, top: 48, width: Math.max(100, context2.left - 52), height: Math.max(80, height - 80) };
+  }
+  return { left: 28, top: 48, width: Math.max(100, width - 56), height: Math.max(80, contextVisible ? context2.top - 62 : height - 68) };
+}
+
+// src/pixi-map.ts
+var mapSceneProtocolVersion = 2;
 async function createMapRenderer(canvas, sink) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 529183, backgroundAlpha: 1, canvas, preference: "canvas" });
@@ -56797,7 +57114,7 @@ async function createMapRenderer(canvas, sink) {
   };
   const centerOnNode = (node, constrainToMapBounds = false) => {
     const metrics = getMapLayoutMetrics(application.renderer.width, application.renderer.height, state?.nodes ?? [], selectedNodeId);
-    panX = metrics.graphBounds.left + metrics.graphBounds.width / 2 - (metrics.mapLeft + (node.column - metrics.minColumn) * metrics.columnStep);
+    panX = metrics.mode === "MobilePortrait" ? 0 : metrics.graphBounds.left + metrics.graphBounds.width / 2 - (metrics.mapLeft + (node.column - metrics.minColumn) * metrics.columnStep);
     panY = metrics.graphBounds.top + metrics.graphBounds.height / 2 - (metrics.mapTop + (node.row - metrics.minRow) * metrics.rowStep);
     if (constrainToMapBounds) {
       constrainPan(metrics);
@@ -56980,6 +57297,7 @@ async function createMapRenderer(canvas, sink) {
     const minimumPanY = metrics.graphBounds.top + metrics.graphBounds.height - (metrics.mapTop + mapHeight + nodeRadius);
     const maximumPanY = metrics.graphBounds.top - (metrics.mapTop - nodeRadius);
     panX = minimumPanX > maximumPanX ? (minimumPanX + maximumPanX) / 2 : Math.min(maximumPanX, Math.max(minimumPanX, panX));
+    if (metrics.mode === "MobilePortrait") panX = 0;
     panY = minimumPanY > maximumPanY ? (minimumPanY + maximumPanY) / 2 : Math.min(maximumPanY, Math.max(minimumPanY, panY));
   }
   function addControl(label, hint, enabled, x2, y2, width, onPress) {
@@ -57187,33 +57505,6 @@ function drawTravelMarker(graphics, transition, nodes, pointFor, reducedMotion) 
   const y2 = from.y + (to.y - from.y) * progress;
   const pulse = 0.7 + (1 - progress) * 0.3;
   graphics.circle(x2, y2, 34 * pulse).fill({ color: 16113563, alpha: 0.16 }).circle(x2, y2, 22).fill({ color: 16113563, alpha: 0.96 }).circle(x2, y2, 14).fill({ color: 1520456, alpha: 0.96 }).circle(x2, y2, 22).stroke({ color: 16777215, width: 3, alpha: 0.92 });
-}
-function getMapLayoutMetrics(width, height, nodes, selectedNodeId) {
-  const mode = getViewportLayoutMode({ width, height });
-  const contextVisible = selectedNodeId !== void 0;
-  const contextHeight = mode === "MobilePortrait" ? selectedNodeId === void 0 ? 132 : 164 : 124;
-  const contextBounds = contextVisible && mode === "Wide" ? { left: Math.max(16, width - 340), top: 58, width: Math.min(324, Math.max(180, width - 32)), height: Math.max(160, height - 82) } : contextVisible ? { left: 16, top: height - contextHeight - 18, width: Math.max(1, width - 32), height: contextHeight } : { left: width / 2, top: height - 18, width: 0, height: 0 };
-  const graphBounds = contextVisible && mode === "Wide" ? { left: 28, top: 48, width: Math.max(100, contextBounds.left - 52), height: Math.max(80, height - 80) } : contextVisible ? { left: 28, top: 48, width: Math.max(100, width - 56), height: Math.max(80, contextBounds.top - 62) } : { left: 28, top: 48, width: Math.max(100, width - 56), height: Math.max(80, height - 68) };
-  const minColumn = Math.min(...nodes.map((node) => node.column), 0);
-  const maxColumn = Math.max(...nodes.map((node) => node.column), 1);
-  const minRow = Math.min(...nodes.map((node) => node.row), 0);
-  const maxRow = Math.max(...nodes.map((node) => node.row), 1);
-  const columnStep = Math.max(minimumMapColumnSpacing, graphBounds.width / Math.max(1, maxColumn - minColumn));
-  const rowStep = Math.max(minimumMapRowSpacing, graphBounds.height / Math.max(1, maxRow - minRow));
-  const mapWidth = (maxColumn - minColumn) * columnStep;
-  const mapHeight = (maxRow - minRow) * rowStep;
-  return {
-    mode,
-    graphBounds,
-    contextBounds,
-    contextVisible,
-    minColumn,
-    minRow,
-    columnStep,
-    rowStep,
-    mapLeft: graphBounds.left + Math.max(0, (graphBounds.width - mapWidth) / 2),
-    mapTop: graphBounds.top + Math.max(0, (graphBounds.height - mapHeight) / 2)
-  };
 }
 function prefersReducedMotion4() {
   return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
