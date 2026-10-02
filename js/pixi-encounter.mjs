@@ -72027,6 +72027,7 @@ var JourneyArtwork = class extends Container {
   generation = 0;
   frameWidth = 1;
   frameHeight = 1;
+  groundLine;
   /** Creates one retained image and clipping mask. */
   constructor() {
     super();
@@ -72046,20 +72047,29 @@ var JourneyArtwork = class extends Container {
       if (!texture || this.destroyed || generation !== this.generation) return;
       this.image.texture = texture;
       this.image.visible = true;
-      this.resize(this.frameWidth, this.frameHeight);
+      this.resize(this.frameWidth, this.frameHeight, this.groundLine);
     }).catch(() => {
     });
   }
   /** Fits art inside a clipped frame without stretching its aspect ratio. */
-  resize(width, height) {
+  resize(width, height, groundLine) {
     this.frameWidth = Math.max(1, width);
     this.frameHeight = Math.max(1, height);
+    this.groundLine = groundLine;
     this.crop.clear().roundRect(0, 0, this.frameWidth, this.frameHeight, 3).fill(16777215);
     if (!this.image.visible) return;
-    const scale = Math.max(this.frameWidth / this.image.texture.width, this.frameHeight / this.image.texture.height);
+    const sourceGround = this.image.texture.height * 0.56;
+    const scale = groundLine === void 0 ? Math.max(this.frameWidth / this.image.texture.width, this.frameHeight / this.image.texture.height) : Math.max(
+      this.frameWidth / this.image.texture.width,
+      groundLine / sourceGround,
+      (this.frameHeight - groundLine) / (this.image.texture.height - sourceGround)
+    );
     this.image.width = this.image.texture.width * scale;
     this.image.height = this.image.texture.height * scale;
-    this.image.position.set((this.frameWidth - this.image.width) / 2, (this.frameHeight - this.image.height) / 2);
+    this.image.position.set(
+      (this.frameWidth - this.image.width) / 2,
+      groundLine === void 0 ? (this.frameHeight - this.image.height) / 2 : groundLine - sourceGround * scale
+    );
   }
 };
 
@@ -72164,6 +72174,26 @@ function getCombatSceneTreatment(value) {
 
 // src/ui-primitives.ts
 init_lib();
+
+// src/text-fit.ts
+function fitTextToBox(text, width, height, preferredSize, minimumSize) {
+  const availableWidth = Math.max(1, width);
+  const availableHeight = Math.max(1, height);
+  text.style.fontSize = preferredSize;
+  text.style.wordWrapWidth = availableWidth;
+  text.style.breakWords = true;
+  const exceedsBounds = () => text.width > availableWidth || text.height > availableHeight;
+  while (exceedsBounds() && Number(text.style.fontSize) > minimumSize) {
+    text.style.fontSize = Math.max(minimumSize, Number(text.style.fontSize) - 1);
+  }
+  const fullText = text.text;
+  for (let length2 = fullText.length - 1; length2 >= 0 && exceedsBounds(); length2--) {
+    text.text = fullText.slice(0, length2).trimEnd() + "\u2026";
+  }
+  if (exceedsBounds()) text.text = "";
+}
+
+// src/ui-primitives.ts
 var uiTokens = {
   color: {
     canvas: 1186592,
@@ -72364,19 +72394,20 @@ var GamePanel = class extends Container {
     this.shadow.clear().roundRect(2, 4, Math.max(0, this.panelWidth - 2), Math.max(0, this.panelHeight - 2), this.cornerRadius).fill({ color: uiColors.panelShadow, alpha: 0.56 });
     this.background.clear().roundRect(0, 0, this.panelWidth, this.panelHeight, this.cornerRadius).fill({ color: this.fill }).stroke({ color: this.stroke, width: uiTokens.frame.borderWidth });
     if (this.surface === "button") {
-      this.background.roundRect(3, 3, Math.max(0, this.panelWidth - 6), Math.max(0, this.panelHeight - 9), Math.max(0, this.cornerRadius - 2)).stroke({ color: 11129818, width: 1, alpha: 0.65 }).rect(12, 4, Math.max(0, this.panelWidth - 24), 2).fill({ color: 12968415, alpha: 0.44 }).rect(12, Math.max(0, this.panelHeight - 6), Math.max(0, this.panelWidth - 24), 2).fill({ color: uiColors.panelShadow, alpha: 0.75 });
+      this.background.rect(10, 3, Math.max(0, this.panelWidth - 20), 1).fill({ color: 12968415, alpha: 0.25 });
+      this.innerFrame.clear();
+      this.ornaments.clear();
+      return;
     } else {
       this.background.rect(12, 4, Math.max(0, this.panelWidth - 24), 2).fill({ color: uiColors.panelOrnament, alpha: 0.38 });
     }
     this.innerFrame.clear().roundRect(inset, inset, innerWidth, innerHeight, Math.max(0, this.cornerRadius - inset / 2)).stroke({ color: uiColors.panelInset, width: 1, alpha: 0.9 });
     this.ornaments.clear().roundRect(ornamentOffset, ornamentOffset, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.88 }).roundRect(this.panelWidth - ornamentOffset - ornamentLength, ornamentOffset, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.88 }).roundRect(ornamentOffset, this.panelHeight - ornamentOffset - ornamentThickness, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.62 }).roundRect(this.panelWidth - ornamentOffset - ornamentLength, this.panelHeight - ornamentOffset - ornamentThickness, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.62 });
-    if (this.surface === "button") {
-      this.ornaments.roundRect(4, Math.max(4, this.panelHeight / 2 - 4), 2, 8, 1).fill({ color: uiColors.panelOrnament, alpha: 0.82 }).roundRect(Math.max(4, this.panelWidth - 6), Math.max(4, this.panelHeight / 2 - 4), 2, 8, 1).fill({ color: uiColors.panelOrnament, alpha: 0.82 });
-    }
   }
 };
 var GameButton = class extends GamePanel {
   labelText;
+  fullLabel;
   onPress;
   stateOutline = new Graphics();
   isEnabled;
@@ -72391,10 +72422,13 @@ var GameButton = class extends GamePanel {
     this.isEnabled = options.enabled ?? true;
     this.isFocused = this.isEnabled && (options.focused ?? false);
     this.isSelected = this.isEnabled && (options.selected ?? false);
-    this.labelText = new Text({ text: options.label, style: getUiTextStyle("Button") });
+    this.fullLabel = options.label;
+    this.labelText = new Text({ text: options.label, style: new TextStyle(uiTokens.typography.button) });
+    this.labelText.resolution = 2;
     this.labelText.anchor.set(0.5);
     this.labelText.position.set(this.panelSize.width / 2, this.panelSize.height / 2);
     this.content.addChild(this.labelText, this.stateOutline);
+    this.fitLabel();
     this.on("pointertap", () => this.press());
     this.updatePresentation();
   }
@@ -72402,13 +72436,14 @@ var GameButton = class extends GamePanel {
    * Gets the current button label.
    */
   get label() {
-    return this.labelText.text;
+    return this.fullLabel;
   }
   /**
    * Updates the visible button label.
    */
   set label(value) {
-    this.labelText.text = value;
+    this.fullLabel = value;
+    this.fitLabel();
   }
   /**
    * Gets whether pointer input can activate the button.
@@ -72483,7 +72518,15 @@ var GameButton = class extends GamePanel {
   resize(width, height) {
     super.resize(width, height);
     this.labelText.position.set(this.panelSize.width / 2, this.panelSize.height / 2);
+    this.fitLabel();
     this.updatePresentation();
+  }
+  /** Fits each label independently to the control's inset without stretching its glyphs. */
+  fitLabel() {
+    this.labelText.text = this.fullLabel;
+    this.accessibleTitle = this.fullLabel;
+    this.labelText.style.wordWrap = true;
+    fitTextToBox(this.labelText, this.panelSize.width - 16, this.panelSize.height - 12, 16, 12);
   }
   updatePresentation() {
     this.eventMode = this.isEnabled ? "static" : "none";
@@ -72871,654 +72914,6 @@ function normalizeCoordinate(value) {
   return Number.isFinite(value) ? value : 0;
 }
 
-// src/encounter-backdrop.ts
-var EncounterBackdrop = class extends Container {
-  atmosphere = new Graphics();
-  architecture = new Graphics();
-  floor = new Graphics();
-  localeArtwork = new JourneyArtwork();
-  atmosphereTokens;
-  treatment;
-  activeTreatmentId;
-  viewport;
-  /** Creates the reusable three-plane scene backdrop. */
-  constructor(atmosphere = "neutral") {
-    super();
-    this.treatment = getCombatSceneTreatment("fold");
-    this.atmosphereTokens = getAreaAtmosphere(atmosphere);
-    this.eventMode = "none";
-    this.addChild(this.atmosphere, this.architecture, this.floor, this.localeArtwork);
-  }
-  /** Adds deterministic broken masonry and floor stones, keeping the central silhouettes readable. */
-  drawRubble(width, height, horizon, colors2) {
-    for (let index = 0; index < 52; index++) {
-      const x2 = (index * 193 + 37) % 997 / 997 * width;
-      const stoneWidth = 8 + index % 7 * 4;
-      const top = horizon - 20 - index * 31 % 113;
-      this.architecture.rect(x2, top, stoneWidth, horizon - top).fill({ color: index % 3 === 0 ? colors2.line : colors2.architecture, alpha: 0.2 }).rect(x2 + 2, top, stoneWidth - 4, 3).fill({ color: colors2.line, alpha: 0.32 });
-    }
-    for (let index = 0; index < 90; index++) {
-      const x2 = (index * 137 + 41) % 991 / 991 * width;
-      const y2 = horizon + index * 83 % 977 / 977 * (height - horizon);
-      this.floor.rect(x2, y2, 5 + index % 8 * 4, 2 + index % 3).fill({ color: colors2.line, alpha: 0.12 + index % 3 * 0.03 });
-    }
-  }
-  /** Applies saved locale artwork above the retained fallback planes. */
-  setEnvironment(environment) {
-    this.localeArtwork.setImage(getSceneEnvironment(environment)?.backgroundUrl ?? "");
-  }
-  /** Selects a restricted decorative atmosphere with a neutral fallback. */
-  setAtmosphere(atmosphere) {
-    this.activeTreatmentId = void 0;
-    this.atmosphereTokens = getAreaAtmosphere(atmosphere);
-    if (this.viewport) {
-      this.resize(this.viewport.width, this.viewport.height);
-    }
-  }
-  /** Selects bounded scenery while retaining the neutral Fold fallback for unknown treatment IDs. */
-  setTreatment(treatmentId) {
-    const treatment = getCombatSceneTreatment(treatmentId);
-    if (this.activeTreatmentId === treatment.id) {
-      return;
-    }
-    this.treatment = treatment;
-    this.activeTreatmentId = treatment.id;
-    this.atmosphereTokens = getAreaAtmosphere(this.treatment.atmosphere);
-    if (this.viewport) {
-      this.resize(this.viewport.width, this.viewport.height);
-    }
-  }
-  /** Repaints all planes for the current viewport without moving gameplay elements. */
-  resize(width, height) {
-    const w2 = Math.max(0, Number.isFinite(width) ? width : 0);
-    const h2 = Math.max(0, Number.isFinite(height) ? height : 0);
-    this.viewport = { width: w2, height: h2 };
-    this.localeArtwork.resize(w2, h2);
-    const horizon = h2 * 0.64;
-    const pillarWidth = Math.max(20, w2 * 0.055);
-    const colors2 = this.atmosphereTokens;
-    this.atmosphere.clear().rect(0, 0, w2, h2).fill({ color: colors2.canvas }).rect(0, 0, w2, horizon).fill({ color: colors2.distantSurface, alpha: this.treatment.distantLightAlpha }).rect(0, h2 * 0.18, w2, h2 * 0.25).fill({ color: colors2.platform, alpha: 0.12 }).rect(0, horizon - 3, w2, 6).fill({ color: colors2.line, alpha: 0.24 });
-    this.architecture.clear();
-    this.floor.clear();
-    if (w2 === 0 || h2 === 0) {
-      return;
-    }
-    for (const x2 of [w2 * 0.07, w2 * 0.87]) {
-      this.architecture.roundRect(x2, h2 * 0.04, pillarWidth, horizon - h2 * 0.04, 7).fill({ color: colors2.architecture, alpha: 0.8 }).stroke({ color: colors2.line, width: 2, alpha: 0.45 }).rect(x2 + pillarWidth * 0.18, h2 * 0.06, pillarWidth * 0.1, horizon - h2 * 0.09).fill({ color: colors2.line, alpha: 0.1 }).rect(x2 - pillarWidth * 0.2, horizon - 12, pillarWidth * 1.4, 12).fill({ color: colors2.distantSurface });
-    }
-    this.drawTreatmentScenery(w2, h2, horizon, colors2);
-    for (let index = 0; index < this.treatment.foregroundSilhouetteCount; index++) {
-      const x2 = w2 * ((index + 1) / (this.treatment.foregroundSilhouetteCount + 1));
-      const width2 = Math.max(18, w2 * 0.035);
-      const top = horizon - h2 * (0.08 + index % 2 * 0.04);
-      this.architecture.roundRect(x2 - width2 / 2, top, width2, horizon - top, 5).fill({ color: colors2.architecture, alpha: 0.48 });
-    }
-    this.floor.rect(0, horizon, w2, h2 - horizon).fill({ color: colors2.floor }).rect(0, horizon + 8, w2, 2).fill({ color: colors2.line, alpha: 0.32 });
-    this.floor.rect(0, horizon - h2 * 0.06, w2, h2 * 0.1).fill({ color: colors2.distantSurface, alpha: this.treatment.mistAlpha });
-    this.drawRubble(w2, h2, horizon, colors2);
-    for (let i2 = 1; i2 < 5; i2++) {
-      const y2 = horizon + (h2 - horizon) * (i2 / 5) ** 1.45;
-      this.floor.rect(0, y2, w2, 1).fill({ color: colors2.line, alpha: 0.12 });
-    }
-    for (let i2 = 1; i2 < 8; i2++) {
-      const x2 = w2 * i2 / 8;
-      this.floor.rect(x2, horizon + 6, 1, h2 - horizon - 6).fill({ color: colors2.line, alpha: 0.09 });
-    }
-    this.floor.roundRect(w2 * 0.12, horizon - 7, w2 * 0.27, 8, 4).fill({ color: colors2.platform, alpha: 0.16 }).roundRect(w2 * 0.62, horizon - 7, w2 * 0.27, 8, 4).fill({ color: colors2.platform, alpha: 0.16 });
-  }
-  /** Draws bounded, non-semantic treatment geometry behind the stable combat composition. */
-  drawTreatmentScenery(width, height, horizon, colors2) {
-    const centerX = width / 2;
-    switch (this.treatment.sceneryKind) {
-      case "archive":
-        for (let index = -2; index <= 2; index++) {
-          const x2 = centerX + index * width * 0.09;
-          this.architecture.rect(x2, height * 0.18, width * 0.045, horizon - height * 0.18).fill({ color: colors2.architecture, alpha: 0.32 }).rect(x2 + 4, height * 0.23, width * 0.037, 2).fill({ color: colors2.line, alpha: 0.22 });
-        }
-        return;
-      case "observatory":
-        this.architecture.roundRect(centerX - width * 0.095, height * 0.2, width * 0.19, height * 0.18, 999).stroke({ color: colors2.line, width: 2, alpha: 0.34 }).roundRect(centerX - width * 0.048, height * 0.245, width * 0.096, height * 0.09, 999).stroke({ color: colors2.architecture, width: 3, alpha: 0.34 });
-        return;
-      case "grove":
-      case "snow-grove":
-        for (const x2 of [width * 0.2, width * 0.8]) {
-          this.architecture.rect(x2, height * 0.16, Math.max(5, width * 0.012), horizon - height * 0.16).fill({ color: colors2.architecture, alpha: 0.42 });
-          this.architecture.roundRect(x2 + width * 0.01, height * 0.11, width * 0.08, height * 0.08, 999).fill({ color: colors2.distantSurface, alpha: this.treatment.sceneryKind === "snow-grove" ? 0.3 : 0.2 });
-        }
-        return;
-      case "monolith":
-        this.architecture.roundRect(centerX - width * 0.035, height * 0.1, width * 0.07, horizon - height * 0.1, 4).fill({ color: colors2.architecture, alpha: 0.5 }).rect(centerX - 1, height * 0.16, 2, horizon - height * 0.25).fill({ color: colors2.line, alpha: 0.28 });
-        return;
-      case "ruins":
-        this.drawRuins(width, height, horizon, colors2);
-        return;
-    }
-  }
-  /** Draws the moon, broken arch and steps of the Fold using a bounded set of stones. */
-  drawRuins(width, height, horizon, colors2) {
-    const moonSize = Math.min(64, width * 0.095);
-    this.atmosphere.roundRect(width * 0.73, height * 0.1, moonSize, moonSize, moonSize / 2).fill({ color: 15062967, alpha: 0.85 });
-    const radius = Math.min(90, width * 0.18);
-    const centerX = width * 0.5;
-    const archY = height * 0.26;
-    for (let index = 0; index < 13; index++) {
-      const angle = Math.PI + index * Math.PI / 12;
-      const x2 = centerX + Math.cos(angle) * radius;
-      const y2 = archY + Math.sin(angle) * radius;
-      this.architecture.rect(x2 - 9, y2 - 8, 17, 15).fill({ color: colors2.line, alpha: 0.38 + index % 3 * 0.08 });
-    }
-    for (let row = 0; row < 6; row++) {
-      const y2 = archY + row * 18;
-      for (const x2 of [centerX - radius, centerX + radius]) {
-        this.architecture.rect(x2 - 9, y2, 17, 16).fill({ color: colors2.line, alpha: 0.35 });
-      }
-      this.architecture.rect(
-        centerX - radius - row * 7,
-        horizon - 36 + row * 6,
-        radius * 2 + row * 14,
-        4
-      ).fill({ color: colors2.line, alpha: 0.18 });
-    }
-  }
-};
-
-// src/card-view.ts
-init_lib();
-
-// src/ui-component-contract.ts
-function normalizeUiComponentSize(size) {
-  return {
-    width: normalizeDimension(size.width),
-    height: normalizeDimension(size.height)
-  };
-}
-function createUiComponentPresentationState(options) {
-  const enabled = options.enabled ?? true;
-  return {
-    size: normalizeUiComponentSize(options.size),
-    interaction: {
-      enabled,
-      focused: enabled && (options.focused ?? false),
-      selected: enabled && (options.selected ?? false)
-    },
-    reducedMotion: options.reducedMotion ?? false
-  };
-}
-function transitionUiComponentLifecycle(state, event) {
-  if (state === "disposed" || event === "dispose") {
-    return "disposed";
-  }
-  if (event === "suspend") {
-    return "suspended";
-  }
-  return "active";
-}
-function normalizeDimension(value) {
-  return Number.isFinite(value) ? Math.max(0, value) : 0;
-}
-
-// src/card-view.ts
-var defaultCardWidth = 180;
-var defaultCardHeight = 252;
-var textPadding = uiTokens.spacing.sm;
-var CardView = class extends Container {
-  frame = new Graphics();
-  artFallback = new Graphics();
-  artwork = new Sprite(Texture.EMPTY);
-  artMask = new Graphics();
-  textScrims = new Graphics();
-  costPlate = new Graphics();
-  energyCostPlate = new Graphics();
-  manaCostPlate = new Graphics();
-  stateOverlay = new Graphics();
-  playabilityOutline = new Graphics();
-  stateOutline = new Graphics();
-  costStyle = new TextStyle({ ...uiTokens.typography.button, stroke: { color: uiTokens.color.panelShadow, width: 3 } });
-  nameStyle = new TextStyle({ ...uiTokens.typography.cardTitle, align: "center", fontSize: 20, stroke: { color: uiTokens.color.panelShadow, width: 4 }, wordWrap: true });
-  typeStyle = new TextStyle({ ...uiTokens.typography.body, align: "center", fontSize: 13, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true });
-  descriptionStyle = new TextStyle({ ...uiTokens.typography.cardEffect, align: "center", fontSize: 15, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true });
-  costLabel = new Text({ text: "", style: this.costStyle });
-  energyCostLabel = new Text({ text: "", style: this.costStyle });
-  manaCostLabel = new Text({ text: "", style: this.costStyle });
-  nameLabel = new Text({ text: "", style: this.nameStyle });
-  typeLabel = new Text({ text: "", style: this.typeStyle });
-  descriptionLabel = new Text({ text: "", style: this.descriptionStyle });
-  handPresentation;
-  cardWidth;
-  cardHeight;
-  cardContent;
-  componentState;
-  componentLifecycleState = "active";
-  motionState;
-  playability;
-  statePresentationKey = "";
-  /**
-   * Creates a stable card display tree from semantic display data.
-   */
-  constructor(options) {
-    super();
-    this.handPresentation = options.presentation === "hand";
-    this.cardWidth = normalizeDimension2(options.width ?? defaultCardWidth, defaultCardWidth);
-    this.cardHeight = normalizeDimension2(options.height ?? defaultCardHeight, defaultCardHeight);
-    this.cardContent = toCardViewContent(options);
-    this.componentState = createUiComponentPresentationState({
-      size: { width: this.cardWidth, height: this.cardHeight },
-      ...options.enabled === void 0 ? {} : { enabled: options.enabled },
-      ...options.focused === void 0 ? {} : { focused: options.focused },
-      ...options.selected === void 0 ? {} : { selected: options.selected },
-      ...options.reducedMotion === void 0 ? {} : { reducedMotion: options.reducedMotion }
-    });
-    this.motionState = options.motionState ?? "idle";
-    this.playability = options.playability ?? "playable";
-    this.costLabel.anchor.set(0.5);
-    this.energyCostLabel.anchor.set(0.5);
-    this.manaCostLabel.anchor.set(0.5);
-    this.nameLabel.anchor.set(0.5, 0);
-    this.typeLabel.anchor.set(0.5, 0);
-    this.descriptionLabel.anchor.set(0.5, 0);
-    this.artwork.anchor.set(0.5, 0.5);
-    this.artwork.mask = this.artMask;
-    this.textScrims.mask = this.artMask;
-    for (const label of [this.costLabel, this.energyCostLabel, this.manaCostLabel, this.nameLabel, this.typeLabel, this.descriptionLabel]) {
-      label.resolution = 2;
-    }
-    this.addChild(
-      this.frame,
-      this.artFallback,
-      this.artwork,
-      this.artMask,
-      this.textScrims,
-      this.costPlate,
-      this.energyCostPlate,
-      this.manaCostPlate,
-      this.costLabel,
-      this.energyCostLabel,
-      this.manaCostLabel,
-      this.nameLabel,
-      this.typeLabel,
-      this.descriptionLabel,
-      this.stateOverlay,
-      this.playabilityOutline,
-      this.stateOutline
-    );
-    this.redraw();
-  }
-  /**
-   * Gets the semantic display data currently rendered by the card.
-   */
-  get content() {
-    return this.cardContent;
-  }
-  /**
-   * Gets the presentation state supplied by the owning scene.
-   */
-  get presentationState() {
-    return this.componentState;
-  }
-  /**
-   * Gets the lifecycle state managed by the owning scene or runtime.
-   */
-  get lifecycleState() {
-    return this.componentLifecycleState;
-  }
-  /**
-   * Gets the card's independent motion treatment.
-   */
-  get currentMotionState() {
-    return this.motionState;
-  }
-  /**
-   * Gets the card's independent playability treatment.
-   */
-  get currentPlayability() {
-    return this.playability;
-  }
-  /**
-   * Gets whether the intentional fallback-art treatment is visible.
-   */
-  get usesFallbackArt() {
-    return this.artFallback.visible;
-  }
-  /**
-   * Gets the current display dimensions.
-   */
-  get size() {
-    return { width: this.cardWidth, height: this.cardHeight };
-  }
-  /**
-   * Reconciles semantic display data without recreating the card display tree.
-   */
-  setContent(content) {
-    if (areCardContentsEqual(this.cardContent, content) && this.artwork.visible === isUsableCardTexture(content.artTexture)) {
-      return;
-    }
-    this.cardContent = content;
-    this.redraw();
-  }
-  /**
-   * Applies the card's motion treatment without changing playability or accessibility state.
-   */
-  setMotionState(state) {
-    if (this.motionState === state) {
-      return;
-    }
-    this.motionState = state;
-    this.applyStatePresentation(getPalette(this.cardContent.rarity));
-  }
-  /**
-   * Applies playability without replacing hover, focus, selection, or motion presentation.
-   */
-  setPlayability(playability) {
-    if (this.playability === playability) {
-      return;
-    }
-    this.playability = playability;
-    this.applyStatePresentation(getPalette(this.cardContent.rarity));
-  }
-  /**
-   * Resizes the card while retaining its content, state, and display-object identity.
-   */
-  resize(size) {
-    const normalizedSize = createUiComponentPresentationState({
-      size,
-      ...this.componentState.interaction,
-      reducedMotion: this.componentState.reducedMotion
-    });
-    this.componentState = normalizedSize;
-    this.cardWidth = normalizedSize.size.width;
-    this.cardHeight = normalizedSize.size.height;
-    this.redraw();
-  }
-  /**
-   * Updates scene-owned enabled, focused, and selected state without changing playability.
-   */
-  setInteractionState(state) {
-    if (areInteractionStatesEqual(this.componentState.interaction, state)) {
-      return;
-    }
-    this.componentState = createUiComponentPresentationState({
-      size: this.componentState.size,
-      ...state,
-      reducedMotion: this.componentState.reducedMotion
-    });
-    this.applyStatePresentation(getPalette(this.cardContent.rarity));
-  }
-  /**
-   * Updates reduced-motion presentation without changing card content or interaction state.
-   */
-  setReducedMotion(reducedMotion) {
-    this.componentState = createUiComponentPresentationState({
-      size: this.componentState.size,
-      ...this.componentState.interaction,
-      reducedMotion
-    });
-    this.redraw();
-  }
-  /**
-   * Suspends display while keeping the reusable card available for a later resume.
-   */
-  suspend() {
-    this.componentLifecycleState = transitionUiComponentLifecycle(this.componentLifecycleState, "suspend");
-    this.visible = this.componentLifecycleState === "active";
-  }
-  /**
-   * Resumes display unless the card has been disposed.
-   */
-  resume() {
-    this.componentLifecycleState = transitionUiComponentLifecycle(this.componentLifecycleState, "resume");
-    this.visible = this.componentLifecycleState === "active";
-  }
-  /**
-   * Disposes the component and prevents later lifecycle transitions from reviving it.
-   */
-  dispose() {
-    if (this.componentLifecycleState === "disposed") {
-      return;
-    }
-    this.componentLifecycleState = transitionUiComponentLifecycle(this.componentLifecycleState, "dispose");
-    this.visible = false;
-    super.destroy();
-  }
-  redraw() {
-    const palette = getPalette(this.cardContent.rarity);
-    const artBounds = getArtBounds(this.cardWidth, this.cardHeight);
-    const header = this.updateLabels(palette);
-    this.frame.clear().roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: palette.frame }).roundRect(uiTokens.frame.borderWidth, uiTokens.frame.borderWidth, this.cardWidth - uiTokens.frame.borderWidth * 2, this.cardHeight - uiTokens.frame.borderWidth * 2, uiTokens.frame.panelCornerRadius - 1).fill({ color: uiTokens.color.panelFill });
-    this.drawFallbackArt(artBounds, palette, header);
-    this.artMask.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.frame.panelCornerRadius - 1).fill({ color: 16777215 });
-    this.updateArtwork(artBounds);
-    this.drawTextScrims(artBounds, palette, header);
-    this.statePresentationKey = "";
-    this.applyStatePresentation(palette);
-  }
-  drawFallbackArt(artBounds, palette, header) {
-    const medallionSize = Math.min(artBounds.width, artBounds.height) * 0.3;
-    const medallionX = artBounds.x + (artBounds.width - medallionSize) / 2;
-    const headerBottom = artBounds.y + header.height;
-    const medallionY = headerBottom + (this.cardHeight * 0.59 - headerBottom - medallionSize) / 2;
-    this.artFallback.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.spacing.xs).fill({ color: palette.artFill }).roundRect(artBounds.x + 3, artBounds.y + 3, artBounds.width - 6, artBounds.height - 6, uiTokens.spacing.xs - 1).stroke({ color: palette.accent, width: 1, alpha: 0.72 }).rect(artBounds.x, artBounds.y + artBounds.height * 0.56, artBounds.width, artBounds.height * 0.44).fill({ color: palette.accent, alpha: 0.4 }).roundRect(medallionX, medallionY, medallionSize, medallionSize, medallionSize / 2).fill({ color: palette.accent, alpha: 0.7 }).roundRect(medallionX + 4, medallionY + 4, medallionSize - 8, medallionSize - 8, Math.max(0, medallionSize / 2 - 4)).fill({ color: palette.artFill, alpha: 0.94 }).rect(artBounds.x + artBounds.width * 0.12, artBounds.y + artBounds.height * 0.16, artBounds.width * 0.18, 3).fill({ color: palette.accent, alpha: 0.74 }).rect(artBounds.x + artBounds.width * 0.7, artBounds.y + artBounds.height * 0.16, artBounds.width * 0.18, 3).fill({ color: palette.accent, alpha: 0.74 });
-    this.artFallback.visible = !isUsableCardTexture(this.cardContent.artTexture);
-  }
-  /** Reserves a translucent title zone and an opaque lower caption without covering the focal center of the art. */
-  drawTextScrims(artBounds, palette, header) {
-    const rulesY = this.cardHeight * (this.handPresentation ? 0.65 : 0.59);
-    this.textScrims.clear().rect(artBounds.x, artBounds.y, artBounds.width, header.height).fill({ color: uiTokens.color.panelShadow, alpha: 0.78 }).rect(artBounds.x, rulesY, artBounds.width, artBounds.y + artBounds.height - rulesY).fill({ color: uiTokens.color.panelShadow });
-    this.costPlate.clear();
-    this.energyCostPlate.clear();
-    this.manaCostPlate.clear();
-    if (header.hasLegacyCost) {
-      this.costPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.badgeWidth, header.badgeHeight, this.handPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.panelShadow, alpha: 0.94 }).stroke({ color: palette.accent, width: 2 });
-    }
-    if (header.hasEnergyCost) {
-      this.energyCostPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.energyBadgeWidth, header.badgeHeight, this.handPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.stamina, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
-    }
-    if (header.hasManaCost) {
-      this.manaCostPlate.roundRect(this.handPresentation ? artBounds.x + artBounds.width - header.manaBadgeWidth - 5 : artBounds.x + 9 + header.energyBadgeWidth, artBounds.y + 5, header.manaBadgeWidth, header.badgeHeight, this.handPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.mana, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
-    }
-  }
-  updateArtwork(artBounds) {
-    const texture = this.cardContent.artTexture;
-    this.artwork.visible = isUsableCardTexture(texture);
-    if (!texture || !this.artwork.visible) {
-      return;
-    }
-    this.artwork.texture = texture;
-    this.artwork.position.set(artBounds.x + artBounds.width / 2, artBounds.y + artBounds.height / 2);
-    const scale = Math.max(artBounds.width / texture.width, artBounds.height / texture.height);
-    this.artwork.width = texture.width * scale;
-    this.artwork.height = texture.height * scale;
-  }
-  updateLabels(palette) {
-    if (this.handPresentation) return this.updateHandLabels();
-    const textScale = Math.max(0.55, Math.min(this.cardWidth / defaultCardWidth, this.cardHeight / defaultCardHeight));
-    const badgeHeight = Math.min(38, Math.max(24, this.cardWidth * 0.21));
-    const rulesY = this.cardHeight * (this.handPresentation ? 0.65 : 0.59);
-    this.costStyle.fontSize = Math.max(12, 18 * textScale);
-    this.nameStyle.fontSize = Math.max(12, 18 * textScale);
-    this.typeStyle.fontSize = Math.max(10, 12 * textScale);
-    this.descriptionStyle.fontSize = Math.max(11, 14 * textScale);
-    const cost = this.cardContent.cost === void 0 ? "" : String(this.cardContent.cost).trim();
-    const energyCost = getVisibleResourceCost(this.cardContent.energyCost);
-    const manaCost = getVisibleResourceCost(this.cardContent.manaCost);
-    this.costLabel.text = cost;
-    this.energyCostLabel.text = energyCost === void 0 ? "" : `\u26A1 ${energyCost}`;
-    this.manaCostLabel.text = manaCost === void 0 ? "" : `\u2726 ${manaCost}`;
-    const hasLegacyCost = cost.length > 0;
-    const hasEnergyCost = energyCost !== void 0;
-    const hasManaCost = manaCost !== void 0;
-    const badgeWidth = hasLegacyCost ? Math.min(this.cardWidth - 14, Math.max(badgeHeight, this.costLabel.width + 14)) : 0;
-    const energyBadgeWidth = hasEnergyCost ? Math.max(badgeHeight, this.energyCostLabel.width + 14) : 0;
-    const manaBadgeWidth = hasManaCost ? Math.max(badgeHeight, this.manaCostLabel.width + 14) : 0;
-    const resourceBadgeWidth = energyBadgeWidth + manaBadgeWidth + (hasEnergyCost && hasManaCost ? 4 : 0);
-    const activeBadgeWidth = Math.max(badgeWidth, resourceBadgeWidth);
-    const hasCost = hasLegacyCost || hasEnergyCost || hasManaCost;
-    const stacked = hasCost && Math.max(badgeWidth, resourceBadgeWidth) > this.cardWidth * 0.35;
-    const headerHeight = stacked ? Math.max(82, this.cardHeight * 0.34) : Math.max(28, this.cardHeight * 0.22);
-    this.costLabel.visible = hasLegacyCost;
-    this.energyCostLabel.visible = hasEnergyCost;
-    this.manaCostLabel.visible = hasManaCost;
-    this.costLabel.position.set(uiTokens.frame.borderWidth + 5 + badgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
-    this.energyCostLabel.position.set(uiTokens.frame.borderWidth + 5 + energyBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
-    this.manaCostLabel.position.set(uiTokens.frame.borderWidth + 9 + energyBadgeWidth + manaBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
-    this.nameLabel.text = this.cardContent.name;
-    this.nameLabel.position.set(
-      stacked || !hasCost ? this.cardWidth / 2 : (this.cardWidth + activeBadgeWidth + textPadding) / 2,
-      uiTokens.frame.borderWidth + (stacked ? badgeHeight + 11 : 9)
-    );
-    this.typeLabel.text = `${this.cardContent.type} \xB7 ${this.cardContent.rarity}`;
-    this.typeLabel.position.set(this.cardWidth / 2, rulesY + 8 * textScale);
-    this.descriptionLabel.text = this.cardContent.description;
-    this.descriptionLabel.position.set(this.cardWidth / 2, rulesY + 31 * textScale);
-    this.nameStyle.wordWrapWidth = Math.max(0, this.cardWidth - (stacked || !hasCost ? textPadding * 2 : activeBadgeWidth + textPadding * 3));
-    this.typeStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
-    this.descriptionStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
-    this.costStyle.fill = palette.accent;
-    return { badgeWidth, badgeHeight, hasLegacyCost, hasEnergyCost, hasManaCost, energyBadgeWidth, manaBadgeWidth, height: headerHeight };
-  }
-  /** Places readable names/effects below the illustration and resource costs in opposite corners. */
-  updateHandLabels() {
-    const scale = this.cardWidth / defaultCardWidth;
-    const badgeHeight = 38 * scale;
-    const rulesY = this.cardHeight * 0.65;
-    const energy = getVisibleResourceCost(this.cardContent.energyCost);
-    const mana = getVisibleResourceCost(this.cardContent.manaCost);
-    this.costStyle.fontSize = 30 * scale;
-    this.costStyle.fill = uiTokens.color.text;
-    this.costLabel.visible = false;
-    this.energyCostLabel.visible = energy !== void 0;
-    this.manaCostLabel.visible = mana !== void 0;
-    this.energyCostLabel.text = energy === void 0 ? "" : String(energy);
-    this.manaCostLabel.text = mana === void 0 ? "" : String(mana);
-    this.energyCostLabel.position.set(uiTokens.frame.borderWidth + 5 + badgeHeight / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
-    this.manaCostLabel.position.set(this.cardWidth - uiTokens.frame.borderWidth - 5 - badgeHeight / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
-    this.nameLabel.text = this.cardContent.name.toUpperCase();
-    this.nameStyle.fontSize = Math.min(26 * scale, Math.max(14 * scale, (this.cardWidth - 16) / Math.max(1, this.cardContent.name.length * 0.62)));
-    this.nameStyle.wordWrap = false;
-    this.nameLabel.position.set(this.cardWidth / 2, rulesY + 5);
-    this.typeLabel.visible = false;
-    this.descriptionStyle.fontSize = 20 * scale;
-    this.descriptionStyle.wordWrapWidth = this.cardWidth - 16;
-    this.descriptionLabel.text = this.cardContent.description;
-    this.descriptionLabel.position.set(this.cardWidth / 2, rulesY + 38 * scale);
-    return {
-      badgeWidth: 0,
-      badgeHeight,
-      hasLegacyCost: false,
-      hasEnergyCost: energy !== void 0,
-      hasManaCost: mana !== void 0,
-      energyBadgeWidth: energy === void 0 ? 0 : badgeHeight,
-      manaBadgeWidth: mana === void 0 ? 0 : badgeHeight,
-      height: 0
-    };
-  }
-  /** Applies mutable interaction state while caching the state graphics between semantic changes. */
-  applyStatePresentation(palette) {
-    const statePresentation = getStatePresentation(this.motionState, this.playability, this.componentState.interaction);
-    this.alpha = statePresentation.alpha;
-    const presentationKey = [
-      this.cardWidth,
-      this.cardHeight,
-      statePresentation.overlayAlpha,
-      statePresentation.overlayColor,
-      statePresentation.outlineColor ?? "",
-      this.playability,
-      palette.accent
-    ].join(":");
-    if (this.statePresentationKey === presentationKey) {
-      return;
-    }
-    this.statePresentationKey = presentationKey;
-    this.stateOverlay.clear();
-    this.playabilityOutline.clear();
-    this.stateOutline.clear();
-    if (statePresentation.overlayAlpha > 0) {
-      this.stateOverlay.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: statePresentation.overlayColor, alpha: statePresentation.overlayAlpha });
-    }
-    if (this.playability === "playable") {
-      this.playabilityOutline.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).stroke({ color: palette.accent, width: uiTokens.frame.borderWidth });
-    }
-    if (statePresentation.outlineColor !== void 0) {
-      this.stateOutline.roundRect(uiTokens.frame.selectedInset, uiTokens.frame.selectedInset, this.cardWidth - uiTokens.frame.selectedInset * 2, this.cardHeight - uiTokens.frame.selectedInset * 2, uiTokens.frame.selectedCornerRadius).stroke({ color: statePresentation.outlineColor, width: uiTokens.frame.borderWidth + 1 });
-    }
-  }
-};
-function isUsableCardTexture(texture) {
-  if (!texture || texture === Texture.EMPTY) {
-    return false;
-  }
-  const width = texture.width;
-  const height = texture.height;
-  return Number.isFinite(width) && Number.isFinite(height) && width > 1 && height > 1;
-}
-function toCardViewContent(options) {
-  return {
-    ...options.cost === void 0 ? {} : { cost: options.cost },
-    ...options.energyCost === void 0 ? {} : { energyCost: options.energyCost },
-    ...options.manaCost === void 0 ? {} : { manaCost: options.manaCost },
-    ...options.unavailableReason === void 0 ? {} : { unavailableReason: options.unavailableReason },
-    name: options.name,
-    description: options.description,
-    type: options.type,
-    rarity: options.rarity,
-    ...options.artTexture === void 0 ? {} : { artTexture: options.artTexture }
-  };
-}
-function areCardContentsEqual(left, right) {
-  return left.cost === right.cost && left.energyCost === right.energyCost && left.manaCost === right.manaCost && left.unavailableReason === right.unavailableReason && left.name === right.name && left.description === right.description && left.type === right.type && left.rarity === right.rarity && left.artTexture === right.artTexture;
-}
-function getVisibleResourceCost(cost) {
-  return cost !== void 0 && Number.isFinite(cost) && cost > 0 ? cost : void 0;
-}
-function areInteractionStatesEqual(left, right) {
-  return left.enabled === right.enabled && left.focused === right.focused && left.selected === right.selected;
-}
-function getArtBounds(width, height) {
-  const x2 = uiTokens.frame.borderWidth;
-  const y2 = uiTokens.frame.borderWidth;
-  const artWidth = Math.max(0, width - uiTokens.frame.borderWidth * 2);
-  const artHeight = Math.max(0, height - uiTokens.frame.borderWidth * 2);
-  return { x: x2, y: y2, width: artWidth, height: artHeight };
-}
-function getPalette(rarity) {
-  switch (rarity) {
-    case "Common":
-      return { accent: 12044248, artFill: 4545394, frame: 9413302 };
-    case "Uncommon":
-      return { accent: 8115878, artFill: 3234638, frame: 5155449 };
-    case "Rare":
-      return { accent: 16765806, artFill: 6836268, frame: 14132535 };
-    case "Special":
-      return { accent: 13674495, artFill: 5060716, frame: 10318801 };
-  }
-}
-function getStatePresentation(motionState, playability, interaction) {
-  const basePresentation = !interaction.enabled ? { alpha: uiTokens.interaction.disabledAlpha, overlayAlpha: 0.35, overlayColor: uiTokens.color.canvas } : playability === "unplayable" ? { alpha: 0.65, overlayAlpha: 0.3, overlayColor: uiTokens.color.surfaceRaised } : { alpha: 1, overlayAlpha: 0, overlayColor: 0 };
-  const dropOutlineColor = motionState === "valid-drop" || motionState === "invalid-drop" ? getMotionOutlineColor(motionState) : void 0;
-  const outlineColor = dropOutlineColor ?? (interaction.focused ? uiTokens.color.focus : interaction.selected ? uiTokens.color.selected : getMotionOutlineColor(motionState));
-  return { ...basePresentation, outlineColor };
-}
-function getMotionOutlineColor(state) {
-  switch (state) {
-    case "idle":
-      return void 0;
-    case "hovered":
-      return uiTokens.color.focus;
-    case "dragging":
-      return uiTokens.color.text;
-    case "valid-drop":
-      return uiTokens.color.valid;
-    case "invalid-drop":
-      return uiTokens.color.invalid;
-    case "returning":
-      return uiTokens.color.textMuted;
-    case "resolving":
-      return void 0;
-  }
-}
-function normalizeDimension2(value, fallback) {
-  return Number.isFinite(value) ? Math.max(1, value) : fallback;
-}
-
 // src/viewport-layout.ts
 var emptySafeAreaInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
 var mobilePortraitMaximumWidth = 600;
@@ -73543,8 +72938,8 @@ function describeViewport(viewport, options = {}) {
   });
 }
 function getViewportOrientation(viewport) {
-  const width = normalizeDimension3(viewport.width);
-  const height = normalizeDimension3(viewport.height);
+  const width = normalizeDimension(viewport.width);
+  const height = normalizeDimension(viewport.height);
   if (width === height) {
     return "Square";
   }
@@ -73554,8 +72949,8 @@ function getViewportDensity(devicePixelRatio) {
   return normalizeDevicePixelRatio(devicePixelRatio) > 1 ? "High" : "Standard";
 }
 function getViewportLayoutMode(viewport) {
-  const width = normalizeDimension3(viewport.width);
-  const height = normalizeDimension3(viewport.height);
+  const width = normalizeDimension(viewport.width);
+  const height = normalizeDimension(viewport.height);
   if (getViewportOrientation({ width, height }) === "Portrait" && width <= mobilePortraitMaximumWidth) {
     return "MobilePortrait";
   }
@@ -73588,15 +72983,15 @@ function planViewportUpdate(previous, viewport, options = {}) {
 }
 function normalizeViewport(viewport) {
   return {
-    width: normalizeDimension3(viewport.width),
-    height: normalizeDimension3(viewport.height)
+    width: normalizeDimension(viewport.width),
+    height: normalizeDimension(viewport.height)
   };
 }
 function normalizeSafeArea(safeArea, viewport) {
-  const top = Math.min(normalizeDimension3(safeArea.top), viewport.height);
-  const bottom = Math.min(normalizeDimension3(safeArea.bottom), Math.max(0, viewport.height - top));
-  const left = Math.min(normalizeDimension3(safeArea.left), viewport.width);
-  const right = Math.min(normalizeDimension3(safeArea.right), Math.max(0, viewport.width - left));
+  const top = Math.min(normalizeDimension(safeArea.top), viewport.height);
+  const bottom = Math.min(normalizeDimension(safeArea.bottom), Math.max(0, viewport.height - top));
+  const left = Math.min(normalizeDimension(safeArea.left), viewport.width);
+  const right = Math.min(normalizeDimension(safeArea.right), Math.max(0, viewport.width - left));
   return { top, right, bottom, left };
 }
 function calculateContentBounds(viewport, safeArea) {
@@ -73608,14 +73003,14 @@ function calculateContentBounds(viewport, safeArea) {
   };
 }
 function calculateAspectRatio(viewport) {
-  const width = normalizeDimension3(viewport.width);
-  const height = normalizeDimension3(viewport.height);
+  const width = normalizeDimension(viewport.width);
+  const height = normalizeDimension(viewport.height);
   return height === 0 ? 0 : width / height;
 }
 function normalizeDevicePixelRatio(value) {
   return value !== void 0 && Number.isFinite(value) && value > 0 ? value : 1;
 }
-function normalizeDimension3(value) {
+function normalizeDimension(value) {
   return Number.isFinite(value) ? Math.max(0, value) : 0;
 }
 
@@ -74020,6 +73415,662 @@ function layoutMobilePortraitHand(count2, viewport) {
   });
 }
 
+// src/encounter-backdrop.ts
+var EncounterBackdrop = class extends Container {
+  atmosphere = new Graphics();
+  architecture = new Graphics();
+  floor = new Graphics();
+  localeArtwork = new JourneyArtwork();
+  atmosphereTokens;
+  treatment;
+  activeTreatmentId;
+  viewport;
+  /** Creates the reusable three-plane scene backdrop. */
+  constructor(atmosphere = "neutral") {
+    super();
+    this.treatment = getCombatSceneTreatment("fold");
+    this.atmosphereTokens = getAreaAtmosphere(atmosphere);
+    this.eventMode = "none";
+    this.addChild(this.atmosphere, this.architecture, this.floor, this.localeArtwork);
+  }
+  /** Adds deterministic broken masonry and floor stones, keeping the central silhouettes readable. */
+  drawRubble(width, height, horizon, colors2) {
+    for (let index = 0; index < 52; index++) {
+      const x2 = (index * 193 + 37) % 997 / 997 * width;
+      const stoneWidth = 8 + index % 7 * 4;
+      const top = horizon - 20 - index * 31 % 113;
+      this.architecture.rect(x2, top, stoneWidth, horizon - top).fill({ color: index % 3 === 0 ? colors2.line : colors2.architecture, alpha: 0.2 }).rect(x2 + 2, top, stoneWidth - 4, 3).fill({ color: colors2.line, alpha: 0.32 });
+    }
+    for (let index = 0; index < 90; index++) {
+      const x2 = (index * 137 + 41) % 991 / 991 * width;
+      const y2 = horizon + index * 83 % 977 / 977 * (height - horizon);
+      this.floor.rect(x2, y2, 5 + index % 8 * 4, 2 + index % 3).fill({ color: colors2.line, alpha: 0.12 + index % 3 * 0.03 });
+    }
+  }
+  /** Applies saved locale artwork above the retained fallback planes. */
+  setEnvironment(environment) {
+    this.localeArtwork.setImage(getSceneEnvironment(environment)?.backgroundUrl ?? "");
+  }
+  /** Selects a restricted decorative atmosphere with a neutral fallback. */
+  setAtmosphere(atmosphere) {
+    this.activeTreatmentId = void 0;
+    this.atmosphereTokens = getAreaAtmosphere(atmosphere);
+    if (this.viewport) {
+      this.resize(this.viewport.width, this.viewport.height);
+    }
+  }
+  /** Selects bounded scenery while retaining the neutral Fold fallback for unknown treatment IDs. */
+  setTreatment(treatmentId) {
+    const treatment = getCombatSceneTreatment(treatmentId);
+    if (this.activeTreatmentId === treatment.id) {
+      return;
+    }
+    this.treatment = treatment;
+    this.activeTreatmentId = treatment.id;
+    this.atmosphereTokens = getAreaAtmosphere(this.treatment.atmosphere);
+    if (this.viewport) {
+      this.resize(this.viewport.width, this.viewport.height);
+    }
+  }
+  /** Repaints all planes for the current viewport without moving gameplay elements. */
+  resize(width, height) {
+    const w2 = Math.max(0, Number.isFinite(width) ? width : 0);
+    const h2 = Math.max(0, Number.isFinite(height) ? height : 0);
+    this.viewport = { width: w2, height: h2 };
+    const headerBottom = calculateCombatLayout({ width: w2, height: h2 }).regions.header.height;
+    const enemyLine = layoutEnemies(1, { width: w2, height: h2 })[0]?.y ?? h2 * 0.3;
+    const horizon = Math.max(headerBottom + 8, enemyLine - 20);
+    this.localeArtwork.resize(w2, h2, horizon);
+    const pillarWidth = Math.max(20, w2 * 0.055);
+    const colors2 = this.atmosphereTokens;
+    this.atmosphere.clear().rect(0, 0, w2, h2).fill({ color: colors2.canvas }).rect(0, 0, w2, horizon).fill({ color: colors2.distantSurface, alpha: this.treatment.distantLightAlpha }).rect(0, h2 * 0.18, w2, h2 * 0.25).fill({ color: colors2.platform, alpha: 0.12 }).rect(0, horizon - 3, w2, 6).fill({ color: colors2.line, alpha: 0.24 });
+    this.architecture.clear();
+    this.floor.clear();
+    if (w2 === 0 || h2 === 0) {
+      return;
+    }
+    for (const x2 of [w2 * 0.07, w2 * 0.87]) {
+      this.architecture.roundRect(x2, h2 * 0.04, pillarWidth, horizon - h2 * 0.04, 7).fill({ color: colors2.architecture, alpha: 0.8 }).stroke({ color: colors2.line, width: 2, alpha: 0.45 }).rect(x2 + pillarWidth * 0.18, h2 * 0.06, pillarWidth * 0.1, horizon - h2 * 0.09).fill({ color: colors2.line, alpha: 0.1 }).rect(x2 - pillarWidth * 0.2, horizon - 12, pillarWidth * 1.4, 12).fill({ color: colors2.distantSurface });
+    }
+    this.drawTreatmentScenery(w2, h2, horizon, colors2);
+    for (let index = 0; index < this.treatment.foregroundSilhouetteCount; index++) {
+      const x2 = w2 * ((index + 1) / (this.treatment.foregroundSilhouetteCount + 1));
+      const width2 = Math.max(18, w2 * 0.035);
+      const top = horizon - h2 * (0.08 + index % 2 * 0.04);
+      this.architecture.roundRect(x2 - width2 / 2, top, width2, horizon - top, 5).fill({ color: colors2.architecture, alpha: 0.48 });
+    }
+    this.floor.rect(0, horizon, w2, h2 - horizon).fill({ color: colors2.floor }).rect(0, horizon + 8, w2, 2).fill({ color: colors2.line, alpha: 0.32 });
+    this.floor.rect(0, horizon - h2 * 0.06, w2, h2 * 0.1).fill({ color: colors2.distantSurface, alpha: this.treatment.mistAlpha });
+    this.drawRubble(w2, h2, horizon, colors2);
+    for (let i2 = 1; i2 < 5; i2++) {
+      const y2 = horizon + (h2 - horizon) * (i2 / 5) ** 1.45;
+      this.floor.rect(0, y2, w2, 1).fill({ color: colors2.line, alpha: 0.12 });
+    }
+    for (let i2 = 1; i2 < 8; i2++) {
+      const x2 = w2 * i2 / 8;
+      this.floor.rect(x2, horizon + 6, 1, h2 - horizon - 6).fill({ color: colors2.line, alpha: 0.09 });
+    }
+    this.floor.roundRect(w2 * 0.12, horizon - 7, w2 * 0.27, 8, 4).fill({ color: colors2.platform, alpha: 0.16 }).roundRect(w2 * 0.62, horizon - 7, w2 * 0.27, 8, 4).fill({ color: colors2.platform, alpha: 0.16 });
+  }
+  /** Draws bounded, non-semantic treatment geometry behind the stable combat composition. */
+  drawTreatmentScenery(width, height, horizon, colors2) {
+    const centerX = width / 2;
+    switch (this.treatment.sceneryKind) {
+      case "archive":
+        for (let index = -2; index <= 2; index++) {
+          const x2 = centerX + index * width * 0.09;
+          this.architecture.rect(x2, height * 0.18, width * 0.045, horizon - height * 0.18).fill({ color: colors2.architecture, alpha: 0.32 }).rect(x2 + 4, height * 0.23, width * 0.037, 2).fill({ color: colors2.line, alpha: 0.22 });
+        }
+        return;
+      case "observatory":
+        this.architecture.roundRect(centerX - width * 0.095, height * 0.2, width * 0.19, height * 0.18, 999).stroke({ color: colors2.line, width: 2, alpha: 0.34 }).roundRect(centerX - width * 0.048, height * 0.245, width * 0.096, height * 0.09, 999).stroke({ color: colors2.architecture, width: 3, alpha: 0.34 });
+        return;
+      case "grove":
+      case "snow-grove":
+        for (const x2 of [width * 0.2, width * 0.8]) {
+          this.architecture.rect(x2, height * 0.16, Math.max(5, width * 0.012), horizon - height * 0.16).fill({ color: colors2.architecture, alpha: 0.42 });
+          this.architecture.roundRect(x2 + width * 0.01, height * 0.11, width * 0.08, height * 0.08, 999).fill({ color: colors2.distantSurface, alpha: this.treatment.sceneryKind === "snow-grove" ? 0.3 : 0.2 });
+        }
+        return;
+      case "monolith":
+        this.architecture.roundRect(centerX - width * 0.035, height * 0.1, width * 0.07, horizon - height * 0.1, 4).fill({ color: colors2.architecture, alpha: 0.5 }).rect(centerX - 1, height * 0.16, 2, horizon - height * 0.25).fill({ color: colors2.line, alpha: 0.28 });
+        return;
+      case "ruins":
+        this.drawRuins(width, height, horizon, colors2);
+        return;
+    }
+  }
+  /** Draws the moon, broken arch and steps of the Fold using a bounded set of stones. */
+  drawRuins(width, height, horizon, colors2) {
+    const moonSize = Math.min(64, width * 0.095);
+    this.atmosphere.roundRect(width * 0.73, height * 0.1, moonSize, moonSize, moonSize / 2).fill({ color: 15062967, alpha: 0.85 });
+    const radius = Math.min(90, width * 0.18);
+    const centerX = width * 0.5;
+    const archY = height * 0.26;
+    for (let index = 0; index < 13; index++) {
+      const angle = Math.PI + index * Math.PI / 12;
+      const x2 = centerX + Math.cos(angle) * radius;
+      const y2 = archY + Math.sin(angle) * radius;
+      this.architecture.rect(x2 - 9, y2 - 8, 17, 15).fill({ color: colors2.line, alpha: 0.38 + index % 3 * 0.08 });
+    }
+    for (let row = 0; row < 6; row++) {
+      const y2 = archY + row * 18;
+      for (const x2 of [centerX - radius, centerX + radius]) {
+        this.architecture.rect(x2 - 9, y2, 17, 16).fill({ color: colors2.line, alpha: 0.35 });
+      }
+      this.architecture.rect(
+        centerX - radius - row * 7,
+        horizon - 36 + row * 6,
+        radius * 2 + row * 14,
+        4
+      ).fill({ color: colors2.line, alpha: 0.18 });
+    }
+  }
+};
+
+// src/card-view.ts
+init_lib();
+
+// src/ui-component-contract.ts
+function normalizeUiComponentSize(size) {
+  return {
+    width: normalizeDimension2(size.width),
+    height: normalizeDimension2(size.height)
+  };
+}
+function createUiComponentPresentationState(options) {
+  const enabled = options.enabled ?? true;
+  return {
+    size: normalizeUiComponentSize(options.size),
+    interaction: {
+      enabled,
+      focused: enabled && (options.focused ?? false),
+      selected: enabled && (options.selected ?? false)
+    },
+    reducedMotion: options.reducedMotion ?? false
+  };
+}
+function transitionUiComponentLifecycle(state, event) {
+  if (state === "disposed" || event === "dispose") {
+    return "disposed";
+  }
+  if (event === "suspend") {
+    return "suspended";
+  }
+  return "active";
+}
+function normalizeDimension2(value) {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+// src/card-view.ts
+var defaultCardWidth = 180;
+var defaultCardHeight = 252;
+var textPadding = uiTokens.spacing.sm;
+var CardView = class extends Container {
+  frame = new Graphics();
+  artFallback = new Graphics();
+  artwork = new Sprite(Texture.EMPTY);
+  artMask = new Graphics();
+  textScrims = new Graphics();
+  costPlate = new Graphics();
+  energyCostPlate = new Graphics();
+  manaCostPlate = new Graphics();
+  stateOverlay = new Graphics();
+  playabilityOutline = new Graphics();
+  stateOutline = new Graphics();
+  costStyle = new TextStyle({ ...uiTokens.typography.button, stroke: { color: uiTokens.color.panelShadow, width: 3 } });
+  nameStyle = new TextStyle({ ...uiTokens.typography.cardTitle, align: "center", fontSize: 20, stroke: { color: uiTokens.color.panelShadow, width: 4 }, wordWrap: true });
+  typeStyle = new TextStyle({ ...uiTokens.typography.body, align: "center", fontSize: 13, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true });
+  descriptionStyle = new TextStyle({ ...uiTokens.typography.cardEffect, align: "center", fontSize: 15, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true });
+  costLabel = new Text({ text: "", style: this.costStyle });
+  energyCostLabel = new Text({ text: "", style: this.costStyle });
+  manaCostLabel = new Text({ text: "", style: this.costStyle });
+  nameLabel = new Text({ text: "", style: this.nameStyle });
+  typeLabel = new Text({ text: "", style: this.typeStyle });
+  descriptionLabel = new Text({ text: "", style: this.descriptionStyle });
+  handPresentation;
+  cardWidth;
+  cardHeight;
+  cardContent;
+  componentState;
+  componentLifecycleState = "active";
+  motionState;
+  playability;
+  statePresentationKey = "";
+  /**
+   * Creates a stable card display tree from semantic display data.
+   */
+  constructor(options) {
+    super();
+    this.handPresentation = options.presentation === "hand";
+    if (this.handPresentation) {
+      this.nameStyle.fontFamily = uiTokens.typography.button.fontFamily;
+      this.nameStyle.fontWeight = "700";
+      this.nameStyle.stroke = { color: uiTokens.color.panelShadow, width: 1 };
+      this.descriptionStyle.stroke = { color: uiTokens.color.panelShadow, width: 1 };
+    }
+    this.cardWidth = normalizeDimension3(options.width ?? defaultCardWidth, defaultCardWidth);
+    this.cardHeight = normalizeDimension3(options.height ?? defaultCardHeight, defaultCardHeight);
+    this.cardContent = toCardViewContent(options);
+    this.componentState = createUiComponentPresentationState({
+      size: { width: this.cardWidth, height: this.cardHeight },
+      ...options.enabled === void 0 ? {} : { enabled: options.enabled },
+      ...options.focused === void 0 ? {} : { focused: options.focused },
+      ...options.selected === void 0 ? {} : { selected: options.selected },
+      ...options.reducedMotion === void 0 ? {} : { reducedMotion: options.reducedMotion }
+    });
+    this.motionState = options.motionState ?? "idle";
+    this.playability = options.playability ?? "playable";
+    this.costLabel.anchor.set(0.5);
+    this.energyCostLabel.anchor.set(0.5);
+    this.manaCostLabel.anchor.set(0.5);
+    this.nameLabel.anchor.set(0.5, 0);
+    this.typeLabel.anchor.set(0.5, 0);
+    this.descriptionLabel.anchor.set(0.5, 0);
+    this.artwork.anchor.set(0.5, 0.5);
+    this.artwork.mask = this.artMask;
+    this.textScrims.mask = this.artMask;
+    for (const label of [this.costLabel, this.energyCostLabel, this.manaCostLabel, this.nameLabel, this.typeLabel, this.descriptionLabel]) {
+      label.resolution = 2;
+    }
+    this.addChild(
+      this.frame,
+      this.artFallback,
+      this.artwork,
+      this.artMask,
+      this.textScrims,
+      this.costPlate,
+      this.energyCostPlate,
+      this.manaCostPlate,
+      this.costLabel,
+      this.energyCostLabel,
+      this.manaCostLabel,
+      this.nameLabel,
+      this.typeLabel,
+      this.descriptionLabel,
+      this.stateOverlay,
+      this.playabilityOutline,
+      this.stateOutline
+    );
+    this.redraw();
+  }
+  /**
+   * Gets the semantic display data currently rendered by the card.
+   */
+  get content() {
+    return this.cardContent;
+  }
+  /**
+   * Gets the presentation state supplied by the owning scene.
+   */
+  get presentationState() {
+    return this.componentState;
+  }
+  /**
+   * Gets the lifecycle state managed by the owning scene or runtime.
+   */
+  get lifecycleState() {
+    return this.componentLifecycleState;
+  }
+  /**
+   * Gets the card's independent motion treatment.
+   */
+  get currentMotionState() {
+    return this.motionState;
+  }
+  /**
+   * Gets the card's independent playability treatment.
+   */
+  get currentPlayability() {
+    return this.playability;
+  }
+  /**
+   * Gets whether the intentional fallback-art treatment is visible.
+   */
+  get usesFallbackArt() {
+    return this.artFallback.visible;
+  }
+  /**
+   * Gets the current display dimensions.
+   */
+  get size() {
+    return { width: this.cardWidth, height: this.cardHeight };
+  }
+  /**
+   * Reconciles semantic display data without recreating the card display tree.
+   */
+  setContent(content) {
+    if (areCardContentsEqual(this.cardContent, content) && this.artwork.visible === isUsableCardTexture(content.artTexture)) {
+      return;
+    }
+    this.cardContent = content;
+    this.redraw();
+  }
+  /**
+   * Applies the card's motion treatment without changing playability or accessibility state.
+   */
+  setMotionState(state) {
+    if (this.motionState === state) {
+      return;
+    }
+    this.motionState = state;
+    this.applyStatePresentation(getPalette(this.cardContent.rarity));
+  }
+  /**
+   * Applies playability without replacing hover, focus, selection, or motion presentation.
+   */
+  setPlayability(playability) {
+    if (this.playability === playability) {
+      return;
+    }
+    this.playability = playability;
+    this.applyStatePresentation(getPalette(this.cardContent.rarity));
+  }
+  /**
+   * Resizes the card while retaining its content, state, and display-object identity.
+   */
+  resize(size) {
+    const normalizedSize = createUiComponentPresentationState({
+      size,
+      ...this.componentState.interaction,
+      reducedMotion: this.componentState.reducedMotion
+    });
+    this.componentState = normalizedSize;
+    this.cardWidth = normalizedSize.size.width;
+    this.cardHeight = normalizedSize.size.height;
+    this.redraw();
+  }
+  /**
+   * Updates scene-owned enabled, focused, and selected state without changing playability.
+   */
+  setInteractionState(state) {
+    if (areInteractionStatesEqual(this.componentState.interaction, state)) {
+      return;
+    }
+    this.componentState = createUiComponentPresentationState({
+      size: this.componentState.size,
+      ...state,
+      reducedMotion: this.componentState.reducedMotion
+    });
+    this.applyStatePresentation(getPalette(this.cardContent.rarity));
+  }
+  /**
+   * Updates reduced-motion presentation without changing card content or interaction state.
+   */
+  setReducedMotion(reducedMotion) {
+    this.componentState = createUiComponentPresentationState({
+      size: this.componentState.size,
+      ...this.componentState.interaction,
+      reducedMotion
+    });
+    this.redraw();
+  }
+  /**
+   * Suspends display while keeping the reusable card available for a later resume.
+   */
+  suspend() {
+    this.componentLifecycleState = transitionUiComponentLifecycle(this.componentLifecycleState, "suspend");
+    this.visible = this.componentLifecycleState === "active";
+  }
+  /**
+   * Resumes display unless the card has been disposed.
+   */
+  resume() {
+    this.componentLifecycleState = transitionUiComponentLifecycle(this.componentLifecycleState, "resume");
+    this.visible = this.componentLifecycleState === "active";
+  }
+  /**
+   * Disposes the component and prevents later lifecycle transitions from reviving it.
+   */
+  dispose() {
+    if (this.componentLifecycleState === "disposed") {
+      return;
+    }
+    this.componentLifecycleState = transitionUiComponentLifecycle(this.componentLifecycleState, "dispose");
+    this.visible = false;
+    super.destroy();
+  }
+  redraw() {
+    const palette = getPalette(this.cardContent.rarity);
+    const artBounds = getArtBounds(this.cardWidth, this.cardHeight);
+    const header = this.updateLabels(palette);
+    this.frame.clear().roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: palette.frame }).roundRect(uiTokens.frame.borderWidth, uiTokens.frame.borderWidth, this.cardWidth - uiTokens.frame.borderWidth * 2, this.cardHeight - uiTokens.frame.borderWidth * 2, uiTokens.frame.panelCornerRadius - 1).fill({ color: uiTokens.color.panelFill });
+    this.drawFallbackArt(artBounds, palette, header);
+    this.artMask.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.frame.panelCornerRadius - 1).fill({ color: 16777215 });
+    this.updateArtwork(artBounds);
+    this.drawTextScrims(artBounds, palette, header);
+    this.statePresentationKey = "";
+    this.applyStatePresentation(palette);
+  }
+  drawFallbackArt(artBounds, palette, header) {
+    const medallionSize = Math.min(artBounds.width, artBounds.height) * 0.3;
+    const medallionX = artBounds.x + (artBounds.width - medallionSize) / 2;
+    const headerBottom = artBounds.y + header.height;
+    const medallionY = headerBottom + (this.cardHeight * 0.59 - headerBottom - medallionSize) / 2;
+    this.artFallback.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.spacing.xs).fill({ color: palette.artFill }).roundRect(artBounds.x + 3, artBounds.y + 3, artBounds.width - 6, artBounds.height - 6, uiTokens.spacing.xs - 1).stroke({ color: palette.accent, width: 1, alpha: 0.72 }).rect(artBounds.x, artBounds.y + artBounds.height * 0.56, artBounds.width, artBounds.height * 0.44).fill({ color: palette.accent, alpha: 0.4 }).roundRect(medallionX, medallionY, medallionSize, medallionSize, medallionSize / 2).fill({ color: palette.accent, alpha: 0.7 }).roundRect(medallionX + 4, medallionY + 4, medallionSize - 8, medallionSize - 8, Math.max(0, medallionSize / 2 - 4)).fill({ color: palette.artFill, alpha: 0.94 }).rect(artBounds.x + artBounds.width * 0.12, artBounds.y + artBounds.height * 0.16, artBounds.width * 0.18, 3).fill({ color: palette.accent, alpha: 0.74 }).rect(artBounds.x + artBounds.width * 0.7, artBounds.y + artBounds.height * 0.16, artBounds.width * 0.18, 3).fill({ color: palette.accent, alpha: 0.74 });
+    this.artFallback.visible = !isUsableCardTexture(this.cardContent.artTexture);
+  }
+  /** Reserves a translucent title zone and an opaque lower caption without covering the focal center of the art. */
+  drawTextScrims(artBounds, palette, header) {
+    const rulesY = this.cardHeight * (this.handPresentation ? 0.58 : 0.59);
+    this.textScrims.clear().rect(artBounds.x, artBounds.y, artBounds.width, header.height).fill({ color: uiTokens.color.panelShadow, alpha: 0.78 }).rect(artBounds.x, rulesY, artBounds.width, artBounds.y + artBounds.height - rulesY).fill({ color: uiTokens.color.panelShadow });
+    this.costPlate.clear();
+    this.energyCostPlate.clear();
+    this.manaCostPlate.clear();
+    if (header.hasLegacyCost) {
+      this.costPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.badgeWidth, header.badgeHeight, this.handPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.panelShadow, alpha: 0.94 }).stroke({ color: palette.accent, width: 2 });
+    }
+    if (header.hasEnergyCost) {
+      this.energyCostPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.energyBadgeWidth, header.badgeHeight, this.handPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.stamina, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
+    }
+    if (header.hasManaCost) {
+      this.manaCostPlate.roundRect(this.handPresentation ? artBounds.x + artBounds.width - header.manaBadgeWidth - 5 : artBounds.x + 9 + header.energyBadgeWidth, artBounds.y + 5, header.manaBadgeWidth, header.badgeHeight, this.handPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.mana, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
+    }
+  }
+  updateArtwork(artBounds) {
+    const texture = this.cardContent.artTexture;
+    this.artwork.visible = isUsableCardTexture(texture);
+    if (!texture || !this.artwork.visible) {
+      return;
+    }
+    this.artwork.texture = texture;
+    this.artwork.position.set(artBounds.x + artBounds.width / 2, artBounds.y + artBounds.height / 2);
+    const scale = Math.max(artBounds.width / texture.width, artBounds.height / texture.height);
+    this.artwork.width = texture.width * scale;
+    this.artwork.height = texture.height * scale;
+  }
+  updateLabels(palette) {
+    if (this.handPresentation) return this.updateHandLabels();
+    const textScale = Math.max(0.55, Math.min(this.cardWidth / defaultCardWidth, this.cardHeight / defaultCardHeight));
+    const badgeHeight = Math.min(38, Math.max(24, this.cardWidth * 0.21));
+    const rulesY = this.cardHeight * (this.handPresentation ? 0.65 : 0.59);
+    this.costStyle.fontSize = Math.max(12, 18 * textScale);
+    this.nameStyle.fontSize = Math.max(12, 18 * textScale);
+    this.typeStyle.fontSize = Math.max(10, 12 * textScale);
+    this.descriptionStyle.fontSize = Math.max(11, 14 * textScale);
+    const cost = this.cardContent.cost === void 0 ? "" : String(this.cardContent.cost).trim();
+    const energyCost = getVisibleResourceCost(this.cardContent.energyCost);
+    const manaCost = getVisibleResourceCost(this.cardContent.manaCost);
+    this.costLabel.text = cost;
+    this.energyCostLabel.text = energyCost === void 0 ? "" : `\u26A1 ${energyCost}`;
+    this.manaCostLabel.text = manaCost === void 0 ? "" : `\u2726 ${manaCost}`;
+    const hasLegacyCost = cost.length > 0;
+    const hasEnergyCost = energyCost !== void 0;
+    const hasManaCost = manaCost !== void 0;
+    const badgeWidth = hasLegacyCost ? Math.min(this.cardWidth - 14, Math.max(badgeHeight, this.costLabel.width + 14)) : 0;
+    const energyBadgeWidth = hasEnergyCost ? Math.max(badgeHeight, this.energyCostLabel.width + 14) : 0;
+    const manaBadgeWidth = hasManaCost ? Math.max(badgeHeight, this.manaCostLabel.width + 14) : 0;
+    const resourceBadgeWidth = energyBadgeWidth + manaBadgeWidth + (hasEnergyCost && hasManaCost ? 4 : 0);
+    const activeBadgeWidth = Math.max(badgeWidth, resourceBadgeWidth);
+    const hasCost = hasLegacyCost || hasEnergyCost || hasManaCost;
+    const stacked = hasCost && Math.max(badgeWidth, resourceBadgeWidth) > this.cardWidth * 0.35;
+    const headerHeight = stacked ? Math.max(82, this.cardHeight * 0.34) : Math.max(28, this.cardHeight * 0.22);
+    this.costLabel.visible = hasLegacyCost;
+    this.energyCostLabel.visible = hasEnergyCost;
+    this.manaCostLabel.visible = hasManaCost;
+    this.costLabel.position.set(uiTokens.frame.borderWidth + 5 + badgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
+    this.energyCostLabel.position.set(uiTokens.frame.borderWidth + 5 + energyBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
+    this.manaCostLabel.position.set(uiTokens.frame.borderWidth + 9 + energyBadgeWidth + manaBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
+    this.nameLabel.text = this.cardContent.name;
+    this.nameLabel.position.set(
+      stacked || !hasCost ? this.cardWidth / 2 : (this.cardWidth + activeBadgeWidth + textPadding) / 2,
+      uiTokens.frame.borderWidth + (stacked ? badgeHeight + 11 : 9)
+    );
+    this.typeLabel.text = `${this.cardContent.type} \xB7 ${this.cardContent.rarity}`;
+    this.typeLabel.position.set(this.cardWidth / 2, rulesY + 8 * textScale);
+    this.descriptionLabel.text = this.cardContent.description;
+    this.descriptionLabel.position.set(this.cardWidth / 2, rulesY + 31 * textScale);
+    this.nameStyle.wordWrapWidth = Math.max(0, this.cardWidth - (stacked || !hasCost ? textPadding * 2 : activeBadgeWidth + textPadding * 3));
+    this.typeStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
+    this.descriptionStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
+    this.costStyle.fill = palette.accent;
+    return { badgeWidth, badgeHeight, hasLegacyCost, hasEnergyCost, hasManaCost, energyBadgeWidth, manaBadgeWidth, height: headerHeight };
+  }
+  /** Places readable names/effects below the illustration and resource costs in opposite corners. */
+  updateHandLabels() {
+    const scale = this.cardWidth / defaultCardWidth;
+    const badgeHeight = 38 * scale;
+    const rulesY = this.cardHeight * 0.58;
+    const energy = getVisibleResourceCost(this.cardContent.energyCost);
+    const mana = getVisibleResourceCost(this.cardContent.manaCost);
+    this.costStyle.fontSize = 30 * scale;
+    this.costStyle.fill = uiTokens.color.text;
+    this.costLabel.visible = false;
+    this.energyCostLabel.visible = energy !== void 0;
+    this.manaCostLabel.visible = mana !== void 0;
+    this.energyCostLabel.text = energy === void 0 ? "" : String(energy);
+    this.manaCostLabel.text = mana === void 0 ? "" : String(mana);
+    this.energyCostLabel.position.set(uiTokens.frame.borderWidth + 5 + badgeHeight / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
+    this.manaCostLabel.position.set(this.cardWidth - uiTokens.frame.borderWidth - 5 - badgeHeight / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
+    this.nameLabel.text = this.cardContent.name.toUpperCase();
+    this.nameStyle.wordWrap = true;
+    this.nameLabel.position.set(this.cardWidth / 2, rulesY + 5);
+    fitTextToBox(this.nameLabel, this.cardWidth - 16, 40 * scale, 24 * scale, 16 * scale);
+    this.typeLabel.visible = false;
+    this.descriptionLabel.text = this.cardContent.description;
+    const descriptionY = rulesY + 8 + Math.min(40 * scale, this.nameLabel.height || 24 * scale);
+    this.descriptionLabel.position.set(this.cardWidth / 2, descriptionY);
+    fitTextToBox(this.descriptionLabel, this.cardWidth - 16, this.cardHeight - descriptionY - 8, 19 * scale, 14 * scale);
+    return {
+      badgeWidth: 0,
+      badgeHeight,
+      hasLegacyCost: false,
+      hasEnergyCost: energy !== void 0,
+      hasManaCost: mana !== void 0,
+      energyBadgeWidth: energy === void 0 ? 0 : badgeHeight,
+      manaBadgeWidth: mana === void 0 ? 0 : badgeHeight,
+      height: 0
+    };
+  }
+  /** Applies mutable interaction state while caching the state graphics between semantic changes. */
+  applyStatePresentation(palette) {
+    const statePresentation = getStatePresentation(this.motionState, this.playability, this.componentState.interaction);
+    this.alpha = statePresentation.alpha;
+    const presentationKey = [
+      this.cardWidth,
+      this.cardHeight,
+      statePresentation.overlayAlpha,
+      statePresentation.overlayColor,
+      statePresentation.outlineColor ?? "",
+      this.playability,
+      palette.accent
+    ].join(":");
+    if (this.statePresentationKey === presentationKey) {
+      return;
+    }
+    this.statePresentationKey = presentationKey;
+    this.stateOverlay.clear();
+    this.playabilityOutline.clear();
+    this.stateOutline.clear();
+    if (statePresentation.overlayAlpha > 0) {
+      this.stateOverlay.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: statePresentation.overlayColor, alpha: statePresentation.overlayAlpha });
+    }
+    if (this.playability === "playable") {
+      this.playabilityOutline.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).stroke({ color: palette.accent, width: uiTokens.frame.borderWidth });
+    }
+    if (statePresentation.outlineColor !== void 0) {
+      this.stateOutline.roundRect(uiTokens.frame.selectedInset, uiTokens.frame.selectedInset, this.cardWidth - uiTokens.frame.selectedInset * 2, this.cardHeight - uiTokens.frame.selectedInset * 2, uiTokens.frame.selectedCornerRadius).stroke({ color: statePresentation.outlineColor, width: uiTokens.frame.borderWidth + 1 });
+    }
+  }
+};
+function isUsableCardTexture(texture) {
+  if (!texture || texture === Texture.EMPTY) {
+    return false;
+  }
+  const width = texture.width;
+  const height = texture.height;
+  return Number.isFinite(width) && Number.isFinite(height) && width > 1 && height > 1;
+}
+function toCardViewContent(options) {
+  return {
+    ...options.cost === void 0 ? {} : { cost: options.cost },
+    ...options.energyCost === void 0 ? {} : { energyCost: options.energyCost },
+    ...options.manaCost === void 0 ? {} : { manaCost: options.manaCost },
+    ...options.unavailableReason === void 0 ? {} : { unavailableReason: options.unavailableReason },
+    name: options.name,
+    description: options.description,
+    type: options.type,
+    rarity: options.rarity,
+    ...options.artTexture === void 0 ? {} : { artTexture: options.artTexture }
+  };
+}
+function areCardContentsEqual(left, right) {
+  return left.cost === right.cost && left.energyCost === right.energyCost && left.manaCost === right.manaCost && left.unavailableReason === right.unavailableReason && left.name === right.name && left.description === right.description && left.type === right.type && left.rarity === right.rarity && left.artTexture === right.artTexture;
+}
+function getVisibleResourceCost(cost) {
+  return cost !== void 0 && Number.isFinite(cost) && cost > 0 ? cost : void 0;
+}
+function areInteractionStatesEqual(left, right) {
+  return left.enabled === right.enabled && left.focused === right.focused && left.selected === right.selected;
+}
+function getArtBounds(width, height) {
+  const x2 = uiTokens.frame.borderWidth;
+  const y2 = uiTokens.frame.borderWidth;
+  const artWidth = Math.max(0, width - uiTokens.frame.borderWidth * 2);
+  const artHeight = Math.max(0, height - uiTokens.frame.borderWidth * 2);
+  return { x: x2, y: y2, width: artWidth, height: artHeight };
+}
+function getPalette(rarity) {
+  switch (rarity) {
+    case "Common":
+      return { accent: 12044248, artFill: 4545394, frame: 9413302 };
+    case "Uncommon":
+      return { accent: 8115878, artFill: 3234638, frame: 5155449 };
+    case "Rare":
+      return { accent: 16765806, artFill: 6836268, frame: 14132535 };
+    case "Special":
+      return { accent: 13674495, artFill: 5060716, frame: 10318801 };
+  }
+}
+function getStatePresentation(motionState, playability, interaction) {
+  const basePresentation = !interaction.enabled ? { alpha: uiTokens.interaction.disabledAlpha, overlayAlpha: 0.35, overlayColor: uiTokens.color.canvas } : playability === "unplayable" ? { alpha: 0.65, overlayAlpha: 0.3, overlayColor: uiTokens.color.surfaceRaised } : { alpha: 1, overlayAlpha: 0, overlayColor: 0 };
+  const dropOutlineColor = motionState === "valid-drop" || motionState === "invalid-drop" ? getMotionOutlineColor(motionState) : void 0;
+  const outlineColor = dropOutlineColor ?? (interaction.focused ? uiTokens.color.focus : interaction.selected ? uiTokens.color.selected : getMotionOutlineColor(motionState));
+  return { ...basePresentation, outlineColor };
+}
+function getMotionOutlineColor(state) {
+  switch (state) {
+    case "idle":
+      return void 0;
+    case "hovered":
+      return uiTokens.color.focus;
+    case "dragging":
+      return uiTokens.color.text;
+    case "valid-drop":
+      return uiTokens.color.valid;
+    case "invalid-drop":
+      return uiTokens.color.invalid;
+    case "returning":
+      return uiTokens.color.textMuted;
+    case "resolving":
+      return void 0;
+  }
+}
+function normalizeDimension3(value, fallback) {
+  return Number.isFinite(value) ? Math.max(1, value) : fallback;
+}
+
 // src/input-policy.ts
 var pointerDragSlopPixels = 8;
 function isPrimaryPointer(event) {
@@ -74092,7 +74143,7 @@ var RunHud = class extends Container {
   constructor(requestRelicCollection) {
     super();
     this.requestRelicCollection = requestRelicCollection;
-    this.addChild(this.health, this.healthBar, this.currency, this.deck, this.relics, this.turn, this.stamina, this.mana, this.pinnedRelics, this.block, this.sceneTitle, this.frame, this.staminaPips, this.manaPips);
+    this.addChild(this.health, this.healthBar, this.currency, this.deck, this.relics, this.turn, this.stamina, this.mana, this.pinnedRelics, this.block, this.sceneTitle, this.frame);
     this.relics.on("pointertap", () => {
       if (this.relicCollectionAvailable) {
         this.requestRelicCollection?.();
@@ -74102,8 +74153,8 @@ var RunHud = class extends Container {
   requestRelicCollection;
   health = new ResourceCounter({ icon: "\u2665", label: "", value: "0/0", valueLayout: "inline" });
   healthBar = new ProgressIndicator({ width: 64, height: 5, value: 0, maximum: 1, fill: uiTokens.color.health });
-  stamina = new ResourceCounter({ label: "STAMINA", value: "0 / 0", valueLayout: "stacked", valueOffsetX: 78 });
-  mana = new ResourceCounter({ label: "MANA", value: "0 / 0", valueLayout: "stacked", valueOffsetX: 78 });
+  stamina = new ResourceCounter({ label: "STAMINA", value: "0 / 0", valueLayout: "stacked" });
+  mana = new ResourceCounter({ label: "MANA", value: "0 / 0", valueLayout: "stacked" });
   currency = new ResourceCounter({ icon: "\u25C6", label: "", value: 0, valueLayout: "inline" });
   deck = new ResourceCounter({ icon: "\u25A3", label: "", value: 0, valueLayout: "inline" });
   relics = new ResourceCounter({ icon: "\u2726", label: "Relics", value: 0, valueLayout: "inline" });
@@ -74112,8 +74163,6 @@ var RunHud = class extends Container {
   block = new ResourceCounter({ icon: "\u25C7", label: "", value: 0, valueLayout: "inline" });
   sceneTitle = new Text({ text: "", style: { ...getUiTextStyle("Caption"), letterSpacing: 3 } });
   frame = new Graphics();
-  staminaPips = new Graphics();
-  manaPips = new Graphics();
   relicCollectionAvailable = false;
   /** Reconciles resource values and a concise, human-readable phase label. */
   reconcile(state, viewport) {
@@ -74132,8 +74181,6 @@ var RunHud = class extends Container {
     if (manaValue !== void 0) {
       this.mana.setValue(manaValue);
     }
-    this.drawResourcePips(this.staminaPips, state.energy, state.turnStartEnergy, uiTokens.color.stamina);
-    this.drawResourcePips(this.manaPips, state.mana, state.turnStartMana, uiTokens.color.mana);
     this.currency.setValue(state.currency);
     this.deck.setValue(state.deckCount);
     this.relics.setValue(formatRelicRailCount(state.relicCount));
@@ -74149,15 +74196,6 @@ var RunHud = class extends Container {
   setFeedbackVisible(visible, viewport) {
     this.turn.visible = !visible || getViewportLayoutMode(viewport) !== "MobilePortrait";
   }
-  /** Bounds decorative pips to five while preserving the exact resource totals in text. */
-  drawResourcePips(graphic, current, allowance, color) {
-    graphic.clear();
-    if (current === void 0 || allowance === void 0) return;
-    const count2 = Math.min(5, Math.max(0, Math.trunc(allowance)));
-    for (let index = 0; index < count2; index++) {
-      graphic.roundRect(1 + index * 14, -5, 10, 10, 5).fill({ color, alpha: index < current ? 0.85 : 0.12 }).stroke({ color, width: 1 });
-    }
-  }
   /** Shares the hand boundary between resource counters and the scene-owned controls. */
   layout(viewport) {
     const portrait = getViewportLayoutMode(viewport) === "MobilePortrait";
@@ -74165,9 +74203,7 @@ var RunHud = class extends Container {
     const layout = calculateCombatLayout(viewport);
     const resourceY = short ? 44 : layout.regions.hand.y - 48;
     this.stamina.position.set(16, resourceY);
-    this.mana.position.set(portrait ? viewport.width - 156 : 190, resourceY);
-    this.staminaPips.position.set(16, resourceY + 25);
-    this.manaPips.position.set(portrait ? viewport.width - 156 : 190, resourceY + 25);
+    this.mana.position.set(portrait ? viewport.width - 88 : 144, resourceY);
     this.turn.position.set(portrait ? 16 : 240, portrait ? 44 : 38);
     this.layoutHealth(portrait || short);
     this.layoutMetadata(viewport, portrait, short);
@@ -74209,6 +74245,74 @@ function formatPinnedRelics(relics) {
     return "";
   }
   return relics.map((relic) => relic.name).join(" \xB7 ");
+}
+
+// src/character-outline.ts
+init_lib();
+var CharacterOutline = class extends Container {
+  silhouettes = Array.from({ length: 12 }, () => new Sprite(Texture.EMPTY));
+  fallback = new Graphics();
+  constructor() {
+    super();
+    this.eventMode = "none";
+    this.visible = false;
+    for (const sprite of this.silhouettes) {
+      sprite.anchor.set(0.5);
+      this.addChild(sprite);
+    }
+    this.addChild(this.fallback);
+  }
+  /** Matches the current artwork, including asynchronous loads and responsive resizing. */
+  show(artwork, color, thickness, opacity) {
+    this.visible = true;
+    this.alpha = opacity;
+    this.fallback.visible = !artwork.visible;
+    this.fallback.clear();
+    if (!artwork.visible) this.fallback.roundRect(-18, artwork.y + 54, 36, 3, 2).fill({ color });
+    this.silhouettes.forEach((sprite, index) => {
+      const angle = index * Math.PI * 2 / this.silhouettes.length;
+      sprite.texture = artwork.texture;
+      sprite.visible = artwork.visible;
+      sprite.tint = color;
+      sprite.width = artwork.width;
+      sprite.height = artwork.height;
+      sprite.position.set(artwork.x + Math.cos(angle) * thickness, artwork.y + Math.sin(angle) * thickness);
+    });
+  }
+};
+
+// src/artwork-ground-contact.ts
+var groundContacts = /* @__PURE__ */ new WeakMap();
+function findGroundContact(pixels, width, height) {
+  for (let row = height - 1; row >= 0; row--) {
+    for (let column = 0; column < width; column++) {
+      if ((pixels[(row * width + column) * 4 + 3] ?? 0) > 8) return (row + 1) / height;
+    }
+  }
+  return 1;
+}
+function getArtworkGroundContact(texture) {
+  const cached = groundContacts.get(texture);
+  if (cached !== void 0) return cached;
+  const resource = texture.source?.resource;
+  if (typeof document === "undefined" || !isCanvasImage(resource)) return 1;
+  const canvas = document.createElement("canvas");
+  const frame = texture.frame;
+  canvas.width = Math.max(1, Math.ceil(frame.width));
+  canvas.height = Math.max(1, Math.ceil(frame.height));
+  const context2 = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context2) return 1;
+  let contact = 1;
+  try {
+    context2.drawImage(resource, frame.x, frame.y, frame.width, frame.height, 0, 0, canvas.width, canvas.height);
+    contact = findGroundContact(context2.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height);
+  } catch {
+  }
+  groundContacts.set(texture, contact);
+  return contact;
+}
+function isCanvasImage(resource) {
+  return typeof HTMLImageElement !== "undefined" && resource instanceof HTMLImageElement || typeof HTMLCanvasElement !== "undefined" && resource instanceof HTMLCanvasElement || typeof ImageBitmap !== "undefined" && resource instanceof ImageBitmap || typeof OffscreenCanvas !== "undefined" && resource instanceof OffscreenCanvas;
 }
 
 // src/encounter-scene.ts
@@ -74738,11 +74842,12 @@ var EncounterScene = class {
     const art = this.getBattlefieldArtworkBounds(entity, position);
     const artHeight = art.height;
     const artY = art.y;
-    tile.background.clear().roundRect(-62, artY + artHeight / 2 - 6, 124, 9, 4).fill({ color: uiTokens.color.panelShadow, alpha: 0.45 });
+    tile.hasGroundShadow = true;
     tile.container.hitArea = new Rectangle(-entityHitHalfWidth, -86, entityHitHalfWidth * 2, entity.isPlayer ? 166 : artY + artHeight / 2 + 106);
     tile.accent.clear();
     this.updateArtwork(tile, entity.image || (entity.isPlayer ? "/img/Player/HoodedTraveler.svg" : ""), 176, artHeight);
     tile.artwork.position.set(0, artY);
+    this.drawGroundShadow(tile);
     this.updateBattlefieldLabels(tile, entity, artY, artHeight);
   }
   /** Fits the enemy sprite below its intent and above the player's figure. */
@@ -74766,40 +74871,60 @@ var EncounterScene = class {
   }
   /** Retains the compact fallback when multiple rows cannot accommodate full battlefield figures. */
   drawCompactEntityPresentation(tile, entity) {
-    tile.background.clear().roundRect(-89, -57, 178, 113, 13).fill({ color: uiTokens.color.surface, alpha: 0.92 }).stroke({ color: uiTokens.color.panelStroke, width: 1 });
+    tile.hasGroundShadow = true;
     tile.container.hitArea = new Rectangle(-94, -64, 188, 128);
     tile.accent.clear();
-    this.updateArtwork(tile, entity.image || (entity.isPlayer ? "/img/Player/HoodedTraveler.svg" : ""), 164, 104);
-    tile.artwork.position.set(0, 0);
-    tile.title.text = entity.name;
-    tile.description.text = formatEntityTelegraph(entity.telegraph);
-    tile.description.visible = !entity.isPlayer;
-    tile.detail.text = `HP ${entity.health} / ${entity.maxHealth} \xB7 BLOCK ${entity.block}`;
-    tile.effects.text = formatEntityEffects(entity);
-    tile.title.position.set(0, -44);
-    tile.description.position.set(0, -24);
-    tile.detail.position.set(0, 7);
-    tile.effects.position.set(0, 38);
-    this.drawMeter(tile.healthBar, entity.health, entity.maxHealth, -78, -9, 156, 5, uiTokens.color.health);
-    tile.healthBar.visible = entity.maxHealth > 0;
-    this.drawMeter(tile.postureBar, entity.posture, entity.maxPosture, -78, 29, 156, 4, uiTokens.color.block);
-    tile.postureBar.visible = !entity.isPlayer && entity.maxPosture > 0;
+    const artHeight = entity.isPlayer ? 76 : 42;
+    const artY = entity.isPlayer ? 20 : 27;
+    this.updateArtwork(tile, entity.image || (entity.isPlayer ? "/img/Player/HoodedTraveler.svg" : ""), 164, artHeight);
+    tile.artwork.position.set(0, artY);
+    this.drawGroundShadow(tile);
+    this.updateBattlefieldLabels(tile, entity, artY, artHeight);
+    if (!entity.isPlayer) this.fitCompactBattlefieldLabels(tile);
+  }
+  /** Fits every combat row inside a dense formation's tile without overlapping the next enemy. */
+  fitCompactBattlefieldLabels(tile) {
+    tile.title.position.set(0, -53);
+    tile.detail.position.set(48, -35);
+    tile.defenses.position.set(0, -18);
+    tile.effects.position.set(0, 1);
+    tile.description.position.set(0, 56);
+    tile.healthBar.position.set(0, 21);
+    tile.postureBar.position.set(0, 18);
+    tile.title.style.stroke = { color: uiTokens.color.panelShadow, width: 1 };
+    tile.description.style.stroke = { color: uiTokens.color.panelShadow, width: 1 };
+    fitTextToBox(tile.title, 176, 22, 16, 14);
+    fitTextToBox(tile.detail, 70, 16, 13, 11);
+    fitTextToBox(tile.defenses, 176, 16, 12, 10);
+    fitTextToBox(tile.effects, 176, 16, 12, 10);
+    fitTextToBox(tile.description, 176, 16, 13, 11);
   }
   /** Positions enemy names, numeric health, intent and status rows clear of their artwork. */
   updateBattlefieldLabels(tile, entity, artY, artHeight) {
     tile.title.text = entity.isPlayer ? "" : entity.name;
+    tile.title.style.fontSize = 18;
+    tile.title.style.stroke = { color: uiTokens.color.panelShadow, width: 3 };
+    tile.description.style.stroke = { color: uiTokens.color.panelShadow, width: 3 };
     tile.description.text = formatEntityTelegraph(entity.telegraph);
     tile.description.visible = !entity.isPlayer;
-    tile.detail.text = entity.isPlayer ? "" : `\u2665 ${entity.health} / ${entity.maxHealth}${entity.block > 0 ? ` \xB7 \u25C7 ${entity.block}` : ""}`;
+    tile.detail.text = entity.isPlayer ? "" : `${entity.health} / ${entity.maxHealth}`;
+    tile.defenses.text = entity.isPlayer ? "" : `Block ${entity.block}${entity.maxPosture > 0 ? `  \xB7  Posture ${entity.posture}/${entity.maxPosture}` : ""}`;
     tile.effects.text = formatEntityEffects(entity);
     tile.title.position.set(0, -80);
-    tile.detail.position.set(0, -60);
-    tile.description.position.set(0, -34);
-    tile.effects.position.set(0, artY + artHeight / 2 + 8);
-    this.drawMeter(tile.healthBar, entity.health, entity.maxHealth, -70, -49, 140, 5, uiTokens.color.health);
+    tile.detail.position.set(48, -56);
+    tile.defenses.position.set(0, -37);
+    tile.description.position.set(0, artY + artHeight / 2 + 14);
+    tile.effects.position.set(0, entity.isPlayer ? artY + artHeight / 2 + 10 : -14);
+    tile.healthBar.position.set(0, 0);
+    tile.postureBar.position.set(0, 0);
+    this.drawMeter(tile.healthBar, entity.health, entity.maxHealth, -78, -60, 84, 8, uiTokens.color.health);
     tile.healthBar.visible = !entity.isPlayer && entity.maxHealth > 0;
-    this.drawMeter(tile.postureBar, entity.posture, entity.maxPosture, -70, artY + artHeight / 2, 140, 3, uiTokens.color.block);
+    this.drawMeter(tile.postureBar, entity.posture, entity.maxPosture, -70, -28, 140, 3, uiTokens.color.block);
     tile.postureBar.visible = !entity.isPlayer && entity.maxPosture > 0;
+    fitTextToBox(tile.defenses, 176, 18, 14, 12);
+    fitTextToBox(tile.detail, 70, 18, 14, 12);
+    fitTextToBox(tile.effects, 176, 22, 14, 12);
+    fitTextToBox(tile.description, 176, 26, 15, 13);
   }
   updateHandTile(id, entry, position) {
     const isCard = isCardPresentationState2(entry);
@@ -74852,7 +74977,7 @@ var EncounterScene = class {
     }
     const background = new Graphics();
     const accent = new Graphics();
-    const targetHighlight = new Graphics();
+    const targetHighlight = new CharacterOutline();
     targetHighlight.visible = false;
     const artwork = new Sprite(Texture.EMPTY);
     artwork.anchor.set(0.5, 0.5);
@@ -74862,21 +74987,23 @@ var EncounterScene = class {
     const effects = new Text({ text: "", style: { ...uiTokens.typography.caption, align: "center", fill: uiTokens.color.block, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true, wordWrapWidth: 156 } });
     const healthBar = new Graphics();
     const postureBar = new Graphics();
+    const defenses = new Text({ text: "", style: { ...uiTokens.typography.caption, align: "center", fill: uiTokens.color.block, stroke: { color: uiTokens.color.panelShadow, width: 2 } } });
+    defenses.anchor.set(0.5);
     const container = new Container();
     title.anchor.set(0.5, 0.5);
     description.anchor.set(0.5, 0.5);
     detail.anchor.set(0.5, 0.5);
     effects.anchor.set(0.5, 0.5);
-    for (const label of [title, description, detail, effects]) {
+    for (const label of [title, description, detail, effects, defenses]) {
       label.resolution = 2;
     }
     title.position.set(0, -42);
     description.position.set(0, -23);
     detail.position.set(0, 7);
     effects.position.set(0, 38);
-    container.addChild(background, targetHighlight, artwork, accent, title, description, detail, healthBar, postureBar, effects);
+    container.addChild(background, targetHighlight, artwork, accent, title, description, detail, healthBar, postureBar, effects, defenses);
     layer.addChild(container);
-    const tile = { container, background, accent, targetHighlight, artwork, title, description, detail, effects, healthBar, postureBar };
+    const tile = { container, background, accent, targetHighlight, artwork, title, description, detail, effects, healthBar, postureBar, defenses };
     tiles.set(id, tile);
     return tile;
   }
@@ -75140,7 +75267,9 @@ var EncounterScene = class {
     cardView.position.set(-handCardVisualSize.width / 2, -handCardVisualSize.height / 2);
     cardView.scale.set(handCardViewScale);
     tile.container.removeAllListeners();
-    tile.container.removeChild(tile.background, tile.accent, tile.targetHighlight, tile.artwork, tile.title, tile.description, tile.detail, tile.healthBar, tile.postureBar, tile.effects);
+    tile.container.removeChild(tile.background, tile.accent, tile.targetHighlight, tile.artwork, tile.title, tile.description, tile.detail, tile.healthBar, tile.postureBar, tile.effects, tile.defenses);
+    tile.targetHighlight.destroy({ children: true });
+    tile.defenses.destroy();
     tile.artwork.destroy();
     tile.title.destroy();
     tile.description.destroy();
@@ -75580,6 +75709,14 @@ var EncounterScene = class {
     const scale = Math.min(bounds.width / Math.max(1, texture.width), bounds.height / Math.max(1, texture.height));
     tile.artwork.width = texture.width * scale;
     tile.artwork.height = texture.height * scale;
+    if (tile.hasGroundShadow) this.drawGroundShadow(tile);
+  }
+  /** Keeps the ground shadow touching visible artwork, including padded character textures. */
+  drawGroundShadow(tile) {
+    const contact = getArtworkGroundContact(tile.artwork.texture);
+    const foot = tile.artwork.y + tile.artwork.height * (contact - 0.5);
+    const width = Math.max(24, Math.min(124, tile.artwork.width * 0.75));
+    tile.background.clear().roundRect(-width / 2, foot - 2, width, 6, 3).fill({ color: uiTokens.color.panelShadow, alpha: 0.45 });
   }
   handleEntitySelection(entityId) {
     const entry = this.selectedEntryId ? this.selectableEntries.get(this.selectedEntryId) : void 0;
@@ -75731,11 +75868,7 @@ var EncounterScene = class {
     delete tile.targetPresentationKey;
     tile.targetHighlight.visible = tile.artwork.visible && progress < 1;
     if (tile.targetHighlight.visible) {
-      tile.targetHighlight.clear().roundRect(-94, -64, 188, 128, 12).stroke({
-        color: 16777215,
-        width: 4,
-        alpha: Math.sin(progress * Math.PI) * (this.reducedMotion ? 0.35 : 0.75)
-      });
+      tile.targetHighlight.show(tile.artwork, 16777215, 3, Math.sin(progress * Math.PI) * (this.reducedMotion ? 0.35 : 0.75));
       return;
     }
     this.refreshSelectionHighlights();
@@ -75747,16 +75880,17 @@ var EncounterScene = class {
     tile.container.scale.set(start.scale * (1 + Math.sin(progress * Math.PI) * intensity));
   }
   /**
-   * Draws and pulses a temporary colored frame around a tile.
+   * Pulses the character silhouette with a temporary effect color.
    */
   pulseAccent(tile, progress, color) {
     tile.accent.clear();
     if (progress >= 1) {
       tile.accent.alpha = 0;
+      delete tile.targetPresentationKey;
+      this.refreshSelectionHighlights();
       return;
     }
-    tile.accent.roundRect(-94, -64, 188, 128, 13).stroke({ color, width: 3 });
-    tile.accent.alpha = 0.25 + Math.sin(progress * Math.PI) * 0.75;
+    tile.targetHighlight.show(tile.artwork, color, 3, 0.25 + Math.sin(progress * Math.PI) * 0.75);
   }
   /**
    * Applies a short rotation and scale loss to communicate a stagger.
@@ -75833,7 +75967,8 @@ var EncounterScene = class {
     const isTargeting = targetingEntry !== void 0 && targetingEntry.targetMode !== "none";
     const isValidTarget = entity !== void 0 && targetingEntry !== void 0 && !this.intentPending && !this.isAnimationLockedForEntry(targetingEntry) && !this.isAnimationLockedForEntity(entity) && this.isValidTarget(targetingEntry.targetMode, entity);
     const isFocused = entityId === this.focusedEntityId;
-    const presentationKey = `${isTargeting}:${isValidTarget}:${isFocused}`;
+    const artwork = tile.artwork;
+    const presentationKey = `${isTargeting}:${isValidTarget}:${isFocused}:${artwork.visible}:${tile.artworkImage}:${artwork.x}:${artwork.y}:${artwork.width}:${artwork.height}`;
     if (tile.targetPresentationKey === presentationKey) {
       return;
     }
@@ -75841,16 +75976,15 @@ var EncounterScene = class {
     tile.background.tint = 16777215;
     tile.accent.clear();
     tile.accent.alpha = 0;
-    tile.targetHighlight.clear();
-    tile.targetHighlight.visible = isTargeting;
+    tile.targetHighlight.visible = false;
     if (isTargeting) {
       const cueColor = isFocused ? uiTokens.color.focus : isValidTarget ? uiTokens.color.valid : uiTokens.color.invalid;
-      const bounds = tile.container.hitArea instanceof Rectangle ? tile.container.hitArea : new Rectangle(-94, -64, 188, 128);
-      tile.targetHighlight.roundRect(bounds.x, bounds.y, bounds.width, bounds.height, 12).stroke({
-        color: cueColor,
-        width: isFocused || isValidTarget ? 4 : 2,
-        alpha: isFocused ? 0.95 : isValidTarget ? 0.9 : 0.55
-      }).roundRect(-18, bounds.y - 4, 36, 4, 2).fill({ color: cueColor, alpha: 0.9 }).roundRect(-18, bounds.y + bounds.height, 36, 4, 2).fill({ color: cueColor, alpha: 0.9 });
+      tile.targetHighlight.show(
+        tile.artwork,
+        cueColor,
+        isFocused || isValidTarget ? 3 : 2,
+        isFocused ? 0.95 : isValidTarget ? 0.9 : 0.55
+      );
     }
   }
   refreshInteractionState() {
@@ -78086,14 +78220,13 @@ async function createEventRenderer(canvas, sink) {
     if (pending || !option.isAvailable || !isNarrativeComplete()) return;
     selectedOptionId = option.id;
     selectedIndex = availableOptions().findIndex((entry) => entry.id === option.id);
-    announce(`Selected ${option.text}. ${getOptionSummary(option)} Review the outcome, then confirm or cancel.`);
+    announce(`${option.text}. ${getOptionSummary(option)}`);
     layout();
   };
-  const pressOption = (option, isTouch) => {
+  const pressOption = (option) => {
+    if (pending || !option.isAvailable || !isNarrativeComplete()) return;
     selectOption(option);
-    if (!isTouch && !option.requiresConfirmation) {
-      confirmSelection();
-    }
+    confirmSelection();
   };
   const confirmSelection = () => {
     if (state?.isComplete) {
@@ -78149,7 +78282,7 @@ async function createEventRenderer(canvas, sink) {
       if (state?.isComplete || selectedOptionId !== void 0) confirmSelection();
       else {
         const option = options[selectedIndex];
-        if (option) selectOption(option);
+        if (option) pressOption(option);
       }
       event.preventDefault();
       return;
@@ -78258,9 +78391,6 @@ async function createEventRenderer(canvas, sink) {
       contextDetails.text = getOptionContextDetails(selected);
       contextDetails.style.fontSize = 12;
       contextDetails.style.lineHeight = 16;
-      const controlWidth = (choiceWidth - 8) / 2;
-      addControl("Confirm", selected.requiresConfirmation ? "Review this risky choice, then apply it" : "Apply this choice", !pending, choiceX, panel.y + panel.height - 58, controlWidth, confirmSelection);
-      addControl("Cancel", "Return to choices", !pending, choiceX + controlWidth + 8, panel.y + panel.height - 58, controlWidth, cancelSelection);
     }
     layoutNestedOverlay(nested, nestedItems, width, height);
     if (!nested) choices.forEach((option, index) => {
@@ -78272,7 +78402,7 @@ async function createEventRenderer(canvas, sink) {
         option.isAvailable ? [option.hint, option.details].filter(Boolean).join(" \xB7 ") : option.disabledReason ?? "Unavailable",
         option.isAvailable && isNarrativeComplete() && !pending,
         selected2,
-        (isTouch) => pressOption(option, isTouch),
+        () => pressOption(option),
         () => scheduleTooltip(option.rewardTooltip, { x: choiceX, y: choiceY, width: choiceWidth, height: choiceHeight }, 0),
         hideTooltip
       );
@@ -78324,8 +78454,7 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
       nestedChoiceLayer.addChild(choice);
     });
     const controlWidth = (panelWidth - 54) / 2;
-    addNestedControl("Confirm", `Use ${formatSelectionRequirement(nested, selectedNestedItemIds.size)}`, !pending && selectedNestedItemIds.size === nested.requiredSelectionCount, 18, actionControlsY, controlWidth, confirmSelection);
-    addNestedControl("Back", "Return to event choice", !pending, 36 + controlWidth, actionControlsY, controlWidth, cancelSelection);
+    addNestedControl("Back", "Return to event choices", !pending, 18, actionControlsY, panelWidth - 36, cancelSelection);
     if (paginated) {
       addNestedControl("Previous", "Previous choices", !pending && nestedPage > 0, 18, navigationControlsY, controlWidth, () => changeNestedPage(-1));
       addNestedControl("Next", "Next choices", !pending && nestedPage < getNestedPageCount(nested, sceneWidth, sceneHeight) - 1, 36 + controlWidth, navigationControlsY, controlWidth, () => changeNestedPage(1));
@@ -78345,7 +78474,7 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
     canvasFocus.focus();
     layout();
   }
-  function toggleNestedItem(item, requireConfirmation = true) {
+  function toggleNestedItem(item) {
     if (!item || pending) return;
     if (selectedNestedItemIds.has(item.id)) {
       selectedNestedItemIds.delete(item.id);
@@ -78359,7 +78488,7 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
     nestedIndex = nested?.items.findIndex((candidate) => candidate.id === item.id) ?? 0;
     announce(`${selectedNestedItemIds.has(item.id) ? "Selected" : "Deselected"} ${item.name}. ${formatSelectedItems(nested, selectedNestedItemIds.size)}.`);
     layout();
-    if (!requireConfirmation && selectedNestedItemIds.size === nested?.requiredSelectionCount) {
+    if (selectedOptionId && selectedNestedItemIds.size === nested?.requiredSelectionCount) {
       void submit("chooseOption", selectedOptionId, [...selectedNestedItemIds]);
     }
   }
@@ -78462,11 +78591,6 @@ function estimateTextHeight(text, width, lineHeight) {
 function getSelectionLabel(nested) {
   const label = nested?.selectionLabel?.trim();
   return label && label.length > 0 ? label : "item";
-}
-function formatSelectionRequirement(nested, selectedCount) {
-  const label = getSelectionLabel(nested);
-  const plural = nested.requiredSelectionCount === 1 ? label : `${label}s`;
-  return `${nested.requiredSelectionCount} ${plural} (${selectedCount}/${nested.requiredSelectionCount})`;
 }
 function formatSelectedItems(nested, selectedCount) {
   const label = getSelectionLabel(nested);
@@ -79626,7 +79750,6 @@ var noOpTreasureAccessibilityOverlay = {
 init_lib();
 
 // src/map-layout.ts
-var minimumMapColumnSpacing = 142;
 var minimumMapRowSpacing = 132;
 function getMapLayoutMetrics(width, height, nodes) {
   const mode = getViewportLayoutMode({ width, height });
@@ -79639,7 +79762,7 @@ function getMapLayoutMetrics(width, height, nodes) {
   const maxRow = Math.max(...nodes.map((node) => -node.row), 0);
   const availableGraphWidth = Math.max(0, graphBounds.width - 68);
   const fittedColumnStep = availableGraphWidth / Math.max(1, maxColumn - minColumn);
-  const columnStep = mode === "MobilePortrait" ? fittedColumnStep : Math.max(minimumMapColumnSpacing, fittedColumnStep);
+  const columnStep = fittedColumnStep;
   const rowStep = Math.max(minimumMapRowSpacing, graphBounds.height / Math.max(1, maxRow - minRow));
   const mapWidth = (maxColumn - minColumn) * columnStep;
   const mapHeight = (maxRow - minRow) * rowStep;
@@ -79772,8 +79895,6 @@ async function createMapRenderer(canvas, sink) {
         pending = false;
         acceptedActionAwaitingReconcile = false;
         announce(name === "commitTravel" ? "That route is no longer available." : "That map action is no longer available.");
-      } else if (name === "selectNode") {
-        announce("Location inspected.");
       } else if (name === "commitTravel") {
         announce("Traveling to the selected location.");
       }
@@ -79788,7 +79909,6 @@ async function createMapRenderer(canvas, sink) {
     if (pending || travelTransition || didPan) return;
     selectedNodeId = node.id;
     focusedIndex = selectableNodes().findIndex((candidate) => candidate.id === node.id);
-    centerOnNode(node);
     announce(`${node.kind}. ${node.description} ${node.isReachable ? "This route is available." : node.isCurrent ? "You are here." : node.isVisited ? "Already visited." : "This route is locked."}`);
     void submit("selectNode", node.id);
     layout();
@@ -79806,7 +79926,6 @@ async function createMapRenderer(canvas, sink) {
     }
     selectedNodeId = node.id;
     focusedIndex = selectableNodes().findIndex((candidate) => candidate.id === node.id);
-    centerOnNode(node);
     announce(`${node.kind}. Traveling to ${node.description}`);
     beginTravel(current, node);
     layout();
@@ -79839,7 +79958,7 @@ async function createMapRenderer(canvas, sink) {
   };
   const centerOnNode = (node, constrainToMapBounds = false) => {
     const metrics = getMapLayoutMetrics(application.renderer.width, application.renderer.height, state?.nodes ?? []);
-    panX = metrics.mode === "MobilePortrait" ? 0 : metrics.graphBounds.left + metrics.graphBounds.width / 2 - (metrics.mapLeft + (node.column - metrics.minColumn) * metrics.columnStep);
+    panX = 0;
     panY = metrics.graphBounds.top + metrics.graphBounds.height / 2 - (metrics.mapTop + (-node.row - metrics.minRow) * metrics.rowStep);
     if (constrainToMapBounds) {
       constrainPan(metrics);
@@ -79892,7 +80011,6 @@ async function createMapRenderer(canvas, sink) {
   };
   const wheel = (event) => {
     if (!state || disposed) return;
-    panX -= event.deltaX;
     panY -= event.deltaY;
     constrainPan(getMapLayoutMetrics(application.renderer.width, application.renderer.height, state.nodes));
     layout();
@@ -79971,7 +80089,7 @@ async function createMapRenderer(canvas, sink) {
       if (!isVisible) continue;
       nextVisibleNodeCount++;
       updatedNodeCount++;
-      view.update(node, node.id === selectedNodeId, !pending && !travelTransition);
+      view.update(node, node.id === selectedNodeId, !pending && !travelTransition, Math.min(24, Math.max(16, metrics.columnStep * 0.4)));
     }
     visibleConnectionCount = nextVisibleConnectionCount;
     visibleNodeCount = nextVisibleNodeCount;
@@ -80007,7 +80125,7 @@ async function createMapRenderer(canvas, sink) {
       contextDetails.style.wordWrapWidth = Math.max(1, contextBounds.width - (wide ? 32 : 124));
       contextDetails.position.set(textX, textY + 30);
       const controlWidth = contextBounds.width - 32;
-      addControl("Travel", "Travel to selected location", selected.isReachable && state?.canTravel === true && !pending && !travelTransition, contextBounds.left + 16, contextBounds.top + contextBounds.height - 54, controlWidth, () => activate(selected));
+      addControl(selected.isCurrent ? "You are here" : "Travel", "Travel to selected location", !selected.isCurrent && selected.isReachable && state?.canTravel === true && !pending && !travelTransition, contextBounds.left + 16, contextBounds.top + contextBounds.height - 54, controlWidth, () => activate(selected));
     }
   }
   function beginTravel(source8, destination) {
@@ -80024,17 +80142,12 @@ async function createMapRenderer(canvas, sink) {
       panY = 0;
       return;
     }
-    const maxColumn = Math.max(...nodes.map((node) => node.column));
     const maxRow = Math.max(...nodes.map((node) => -node.row), 0);
-    const mapWidth = (maxColumn - metrics.minColumn) * metrics.columnStep;
     const mapHeight = (maxRow - metrics.minRow) * metrics.rowStep;
     const nodeRadius = 34;
-    const minimumPanX = metrics.graphBounds.left + metrics.graphBounds.width - (metrics.mapLeft + mapWidth + nodeRadius);
-    const maximumPanX = metrics.graphBounds.left - (metrics.mapLeft - nodeRadius);
     const minimumPanY = metrics.graphBounds.top + metrics.graphBounds.height - (metrics.mapTop + mapHeight + nodeRadius);
     const maximumPanY = metrics.graphBounds.top - (metrics.mapTop - nodeRadius);
-    panX = minimumPanX > maximumPanX ? (minimumPanX + maximumPanX) / 2 : Math.min(maximumPanX, Math.max(minimumPanX, panX));
-    if (metrics.mode === "MobilePortrait") panX = 0;
+    panX = 0;
     panY = minimumPanY > maximumPanY ? (minimumPanY + maximumPanY) / 2 : Math.min(maximumPanY, Math.max(minimumPanY, panY));
   }
   function addControl(label, hint, enabled, x2, y2, width, onPress) {
@@ -80118,13 +80231,16 @@ async function createMapRenderer(canvas, sink) {
       sequence = nextSequence;
       const wasPreview = state?.isPreview === true;
       const cancelledTravelTransition = travelTransition && !isTravelTransitionValid(travelTransition, candidate);
+      const currentChanged = state?.nodes.find((node) => node.isCurrent)?.id !== candidate.nodes.find((node) => node.isCurrent)?.id;
       state = candidate;
       updateJourneyBackdrop(canvas, "map", candidate.environment);
       reconcileViews(candidate);
-      selectedNodeId = void 0;
-      focusedIndex = 0;
+      if (currentChanged) {
+        selectedNodeId = void 0;
+        focusedIndex = 0;
+      }
       if (cancelledTravelTransition) travelTransition = void 0;
-      centerOnCurrentNode();
+      if (currentChanged) centerOnCurrentNode();
       if (pending && acceptedActionAwaitingReconcile) {
         pending = false;
         acceptedActionAwaitingReconcile = false;
@@ -80204,17 +80320,25 @@ function isTravelTransitionValid(transition, state) {
 var MapNodeView = class extends Container {
   frame = new Graphics();
   icon = new Graphics();
+  here = new Text({ text: "HERE", style: { ...controlStyle, fontSize: 10, fill: 15785906 } });
   constructor(onPress) {
     super();
-    this.addChild(this.frame, this.icon);
+    this.here.anchor.set(0.5);
+    this.here.resolution = 2;
+    this.addChild(this.frame, this.icon, this.here);
     this.pivot.set(0.5);
     this.on("pointertap", onPress);
   }
-  update(node, selected, interactive) {
-    const color = node.isCurrent ? 15785906 : node.isReachable ? 15785906 : node.isVisited ? 9083029 : 4678260;
-    const radius = selected ? 29 : 24;
-    this.frame.clear().circle(0, 2, radius).fill({ color: 132631, alpha: 0.4 }).circle(0, 0, radius).fill({ color: 530204, alpha: 0.96 }).circle(0, 0, Math.max(1, radius - 7)).fill({ color: 1058874, alpha: 0.7 }).circle(0, 0, radius).stroke({ color: selected ? 16022090 : color, width: selected ? 4 : 2 });
+  update(node, selected, interactive, baseRadius) {
+    const color = node.isCurrent ? 15785906 : node.isReachable ? 7854502 : node.isVisited ? 9083029 : 4678260;
+    const radius = baseRadius + (selected ? 3 : 0);
+    this.frame.clear().circle(0, 2, radius).fill({ color: 132631, alpha: 0.4 }).circle(0, 0, radius).fill({ color: node.isCurrent ? 5260589 : node.isReachable ? 1456945 : 530204, alpha: 0.96 }).circle(0, 0, radius).stroke({ color, width: selected || node.isCurrent ? 3 : 2 });
+    if (node.isCurrent) this.frame.circle(0, 0, Math.max(1, radius - 5)).stroke({ color, width: 1 });
+    this.here.visible = node.isCurrent;
+    this.here.position.set(0, radius + 10);
+    this.icon.scale.set(baseRadius / 24);
     drawMapNodeIcon(this.icon, node.kind, node.isLocked ? 6584440 : color);
+    this.accessibleTitle = node.isCurrent ? "Current location" : node.isReachable ? "Available destination" : node.kind;
     this.eventMode = interactive ? "static" : "none";
     this.cursor = interactive ? "pointer" : "default";
   }
