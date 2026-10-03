@@ -80679,35 +80679,76 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
   let characterButtons = [];
   let seedButtons = [];
   let disposed = false;
-  const send = (action) => sink.invokeMethodAsync("HandleActionFromRendererAsync", action);
+  let localCharacter;
+  let selectionRevision = 0;
+  let startingRun = false;
+  let actionQueue = Promise.resolve();
+  const dispatch = (action) => disposed ? Promise.resolve(false) : sink.invokeMethodAsync("HandleActionFromRendererAsync", action);
+  const send = (action) => {
+    const result = actionQueue.then(() => dispatch(action));
+    actionQueue = result.then(() => void 0, () => void 0);
+    return result;
+  };
+  const updateButtons = () => {
+    characterButtons.forEach((button, index) => {
+      button.setEnabled(!startingRun);
+      button.setSelected(index === selection);
+    });
+    seedButtons.forEach((button) => button.setEnabled(!startingRun));
+  };
+  const rejectSelection = (revision) => {
+    if (disposed || revision !== selectionRevision) return;
+    localCharacter = void 0;
+    rebuild();
+    layout();
+  };
+  const selectCharacter = (index) => {
+    const character = state?.characters[index];
+    if (!character || startingRun || disposed) return;
+    selection = index;
+    localCharacter = character;
+    const revision = ++selectionRevision;
+    updateButtons();
+    void send(`select:${character}`).then((accepted) => {
+      if (!accepted) rejectSelection(revision);
+    }).catch(() => rejectSelection(revision));
+  };
   const embark = async () => {
     const character = state?.characters[selection];
-    if (character) await send(`select:${character}`);
-    await send("embark");
+    if (!character || startingRun || disposed) return;
+    startingRun = true;
+    updateButtons();
+    let accepted = false;
+    try {
+      if (await send(`select:${character}`)) accepted = await send("embark");
+    } catch {
+    } finally {
+      startingRun = accepted;
+      if (!disposed) updateButtons();
+    }
   };
   const rebuild = () => {
     if (!state) return;
-    selection = Math.max(0, state.characters.indexOf(state.selectedCharacter));
+    selection = Math.max(0, state.characters.indexOf(localCharacter ?? state.selectedCharacter));
     buttons.removeChildren();
     characterButtons = state.characters.map((character, index) => {
-      const button = new GameButton({ label: character, width: 1, height: 1, selected: index === selection, onPress: () => {
-        void send(`select:${character}`);
-      } });
+      const button = new GameButton({ label: character, width: 1, height: 1, selected: index === selection, onPress: () => selectCharacter(index) });
       buttons.addChild(button);
       return button;
     });
     controls.removeChildren();
     const reroll = new GameButton({ label: "New seed", width: 1, height: 1, onPress: () => {
-      void send("rerollSeed");
+      void dispatch("rerollSeed").catch(() => void 0);
     } });
     const paste = new GameButton({ label: "Paste", width: 1, height: 1, onPress: () => {
-      void send("pasteSeed");
+      void dispatch("pasteSeed").catch(() => void 0);
     } });
     const embarkButton = new GameButton({ label: "Embark", width: 1, height: 1, selected: true, onPress: () => {
       void embark();
     } });
     seedButtons = [reroll, paste, embarkButton];
     controls.addChild(...seedButtons);
+    updateButtons();
   };
   const layout = () => {
     if (disposed) return;
@@ -80741,10 +80782,9 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
     });
   };
   const keydown = (event) => {
-    if (!state) return;
+    if (!state || startingRun || state.characters.length === 0) return;
     if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-      selection = (selection + (event.key === "ArrowUp" ? -1 : 1) + state.characters.length) % state.characters.length;
-      characterButtons.forEach((button, index) => button.setSelected(index === selection));
+      selectCharacter((selection + (event.key === "ArrowUp" ? -1 : 1) + state.characters.length) % state.characters.length);
       event.preventDefault();
     } else if (event.key === "Enter" || event.key === " ") {
       void embark();
@@ -80758,6 +80798,7 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
   const reconcile = (candidate) => {
     const nextState = toCharacterSelectState(candidate);
     if (!nextState) return false;
+    if (!nextState.characters.includes(localCharacter ?? "")) localCharacter = void 0;
     state = nextState;
     rebuild();
     layout();
