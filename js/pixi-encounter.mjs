@@ -77259,8 +77259,11 @@ function toContent(content) {
   };
 }
 
+// src/run-scene-protocol.ts
+var runSceneProtocolVersion = 2;
+
 // src/reward-protocol.ts
-var rewardRendererProtocolVersion = 2;
+var rewardRendererProtocolVersion = runSceneProtocolVersion;
 var rewardSceneId = "reward";
 function isRewardPresentationSnapshot(value) {
   return isRecord3(value) && value.protocolVersion === rewardRendererProtocolVersion && value.sceneId === rewardSceneId && isFiniteNumber3(value.sequence) && isString3(value.title) && isFiniteNumber3(value.currency) && typeof value.canSkip === "boolean" && isArrayOf2(value.choices, isRewardChoicePresentationState);
@@ -78200,7 +78203,7 @@ function normalizeSize2(value) {
 }
 
 // src/pixi-event.ts
-var eventSceneProtocolVersion = 2;
+var eventSceneProtocolVersion = runSceneProtocolVersion;
 async function createEventRenderer(canvas, sink) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 529183, backgroundAlpha: 0, canvas, preference: "canvas" });
@@ -78810,7 +78813,7 @@ async function createRestRenderer(canvas, sink) {
     acceptedActionAwaitingReconcile = true;
     const request = getActionRequest(action.id);
     try {
-      const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: 1, sceneId: "rest", name: request.name, sequence, sourceId: null, targetId: null, optionIndex: null, choiceId: request.choiceId });
+      const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: runSceneProtocolVersion, sceneId: "rest", name: request.name, sequence, sourceId: null, targetId: null, optionIndex: null, choiceId: request.choiceId });
       announce(result.accepted ? `${action.name} accepted.` : "That action is no longer available.");
       playEffect(result.accepted ? getActionEffect(action.id) : "rejected");
       if (!result.accepted) {
@@ -79058,6 +79061,83 @@ var noOpRestAccessibilityOverlay = {
 
 // src/pixi-shop.ts
 init_lib();
+
+// src/scroll-motion.ts
+function getWheelScrollDelta(delta, mode, pageSize) {
+  if (!Number.isFinite(delta)) return 0;
+  return delta * (mode === 2 ? pageSize : mode === 1 ? 24 : 1.5);
+}
+var ScrollMotion = class {
+  constructor(enabled = true) {
+    this.enabled = enabled;
+  }
+  enabled;
+  velocityX = 0;
+  velocityY = 0;
+  sampleTime = 0;
+  dragging = false;
+  frame;
+  /** Reports whether another frame can move the scroll position. */
+  get active() {
+    return !this.dragging && Math.hypot(this.velocityX, this.velocityY) >= 0.02;
+  }
+  /** Interrupts an old fling as soon as another gesture starts. */
+  begin(time) {
+    this.stop();
+    this.dragging = true;
+    this.sampleTime = time;
+  }
+  /** Samples direct drag movement without changing its one-to-one distance. */
+  drag(x2, y2, time) {
+    const elapsed = Math.max(8, time - this.sampleTime);
+    this.velocityX = Math.max(-3, Math.min(3, x2 / elapsed));
+    this.velocityY = Math.max(-3, Math.min(3, y2 / elapsed));
+    this.sampleTime = time;
+  }
+  /** Continues a quick release, but leaves held or cancelled gestures stationary. */
+  release(time, cancelled = false) {
+    this.dragging = false;
+    if (!this.enabled || cancelled || time - this.sampleTime > 100) this.stop();
+  }
+  /** Applies time-based decay so momentum feels the same at different frame rates. */
+  advance(deltaMs) {
+    if (!this.active) return { x: 0, y: 0 };
+    const elapsed = Math.max(0, Math.min(64, deltaMs));
+    const decay = Math.exp(-elapsed / 325);
+    const distance = 325 * (1 - decay);
+    const movement = { x: this.velocityX * distance, y: this.velocityY * distance };
+    this.velocityX *= decay;
+    this.velocityY *= decay;
+    return movement;
+  }
+  /** Runs frames only during a fling for overlays without an owned scene ticker. */
+  animate(apply) {
+    if (!this.active || this.frame !== void 0 || typeof requestAnimationFrame !== "function") return;
+    let previousTime;
+    const tick = (time) => {
+      this.frame = void 0;
+      if (!this.active) return;
+      const movement = this.advance(previousTime === void 0 ? 16 : time - previousTime);
+      previousTime = time;
+      if (!apply(movement)) {
+        this.stop();
+        return;
+      }
+      if (this.active) this.frame = requestAnimationFrame(tick);
+    };
+    this.frame = requestAnimationFrame(tick);
+  }
+  /** Stops motion on a boundary, selection, wheel event, or scene disposal. */
+  stop() {
+    if (this.frame !== void 0 && typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.frame);
+    this.frame = void 0;
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.dragging = false;
+  }
+};
+
+// src/pixi-shop.ts
 async function createShopRenderer(canvas, sink) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 726562, backgroundAlpha: 0, canvas, preference: "canvas" });
@@ -79100,6 +79180,7 @@ async function createShopRenderer(canvas, sink) {
   let sectionViewportTop = 0;
   let sectionViewportBottom = 0;
   const reducedMotion = prefersReducedMotion3();
+  const scrollMotion = new ScrollMotion(!reducedMotion);
   const selectableMerchandise = () => state?.merchandise.filter((merchandise) => !merchandise.isSold) ?? [];
   const announce = (message) => {
     feedback.text = message;
@@ -79111,13 +79192,14 @@ async function createShopRenderer(canvas, sink) {
   };
   const submit = async (name, sourceId) => {
     if (pending) return;
+    scrollMotion.stop();
     pending = true;
     const awaitReconcile = name !== "inspect";
     if (awaitReconcile) acceptedActionAwaitingReconcile = true;
     if (name === "purchase") pendingPurchaseMerchandiseId = sourceId ?? void 0;
     try {
       const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", {
-        protocolVersion: 1,
+        protocolVersion: runSceneProtocolVersion,
         sceneId: "shop",
         name,
         sequence,
@@ -79143,12 +79225,11 @@ async function createShopRenderer(canvas, sink) {
   };
   const inspect = (merchandise) => {
     if (pending || merchandise.isSold) return;
+    scrollMotion.stop();
     selectedMerchandiseId = merchandise.id;
     selectedIndex = selectableMerchandise().findIndex((entry) => entry.id === merchandise.id);
     announce(`Selected ${merchandise.name}. ${getMerchandiseSummary(merchandise)} Confirm to buy, or choose another item.`);
-    void submit("inspect", merchandise.id);
     layout();
-    scrollMerchandiseIntoView(selectedIndex);
   };
   const confirmPurchase = () => {
     const merchandise = state?.merchandise.find((entry) => entry.id === selectedMerchandiseId);
@@ -79183,7 +79264,10 @@ async function createShopRenderer(canvas, sink) {
       const direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
       selectedIndex = (selectedIndex + direction + merchandise.length) % merchandise.length;
       const selected = merchandise[selectedIndex];
-      if (selected) inspect(selected);
+      if (selected) {
+        inspect(selected);
+        scrollMerchandiseIntoView(selectedIndex);
+      }
       event.preventDefault();
       return;
     }
@@ -79195,12 +79279,15 @@ async function createShopRenderer(canvas, sink) {
   };
   const wheel = (event) => {
     if (merchandiseScroll.maximumScrollOffset === 0 || event.deltaY === 0) return;
-    scrollInventory(normalizeWheelDelta(event, merchandiseScroll.viewportSize.height));
+    scrollMotion.stop();
+    scrollInventory(getWheelScrollDelta(event.deltaY, event.deltaMode, merchandiseScroll.viewportSize.height));
     event.preventDefault();
   };
   const pointerdown = (event) => {
+    scrollMotion.stop();
     if (event.pointerType !== "touch" || touchScrollPointer !== void 0 || !isPrimaryPointer(event)) return;
     suppressedTouchTapPointerId = void 0;
+    scrollMotion.begin(event.timeStamp);
     touchScrollPointer = { pointerId: getPointerId(event), x: event.clientX, y: event.clientY, currentY: event.clientY, moved: false };
     canvas.setPointerCapture?.(touchScrollPointer.pointerId);
   };
@@ -79214,6 +79301,9 @@ async function createShopRenderer(canvas, sink) {
       moved: touchScrollPointer.moved || hasExceededPointerDragSlop(touchScrollPointer, event)
     };
     if (merchandiseScroll.maximumScrollOffset === 0) return;
+    if (!touchScrollPointer.moved) return;
+    suppressedTouchTapPointerId = touchScrollPointer.pointerId;
+    scrollMotion.drag(0, offset, event.timeStamp);
     scrollInventory(offset);
     event.preventDefault();
   };
@@ -79224,6 +79314,7 @@ async function createShopRenderer(canvas, sink) {
       event.preventDefault();
     }
     const pointerId = touchScrollPointer.pointerId;
+    scrollMotion.release(event.timeStamp, event.type === "pointercancel" || !touchScrollPointer.moved);
     touchScrollPointer = void 0;
     canvas.releasePointerCapture?.(pointerId);
   };
@@ -79237,6 +79328,11 @@ async function createShopRenderer(canvas, sink) {
   const resizeObserver = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(resize);
   resizeObserver?.observe(canvas.parentElement ?? canvas);
   const tick = () => {
+    if (scrollMotion.active) {
+      const before = merchandiseScroll.scrollOffset;
+      scrollInventory(scrollMotion.advance(application.ticker.deltaMS).y);
+      if (before === merchandiseScroll.scrollOffset) scrollMotion.stop();
+    }
     if (resolutionEffectElapsedMs <= 0 && currencyEffectElapsedMs <= 0) return;
     const elapsed = Math.max(0, application.ticker.deltaMS);
     if (resolutionEffectElapsedMs > 0) {
@@ -79291,8 +79387,8 @@ async function createShopRenderer(canvas, sink) {
       if (!placement) throw new Error("Missing merchandise layout: " + entry.id);
       const resolutionIntensity = resolutionEffect?.merchandiseId === entry.id ? resolutionGlow : 0;
       const card = getMerchandiseCard(entry);
-      card.update(entry, entry.id === selectedMerchandiseId, selectedMerchandiseId !== void 0, !pending, resolutionIntensity, resolutionEffect?.kind, (event) => {
-        if (event?.pointerType === "touch" && suppressedTouchTapPointerId !== void 0 && event.pointerId === suppressedTouchTapPointerId) {
+      card.update(entry, entry.id === selectedMerchandiseId, !pending, resolutionIntensity, resolutionEffect?.kind, (event) => {
+        if (event?.pointerType === "touch" && (touchScrollPointer?.moved || suppressedTouchTapPointerId !== void 0 && event.pointerId === suppressedTouchTapPointerId)) {
           suppressedTouchTapPointerId = void 0;
           return;
         }
@@ -79396,7 +79492,7 @@ ${getMerchandiseSummary(entry)}`, { x: 24 + placement.x, y: merchandiseLayout.gr
   function addControl(label, hint, enabled, x2, y2, width, onPress) {
     const controlState = { id: label, kind: "control", name: label, description: hint, image: "", price: 0, isOnSale: false, isSold: false, isAffordable: enabled, disabledReason: null };
     const control = new ShopMerchandiseCard(controlState);
-    control.update(controlState, false, false, enabled, 0, void 0, onPress);
+    control.update(controlState, false, enabled, 0, void 0, onPress);
     control.resize(width, 42);
     control.position.set(x2, y2);
     controlLayer.addChild(control);
@@ -79413,8 +79509,8 @@ ${getMerchandiseSummary(entry)}`, { x: 24 + placement.x, y: merchandiseLayout.gr
       state = candidate;
       updateJourneyBackdrop(canvas, "shop", candidate.environment);
       sceneArt.setImage(getJourneyBackground("shop", candidate.environment));
-      selectedIndex = 0;
-      selectedMerchandiseId = void 0;
+      if (!candidate.merchandise.some((entry) => entry.id === selectedMerchandiseId && !entry.isSold)) selectedMerchandiseId = void 0;
+      selectedIndex = Math.max(0, selectableMerchandise().findIndex((entry) => entry.id === selectedMerchandiseId));
       if (pending && acceptedActionAwaitingReconcile) {
         pending = false;
         acceptedActionAwaitingReconcile = false;
@@ -79446,6 +79542,7 @@ ${getMerchandiseSummary(entry)}`, { x: 24 + placement.x, y: merchandiseLayout.gr
       return true;
     },
     dispose() {
+      scrollMotion.stop();
       canvas.removeEventListener("keydown", keydown);
       canvas.removeEventListener("wheel", wheel);
       canvas.removeEventListener("pointerdown", pointerdown);
@@ -79507,7 +79604,7 @@ var ShopMerchandiseCard = class extends Container {
     this.addChild(this.priceLabel);
   }
   /** Updates dynamic merchandise state without allocating another card display tree. */
-  update(merchandise, selected, hasSelection, interactive, resolutionIntensity, resolutionKind, onPress, onHover, onExit) {
+  update(merchandise, selected, interactive, resolutionIntensity, resolutionKind, onPress, onHover, onExit) {
     this.selected = selected;
     this.priceLabel.text = merchandise.kind === "control" ? "" : merchandise.isSold ? "SOLD" : (merchandise.isOnSale ? "SALE \xB7 " : "") + merchandise.price + " gold";
     this.priceLabel.style.fill = merchandise.isAffordable ? 15259564 : 14972757;
@@ -79521,7 +79618,7 @@ var ShopMerchandiseCard = class extends Container {
     this.eventMode = enabled ? "static" : "none";
     this.cursor = enabled ? "pointer" : "default";
     const availabilityAlpha = merchandise.isSold ? 0.42 : merchandise.isAffordable ? 1 : 0.62;
-    this.alpha = Math.min(1, availabilityAlpha * (hasSelection && !selected ? 0.82 : 1) + resolutionIntensity * 0.4);
+    this.alpha = Math.min(1, availabilityAlpha + resolutionIntensity * 0.4);
     this.scale.set(1 + resolutionIntensity * (resolutionKind === "Service" ? 0.035 : 0.065));
     this.frame.tint = resolutionIntensity > 0 ? resolutionKind === "Service" ? 10212584 : 16113563 : selected ? 16113563 : 16777215;
     this.card?.setInteractionState({ enabled, focused: false, selected });
@@ -79618,11 +79715,6 @@ function createMerchandiseLayout(width, height, merchandise) {
     contentHeight = Math.max(cardsBottom, serviceBottom);
   }
   return { mode, compact, trayHeight, trayY, gridTop, gridBottom, gridWidth, panelX, panelWidth, placements, sections, columns: compact ? 3 : 4, gap, cardWidth: 120, cardHeight: 180, contentHeight };
-}
-function normalizeWheelDelta(event, viewportHeight) {
-  if (event.deltaMode === 1) return event.deltaY * 20;
-  if (event.deltaMode === 2) return event.deltaY * viewportHeight;
-  return event.deltaY;
 }
 function getCardCost(merchandise) {
   const costs = [
@@ -79727,7 +79819,7 @@ async function createTreasureRenderer(canvas, sink) {
     if (pending || !isAvailable(name)) return;
     pending = true;
     try {
-      const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: 1, sceneId: "treasure", name, sequence, sourceId: null, targetId: null, optionIndex: null, choiceId: null });
+      const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: runSceneProtocolVersion, sceneId: "treasure", name, sequence, sourceId: null, targetId: null, optionIndex: null, choiceId: null });
       feedback.text = result.accepted ? name === "collectTreasure" ? "Opening the cache\u2026" : "Returning to the map\u2026" : "That action is no longer available.";
       if (!result.accepted) pending = false;
     } catch {
@@ -79914,7 +80006,7 @@ function getMapDestinationLayout(metrics) {
 }
 
 // src/pixi-map.ts
-var mapSceneProtocolVersion = 2;
+var mapSceneProtocolVersion = runSceneProtocolVersion;
 async function createMapRenderer(canvas, sink) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 529183, backgroundAlpha: 0, canvas, preference: "canvas" });
@@ -79968,6 +80060,7 @@ async function createMapRenderer(canvas, sink) {
   let eligibleConnectionUpdateCount = 0;
   let previousPreviewFocus;
   const reducedMotion = prefersReducedMotion4();
+  const scrollMotion = new ScrollMotion(!reducedMotion);
   const announce = (message) => {
     feedback.text = message;
     accessibility.update(message);
@@ -80128,7 +80221,8 @@ async function createMapRenderer(canvas, sink) {
   };
   const pointerdown = (event) => {
     if (pointerStart !== void 0 || !isPrimaryPointer(event)) return;
-    pointerStart = { pointerId: getPointerId(event), x: event.clientX, y: event.clientY, panX, panY };
+    scrollMotion.begin(event.timeStamp);
+    pointerStart = { pointerId: getPointerId(event), x: event.clientX, y: event.clientY, panX, panY, inertial: event.pointerType === "touch" || event.pointerType === "pen" };
     didPan = false;
     canvas.setPointerCapture?.(pointerStart.pointerId);
   };
@@ -80137,23 +80231,27 @@ async function createMapRenderer(canvas, sink) {
     const dx = event.clientX - pointerStart.x;
     if (hasExceededPointerDragSlop(pointerStart, event)) didPan = true;
     if (didPan) {
+      const previousX = panX;
+      const previousY = panY;
       panX = pointerStart.panX + dx;
       panY = pointerStart.panY + event.clientY - pointerStart.y;
       constrainPan(getMapLayoutMetrics(application.renderer.width, application.renderer.height, state?.nodes ?? []));
+      scrollMotion.drag(panX - previousX, panY - previousY, event.timeStamp);
       layout();
     }
   };
   const pointerup = (event) => {
     if (!pointerStart || getPointerId(event) !== pointerStart.pointerId) return;
     canvas.releasePointerCapture?.(pointerStart.pointerId);
+    scrollMotion.release(event.timeStamp, event.type === "pointercancel" || !didPan || !pointerStart.inertial);
     pointerStart = void 0;
   };
   const wheel = (event) => {
     if (!state || disposed) return;
     const delta = Math.abs(event.deltaX ?? 0) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? application.renderer.width : 1;
-    if (event.shiftKey) panY -= event.deltaY * unit;
-    else panX -= delta * unit;
+    scrollMotion.stop();
+    if (event.shiftKey) panY -= getWheelScrollDelta(event.deltaY, event.deltaMode, application.renderer.height);
+    else panX -= getWheelScrollDelta(delta, event.deltaMode, application.renderer.width);
     constrainPan(getMapLayoutMetrics(application.renderer.width, application.renderer.height, state.nodes));
     layout();
     event.preventDefault();
@@ -80168,6 +80266,16 @@ async function createMapRenderer(canvas, sink) {
   const resizeObserver = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(resize);
   resizeObserver?.observe(canvas.parentElement ?? canvas);
   const tick = () => {
+    if (scrollMotion.active) {
+      const movement = scrollMotion.advance(application.ticker.deltaMS);
+      const previousX = panX;
+      const previousY = panY;
+      panX += movement.x;
+      panY += movement.y;
+      constrainPan(getMapLayoutMetrics(application.renderer.width, application.renderer.height, state?.nodes ?? []));
+      if (panX === previousX && panY === previousY) scrollMotion.stop();
+      layout();
+    }
     if (!travelTransition) return;
     travelTransition.elapsedMs += Math.max(0, application.ticker.deltaMS);
     const duration = getMotionDuration("emphasis", reducedMotion);
@@ -80401,6 +80509,7 @@ async function createMapRenderer(canvas, sink) {
       };
     },
     dispose() {
+      scrollMotion.stop();
       if (disposed) return;
       disposed = true;
       canvas.removeEventListener("keydown", keydown);
@@ -81020,6 +81129,9 @@ async function createCollectionRenderer(canvas, sink) {
   let state;
   let disposed = false;
   let scrollOffset = 0;
+  const scrollMotion = new ScrollMotion(!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+  let gestureStart;
+  let suppressedTap = false;
   let selectedIndex = 0;
   let generation = 0;
   let viewportHeight = 1;
@@ -81050,6 +81162,7 @@ async function createCollectionRenderer(canvas, sink) {
     }
   };
   const selectEntry = (index) => {
+    scrollMotion.stop();
     const count2 = state?.tabs[state.activeTabIndex]?.entries.length ?? 0;
     selectedIndex = Math.max(0, Math.min(count2 - 1, index));
     if (selectedIndex * 88 < scrollOffset) scrollOffset = selectedIndex * 88;
@@ -81078,7 +81191,9 @@ async function createCollectionRenderer(canvas, sink) {
       const description = new Text({ text: entry.description, style: { ...uiTokens.typography.body, fill: 12109785, fontSize: 12, wordWrap: true } });
       card.eventMode = "static";
       card.cursor = "pointer";
-      card.on("pointertap", () => selectEntry(index));
+      card.on("pointertap", () => {
+        if (!suppressedTap) selectEntry(index);
+      });
       card.addChild(name, detail, description);
       if (entry.image && isSafeImagePath(entry.image)) {
         const image = new Sprite(Texture.EMPTY);
@@ -81196,29 +81311,47 @@ async function createCollectionRenderer(canvas, sink) {
     layout();
   };
   const wheel = (event) => {
-    scroll(event.deltaY);
+    scrollMotion.stop();
+    scroll(getWheelScrollDelta(event.deltaY, event.deltaMode, viewportHeight));
     event.preventDefault();
     event.stopImmediatePropagation();
   };
   let scrollPointerId;
   let lastScrollPointerY = 0;
   const pointerdown = (event) => {
+    suppressedTap = false;
+    scrollMotion.stop();
     if (event.pointerType !== "mouse") {
+      gestureStart = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+      scrollMotion.begin(event.timeStamp);
       scrollPointerId = event.pointerId;
       lastScrollPointerY = event.clientY;
     }
   };
   const pointermove = (event) => {
     if (event.pointerId === scrollPointerId) {
-      scroll(lastScrollPointerY - event.clientY);
+      if (!gestureStart || !hasExceededPointerDragSlop(gestureStart, event)) return;
+      suppressedTap = true;
+      const delta = lastScrollPointerY - event.clientY;
+      scrollMotion.drag(0, delta, event.timeStamp);
+      scroll(delta);
       lastScrollPointerY = event.clientY;
       event.preventDefault();
     }
   };
   const pointerend = (event) => {
-    if (event.pointerId === scrollPointerId) scrollPointerId = void 0;
+    if (event.pointerId !== scrollPointerId) return;
+    scrollPointerId = void 0;
+    gestureStart = void 0;
+    scrollMotion.release(event.timeStamp, event.type === "pointercancel" || !suppressedTap);
+    scrollMotion.animate(({ y: y2 }) => {
+      const before = scrollOffset;
+      scroll(y2);
+      return before !== scrollOffset;
+    });
   };
   const keydown = (event) => {
+    scrollMotion.stop();
     if (event.key === "Tab" && dialogElement) {
       const buttons = [...dialogElement.querySelectorAll("button")];
       const next = event.shiftKey ? buttons.at(-1) : buttons[0];
@@ -81254,6 +81387,8 @@ async function createCollectionRenderer(canvas, sink) {
     const changedTab = state?.activeTabIndex !== candidate.activeTabIndex || state?.title !== candidate.title;
     state = candidate;
     if (changedTab) {
+      scrollMotion.stop();
+      suppressedTap = false;
       scrollOffset = 0;
       selectedIndex = 0;
     }
@@ -81263,6 +81398,7 @@ async function createCollectionRenderer(canvas, sink) {
   }, dispose() {
     if (disposed) return;
     disposed = true;
+    scrollMotion.stop();
     generation++;
     observer.disconnect();
     window.removeEventListener("resize", layout);
@@ -81699,11 +81835,15 @@ async function createCardChoiceRenderer(canvas, sink) {
   let lastScrollPointerY = 0;
   let scrollOffset = 0;
   let disposed = false;
+  const scrollMotion = new ScrollMotion(!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+  let gestureStart;
+  let suppressedTap = false;
   const submit = async (action) => {
     await sink.invokeMethodAsync("HandleActionFromRendererAsync", action);
   };
   const activeConfirm = () => isDangerAccent(state?.accent) ? dangerConfirm : primaryConfirm;
   const select = (card, index) => {
+    scrollMotion.stop();
     selectedCardId = card.id;
     focusedCardIndex = index;
     selection.text = `${card.name}
@@ -81796,10 +81936,12 @@ ${card.description}`;
     if (card) select(card, nextIndex);
   };
   const wheel = (event) => {
-    scroll(event.deltaY);
+    scrollMotion.stop();
+    scroll(getWheelScrollDelta(event.deltaY, event.deltaMode, application.renderer.height * 0.7));
     event.preventDefault();
   };
   const keydown = (event) => {
+    scrollMotion.stop();
     if (event.key === "Escape" && state?.allowCancel) {
       void submit("cancel");
       event.preventDefault();
@@ -81840,19 +81982,35 @@ ${card.description}`;
     }
   };
   const pointerdown = (event) => {
+    suppressedTap = false;
+    scrollMotion.stop();
     if (event.pointerType !== "mouse") {
+      gestureStart = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+      scrollMotion.begin(event.timeStamp);
       scrollPointerId = event.pointerId;
       lastScrollPointerY = event.clientY;
     }
   };
   const pointermove = (event) => {
     if (event.pointerId !== scrollPointerId) return;
-    scroll(lastScrollPointerY - event.clientY);
+    if (!gestureStart || !hasExceededPointerDragSlop(gestureStart, event)) return;
+    suppressedTap = true;
+    const delta = lastScrollPointerY - event.clientY;
+    scrollMotion.drag(0, delta, event.timeStamp);
+    scroll(delta);
     lastScrollPointerY = event.clientY;
     event.preventDefault();
   };
   const pointerend = (event) => {
-    if (event.pointerId === scrollPointerId) scrollPointerId = void 0;
+    if (event.pointerId !== scrollPointerId) return;
+    scrollPointerId = void 0;
+    gestureStart = void 0;
+    scrollMotion.release(event.timeStamp, event.type === "pointercancel" || !suppressedTap);
+    scrollMotion.animate(({ y: y2 }) => {
+      const before = scrollOffset;
+      scroll(y2);
+      return before !== scrollOffset;
+    });
   };
   canvas.addEventListener("wheel", wheel, { passive: false });
   canvas.addEventListener("keydown", keydown);
@@ -81864,6 +82022,7 @@ ${card.description}`;
   return {
     reconcile(candidate) {
       if (!isCardChoiceState(candidate)) return false;
+      scrollMotion.stop();
       state = candidate;
       selectedCardId = void 0;
       focusedCardIndex = void 0;
@@ -81872,13 +82031,16 @@ ${card.description}`;
       dangerConfirm.setEnabled(false);
       selection.text = "Select a card to inspect it.";
       cardLayer.removeChildren();
-      candidate.cards.forEach((card, index) => cardLayer.addChild(new CardChoiceButton(card, () => select(card, index))));
+      candidate.cards.forEach((card, index) => cardLayer.addChild(new CardChoiceButton(card, () => {
+        if (!suppressedTap) select(card, index);
+      })));
       layout();
       return true;
     },
     dispose() {
       if (disposed) return;
       disposed = true;
+      scrollMotion.stop();
       window.removeEventListener("resize", layout);
       canvas.removeEventListener("wheel", wheel);
       canvas.removeEventListener("keydown", keydown);
@@ -82359,6 +82521,8 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   };
   window.addEventListener("resize", handleViewportChange);
   window.addEventListener("orientationchange", handleViewportChange);
+  document.addEventListener("fullscreenchange", handleViewportChange);
+  document.addEventListener("webkitfullscreenchange", handleViewportChange);
   const devicePixelRatioWatcher = createDevicePixelRatioWatcher(handleViewportChange);
   visualViewport?.addEventListener("resize", handleVisualViewportChange);
   document.addEventListener("visibilitychange", suspendWhenHidden);
@@ -82508,6 +82672,8 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     resizeObserver.disconnect();
     window.removeEventListener("resize", handleViewportChange);
     window.removeEventListener("orientationchange", handleViewportChange);
+    document.removeEventListener("fullscreenchange", handleViewportChange);
+    document.removeEventListener("webkitfullscreenchange", handleViewportChange);
     devicePixelRatioWatcher.dispose();
     visualViewport?.removeEventListener("resize", handleVisualViewportChange);
     document.removeEventListener("visibilitychange", suspendWhenHidden);
@@ -82605,7 +82771,8 @@ function readBrowserSafeAreaInsets(canvas) {
   try {
     const style = getComputedStyle(probe);
     return {
-      top: parseCssPixel(style.paddingTop),
+      // The shared layout may already have moved the canvas below the cutout.
+      top: Math.max(0, parseCssPixel(style.paddingTop) - Math.max(0, canvas.getBoundingClientRect?.().top ?? 0)),
       right: parseCssPixel(style.paddingRight),
       bottom: parseCssPixel(style.paddingBottom),
       left: parseCssPixel(style.paddingLeft)
