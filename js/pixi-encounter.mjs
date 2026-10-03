@@ -79773,48 +79773,77 @@ var noOpTreasureAccessibilityOverlay = {
 init_lib();
 
 // src/map-layout.ts
-var minimumMapRowSpacing = 132;
+var depthSpacing = 56;
+var endpointPadding = 34;
 function getMapLayoutMetrics(width, height, nodes) {
   const mode = getViewportLayoutMode({ width, height });
   const contextVisible = nodes.length > 0;
-  const contextBounds = getContextBounds(width, height, mode, contextVisible);
-  const graphBounds = getGraphBounds(width, height, mode, contextVisible, contextBounds);
-  const minColumn = Math.min(...nodes.map((node) => node.column), 0);
-  const maxColumn = Math.max(...nodes.map((node) => node.column), 1);
-  const minRow = Math.min(...nodes.map((node) => -node.row), 0);
-  const maxRow = Math.max(...nodes.map((node) => -node.row), 0);
-  const availableGraphWidth = Math.max(0, graphBounds.width - 68);
-  const fittedColumnStep = availableGraphWidth / Math.max(1, maxColumn - minColumn);
-  const columnStep = fittedColumnStep;
-  const rowStep = Math.max(minimumMapRowSpacing, graphBounds.height / Math.max(1, maxRow - minRow));
-  const mapWidth = (maxColumn - minColumn) * columnStep;
-  const mapHeight = (maxRow - minRow) * rowStep;
+  const contextSide = mode === "Wide" || width > height && height < 500;
+  const contextBounds = getContextBounds(width, height, contextSide, contextVisible);
+  const graphBounds = getGraphBounds(width, height, contextSide, contextVisible, contextBounds);
+  const minColumn = nodes.length > 0 ? Math.min(...nodes.map((node) => node.column)) : 0;
+  const maxColumn = nodes.length > 0 ? Math.max(...nodes.map((node) => node.column)) : 0;
+  const minRow = nodes.length > 0 ? Math.min(...nodes.map((node) => node.row)) : 0;
+  const maxRow = nodes.length > 0 ? Math.max(...nodes.map((node) => node.row)) : 0;
+  const availableGraphWidth = Math.max(0, graphBounds.width - endpointPadding * 2);
+  const availableGraphHeight = Math.max(0, graphBounds.height - 80);
+  const columnStep = Math.max(44, Math.min(56, availableGraphHeight / Math.max(1, maxColumn - minColumn)));
+  const rowStep = depthSpacing;
+  const mapWidth = (maxRow - minRow) * rowStep;
+  const mapHeight = (maxColumn - minColumn) * columnStep;
   return {
     mode,
     graphBounds,
     contextBounds,
     contextVisible,
+    contextSide,
     minColumn,
     minRow,
     columnStep,
     rowStep,
-    mapLeft: graphBounds.left + 34 + Math.max(0, (availableGraphWidth - mapWidth) / 2),
-    mapTop: graphBounds.top + Math.max(0, (graphBounds.height - mapHeight) / 2)
+    mapLeft: graphBounds.left + endpointPadding + Math.max(0, (availableGraphWidth - mapWidth) / 2),
+    mapTop: graphBounds.top + 44 + Math.max(0, (availableGraphHeight - mapHeight) / 2),
+    nodeRadius: 16,
+    minimumPanX: Math.min(0, availableGraphWidth - mapWidth),
+    minimumPanY: Math.min(0, availableGraphHeight - mapHeight)
   };
 }
-function getContextBounds(width, height, mode, contextVisible) {
+function getContextBounds(width, height, contextSide, contextVisible) {
   if (!contextVisible) return { left: width / 2, top: height - 18, width: 0, height: 0 };
-  if (mode === "Wide") {
-    return { left: Math.max(16, width - 340), top: 58, width: Math.min(324, Math.max(180, width - 32)), height: Math.max(160, height - 82) };
+  if (contextSide) {
+    const panelWidth = height < 500 ? Math.min(240, width * 0.45) : 324;
+    return { left: width - panelWidth - 16, top: 48, width: panelWidth, height: Math.max(1, height - 64) };
   }
-  const contextHeight = mode === "MobilePortrait" ? 174 : 150;
+  const contextHeight = 174;
   return { left: 16, top: height - contextHeight - 18, width: Math.max(1, width - 32), height: contextHeight };
 }
-function getGraphBounds(width, height, mode, contextVisible, context2) {
-  if (contextVisible && mode === "Wide") {
+function getGraphBounds(width, height, contextSide, contextVisible, context2) {
+  if (contextVisible && contextSide) {
     return { left: 28, top: 48, width: Math.max(100, context2.left - 52), height: Math.max(80, height - 80) };
   }
   return { left: 28, top: 48, width: Math.max(100, width - 56), height: Math.max(80, contextVisible ? context2.top - 62 : height - 68) };
+}
+
+// src/map-destination-layout.ts
+function getMapDestinationLayout(metrics) {
+  const { contextBounds: bounds, contextSide } = metrics;
+  const compactSide = contextSide && bounds.height < 300;
+  const artHeight = compactSide ? 0 : contextSide ? Math.min(240, Math.max(48, (bounds.height - 160) * 0.7)) : 98;
+  const artWidth = compactSide ? 0 : contextSide ? bounds.width - 32 : 80;
+  const textX = bounds.left + (contextSide ? 16 : 108);
+  const titleY = bounds.top + (compactSide ? 12 : contextSide ? artHeight + 28 : 14);
+  const detailsY = titleY + 30;
+  const controlY = bounds.top + bounds.height - 54;
+  return {
+    artWidth,
+    artHeight,
+    textX,
+    titleY,
+    detailsY,
+    textWidth: Math.max(1, bounds.width - (contextSide ? 32 : 124)),
+    detailsHeight: Math.max(1, controlY - detailsY - 8),
+    controlY
+  };
 }
 
 // src/pixi-map.ts
@@ -80002,8 +80031,8 @@ async function createMapRenderer(canvas, sink) {
   };
   const centerOnNode = (node, constrainToMapBounds = false) => {
     const metrics = getMapLayoutMetrics(application.renderer.width, application.renderer.height, state?.nodes ?? []);
-    panX = 0;
-    panY = metrics.graphBounds.top + metrics.graphBounds.height / 2 - (metrics.mapTop + (-node.row - metrics.minRow) * metrics.rowStep);
+    panX = metrics.graphBounds.left + metrics.graphBounds.width / 2 - (metrics.mapLeft + (node.row - metrics.minRow) * metrics.rowStep);
+    panY = metrics.graphBounds.top + metrics.graphBounds.height / 2 - (metrics.mapTop + (node.column - metrics.minColumn) * metrics.columnStep);
     if (constrainToMapBounds) {
       constrainPan(metrics);
     }
@@ -80039,11 +80068,10 @@ async function createMapRenderer(canvas, sink) {
   const pointermove = (event) => {
     if (!pointerStart || getPointerId(event) !== pointerStart.pointerId) return;
     const dx = event.clientX - pointerStart.x;
-    const dy = event.clientY - pointerStart.y;
     if (hasExceededPointerDragSlop(pointerStart, event)) didPan = true;
     if (didPan) {
       panX = pointerStart.panX + dx;
-      panY = pointerStart.panY + dy;
+      panY = pointerStart.panY + event.clientY - pointerStart.y;
       constrainPan(getMapLayoutMetrics(application.renderer.width, application.renderer.height, state?.nodes ?? []));
       layout();
     }
@@ -80055,7 +80083,10 @@ async function createMapRenderer(canvas, sink) {
   };
   const wheel = (event) => {
     if (!state || disposed) return;
-    panY -= event.deltaY;
+    const delta = Math.abs(event.deltaX ?? 0) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? application.renderer.width : 1;
+    if (event.shiftKey) panY -= event.deltaY * unit;
+    else panX -= delta * unit;
     constrainPan(getMapLayoutMetrics(application.renderer.width, application.renderer.height, state.nodes));
     layout();
     event.preventDefault();
@@ -80087,12 +80118,13 @@ async function createMapRenderer(canvas, sink) {
     const width = application.renderer.width;
     const height = application.renderer.height;
     const metrics = getMapLayoutMetrics(width, height, state?.nodes ?? []);
+    constrainPan(metrics);
     const { minColumn, minRow, columnStep, rowStep, mapLeft, mapTop } = metrics;
     const { contextBounds } = metrics;
     const nodes = state?.nodes ?? [];
     const pointFor = (node) => ({
-      x: mapLeft + (node.column - minColumn) * columnStep + panX,
-      y: mapTop + (-node.row - minRow) * rowStep + panY
+      x: mapLeft + (node.row - minRow) * rowStep + panX,
+      y: mapTop + (node.column - minColumn) * columnStep + panY
     });
     background.clear().rect(0, 0, width, height).fill({ color: 530204, alpha: 0.16 }).rect(0, 0, width, Math.min(height * 0.18, 84)).fill({ color: 1520456, alpha: 0.38 });
     graphMask.clear().rect(metrics.graphBounds.left, metrics.graphBounds.top, metrics.graphBounds.width, metrics.graphBounds.height).fill(16777215);
@@ -80133,7 +80165,7 @@ async function createMapRenderer(canvas, sink) {
       if (!isVisible) continue;
       nextVisibleNodeCount++;
       updatedNodeCount++;
-      view.update(node, node.id === selectedNodeId, !pending && !travelTransition, Math.min(24, Math.max(16, metrics.columnStep * 0.4)));
+      view.update(node, node.id === selectedNodeId, !pending && !travelTransition, metrics.nodeRadius, 22);
     }
     visibleConnectionCount = nextVisibleConnectionCount;
     visibleNodeCount = nextVisibleNodeCount;
@@ -80157,19 +80189,17 @@ async function createMapRenderer(canvas, sink) {
       contextTitle.text = selected.kind.toUpperCase();
       const localeName = getSceneEnvironment(selected.environment)?.localeName;
       contextDetails.text = `${localeName ? localeName + ". " : ""}${selected.description} ${selected.isReachable ? "" : selected.isCurrent ? "Current location." : selected.isVisited ? "Visited." : "Route locked."}`;
-      const wide = metrics.mode === "Wide";
-      const artHeight = wide ? Math.min(240, contextBounds.height * 0.4) : 98;
-      const artWidth = wide ? contextBounds.width - 32 : 80;
+      const destination = getMapDestinationLayout(metrics);
+      destinationArt.visible = destination.artHeight > 0;
       destinationArt.setImage(getJourneyBackground(selected.kind.toLowerCase(), selected.environment));
-      destinationArt.resize(artWidth, artHeight);
+      destinationArt.resize(destination.artWidth, destination.artHeight);
       destinationArt.position.set(contextBounds.left + 16, contextBounds.top + 12);
-      const textX = contextBounds.left + (wide ? 16 : 108);
-      const textY = contextBounds.top + (wide ? artHeight + 28 : 14);
-      contextTitle.position.set(textX, textY);
-      contextDetails.style.wordWrapWidth = Math.max(1, contextBounds.width - (wide ? 32 : 124));
-      contextDetails.position.set(textX, textY + 30);
+      contextTitle.position.set(destination.textX, destination.titleY);
+      fitTextToBox(contextTitle, destination.textWidth, 24, 18, 16);
+      contextDetails.position.set(destination.textX, destination.detailsY);
+      fitTextToBox(contextDetails, destination.textWidth, destination.detailsHeight, 14, 13);
       const controlWidth = contextBounds.width - 32;
-      addControl(selected.isCurrent ? "You are here" : "Travel", "Travel to selected location", !selected.isCurrent && selected.isReachable && state?.canTravel === true && !pending && !travelTransition, contextBounds.left + 16, contextBounds.top + contextBounds.height - 54, controlWidth, () => activate(selected));
+      addControl(selected.isCurrent ? "You are here" : "Travel", "Travel to selected location", !selected.isCurrent && selected.isReachable && state?.canTravel === true && !pending && !travelTransition, contextBounds.left + 16, destination.controlY, controlWidth, () => activate(selected));
     }
   }
   function beginTravel(source8, destination) {
@@ -80180,19 +80210,8 @@ async function createMapRenderer(canvas, sink) {
     travelTransition = { sourceId: source8.id, destinationId: destination.id, elapsedMs: 0 };
   }
   function constrainPan(metrics) {
-    const nodes = state?.nodes ?? [];
-    if (nodes.length === 0) {
-      panX = 0;
-      panY = 0;
-      return;
-    }
-    const maxRow = Math.max(...nodes.map((node) => -node.row), 0);
-    const mapHeight = (maxRow - metrics.minRow) * metrics.rowStep;
-    const nodeRadius = 34;
-    const minimumPanY = metrics.graphBounds.top + metrics.graphBounds.height - (metrics.mapTop + mapHeight + nodeRadius);
-    const maximumPanY = metrics.graphBounds.top - (metrics.mapTop - nodeRadius);
-    panX = 0;
-    panY = minimumPanY > maximumPanY ? (minimumPanY + maximumPanY) / 2 : Math.min(maximumPanY, Math.max(minimumPanY, panY));
+    panX = Math.min(0, Math.max(metrics.minimumPanX, panX));
+    panY = Math.min(0, Math.max(metrics.minimumPanY, panY));
   }
   function addControl(label, hint, enabled, x2, y2, width, onPress) {
     const control = new MapControl(label, hint, enabled, width, onPress);
@@ -80211,7 +80230,7 @@ async function createMapRenderer(canvas, sink) {
       chunks.set(environment.chunkIndex, nodes);
     }
     for (const nodes of chunks.values()) {
-      const label = new Text({ text: getSceneEnvironment(nodes[0]?.environment)?.localeName ?? "", style: { fontFamily: "Georgia", fontSize: 15, fill: 12699836 } });
+      const label = new Text({ text: getSceneEnvironment(nodes[0]?.environment)?.localeName ?? "", style: { fontFamily: "Georgia", fontSize: 14, fill: 12699836 } });
       const shape = new Graphics();
       localeLayer.addChild(shape, label);
       localeBands.push({ nodes, shape, label });
@@ -80220,12 +80239,12 @@ async function createMapRenderer(canvas, sink) {
   function layoutLocaleBands(pointFor, rowStep) {
     for (const band of localeBands) {
       const points = band.nodes.map(pointFor);
-      const left = Math.min(...points.map((point) => point.x)) - 38;
-      const top = Math.min(...points.map((point) => point.y)) - rowStep * 0.44;
-      const right = Math.max(...points.map((point) => point.x)) + 38;
-      const bottom = Math.max(...points.map((point) => point.y)) + rowStep * 0.44;
-      band.shape.clear().roundRect(left, top, right - left, bottom - top, 24).fill({ color: 8229253, alpha: 0.09 }).stroke({ color: 10202011, width: 1, alpha: 0.2 });
-      band.label.position.set(left + 14, top + 8);
+      const left = Math.min(...points.map((point) => point.x)) - rowStep * 0.44;
+      const top = Math.min(...points.map((point) => point.y)) - 40;
+      const right = Math.max(...points.map((point) => point.x)) + rowStep * 0.44;
+      const bottom = Math.max(...points.map((point) => point.y)) + 30;
+      band.shape.clear().roundRect(left, top, right - left, bottom - top, 16).fill({ color: 8229253, alpha: 0.09 }).stroke({ color: 10202011, width: 1, alpha: 0.2 });
+      band.label.position.set(left + 10, top + 6);
     }
   }
   function reconcileViews(next) {
@@ -80373,7 +80392,8 @@ var MapNodeView = class extends Container {
     this.pivot.set(0.5);
     this.on("pointertap", onPress);
   }
-  update(node, selected, interactive, baseRadius) {
+  /** Draws a compact room marker while retaining a larger, nonoverlapping tap area. */
+  update(node, selected, interactive, baseRadius, hitRadius) {
     const color = node.isCurrent ? 15785906 : node.isReachable ? 7854502 : node.isVisited ? 9083029 : 4678260;
     const radius = baseRadius + (selected ? 3 : 0);
     this.frame.clear().circle(0, 2, radius).fill({ color: 132631, alpha: 0.4 }).circle(0, 0, radius).fill({ color: node.isCurrent ? 5260589 : node.isReachable ? 1456945 : 530204, alpha: 0.96 }).circle(0, 0, radius).stroke({ color, width: selected || node.isCurrent ? 3 : 2 });
@@ -80381,6 +80401,7 @@ var MapNodeView = class extends Container {
     this.here.visible = node.isCurrent;
     this.here.position.set(0, radius + 10);
     this.icon.scale.set(baseRadius / 24);
+    this.hitArea = { contains: (x2, y2) => Math.abs(x2) <= hitRadius && Math.abs(y2) <= hitRadius };
     drawMapNodeIcon(this.icon, node.kind, node.isLocked ? 6584440 : color);
     this.accessibleTitle = node.isCurrent ? "Current location" : node.isReachable ? "Available destination" : node.kind;
     this.eventMode = interactive ? "static" : "none";
