@@ -77337,8 +77337,9 @@ var RewardScene = class {
     const previousChoiceIds = this.snapshot?.choices.map((choice) => choice.id).join(":");
     const nextChoiceIds = candidate.choices.map((choice) => choice.id).join(":");
     this.snapshot = candidate;
+    this.reconcileResolution(candidate.choices);
     this.viewport = normalizeViewport2(viewport);
-    this.pendingAction = false;
+    this.pendingAction = this.resolution !== void 0;
     if (previousChoiceIds !== nextChoiceIds) {
       this.revealElapsedMs = this.reducedMotion ? Number.POSITIVE_INFINITY : 0;
     }
@@ -77555,6 +77556,13 @@ var RewardScene = class {
         view.position.set(startX + index % columns * (optionWidth + gap), choiceArea.y + Math.floor(index / columns) * (optionHeight + gap));
       });
     }
+  }
+  /** Stops an obsolete collection beat before it can disable the newer remaining reward rows. */
+  reconcileResolution(choices) {
+    const resolution = this.resolution;
+    if (resolution === void 0 || choices.some((choice) => choice.id === resolution.choiceId)) return;
+    this.resolution = void 0;
+    resolution.resolve();
   }
   refreshInspection() {
     const target = this.selectedOption ?? this.selectedReward;
