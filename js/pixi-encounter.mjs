@@ -72003,6 +72003,7 @@ function getSnapshotEnvironment(snapshot) {
   return getSceneEnvironment(snapshot.environment);
 }
 function getJourneyBackground(scene, environment) {
+  if (scene === "map") return "/img/Scenes/journey-map.svg";
   return getSceneEnvironment(environment)?.backgroundUrl ?? `/img/Scenes/journey-${scene === "rest" || scene === "shop" ? scene : "ruins"}.svg`;
 }
 
@@ -77145,8 +77146,7 @@ function installJourneyBackdrop(canvas, scene) {
   if (!canvas.style) return () => {
   };
   const previous = { image: canvas.style.backgroundImage, size: canvas.style.backgroundSize, position: canvas.style.backgroundPosition, color: canvas.style.backgroundColor };
-  const asset = scene === "rest" || scene === "shop" ? scene : "ruins";
-  canvas.style.backgroundImage = `url('/img/Scenes/journey-${asset}.svg')`;
+  canvas.style.backgroundImage = `url('${getJourneyBackground(scene, void 0)}')`;
   canvas.style.backgroundSize = "cover";
   canvas.style.backgroundPosition = "center";
   canvas.style.backgroundColor = "#08171c";
@@ -77163,6 +77163,38 @@ init_lib();
 
 // src/reward-scene.ts
 init_lib();
+
+// src/choice-tooltip.ts
+init_lib();
+var ChoiceTooltip = class extends Container {
+  frame = new Graphics();
+  body = new Text({ text: "", style: new TextStyle({ ...uiTokens.typography.body, fontSize: 16, wordWrap: true }) });
+  constructor() {
+    super();
+    this.addChild(this.frame, this.body);
+    this.eventMode = "none";
+    this.interactiveChildren = false;
+    this.visible = false;
+  }
+  /** Shows readable copy beside a choice, clamped inside the owning canvas. */
+  show(text, anchor, viewport) {
+    const width = Math.max(1, Math.min(300, viewport.width - 24));
+    const maximumHeight = Math.max(1, viewport.height - 24);
+    this.body.text = text;
+    fitTextToBox(this.body, width - 24, maximumHeight - 24, 16, 14);
+    const height = Math.min(maximumHeight, Math.max(64, this.body.height + 24));
+    this.frame.clear().roundRect(0, 0, width, height, 6).fill({ color: 530204, alpha: 0.98 }).stroke({ color: 13280860, width: 1 });
+    this.body.position.set(12, 12);
+    const above = anchor.y - height - 8;
+    const y2 = above >= 12 ? above : anchor.y + anchor.height + 8;
+    this.position.set(Math.max(12, Math.min(viewport.width - width - 12, anchor.x + (anchor.width - width) / 2)), Math.max(12, Math.min(viewport.height - height - 12, y2)));
+    this.visible = true;
+  }
+  /** Dismisses stale descriptions after pointer exit, scrolling, or an action. */
+  hide() {
+    this.visible = false;
+  }
+};
 
 // src/relic-view.ts
 init_lib();
@@ -77257,8 +77289,6 @@ var RewardScene = class {
     this.emitAction = emitAction;
     this.reducedMotion = reducedMotion;
     this.onAccessibleStateChanged = onAccessibleStateChanged;
-    this.inspectionTitle.anchor.set(0, 0);
-    this.inspectionDescription.anchor.set(0, 0);
     this.feedback.anchor.set(0.5);
     this.inventoryDestination.anchor.set(1, 0.5);
     this.displayObject.addChild(
@@ -77268,16 +77298,13 @@ var RewardScene = class {
       this.inventoryDestination,
       this.choiceLayer,
       this.optionLayer,
-      this.inspectionPanel,
-      this.inspectionTitle,
-      this.inspectionDescription,
       this.backButton,
       this.skipButton,
       this.feedback,
       this.takeButton,
-      this.selectedArtwork,
       this.subtitle
     );
+    this.displayObject.addChild(this.tooltip);
   }
   emitAction;
   reducedMotion;
@@ -77289,14 +77316,11 @@ var RewardScene = class {
   inventoryDestination = new Text({ text: "Deck \xB7 Relics \xB7 Items", style: new TextStyle(inventoryStyle) });
   choiceLayer = new Container();
   optionLayer = new Container();
-  inspectionPanel = new Graphics();
-  inspectionTitle = new Text({ text: "Select a reward", style: new TextStyle(inspectionTitleStyle) });
-  inspectionDescription = new Text({ text: "Choose an available reward to inspect it.", style: new TextStyle(inspectionBodyStyle) });
+  tooltip = new ChoiceTooltip();
   feedback = new Text({ text: "", style: new TextStyle(feedbackStyle) });
   backButton = new GameButton({ label: "Back", width: 92, height: 38, enabled: false, onPress: () => this.returnToRewards() });
   skipButton = new GameButton({ label: "Skip", width: 110, height: 42, enabled: false, onPress: () => this.skipRewards() });
   subtitle = new Text({ text: "", style: { ...uiTokens.typography.body, fontSize: 15, align: "center", wordWrap: true } });
-  selectedArtwork = new JourneyArtwork();
   takeButton = new GameButton({ label: "Take card", fill: 9714732, stroke: 15759440, cornerRadius: 3, width: 220, height: 44, enabled: false, onPress: () => this.collectSelection() });
   choiceViews = /* @__PURE__ */ new Map();
   optionViews = /* @__PURE__ */ new Map();
@@ -77309,6 +77333,7 @@ var RewardScene = class {
   pendingAction = false;
   resolution;
   nextChoiceSlot = 0;
+  confirmationRequired = false;
   /** Gets the stable display object for a choice, when it is currently present. */
   getChoiceView(id) {
     return this.choiceViews.get(id);
@@ -77370,6 +77395,8 @@ var RewardScene = class {
   }
   /** Handles keyboard interaction without forwarding input events across the interop boundary. */
   handleKeyboardEvent(event) {
+    this.confirmationRequired = true;
+    this.tooltip.hide();
     if (event.key === "Tab" || event.key === "ArrowLeft" || event.key === "ArrowRight") {
       this.focusReward(event.key === "ArrowLeft" || event.key === "Tab" && event.shiftKey ? -1 : 1);
       return true;
@@ -77379,11 +77406,7 @@ var RewardScene = class {
       return true;
     }
     if (event.key === "Enter" || event.key === " ") {
-      if (this.selectedOption !== void 0) {
-        void this.collectSelection();
-      } else if (this.selectedReward !== void 0) {
-        this.activateReward(this.selectedReward);
-      }
+      this.confirmKeyboardSelection();
       return true;
     }
     if (!event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "s") {
@@ -77401,6 +77424,12 @@ var RewardScene = class {
       return true;
     }
     return false;
+  }
+  /** Treats Enter or Space as explicit confirmation of the focused reward. */
+  confirmKeyboardSelection() {
+    if (this.selectedReward === void 0) return;
+    if (this.selectedOption !== void 0 || !this.selectedReward.options?.length) void this.collectSelection();
+    else this.activateReward(this.selectedReward);
   }
   /** Selects a reward for inspection without making a gameplay decision. */
   inspectReward(id) {
@@ -77444,7 +77473,7 @@ var RewardScene = class {
       }
       let view = this.choiceViews.get(choice.id);
       if (view === void 0) {
-        view = new RewardChoiceView(choice, () => this.activateReward(choice));
+        view = new RewardChoiceView(choice, (current, event) => this.activateReward(current, event), (current, event) => this.hoverChoice(current, this.choiceViews.get(current.id), event), () => this.tooltip.hide());
         this.choiceViews.set(choice.id, view);
         this.choiceLayer.addChild(view);
       } else {
@@ -77473,7 +77502,7 @@ var RewardScene = class {
     for (const option of options) {
       let view = this.optionViews.get(option.id);
       if (view === void 0) {
-        view = new RewardOptionView(option, () => this.activateOption(option));
+        view = new RewardOptionView(option, (current, event) => this.activateOption(current, event), (current, event) => this.hoverChoice(current, this.optionViews.get(current.id), event), () => this.tooltip.hide());
         this.optionViews.set(option.id, view);
         this.optionLayer.addChild(view);
       } else {
@@ -77482,80 +77511,95 @@ var RewardScene = class {
       view.setEnabled(!this.pendingAction && option.isAvailable);
     }
   }
+  /** Gives choices the browsing area above a compact action footer. */
   layout() {
+    this.tooltip.hide();
     const { width, height } = this.viewport;
     const mobile = width < 700 && height > width;
-    const short = width >= 500 && height < 420;
+    const short = height < 420;
     const panelWidth = mobile ? width - 24 : Math.min(820, width - 80);
-    const panelX = (width - panelWidth) / 2;
-    const panelY = mobile ? Math.min(140, height * 0.15) : 32;
-    const panelHeight = height - panelY - 20;
+    const panel = { x: (width - panelWidth) / 2, y: 16, width: panelWidth, height: height - 36 };
     const hasOptions = (this.selectedReward?.options?.length ?? 0) > 0;
-    this.background.clear().rect(0, 0, width, height).fill({ color: 530204, alpha: 0.12 }).roundRect(panelX, panelY, panelWidth, panelHeight, 4).fill({ color: 530204, alpha: 0.96 }).stroke({ color: 7901071, width: 1 });
-    const cardOptions = hasOptions && this.selectedReward?.options?.every((option) => option.kind === "card");
-    this.title.title = hasOptions ? cardOptions ? "CHOOSE A CARD" : "CHOOSE A REWARD" : this.snapshot?.title ?? "REWARDS";
-    this.title.resize(panelWidth - 32);
-    this.title.position.set(panelX + 16, panelY + 12);
-    this.currency.visible = false;
-    this.inventoryDestination.visible = false;
-    const footerY = height - (mobile ? 116 : 80);
-    const inspectionY = short ? panelY + 78 : mobile ? panelY + 78 : footerY - 96;
-    const inspectionHeight = short ? footerY - inspectionY - 12 : mobile ? Math.min(140, height * 0.21) : 80;
-    const inspectionWidth = short ? Math.min(252, panelWidth * 0.4) : panelWidth - 32;
-    const inspectionX = short ? panelX + panelWidth - inspectionWidth - 16 : panelX + 16;
-    this.inspectionPanel.clear().roundRect(inspectionX, inspectionY, inspectionWidth, inspectionHeight, 3).fill({ color: 1057062, alpha: 0.9 }).stroke({ color: 5467506, width: 1 });
-    const target = this.selectedOption ?? this.selectedReward;
-    const thumbnailWidth = mobile ? 82 : 60;
-    this.selectedArtwork.visible = !short && Boolean(target?.image);
-    this.selectedArtwork.setImage(target?.image ?? "");
-    this.selectedArtwork.resize(thumbnailWidth, inspectionHeight - 16);
-    this.selectedArtwork.position.set(panelX + 24, inspectionY + 8);
-    const textInset = target?.image && !short ? thumbnailWidth + 20 : 12;
-    this.inspectionTitle.position.set(inspectionX + textInset, inspectionY + 12);
-    this.inspectionTitle.style.wordWrap = true;
-    this.inspectionTitle.style.wordWrapWidth = inspectionWidth - textInset - 12;
-    this.inspectionDescription.position.set(inspectionX + textInset, inspectionY + 42);
-    this.inspectionDescription.style.wordWrapWidth = inspectionWidth - textInset - 12;
-    this.backButton.position.set(panelX + 16, panelY + 46);
-    this.backButton.visible = hasOptions && (this.snapshot?.choices.length ?? 0) > 1;
-    this.subtitle.text = hasOptions ? this.selectedReward?.description ?? "" : "";
-    this.subtitle.style.wordWrapWidth = panelWidth - 32;
-    this.subtitle.anchor.set(0.5, 0);
-    this.subtitle.position.set(width / 2, panelY + 46);
-    this.skipButton.resize(mobile ? panelWidth - 32 : 150, 42);
-    this.skipButton.position.set(mobile ? panelX + 16 : panelX + panelWidth - 166, mobile ? height - 66 : footerY);
-    this.takeButton.resize(mobile ? panelWidth - 32 : Math.min(320, panelWidth - 210), 44);
-    this.takeButton.position.set(panelX + 16, footerY);
-    this.takeButton.label = hasOptions ? this.selectedOption?.kind === "card" ? "Take card" : "Take reward" : "Collect reward";
-    this.feedback.position.set(width / 2, height - 18);
-    const choiceArea = { x: panelX + 24, y: mobile ? inspectionY + inspectionHeight + 16 : panelY + 84, width: short ? panelWidth - inspectionWidth - 64 : panelWidth - 48, height: short ? footerY - panelY - 96 : mobile ? footerY - inspectionY - inspectionHeight - 30 : inspectionY - panelY - 100 };
-    const choices = this.snapshot?.choices ?? [];
+    const footerY = height - (mobile && this.confirmationRequired ? 116 : short ? 58 : 72);
+    this.background.clear().rect(0, 0, width, height).fill({ color: 530204, alpha: 0.12 }).roundRect(panel.x, panel.y, panel.width, panel.height, 4).fill({ color: 530204, alpha: 0.96 }).stroke({ color: 7901071, width: 1 });
+    this.layoutHeader(panel, short, hasOptions);
+    this.layoutControls(panel, footerY, mobile, hasOptions);
+    const choiceTop = panel.y + (short ? 58 : 86);
+    const area2 = { x: panel.x + 16, y: choiceTop, width: panel.width - 32, height: Math.max(1, footerY - choiceTop - 12) };
     this.choiceLayer.visible = !hasOptions;
     this.optionLayer.visible = hasOptions;
-    const gap = mobile ? 8 : 20;
+    this.layoutChoiceRows(area2);
+    if (hasOptions) this.layoutOptions(area2, mobile);
+  }
+  /** Positions the title and return action without taking room away from short-screen cards. */
+  layoutHeader(panel, short, hasOptions) {
+    this.title.title = this.getRewardTitle(hasOptions);
+    this.title.resize(panel.width - 32);
+    this.title.position.set(panel.x + 16, panel.y + 12);
+    this.currency.visible = false;
+    this.inventoryDestination.visible = false;
+    this.backButton.position.set(panel.x + 16, panel.y + (short ? 12 : 46));
+    this.backButton.visible = hasOptions && (this.snapshot?.choices.length ?? 0) > 1;
+    if (short && this.backButton.visible) {
+      this.title.resize(panel.width - 142);
+      this.title.position.set(panel.x + 126, panel.y + 12);
+    }
+    this.layoutSubtitle(panel, short, hasOptions);
+  }
+  /** Labels card choices distinctly from other selectable drops. */
+  getRewardTitle(hasOptions) {
+    if (!hasOptions) return this.snapshot?.title ?? "REWARDS";
+    return this.selectedReward?.options?.every((option) => option.kind === "card") ? "CHOOSE A CARD" : "CHOOSE A REWARD";
+  }
+  /** Keeps optional instructions clear of the return control. */
+  layoutSubtitle(panel, short, hasOptions) {
+    const showSelectedDetails = this.confirmationRequired && this.selectedReward !== void 0 && !hasOptions;
+    this.subtitle.text = hasOptions || showSelectedDetails ? this.selectedReward?.description ?? "" : "";
+    this.subtitle.visible = !short || showSelectedDetails;
+    fitTextToBox(this.subtitle, panel.width - (this.backButton.visible ? 144 : 32), short ? 18 : 32, 15, 12);
+    this.subtitle.anchor.set(0.5, 0);
+    this.subtitle.position.set(this.viewport.width / 2 + (this.backButton.visible ? 48 : 0), panel.y + (short ? 38 : 46));
+  }
+  /** Shows confirmation for touch and keyboard selection while keeping mouse actions direct. */
+  layoutControls(panel, footerY, mobile, hasOptions) {
+    this.skipButton.resize(mobile ? panel.width - 32 : 150, 42);
+    this.skipButton.position.set(mobile ? panel.x + 16 : panel.x + panel.width - 166, mobile ? this.viewport.height - 66 : footerY);
+    this.takeButton.resize(mobile ? panel.width - 32 : Math.min(320, panel.width - 210), 44);
+    this.takeButton.position.set(panel.x + 16, footerY);
+    this.takeButton.visible = this.confirmationRequired && this.selectedReward !== void 0;
+    this.takeButton.label = hasOptions ? this.selectedOption?.kind === "card" ? "Take card" : "Take reward" : "Collect reward";
+    this.feedback.position.set(this.viewport.width / 2, this.viewport.height - 18);
+  }
+  /** Preserves the rows of remaining rewards as individual drops are collected. */
+  layoutChoiceRows(area2) {
     const listSlotCount = Math.max(1, this.nextChoiceSlot);
-    const choiceHeight = Math.max(44, Math.min(88, (choiceArea.height - (listSlotCount - 1) * 8) / listSlotCount));
-    choices.forEach((choice) => {
+    const choiceHeight = Math.max(44, Math.min(88, (area2.height - (listSlotCount - 1) * 8) / listSlotCount));
+    this.snapshot?.choices.forEach((choice) => {
       const view = this.choiceViews.get(choice.id);
       if (!view) return;
-      view.resize(choiceArea.width, choiceHeight);
+      view.resize(area2.width, choiceHeight);
       const slot = this.choiceSlots.get(choice.id) ?? 0;
-      view.position.set(choiceArea.x, choiceArea.y + slot * (choiceHeight + 8));
+      view.position.set(area2.x, area2.y + slot * (choiceHeight + 8));
     });
-    if (hasOptions) {
-      const options = this.selectedReward?.options ?? [];
-      const columns = Math.min(3, Math.max(1, options.length));
-      const rows = Math.ceil(options.length / columns);
-      const optionWidth = Math.max(1, Math.min(190, (choiceArea.width - (columns - 1) * gap) / columns, (choiceArea.height - (rows - 1) * gap) / rows / 1.4));
-      const optionHeight = optionWidth * 1.4;
-      const startX = choiceArea.x + (choiceArea.width - columns * optionWidth - (columns - 1) * gap) / 2;
-      options.forEach((option, index) => {
-        const view = this.optionViews.get(option.id);
-        if (!view) return;
-        view.resize(optionWidth, optionHeight);
-        view.position.set(startX + index % columns * (optionWidth + gap), choiceArea.y + Math.floor(index / columns) * (optionHeight + gap));
-      });
-    }
+  }
+  /** Uses larger native card faces and centers incomplete rows on portrait screens. */
+  layoutOptions(area2, mobile) {
+    const options = this.selectedReward?.options ?? [];
+    const gap = mobile ? 8 : 20;
+    const columns = Math.min(mobile ? 2 : 3, Math.max(1, options.length));
+    const rows = Math.ceil(options.length / columns);
+    const optionWidth = Math.max(1, Math.min(230, (area2.width - (columns - 1) * gap) / columns, (area2.height - (rows - 1) * gap) / rows / 1.4));
+    const optionHeight = optionWidth * 1.4;
+    const rowInset = Math.max(0, (area2.height - rows * optionHeight - (rows - 1) * gap) / 2);
+    options.forEach((option, index) => {
+      const view = this.optionViews.get(option.id);
+      if (!view) return;
+      view.resize(optionWidth, optionHeight);
+      const row = Math.floor(index / columns);
+      const rowColumns = Math.min(columns, options.length - row * columns);
+      const rowX = area2.x + (area2.width - rowColumns * optionWidth - (rowColumns - 1) * gap) / 2;
+      view.position.set(rowX + index % columns * (optionWidth + gap), area2.y + rowInset + row * (optionHeight + gap));
+    });
   }
   /** Stops an obsolete collection beat before it can disable the newer remaining reward rows. */
   reconcileResolution(choices) {
@@ -77565,9 +77609,6 @@ var RewardScene = class {
     resolution.resolve();
   }
   refreshInspection() {
-    const target = this.selectedOption ?? this.selectedReward;
-    this.inspectionTitle.text = target?.name ?? "Select a reward";
-    this.inspectionDescription.text = target?.description ?? "Choose an available reward to inspect it.";
     this.reconcileOptions();
   }
   updateInteractivity() {
@@ -77579,22 +77620,39 @@ var RewardScene = class {
     this.takeButton.setEnabled(!this.pendingAction && this.selectedReward !== void 0 && this.selectedReward.isAvailable && (!this.selectedReward.options?.length || this.selectedOption?.isAvailable === true));
     this.skipButton.setEnabled(!this.pendingAction && (this.snapshot?.canSkip ?? false));
     this.backButton.setEnabled(!this.pendingAction && (this.selectedReward?.options?.length ?? 0) > 0);
-    this.optionViews.forEach((view, id) => view.setSelected(id === this.selectedOption?.id));
+    this.optionViews.forEach((view, id) => {
+      view.setSelected(id === this.selectedOption?.id);
+      view.setEnabled(!this.pendingAction && (this.selectedReward?.options?.find((option) => option.id === id)?.isAvailable ?? false));
+    });
   }
-  activateReward(reward) {
+  activateReward(reward, event) {
+    if (this.pendingAction || !reward.isAvailable) return;
+    this.confirmationRequired = event?.pointerType !== "mouse";
+    this.tooltip.hide();
     if ((reward.options?.length ?? 0) > 0) {
       this.inspectReward(reward.id);
       return;
     }
     this.selectedReward = reward;
     this.selectedOption = void 0;
-    void this.collectSelection();
+    if (this.confirmationRequired) this.inspectReward(reward.id);
+    else void this.collectSelection();
   }
-  activateOption(option) {
+  activateOption(option, event) {
     if (this.selectedReward === void 0 || this.pendingAction || !option.isAvailable) {
       return;
     }
+    this.confirmationRequired = event?.pointerType !== "mouse";
     this.inspectOption(option.id);
+    if (!this.confirmationRequired) void this.collectSelection();
+  }
+  /** Shows details on mouse hover without selecting or collecting the reward. */
+  hoverChoice(choice, view, event) {
+    if (!view || event?.pointerType !== "mouse" || this.pendingAction) return;
+    this.confirmationRequired = false;
+    this.takeButton.visible = false;
+    this.tooltip.show(`${choice.name}
+${choice.description}`, { x: view.x, y: view.y, width: view.width, height: view.height }, this.viewport);
   }
   returnToRewards() {
     if (this.pendingAction || (this.selectedReward?.options?.length ?? 0) === 0) {
@@ -77639,6 +77697,7 @@ var RewardScene = class {
     });
   }
   async submit(action) {
+    this.tooltip.hide();
     this.pendingAction = true;
     this.feedback.text = "Resolving\u2026";
     this.updateInteractivity();
@@ -77744,16 +77803,16 @@ var RewardScene = class {
   }
 };
 var RewardChoiceView = class extends Container {
-  constructor(choice, onInspect) {
+  constructor(choice, onInspect, onHover, onExit) {
     super();
     this.choice = choice;
-    this.onInspect = onInspect;
     this.addChild(this.frame, this.rewardIcon, this.title, this.type, this.description);
-    this.on("pointertap", () => this.onInspect());
+    this.on("pointertap", (event) => onInspect(this.choice, event));
+    this.on("pointerover", (event) => onHover(this.choice, event));
+    this.on("pointerout", onExit);
     this.redraw();
   }
   choice;
-  onInspect;
   frame = new Graphics();
   rewardIcon = new Graphics();
   title = new Text({ text: "", style: new TextStyle(choiceTitleStyle) });
@@ -77820,6 +77879,8 @@ var RewardChoiceView = class extends Container {
     this.description.visible = !compact;
     this.title.style.wordWrapWidth = Math.max(1, this.choiceWidth - contentX - 16);
     this.description.style.wordWrapWidth = Math.max(1, this.choiceWidth - contentX - 16);
+    fitTextToBox(this.title, this.title.style.wordWrapWidth, compact ? 22 : 25, 18, 14);
+    if (!compact) fitTextToBox(this.description, this.description.style.wordWrapWidth, this.choiceHeight - 69, 14, 12);
   }
 };
 function drawRewardIcon(graphics, kind, accent, height) {
@@ -77854,9 +77915,13 @@ function drawRewardIcon(graphics, kind, accent, height) {
   }
 }
 var RewardOptionView = class extends Container {
-  constructor(choice, onSelect) {
+  choice;
+  card;
+  relic;
+  artTexture;
+  selected = false;
+  constructor(choice, onSelect, onHover, onExit) {
     super();
-    this.onSelect = onSelect;
     this.choice = choice;
     if (choice.kind === "card") {
       this.card = new CardView({
@@ -77886,14 +77951,10 @@ var RewardOptionView = class extends Container {
       });
       this.addChild(this.relic);
     }
-    this.on("pointertap", () => this.onSelect());
+    this.on("pointertap", (event) => onSelect(this.choice, event));
+    this.on("pointerover", (event) => onHover(this.choice, event));
+    this.on("pointerout", onExit);
   }
-  onSelect;
-  choice;
-  card;
-  relic;
-  artTexture;
-  selected = false;
   setChoice(choice) {
     this.choice = choice;
     if (this.card !== void 0) {
@@ -77922,8 +77983,6 @@ var RewardOptionView = class extends Container {
     this.relic?.resize(width, height);
   }
 };
-var inspectionTitleStyle = { ...uiTokens.typography.panelTitle, fontSize: 18 };
-var inspectionBodyStyle = { ...uiTokens.typography.body, wordWrap: true };
 var feedbackStyle = { ...uiTokens.typography.body, fill: 16113563 };
 var inventoryStyle = { ...uiTokens.typography.body, fontSize: 12, fill: 12109785 };
 var choiceTitleStyle = { ...uiTokens.typography.panelTitle, align: "center", wordWrap: true, fontSize: 18 };
@@ -79013,17 +79072,15 @@ async function createShopRenderer(canvas, sink) {
   background.addChild(sceneArt);
   const merchant = new Graphics();
   const merchandiseScroll = new ScrollContainer({ width: 1, height: 1 });
-  const contextPanel = new Graphics();
   const title = new Text({ text: "Shop", style: new TextStyle(titleStyle3) });
   const currency = new Text({ text: "", style: new TextStyle(currencyStyle) });
-  const contextTitle = new Text({ text: "Browse merchandise", style: new TextStyle(contextTitleStyle3) });
-  const contextDetails = new Text({ text: "Choose an item to inspect its price and effect.", style: new TextStyle(contextBodyStyle3) });
   const feedback = new Text({ text: "", style: new TextStyle(feedbackStyle4) });
   const controlLayer = new Container();
   const sectionLayer = new Container();
-  const selectedArtwork = new JourneyArtwork();
-  root.addChild(background, merchant, title, currency, merchandiseScroll, contextPanel, contextTitle, contextDetails, controlLayer, feedback);
-  root.addChild(sectionLayer, selectedArtwork);
+  const tooltip = new ChoiceTooltip();
+  root.addChild(background, merchant, title, currency, merchandiseScroll, controlLayer, feedback);
+  root.addChild(sectionLayer);
+  root.addChild(tooltip);
   application.stage.addChild(root);
   let sequence = 0;
   let state;
@@ -79088,7 +79145,7 @@ async function createShopRenderer(canvas, sink) {
     if (pending || merchandise.isSold) return;
     selectedMerchandiseId = merchandise.id;
     selectedIndex = selectableMerchandise().findIndex((entry) => entry.id === merchandise.id);
-    announce(`Selected ${merchandise.name}. ${getMerchandiseSummary(merchandise)} Review it, then confirm or cancel.`);
+    announce(`Selected ${merchandise.name}. ${getMerchandiseSummary(merchandise)} Confirm to buy, or choose another item.`);
     void submit("inspect", merchandise.id);
     layout();
     scrollMerchandiseIntoView(selectedIndex);
@@ -79143,6 +79200,7 @@ async function createShopRenderer(canvas, sink) {
   };
   const pointerdown = (event) => {
     if (event.pointerType !== "touch" || touchScrollPointer !== void 0 || !isPrimaryPointer(event)) return;
+    suppressedTouchTapPointerId = void 0;
     touchScrollPointer = { pointerId: getPointerId(event), x: event.clientX, y: event.clientY, currentY: event.clientY, moved: false };
     canvas.setPointerCapture?.(touchScrollPointer.pointerId);
   };
@@ -79199,29 +79257,15 @@ async function createShopRenderer(canvas, sink) {
   };
   application.ticker.add(tick);
   function layout() {
+    tooltip.hide();
     const width = application.renderer.width;
     const height = application.renderer.height;
     const allMerchandise = state?.merchandise ?? [];
     const selected = allMerchandise.find((entry) => entry.id === selectedMerchandiseId);
     const merchandiseLayout = createMerchandiseLayout(width, height, allMerchandise);
     const resolutionGlow = resolutionEffectElapsedMs > 0 ? 1 - getMotionProgress(resolutionEffectElapsedMs, getMotionDuration("emphasis", reducedMotion)) : 0;
-    const currencyProgress = currencyEffectElapsedMs > 0 ? getMotionProgress(currencyEffectElapsedMs, getMotionDuration("emphasis", reducedMotion)) : 1;
-    const displayedCurrency = currencyTransition ? Math.round(currencyTransition.from + (currencyTransition.to - currencyTransition.from) * currencyProgress) : state?.currency ?? 0;
-    background.clear().rect(0, 0, width, height).fill({ color: 530204, alpha: 0.12 }).rect(0, merchandiseLayout.gridTop - 28, width, height).fill({ color: 530204, alpha: 0.96 });
-    merchant.clear();
-    sceneArt.resize(merchandiseLayout.compact ? width : merchandiseLayout.panelX - 16, Math.max(1, merchandiseLayout.gridTop - 36));
-    sceneArt.position.set(0, 0);
-    title.text = getSceneEnvironment(state?.environment)?.localeName ?? state?.title ?? "Shop";
-    title.position.set(24, 20);
-    title.style.fontSize = merchandiseLayout.compact ? 20 : 30;
-    title.style.wordWrap = true;
-    title.style.wordWrapWidth = merchandiseLayout.compact ? width - 156 : merchandiseLayout.panelX - 120;
-    currency.text = `Gold: ${displayedCurrency}`;
-    currency.alpha = currencyTransition ? 0.82 + resolutionGlow * 0.18 : 1;
-    currency.style.fontSize = merchandiseLayout.compact ? 16 : 20;
-    currency.position.set(merchandiseLayout.compact ? width - 24 : merchandiseLayout.panelX - 24, 24);
-    currency.anchor.set(1, 0);
-    feedback.visible = feedback.text.length > 0;
+    layoutHeader(merchandiseLayout, resolutionGlow);
+    feedback.visible = feedback.text.length > 0 && !feedback.text.startsWith("Selected") && !feedback.text.endsWith("inspected.");
     feedback.style.wordWrap = true;
     feedback.style.wordWrapWidth = merchandiseLayout.gridWidth;
     feedback.style.fontSize = 13;
@@ -79231,33 +79275,7 @@ async function createShopRenderer(canvas, sink) {
     merchandiseScroll.position.set(24, merchandiseLayout.gridTop);
     merchandiseScroll.resize(merchandiseLayout.gridWidth, Math.max(1, merchandiseLayout.gridBottom - merchandiseLayout.gridTop - feedbackHeight));
     merchandiseScroll.setContentHeight(merchandiseLayout.contentHeight);
-    clearJourneyLayer(controlLayer);
-    contextPanel.clear().roundRect(merchandiseLayout.panelX, merchandiseLayout.trayY, merchandiseLayout.panelWidth, merchandiseLayout.trayHeight, 4).fill({ color: 530204, alpha: 0.97 }).stroke({ color: 7901071, width: 1 });
-    contextTitle.text = selected?.name ?? "Browse merchandise";
-    contextDetails.text = selected ? getMerchandiseSummary(selected) : "Select merchandise to inspect its effect, price, and availability.";
-    const panelX = merchandiseLayout.panelX + 16;
-    const panelWidth = merchandiseLayout.panelWidth - 32;
-    const artHeight = merchandiseLayout.compact || height < 420 ? 0 : Math.min(260, Math.max(0, merchandiseLayout.trayHeight - 260));
-    const thumbnail = selected !== void 0 && merchandiseLayout.compact && height >= 420;
-    selectedArtwork.visible = selected !== void 0 && (thumbnail || artHeight > 0);
-    selectedArtwork.setImage(selected?.image ?? "");
-    selectedArtwork.resize(thumbnail ? 84 : panelWidth, thumbnail ? 92 : Math.max(1, artHeight));
-    selectedArtwork.position.set(panelX, merchandiseLayout.trayY + 16);
-    contextTitle.position.set(panelX + (thumbnail ? 100 : 0), merchandiseLayout.trayY + artHeight + 22);
-    contextTitle.style.wordWrap = true;
-    contextTitle.style.wordWrapWidth = panelWidth - (thumbnail ? 100 : 0);
-    contextDetails.style.wordWrapWidth = panelWidth - (thumbnail ? 100 : 0);
-    contextDetails.style.fontSize = height < 420 ? 14 : 16;
-    contextDetails.style.lineHeight = height < 420 ? 18 : 22;
-    contextDetails.position.set(panelX + (thumbnail ? 100 : 0), merchandiseLayout.trayY + artHeight + 58);
-    const inlineControls = merchandiseLayout.compact || height < 420 && panelWidth >= 160;
-    const buyY = merchandiseLayout.trayY + merchandiseLayout.trayHeight - (inlineControls ? 54 : 106);
-    const leaveY = merchandiseLayout.trayY + merchandiseLayout.trayHeight - 54;
-    const controlWidth = inlineControls && selected ? (panelWidth - 8) / 2 : panelWidth;
-    if (selected !== void 0) {
-      addControl("Buy \u2014 " + selected.price + " gold", "", selected.isAffordable && !selected.isSold && !pending, panelX, buyY, controlWidth, confirmPurchase);
-    }
-    addControl("Leave shop", "", !pending, panelX + (inlineControls && selected ? controlWidth + 8 : 0), leaveY, controlWidth, leave);
+    layoutControls(merchandiseLayout, selected);
     clearJourneyLayer(sectionLayer);
     sectionViews.length = 0;
     sectionViewportTop = merchandiseLayout.gridTop;
@@ -79274,17 +79292,60 @@ async function createShopRenderer(canvas, sink) {
       const resolutionIntensity = resolutionEffect?.merchandiseId === entry.id ? resolutionGlow : 0;
       const card = getMerchandiseCard(entry);
       card.update(entry, entry.id === selectedMerchandiseId, selectedMerchandiseId !== void 0, !pending, resolutionIntensity, resolutionEffect?.kind, (event) => {
-        if (event?.pointerType === "touch" && event.pointerId === suppressedTouchTapPointerId) {
+        if (event?.pointerType === "touch" && suppressedTouchTapPointerId !== void 0 && event.pointerId === suppressedTouchTapPointerId) {
           suppressedTouchTapPointerId = void 0;
           return;
         }
-        inspect(entry);
-      });
+        tooltip.hide();
+        if (event?.pointerType === "mouse") {
+          if (entry.isAffordable && !entry.isSold) void submit("purchase", entry.id);
+          else {
+            announce(entry.disabledReason ?? "Not enough gold.");
+            layout();
+          }
+        } else inspect(entry);
+      }, (event) => {
+        if (event?.pointerType === "touch" || pending) return;
+        tooltip.show(`${entry.name}
+${getMerchandiseSummary(entry)}`, { x: 24 + placement.x, y: merchandiseLayout.gridTop + placement.y - merchandiseScroll.scrollOffset, width: placement.width, height: placement.height }, { width, height });
+      }, () => tooltip.hide());
       card.resize(placement.width, placement.height);
       card.position.set(placement.x, placement.y);
       return card;
     });
     reconcileMerchandiseCards(cards);
+  }
+  function layoutHeader(merchandiseLayout, resolutionGlow) {
+    const { width, height } = application.renderer;
+    const currencyProgress = currencyEffectElapsedMs > 0 ? getMotionProgress(currencyEffectElapsedMs, getMotionDuration("emphasis", reducedMotion)) : 1;
+    const displayedCurrency = currencyTransition ? Math.round(currencyTransition.from + (currencyTransition.to - currencyTransition.from) * currencyProgress) : state?.currency ?? 0;
+    background.clear().rect(0, 0, width, height).fill({ color: 530204, alpha: 0.12 }).rect(0, merchandiseLayout.gridTop - 28, width, height).fill({ color: 530204, alpha: 0.96 });
+    merchant.clear();
+    sceneArt.resize(width, 60);
+    sceneArt.position.set(0, 0);
+    title.text = getSceneEnvironment(state?.environment)?.localeName ?? state?.title ?? "Shop";
+    title.position.set(24, 20);
+    title.style.fontSize = merchandiseLayout.compact ? 20 : 30;
+    title.style.wordWrap = true;
+    title.style.wordWrapWidth = Math.max(1, width - 156);
+    currency.text = `Gold: ${displayedCurrency}`;
+    currency.alpha = currencyTransition ? 0.82 + resolutionGlow * 0.18 : 1;
+    currency.style.fontSize = merchandiseLayout.compact ? 16 : 20;
+    currency.position.set(width - 24, 24);
+    currency.anchor.set(1, 0);
+  }
+  function layoutControls(merchandiseLayout, selected) {
+    const width = application.renderer.width;
+    clearJourneyLayer(controlLayer);
+    const panelWidth = Math.min(merchandiseLayout.panelWidth - 32, selected ? 560 : 280);
+    const panelX = (width - panelWidth) / 2;
+    const buyY = merchandiseLayout.trayY + 8;
+    const leaveY = buyY;
+    const controlWidth = selected ? (panelWidth - 8) / 2 : panelWidth;
+    if (selected !== void 0) {
+      addControl("Buy \u2014 " + selected.price + " gold", "", selected.isAffordable && !selected.isSold && !pending, panelX, buyY, controlWidth, confirmPurchase);
+    }
+    addControl("Leave shop", "", !pending, panelX + (selected ? controlWidth + 8 : 0), leaveY, controlWidth, leave);
   }
   function updateSectionHeadings() {
     for (const { heading, x: x2, y: y2 } of sectionViews) {
@@ -79294,6 +79355,7 @@ async function createShopRenderer(canvas, sink) {
     }
   }
   function scrollInventory(amount) {
+    tooltip.hide();
     merchandiseScroll.scrollBy(amount);
     updateSectionHeadings();
   }
@@ -79423,6 +79485,7 @@ var ShopMerchandiseCard = class extends Container {
     this.itemArt.setImage(merchandise.image);
     if (merchandise.isCard) {
       this.card = new CardView({
+        presentation: "reward",
         cost: getCardCost(merchandise),
         name: merchandise.name,
         description: merchandise.description,
@@ -79444,7 +79507,7 @@ var ShopMerchandiseCard = class extends Container {
     this.addChild(this.priceLabel);
   }
   /** Updates dynamic merchandise state without allocating another card display tree. */
-  update(merchandise, selected, hasSelection, interactive, resolutionIntensity, resolutionKind, onPress) {
+  update(merchandise, selected, hasSelection, interactive, resolutionIntensity, resolutionKind, onPress, onHover, onExit) {
     this.selected = selected;
     this.priceLabel.text = merchandise.kind === "control" ? "" : merchandise.isSold ? "SOLD" : (merchandise.isOnSale ? "SALE \xB7 " : "") + merchandise.price + " gold";
     this.priceLabel.style.fill = merchandise.isAffordable ? 15259564 : 14972757;
@@ -79465,17 +79528,20 @@ var ShopMerchandiseCard = class extends Container {
     if (this.card && resolutionIntensity > 0 && !this.children.includes(this.resolutionOverlay)) this.addChild(this.resolutionOverlay);
     if (this.card && resolutionIntensity === 0 && this.children.includes(this.resolutionOverlay)) this.removeChild(this.resolutionOverlay);
     this.removeAllListeners("pointertap");
+    this.removeAllListeners("pointerover");
+    this.removeAllListeners("pointerout");
     if (enabled) this.on("pointertap", onPress);
+    if (onHover) this.on("pointerover", onHover);
+    if (onExit) this.on("pointerout", onExit);
   }
   resize(width, height) {
     this.priceLabel.style.fontSize = width < 110 ? 12 : 15;
     this.priceLabel.anchor.set(0.5, 0);
     this.priceLabel.position.set(width / 2, height - 24);
     if (this.card) {
-      this.card.resize({ width: 180, height: 252 });
-      const scale = Math.min(width / 180, Math.max(1, height - 30) / 252);
-      this.card.scale.set(scale);
-      this.card.position.set((width - 180 * scale) / 2, 0);
+      this.card.resize({ width, height: Math.max(1, height - 30) });
+      this.card.scale.set(1);
+      this.card.position.set(0, 0);
       this.card.setInteractionState({ enabled: this.eventMode === "static", focused: false, selected: this.selected });
       if (this.resolutionIntensity > 0) {
         this.resolutionOverlay.clear().roundRect(0, 0, width, height, 10).fill({
@@ -79493,6 +79559,8 @@ var ShopMerchandiseCard = class extends Container {
     this.description.style.wordWrapWidth = Math.max(1, width - 28);
     this.description.visible = height > 52;
     this.description.position.set(14, 43);
+    fitTextToBox(this.heading, width - 28, height > 52 ? 34 : 26, width < 140 ? 15 : 18, 14);
+    if (height > 52) fitTextToBox(this.description, width - 28, height - 73, 14, 12);
     this.itemArt.visible = this.hasArtwork;
     if (this.hasArtwork) {
       this.itemArt.resize(Math.min(56, width - 20), 48);
@@ -79501,6 +79569,7 @@ var ShopMerchandiseCard = class extends Container {
       this.heading.style.align = "center";
       this.heading.anchor.set(0.5, 0);
       this.heading.position.set(width / 2, 56);
+      fitTextToBox(this.heading, width - 20, height - 86, width < 130 ? 12 : 15, 12);
       this.description.visible = false;
     }
   }
@@ -79511,15 +79580,14 @@ function getLayoutMode(width, height) {
 }
 function createMerchandiseLayout(width, height, merchandise) {
   const mode = getLayoutMode(width, height);
-  const compact = mode === "MobilePortrait" || mode === "Compact" && height >= 600;
-  const short = height < 420;
-  const panelWidth = compact ? width - 32 : Math.min(280, width * 0.25);
-  const panelX = compact ? 16 : width - panelWidth - 16;
-  const trayHeight = compact ? Math.min(216, height * 0.36) : height - 40;
-  const trayY = compact ? height - trayHeight - 12 : 20;
-  const gridWidth = compact ? width - 48 : panelX - 44;
-  const gridTop = short ? 64 : Math.min(compact ? 166 : 290, height * 0.28);
-  const gridBottom = compact ? trayY - 12 : height - 20;
+  const compact = width < 700;
+  const panelWidth = width - 32;
+  const panelX = 16;
+  const trayHeight = 58;
+  const trayY = height - trayHeight - 8;
+  const gridWidth = width - 48;
+  const gridTop = 80;
+  const gridBottom = trayY - 8;
   const gap = compact ? 8 : 12;
   const cards = merchandise.filter((entry) => entry.isCard);
   const services = merchandise.filter((entry) => !entry.isCard && (entry.resolutionKind === "Service" || entry.kind.includes("ShopCardRemoval") || entry.kind.includes("ShopStatUpgrade")));
@@ -79532,7 +79600,7 @@ function createMerchandiseLayout(width, height, merchandise) {
     sections.push({ label, x: x2, y: y2 });
     const usableColumns = Math.min(columns, Math.max(1, Math.floor((areaWidth + gap) / ((card ? 160 : 100) + gap))));
     const itemWidth = (areaWidth - (usableColumns - 1) * gap) / usableColumns;
-    const itemHeight = card ? Math.min(260, itemWidth * 1.55) : 112;
+    const itemHeight = card ? itemWidth * 1.4 + 30 : 112;
     entries.forEach((entry, index) => placements.set(entry.id, { x: x2 + index % usableColumns * (itemWidth + gap), y: y2 + 28 + Math.floor(index / usableColumns) * (itemHeight + gap), width: itemWidth, height: itemHeight }));
     return y2 + 28 + Math.ceil(entries.length / usableColumns) * (itemHeight + gap);
   };
@@ -79617,10 +79685,9 @@ var noOpShopAccessibilityOverlay = {
 var titleStyle3 = { fill: 16317180, fontFamily: "Alegreya, Georgia, serif", fontSize: 34, fontWeight: "bold" };
 var currencyStyle = { fill: 16113563, fontFamily: "Alegreya, Georgia, serif", fontSize: 20, fontWeight: "bold" };
 var contextTitleStyle3 = { fill: 16317180, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "bold" };
-var contextBodyStyle3 = { fill: 13358561, fontFamily: "Alegreya, Georgia, serif", fontSize: 14, lineHeight: 19, wordWrap: true };
 var feedbackStyle4 = { fill: 16113563, fontFamily: "Alegreya, Georgia, serif", fontSize: 15, align: "center" };
-var cardHeadingStyle = { fill: 16317180, fontFamily: "Alegreya, Georgia, serif", fontSize: 16, fontWeight: "bold", wordWrap: true };
-var cardBodyStyle = { fill: 13358561, fontFamily: "Alegreya, Georgia, serif", fontSize: 12, lineHeight: 16, wordWrap: true };
+var cardHeadingStyle = { ...uiTokens.typography.button, fill: 16317180, fontSize: 16, wordWrap: true };
+var cardBodyStyle = { ...uiTokens.typography.body, fill: 13358561, fontSize: 14, lineHeight: 18, wordWrap: true };
 
 // src/pixi-treasure.ts
 init_lib();
@@ -79868,7 +79935,7 @@ async function createMapRenderer(canvas, sink) {
   const contextPanel = new Graphics();
   const region = new Text({ text: "", style: new TextStyle(regionStyle) });
   const contextTitle = new Text({ text: "Inspect a location", style: new TextStyle(contextTitleStyle4) });
-  const contextDetails = new Text({ text: "Select a node to review its route and destination.", style: new TextStyle(contextBodyStyle4) });
+  const contextDetails = new Text({ text: "Select a node to review its route and destination.", style: new TextStyle(contextBodyStyle3) });
   const feedback = new Text({ text: "", style: new TextStyle(feedbackStyle5) });
   const controls = new Container();
   const destinationArt = new JourneyArtwork();
@@ -80506,7 +80573,7 @@ var noOpAccessibilityOverlay3 = { update() {
 } };
 var regionStyle = { fill: 9549506, fontFamily: "Alegreya, Georgia, serif", fontSize: 14, fontWeight: "bold", letterSpacing: 0.6 };
 var contextTitleStyle4 = { fill: 16317180, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "bold" };
-var contextBodyStyle4 = { fill: 13358561, fontFamily: "Alegreya, Georgia, serif", fontSize: 14, lineHeight: 19, wordWrap: true };
+var contextBodyStyle3 = { fill: 13358561, fontFamily: "Alegreya, Georgia, serif", fontSize: 14, lineHeight: 19, wordWrap: true };
 var feedbackStyle5 = { fill: 16113563, fontFamily: "Alegreya, Georgia, serif", fontSize: 15, align: "center" };
 var controlStyle = { fill: 16317180, fontFamily: "Alegreya, Georgia, serif", fontSize: 15, fontWeight: "bold" };
 
