@@ -70166,6 +70166,44 @@ var init_lib = __esm({
   }
 });
 
+// src/canvas-presentation.ts
+init_lib();
+function refreshCanvasText(container) {
+  if (container instanceof Text) container.unload();
+  for (const child of container.children) refreshCanvasText(child);
+}
+function installCanvasPresentationRecovery(application, canvas) {
+  const ownerDocument = canvas.ownerDocument;
+  const view = ownerDocument?.defaultView;
+  let contextLost = false;
+  const recover = () => {
+    if (ownerDocument?.hidden || contextLost || canvas.style?.display === "none") return;
+    refreshCanvasText(application.stage);
+    application.render();
+  };
+  const loseContext = () => {
+    contextLost = true;
+  };
+  const restoreContext = () => {
+    contextLost = false;
+    recover();
+  };
+  ownerDocument?.addEventListener?.("visibilitychange", recover);
+  ownerDocument?.fonts?.addEventListener("loadingdone", recover);
+  view?.addEventListener("focus", recover);
+  view?.addEventListener("pageshow", recover);
+  canvas.addEventListener("contextlost", loseContext);
+  canvas.addEventListener("contextrestored", restoreContext);
+  return () => {
+    ownerDocument?.removeEventListener?.("visibilitychange", recover);
+    ownerDocument?.fonts?.removeEventListener("loadingdone", recover);
+    view?.removeEventListener("focus", recover);
+    view?.removeEventListener("pageshow", recover);
+    canvas.removeEventListener("contextlost", loseContext);
+    canvas.removeEventListener("contextrestored", restoreContext);
+  };
+}
+
 // src/pixi-encounter.ts
 init_lib();
 
@@ -72358,7 +72396,7 @@ var GamePanel = class extends Container {
     super();
     this.fill = options.fill ?? (options.surface === "button" ? 1058092 : uiColors.panelFill);
     this.stroke = options.stroke ?? uiColors.panelStroke;
-    this.cornerRadius = Math.max(0, options.cornerRadius ?? (options.surface === "button" ? 3 : uiTokens.frame.panelCornerRadius));
+    this.cornerRadius = Math.max(0, options.cornerRadius ?? (options.surface === "button" ? 3 : 4));
     this.surface = options.surface ?? "panel";
     this.panelWidth = normalizeSize(options.width);
     this.panelHeight = normalizeSize(options.height);
@@ -72393,17 +72431,10 @@ var GamePanel = class extends Container {
       this.ornaments.clear();
       return;
     }
-    const inset = Math.min(uiTokens.frame.innerInset, this.panelWidth / 4, this.panelHeight / 4);
-    const innerWidth = Math.max(0, this.panelWidth - inset * 2);
-    const innerHeight = Math.max(0, this.panelHeight - inset * 2);
-    const ornamentLength = Math.min(uiTokens.frame.ornamentLength, innerWidth / 2);
-    const ornamentThickness = Math.min(uiTokens.frame.ornamentThickness, innerHeight / 2);
-    const ornamentOffset = inset + uiTokens.frame.borderWidth;
-    this.shadow.clear().roundRect(2, 4, Math.max(0, this.panelWidth - 2), Math.max(0, this.panelHeight - 2), this.cornerRadius).fill({ color: uiColors.panelShadow, alpha: 0.56 });
-    this.background.clear().roundRect(0, 0, this.panelWidth, this.panelHeight, this.cornerRadius).fill({ color: this.fill }).stroke({ color: this.stroke, width: uiTokens.frame.borderWidth });
-    this.background.rect(12, 4, Math.max(0, this.panelWidth - 24), 2).fill({ color: uiColors.panelOrnament, alpha: 0.38 });
-    this.innerFrame.clear().roundRect(inset, inset, innerWidth, innerHeight, Math.max(0, this.cornerRadius - inset / 2)).stroke({ color: uiColors.panelInset, width: 1, alpha: 0.9 });
-    this.ornaments.clear().roundRect(ornamentOffset, ornamentOffset, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.88 }).roundRect(this.panelWidth - ornamentOffset - ornamentLength, ornamentOffset, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.88 }).roundRect(ornamentOffset, this.panelHeight - ornamentOffset - ornamentThickness, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.62 }).roundRect(this.panelWidth - ornamentOffset - ornamentLength, this.panelHeight - ornamentOffset - ornamentThickness, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.62 });
+    this.shadow.clear().roundRect(2, 4, Math.max(0, this.panelWidth - 2), Math.max(0, this.panelHeight - 2), this.cornerRadius).fill({ color: uiColors.panelShadow, alpha: 0.3 });
+    this.background.clear().roundRect(0, 0, this.panelWidth, this.panelHeight, this.cornerRadius).fill({ color: this.fill }).stroke({ color: this.stroke, width: 1 });
+    this.innerFrame.clear();
+    this.ornaments.clear();
   }
 };
 var GameButton = class extends GamePanel {
@@ -74564,7 +74595,7 @@ var EncounterScene = class {
    * Invalidates cached Pixi text textures after the browser restores rendering or finishes loading a font.
    */
   refreshTextTextures() {
-    this.refreshTextTexturesIn(this.root);
+    refreshCanvasText(this.root);
   }
   /**
    * Determines whether an animation source is present in the current snapshot, including objects paged out of view.
@@ -76108,7 +76139,7 @@ var EncounterScene = class {
   /** Builds the final hand transform for either a resting or inspected entry. */
   getHandLayoutTransform(tileId, position) {
     if (tileId === this.getSelectedHandTileId() && this.getTargetingEntry()?.targetMode !== "none") {
-      return { x: position.x, y: position.y, rotation: position.rotation ?? 0, scale: position.scale ?? 1 };
+      return this.getSelectedCardTransform(position);
     }
     const isInspected = this.isHandEntryInspected(tileId);
     const isMobilePortrait = this.viewport !== void 0 && getViewportLayoutMode(this.viewport) === "MobilePortrait";
@@ -76121,6 +76152,35 @@ var EncounterScene = class {
       y: position.y - (isInspected ? lift : 0),
       rotation: isInspected ? 0 : position.rotation ?? 0,
       scale: (position.scale ?? 1) * (isInspected ? this.getHandInspectionScale(position, isMobilePortrait) : 1)
+    };
+  }
+  /** Fits a readable selected card between the player's figure and the bottom controls. */
+  getSelectedCardTransform(position) {
+    if (!this.viewport) return { x: position.x, y: position.y, rotation: 0, scale: position.scale ?? 1 };
+    const player = layoutPlayer(this.viewport);
+    const top = player.y + 80 * Math.max(1, player.scale ?? 1) + 12;
+    const layout = calculateCombatLayout(this.viewport);
+    const bottom = layout.mode === "MobilePortrait" ? layout.regions.endTurn.y - 12 : this.viewport.height - 4;
+    if (!layout.isShortFallback && this.viewport.width >= 700) {
+      const scale2 = draggedCardScale;
+      return {
+        x: player.x - 88 * (player.scale ?? 1) - handCardVisualSize.width * scale2 / 2 - 16,
+        y: bottom - handCardVisualSize.height * scale2 / 2,
+        rotation: 0,
+        scale: scale2
+      };
+    }
+    const scale = Math.max(position.scale ?? 1, Math.min(
+      draggedCardScale,
+      (bottom - top) / handCardVisualSize.height,
+      (this.viewport.width - 32) / handCardVisualSize.width
+    ));
+    const halfWidth = handCardVisualSize.width * scale / 2;
+    return {
+      x: Math.max(16 + halfWidth, Math.min(this.viewport.width - 16 - halfWidth, position.x)),
+      y: bottom - handCardVisualSize.height * scale / 2,
+      rotation: 0,
+      scale
     };
   }
   /** Scales constrained layouts modestly so inspection remains readable without crowding combat space. */
@@ -76225,17 +76285,6 @@ var EncounterScene = class {
     }
     if (this.handLayer.children.at(-1) !== inspectedTile.container) {
       this.handLayer.addChild(inspectedTile.container);
-    }
-  }
-  /**
-   * Walks the retained scene graph so reused labels recreate their textures without replacing display objects.
-   */
-  refreshTextTexturesIn(container) {
-    if (container instanceof Text) {
-      container.onViewUpdate();
-    }
-    for (const child of container.children) {
-      this.refreshTextTexturesIn(child);
     }
   }
   focusEntry(direction) {
@@ -77383,6 +77432,7 @@ var RewardScene = class {
   choiceViews = /* @__PURE__ */ new Map();
   optionViews = /* @__PURE__ */ new Map();
   choiceSlots = /* @__PURE__ */ new Map();
+  collectedChoiceIds = /* @__PURE__ */ new Set();
   snapshot;
   selectedReward;
   selectedOption;
@@ -77420,13 +77470,12 @@ var RewardScene = class {
     if (!isRewardPresentationSnapshot(candidate) || this.snapshot !== void 0 && candidate.sequence <= this.snapshot.sequence) {
       return false;
     }
-    const previousChoiceIds = this.snapshot?.choices.map((choice) => choice.id).join(":");
-    const nextChoiceIds = candidate.choices.map((choice) => choice.id).join(":");
+    const firstSnapshot = this.snapshot === void 0;
     this.snapshot = candidate;
     this.reconcileResolution(candidate.choices);
     this.viewport = normalizeViewport2(viewport);
     this.reconcilePendingAction();
-    if (previousChoiceIds !== nextChoiceIds) {
+    if (firstSnapshot) {
       this.revealElapsedMs = this.reducedMotion ? Number.POSITIVE_INFINITY : 0;
     }
     this.currency.setValue(candidate.currency);
@@ -77447,7 +77496,10 @@ var RewardScene = class {
       this.advanceResolution(deltaMs);
       return;
     }
-    this.snapshot.choices.forEach((choice, index) => this.choiceViews.get(choice.id)?.setRevealProgress(getRevealProgress(this.revealElapsedMs, index, this.reducedMotion)));
+    this.snapshot.choices.forEach((choice) => {
+      if (this.collectedChoiceIds.has(choice.id)) return;
+      this.choiceViews.get(choice.id)?.setRevealProgress(getRevealProgress(this.revealElapsedMs, this.choiceSlots.get(choice.id) ?? 0, this.reducedMotion));
+    });
   }
   /** Reflows the stable scene tree after the owning canvas changes size. */
   resize(viewport) {
@@ -77527,6 +77579,7 @@ var RewardScene = class {
         this.choiceLayer.removeChild(view);
         view.destroy();
         this.choiceViews.delete(id);
+        this.collectedChoiceIds.delete(id);
       }
     }
     choices.forEach((choice) => {
@@ -77541,6 +77594,7 @@ var RewardScene = class {
       } else {
         view.setChoice(choice);
       }
+      view.visible = !this.collectedChoiceIds.has(choice.id);
       view.setRevealProgress(getRevealProgress(this.revealElapsedMs, this.choiceSlots.get(choice.id) ?? 0, this.reducedMotion));
     });
   }
@@ -77832,8 +77886,6 @@ ${choice.description}`, { x: view.x, y: view.y, width: view.width, height: view.
     for (const [id, view] of this.choiceViews) {
       if (id === resolution.choiceId) {
         view.setResolutionProgress(progress, resolution.start, resolution.target);
-      } else {
-        view.setRecedingProgress(progress);
       }
     }
     if (progress < 1) {
@@ -77843,11 +77895,11 @@ ${choice.description}`, { x: view.x, y: view.y, width: view.width, height: view.
   }
   /** Applies the terminal reward-resolution state without requiring another animation frame. */
   completeResolution(resolution) {
+    this.collectedChoiceIds.add(resolution.choiceId);
     for (const [id, view] of this.choiceViews) {
       if (id === resolution.choiceId) {
         view.setResolutionProgress(1, resolution.start, resolution.target);
-      } else {
-        view.setRecedingProgress(1);
+        view.visible = false;
       }
     }
     this.resolution = void 0;
@@ -77912,7 +77964,6 @@ var RewardChoiceView = class extends Container {
   setEnabled(enabled) {
     this.eventMode = enabled ? "static" : "none";
     this.cursor = enabled ? "pointer" : "default";
-    this.alpha = enabled ? 1 : uiTokens.interaction.disabledAlpha;
   }
   setSelected(selected) {
     this.selected = selected;
@@ -77920,7 +77971,7 @@ var RewardChoiceView = class extends Container {
   }
   setRevealProgress(progress) {
     const normalized = Math.max(0, Math.min(1, progress));
-    this.alpha = normalized;
+    this.alpha = normalized * (this.choice.isAvailable ? 1 : uiTokens.interaction.disabledAlpha);
     this.scale.set(0.92 + normalized * 0.08);
   }
   /** Emphasizes the accepted choice, then carries it to a renderer-owned HUD destination. */
@@ -77930,13 +77981,6 @@ var RewardChoiceView = class extends Container {
     this.alpha = 1 - travel * 0.12;
     this.position.set(interpolate2(start.x, target.x, travel), interpolate2(start.y, target.y, travel));
     this.scale.set(1 + Math.sin(Math.min(1, normalized / 0.35) * Math.PI) * 0.12 - travel * 0.55);
-    this.eventMode = "none";
-  }
-  /** Recedes non-selected choices while the accepted choice resolves. */
-  setRecedingProgress(progress) {
-    const normalized = Math.max(0, Math.min(1, progress));
-    this.alpha = 1 - normalized * 0.7;
-    this.scale.set(1 - normalized * 0.05);
     this.eventMode = "none";
   }
   resize(width, height) {
@@ -78053,8 +78097,8 @@ var RewardOptionView = class extends Container {
   setEnabled(enabled) {
     this.eventMode = enabled ? "static" : "none";
     this.cursor = enabled ? "pointer" : "default";
-    this.alpha = enabled ? 1 : uiTokens.interaction.disabledAlpha;
-    this.card?.setInteractionState({ enabled, focused: false, selected: this.selected });
+    this.alpha = this.choice.isAvailable ? 1 : uiTokens.interaction.disabledAlpha;
+    this.card?.setInteractionState({ enabled: this.choice.isAvailable, focused: false, selected: this.selected });
   }
   setSelected(selected) {
     this.selected = selected;
@@ -78122,6 +78166,7 @@ async function createRewardRenderer(canvas, actionSink) {
     canvas,
     preference: "canvas"
   });
+  const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
   const restoreBackdrop = installJourneyBackdrop(canvas, "reward");
   canvas.tabIndex = 0;
   const canvasFocus = createCanvasFocusCoordinator(canvas);
@@ -78174,6 +78219,7 @@ async function createRewardRenderer(canvas, actionSink) {
       canvasFocus.dispose();
       restoreBackdrop();
       accessibility.dispose();
+      restoreCanvasPresentation();
       application.destroy({ removeView: false }, { children: true });
     }
   };
@@ -78439,39 +78485,56 @@ function installChoiceScrollInput(canvas, scroll, isBlocked, onScroll) {
 // src/event-deck-row.ts
 init_lib();
 var EventDeckRow = class extends Container {
-  layoutHeight;
+  layoutHeight = 80;
+  frame = new Graphics();
+  heading = new Text({ text: "", style: { ...uiTokens.typography.button, fontSize: 18, wordWrap: true } });
+  body = new Text({ text: "", style: {
+    ...uiTokens.typography.body,
+    fill: uiTokens.color.textMuted,
+    fontSize: 14,
+    lineHeight: 19,
+    wordWrap: true
+  } });
+  artwork = new JourneyArtwork();
+  energy = new Text({ text: "", style: { ...uiTokens.typography.body, fontSize: 14, fill: uiTokens.color.stamina } });
+  mana = new Text({ text: "", style: { ...uiTokens.typography.body, fontSize: 14, fill: uiTokens.color.mana } });
   /** Creates a row whose height expands to retain all card details at the current viewport width. */
-  constructor(name, details, image, width, selected, enabled, onPress) {
+  constructor(name, details, image, width, selected, enabled, onPress, energyCost, manaCost) {
     super();
+    this.heading.resolution = this.body.resolution = 2;
+    this.energy.resolution = this.mana.resolution = 2;
+    this.addChild(this.frame, this.heading, this.body, this.artwork, this.energy, this.mana);
+    this.artwork.resize(56, 56);
+    this.artwork.position.set(12, 12);
+    this.on("pointertap", (event) => {
+      if (this.eventMode === "static") onPress(event?.pointerType === "touch", event?.pointerId);
+    });
+    this.update(name, details, image, width, selected, enabled, energyCost, manaCost);
+  }
+  /** Updates selection and wrapping while retaining loaded artwork and text display objects. */
+  update(name, details, image, width, selected, enabled, energyCost, manaCost) {
     const textX = image ? 80 : 14;
     const textWidth = Math.max(1, width - textX - 14);
-    const heading = new Text({ text: name, style: { ...uiTokens.typography.button, fontSize: 18, wordWrap: true, wordWrapWidth: textWidth } });
-    const body = new Text({ text: details, style: {
-      ...uiTokens.typography.body,
-      fill: uiTokens.color.textMuted,
-      fontSize: 14,
-      lineHeight: 19,
-      wordWrap: true,
-      wordWrapWidth: textWidth
-    } });
-    heading.resolution = body.resolution = 2;
-    heading.position.set(textX, 8);
-    const bodyY = 12 + Math.max(heading.height, estimateHeight(name, textWidth, 22));
-    body.position.set(textX, bodyY);
-    this.layoutHeight = Math.max(80, bodyY + Math.max(body.height, estimateHeight(details, textWidth, 19)) + 10);
-    const frame = new Graphics().roundRect(0, 0, width, this.layoutHeight, 4).fill({ color: selected ? 2639453 : 1254710 }).stroke({ color: selected ? uiTokens.color.selected : 3561587, width: 1 });
-    this.addChild(frame, heading, body);
-    if (image) {
-      const artwork = new JourneyArtwork();
-      artwork.setImage(image);
-      artwork.resize(56, 56);
-      artwork.position.set(12, 12);
-      this.addChild(artwork);
-    }
+    this.heading.text = name;
+    this.body.text = details;
+    this.heading.style.wordWrapWidth = this.body.style.wordWrapWidth = textWidth;
+    this.heading.position.set(textX, 8);
+    const costsY = 12 + Math.max(this.heading.height, estimateHeight(name, textWidth, 22));
+    const hasCosts = energyCost != null || manaCost != null;
+    this.energy.visible = this.mana.visible = hasCosts;
+    this.energy.text = `\u26A1 ${energyCost ?? 0}`;
+    this.mana.text = `\u2726 ${manaCost ?? 0}`;
+    this.energy.position.set(textX, costsY);
+    this.mana.position.set(textX + 60, costsY);
+    const bodyY = costsY + (hasCosts ? 22 : 0);
+    this.body.position.set(textX, bodyY);
+    this.layoutHeight = Math.max(80, bodyY + Math.max(this.body.height, estimateHeight(details, textWidth, 19)) + 10);
+    this.frame.clear().roundRect(0, 0, width, this.layoutHeight, 4).fill({ color: selected ? uiTokens.color.surfaceRaised : uiTokens.color.surface }).stroke({ color: selected ? uiTokens.color.selected : 4284778, width: 1 });
+    this.artwork.visible = image.length > 0;
+    this.artwork.setImage(image);
     this.eventMode = enabled ? "static" : "none";
     this.cursor = enabled ? "pointer" : "default";
     this.alpha = enabled ? 1 : 0.45;
-    if (enabled) this.on("pointertap", (event) => onPress(event?.pointerType === "touch", event?.pointerId));
   }
 };
 function estimateHeight(text, width, lineHeight) {
@@ -78484,6 +78547,7 @@ var eventSceneProtocolVersion = runSceneProtocolVersion;
 async function createEventRenderer(canvas, sink) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 529183, backgroundAlpha: 0, canvas, preference: "canvas" });
+  const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
   const restoreBackdrop = installJourneyBackdrop(canvas, "event");
   canvas.tabIndex = 0;
   const canvasFocus = createCanvasFocusCoordinator(canvas);
@@ -78506,6 +78570,7 @@ async function createEventRenderer(canvas, sink) {
   const nestedDetails = new Text({ text: "", style: new TextStyle(contextBodyStyle) });
   const nestedChoiceScroll = new ScrollContainer({ width: 1, height: 1 });
   const nestedChoiceLayer = nestedChoiceScroll.content;
+  const nestedRows = /* @__PURE__ */ new Map();
   const nestedControlLayer = new Container();
   nestedOverlay.content.addChild(nestedTitle, nestedDetails, nestedChoiceScroll, nestedControlLayer);
   root.addChild(background, focal, title, narrative, choiceScroll, contextPanel, contextTitle, contextDetails, controlLayer, feedback, tooltip, nestedOverlay);
@@ -78756,7 +78821,6 @@ async function createEventRenderer(canvas, sink) {
     feedback.position.set(scene.art.x + scene.art.width / 2, scene.art.y + scene.art.height - 12);
     clearJourneyLayer(choiceLayer);
     clearJourneyLayer(controlLayer);
-    clearJourneyLayer(nestedChoiceLayer);
     clearJourneyLayer(nestedControlLayer);
     hideTooltip();
     contextPanel.clear();
@@ -78836,19 +78900,35 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
     nestedChoiceScroll.resize(panelWidth - 36, Math.max(1, choiceBottom - choiceTop));
     const choiceGap = 8;
     let choiceY = 0;
+    const itemIds = new Set(nested.items.map((item) => item.id));
+    for (const [id, row] of nestedRows) {
+      if (itemIds.has(id)) continue;
+      nestedChoiceLayer.removeChild(row);
+      row.destroy({ children: true });
+      nestedRows.delete(id);
+    }
+    nestedChoiceLayer.removeChildren();
     nested.items.forEach((item, index) => {
       const itemSelected = selectedNestedItemIds.has(item.id) || index === nestedIndex;
-      const choice = new EventDeckRow(
-        item.name,
-        getNestedRowDetails(item),
-        item.image,
-        panelWidth - 36,
-        itemSelected,
-        !pending,
-        (isTouch, pointerId) => {
-          if (!isTouch || !nestedScrollInput.suppressesTap(pointerId)) toggleNestedItem(item);
-        }
-      );
+      let choice = nestedRows.get(item.id);
+      if (!choice) {
+        choice = new EventDeckRow(
+          item.name,
+          getNestedRowDetails(item),
+          item.image,
+          panelWidth - 36,
+          itemSelected,
+          !pending,
+          (isTouch, pointerId) => {
+            if (!isTouch || !nestedScrollInput.suppressesTap(pointerId)) toggleNestedItem(getNestedChoice()?.items.find((candidate) => candidate.id === item.id));
+          },
+          item.energyCost,
+          item.manaCost
+        );
+        nestedRows.set(item.id, choice);
+      } else {
+        choice.update(item.name, getNestedRowDetails(item), item.image, panelWidth - 36, itemSelected, !pending, item.energyCost, item.manaCost);
+      }
       choice.position.set(0, choiceY);
       nestedChoiceLayer.addChild(choice);
       choiceY += choice.layoutHeight + choiceGap;
@@ -78901,6 +78981,7 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
   function getNestedRowDetails(item) {
     const lines = (item.tooltip ?? item.description).split("\n");
     if (lines[0] === `Card \xB7 ${item.name}` || lines[0] === `Relic \xB7 ${item.name}`) lines.shift();
+    if ((item.energyCost != null || item.manaCost != null) && /^\d+ Energy|^\d+ Mana/.test(lines[0] ?? "")) lines.shift();
     return lines.join("\n");
   }
   function addControl(label, hint, enabled, x2, y2, width, onPress) {
@@ -78966,6 +79047,7 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
       canvasFocus.dispose();
       restoreBackdrop();
       accessibility.dispose();
+      restoreCanvasPresentation();
       application.destroy({ removeView: false }, { children: true });
     }
   };
@@ -79103,6 +79185,7 @@ init_lib();
 async function createRestRenderer(canvas, sink) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 726562, backgroundAlpha: 0, canvas, preference: "canvas" });
+  const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
   const restoreBackdrop = installJourneyBackdrop(canvas, "rest");
   canvas.tabIndex = 0;
   const canvasFocus = createCanvasFocusCoordinator(canvas);
@@ -79326,6 +79409,7 @@ async function createRestRenderer(canvas, sink) {
       canvasFocus.dispose();
       restoreBackdrop();
       accessibility.dispose();
+      restoreCanvasPresentation();
       application.destroy({ removeView: false }, { children: true });
     }
   };
@@ -79412,6 +79496,7 @@ init_lib();
 async function createShopRenderer(canvas, sink) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 726562, backgroundAlpha: 0, canvas, preference: "canvas" });
+  const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
   const restoreBackdrop = installJourneyBackdrop(canvas, "shop");
   canvas.tabIndex = 0;
   const canvasFocus = createCanvasFocusCoordinator(canvas);
@@ -79834,6 +79919,7 @@ ${getMerchandiseSummary(entry)}`, { x: 24 + placement.x, y: merchandiseLayout.gr
       canvasFocus.dispose();
       restoreBackdrop();
       accessibility.dispose();
+      restoreCanvasPresentation();
       application.destroy({ removeView: false }, { children: true });
     }
   };
@@ -79904,7 +79990,7 @@ var ShopMerchandiseCard = class extends Container {
     this.alpha = Math.min(1, availabilityAlpha + resolutionIntensity * 0.4);
     this.scale.set(1 + resolutionIntensity * (resolutionKind === "Service" ? 0.035 : 0.065));
     this.frame.tint = resolutionIntensity > 0 ? resolutionKind === "Service" ? 10212584 : 16113563 : selected ? 16113563 : 16777215;
-    this.card?.setInteractionState({ enabled, focused: false, selected });
+    this.card?.setInteractionState({ enabled: !merchandise.isSold, focused: false, selected });
     if (this.card && resolutionIntensity > 0 && !this.children.includes(this.resolutionOverlay)) this.addChild(this.resolutionOverlay);
     if (this.card && resolutionIntensity === 0 && this.children.includes(this.resolutionOverlay)) this.removeChild(this.resolutionOverlay);
     this.removeAllListeners("pointertap");
@@ -80074,6 +80160,7 @@ init_lib();
 async function createTreasureRenderer(canvas, sink) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 726562, backgroundAlpha: 0, canvas, preference: "canvas" });
+  const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
   const restoreBackdrop = installJourneyBackdrop(canvas, "reward");
   canvas.tabIndex = 0;
   const canvasFocus = createCanvasFocusCoordinator(canvas);
@@ -80188,6 +80275,7 @@ async function createTreasureRenderer(canvas, sink) {
       canvasFocus.dispose();
       restoreBackdrop();
       accessibility.dispose();
+      restoreCanvasPresentation();
       application.destroy({ removeView: false }, { children: true });
     }
   };
@@ -80218,6 +80306,26 @@ var noOpTreasureAccessibilityOverlay = {
   dispose() {
   }
 };
+
+// src/map-edge-fade.ts
+function drawMapEdgeFade(context2, bounds, resolution) {
+  const fadeWidth = Math.min(28, bounds.width / 4);
+  context2.save();
+  context2.setTransform(resolution, 0, 0, resolution, 0, 0);
+  context2.globalCompositeOperation = "destination-out";
+  context2.globalAlpha = 1;
+  for (const side of [0, 1]) {
+    const outer = side === 0 ? bounds.left : bounds.left + bounds.width;
+    const inner = outer + (side === 0 ? fadeWidth : -fadeWidth);
+    const gradient = context2.createLinearGradient(outer, 0, inner, 0);
+    gradient.addColorStop(0, "rgba(0,0,0,1)");
+    gradient.addColorStop(0.5, "rgba(0,0,0,0.25)");
+    gradient.addColorStop(1, "rgba(0,0,0,0)");
+    context2.fillStyle = gradient;
+    context2.fillRect(Math.min(outer, inner), bounds.top, fadeWidth, bounds.height);
+  }
+  context2.restore();
+}
 
 // src/pixi-map.ts
 init_lib();
@@ -80303,6 +80411,7 @@ var mapSceneProtocolVersion = runSceneProtocolVersion;
 async function createMapRenderer(canvas, sink) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 529183, backgroundAlpha: 0, canvas, preference: "canvas" });
+  const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
   const restoreBackdrop = installJourneyBackdrop(canvas, "map");
   canvas.tabIndex = 0;
   const canvasFocus = createCanvasFocusCoordinator(canvas);
@@ -80333,6 +80442,13 @@ async function createMapRenderer(canvas, sink) {
   const nodeViews = /* @__PURE__ */ new Map();
   const connectionViews = /* @__PURE__ */ new Map();
   let state;
+  let fadeBounds;
+  const edgeFade = { postrender: () => {
+    if (!fadeBounds) return;
+    const context2 = canvas.getContext("2d");
+    if (context2) drawMapEdgeFade(context2, fadeBounds, application.renderer.resolution);
+  } };
+  application.renderer.runners.postrender.add(edgeFade);
   let sequence = 0;
   let selectedNodeId;
   let focusedIndex = 0;
@@ -80600,6 +80716,7 @@ async function createMapRenderer(canvas, sink) {
     });
     background.clear().rect(0, 0, width, height).fill({ color: 530204, alpha: 0.16 }).rect(0, 0, width, Math.min(height * 0.18, 84)).fill({ color: 1520456, alpha: 0.38 });
     graphMask.clear().rect(metrics.graphBounds.left, metrics.graphBounds.top, metrics.graphBounds.width, metrics.graphBounds.height).fill(16777215);
+    fadeBounds = metrics.minimumPanX < 0 ? metrics.graphBounds : void 0;
     graph.removeChildren();
     if (localeBands.length > 0) graph.addChild(localeLayer);
     graph.addChild(connectionLayer, nodeLayer, travelMarker);
@@ -80824,6 +80941,8 @@ async function createMapRenderer(canvas, sink) {
       canvasFocus.dispose();
       restoreBackdrop();
       accessibility.dispose();
+      restoreCanvasPresentation();
+      application.renderer.runners.postrender.remove(edgeFade);
       application.destroy({ removeView: false }, { children: true });
       restorePreviewFocus();
     }
@@ -80994,6 +81113,7 @@ init_lib();
 async function createMainMenuRenderer(canvas, sink, initialState) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 529183, backgroundAlpha: 1, canvas, preference: "canvas" });
+  const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
   canvas.tabIndex = 0;
   const root = new Container();
   const background = new Graphics();
@@ -81108,6 +81228,7 @@ async function createMainMenuRenderer(canvas, sink, initialState) {
       canvas.removeEventListener("keydown", keydown);
       window.removeEventListener("resize", layout);
       resizeObserver?.disconnect();
+      restoreCanvasPresentation();
       application.destroy({ removeView: false }, { children: true });
     }
   };
@@ -81141,6 +81262,7 @@ init_lib();
 async function createCharacterSelectRenderer(canvas, sink, initialState) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 529183, canvas, preference: "canvas" });
+  const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
   canvas.tabIndex = 0;
   const root = new Container();
   const background = new Graphics();
@@ -81292,6 +81414,7 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
       resizeObserver?.disconnect();
       window.removeEventListener("resize", layout);
       canvas.removeEventListener("keydown", keydown);
+      restoreCanvasPresentation();
       application.destroy({ removeView: false }, { children: true });
     }
   };
@@ -81312,6 +81435,7 @@ init_lib();
 async function createLeaveRenderer(canvas, sink) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 529183, canvas, preference: "canvas" });
+  const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
   canvas.tabIndex = 0;
   const root = new Container();
   const panel = new Graphics();
@@ -81344,14 +81468,17 @@ async function createLeaveRenderer(canvas, sink) {
   const observer = new ResizeObserver(layout);
   observer.observe(canvas.parentElement ?? canvas);
   layout();
-  return { dispose() {
-    if (disposed) return;
-    disposed = true;
-    observer.disconnect();
-    window.removeEventListener("resize", layout);
-    canvas.removeEventListener("keydown", keydown);
-    application.destroy({ removeView: false }, { children: true });
-  } };
+  return {
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      observer.disconnect();
+      window.removeEventListener("resize", layout);
+      canvas.removeEventListener("keydown", keydown);
+      restoreCanvasPresentation();
+      application.destroy({ removeView: false }, { children: true });
+    }
+  };
 }
 
 // src/pixi-collection.ts
@@ -81388,6 +81515,7 @@ async function acquireFallbackRenderer() {
     const application = new Application();
     try {
       await application.init({ antialias: true, autoDensity: true, background: 529183, canvas: fallbackCanvas, preference: "canvas" });
+      installCanvasPresentationRecovery(application, fallbackCanvas);
       return { application, canvas: fallbackCanvas };
     } catch (error) {
       fallbackCanvas.remove();
@@ -81481,7 +81609,7 @@ async function createCollectionRenderer(canvas, sink) {
     if (!state) return;
     title.text = state.title;
     const currentState = state;
-    currentState.tabs.forEach((tab2, index) => tabLayer.addChild(new GameButton({ width: 1, height: 1, label: `${tab2.label} ${tab2.entries.length}`, selected: index === currentState.activeTabIndex, onPress: () => {
+    currentState.tabs.forEach((tab2, index) => tabLayer.addChild(new GameButton({ width: 1, height: 1, label: tab2.label, selected: index === currentState.activeTabIndex, onPress: () => {
       void sink.invokeMethodAsync("HandleActionFromRendererAsync", `tab:${index}`);
     } })));
     const tab = currentState.tabs[currentState.activeTabIndex];
@@ -81515,9 +81643,10 @@ async function createCollectionRenderer(canvas, sink) {
   const layoutTabs = (width, plan) => {
     const tabs = tabLayer.children.filter((child) => child instanceof GameButton);
     const tabWidth = Math.max(44, (width - 40) / Math.max(1, tabs.length));
+    const compact = width < 500;
     tabs.forEach((tab, index) => {
       const tabState = state?.tabs[index];
-      if (tabState) tab.label = `${width < 500 ? compactTabLabel(tabState.label) : tabState.label} ${tabState.entries.length}`;
+      if (tabState) tab.label = compact ? compactTabLabel(tabState.label) : tabState.label;
       tab.resize(Math.max(44, tabWidth - 4), plan.tabHeight);
       tab.position.set(20 + index * tabWidth, plan.tabY);
     });
@@ -81773,6 +81902,72 @@ function fitImage(sprite, width, height, x2, y2) {
 
 // src/pixi-menu-overlay.ts
 init_lib();
+
+// src/settings-slider-input.ts
+function quantizeSetting(value, min, max, step) {
+  const clamped = Math.max(min, Math.min(max, value));
+  return Number((Math.round((clamped - min) / step) * step + min).toFixed(2));
+}
+function installSettingsSliderInput(canvas, geometry, initial, min, max, step, preview, commit) {
+  let activePointer;
+  let value = initial;
+  const point = (event) => {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (event.clientX - rect.left) * geometry.sceneWidth / Math.max(1, rect.width),
+      y: (event.clientY - rect.top) * geometry.sceneHeight / Math.max(1, rect.height)
+    };
+  };
+  const update = (event) => {
+    value = quantizeSetting(min + (point(event).x - geometry.x) / geometry.width * (max - min), min, max, step);
+    preview(value);
+  };
+  const down = (event) => {
+    if (activePointer !== void 0 || event.button !== 0 || event.isPrimary === false) return;
+    const location = point(event);
+    if (location.x < geometry.x - 10 || location.x > geometry.x + geometry.width + 10 || location.y < geometry.y || location.y > geometry.y + 46) return;
+    activePointer = event.pointerId;
+    canvas.setPointerCapture?.(event.pointerId);
+    update(event);
+    event.preventDefault();
+  };
+  const move = (event) => {
+    if (event.pointerId !== activePointer) return;
+    update(event);
+    event.preventDefault();
+  };
+  const release = () => {
+    const pointer = activePointer;
+    activePointer = void 0;
+    if (pointer !== void 0 && canvas.hasPointerCapture?.(pointer)) canvas.releasePointerCapture(pointer);
+  };
+  const up = (event) => {
+    if (event.pointerId !== activePointer) return;
+    update(event);
+    release();
+    commit(value);
+  };
+  const cancel = (event) => {
+    if (event.pointerId !== activePointer) return;
+    release();
+    preview(initial);
+  };
+  canvas.addEventListener("pointerdown", down);
+  canvas.addEventListener("pointermove", move);
+  canvas.addEventListener("pointerup", up);
+  canvas.addEventListener("pointercancel", cancel);
+  canvas.addEventListener("lostpointercapture", cancel);
+  return () => {
+    canvas.removeEventListener("pointerdown", down);
+    canvas.removeEventListener("pointermove", move);
+    canvas.removeEventListener("pointerup", up);
+    canvas.removeEventListener("pointercancel", cancel);
+    canvas.removeEventListener("lostpointercapture", cancel);
+    release();
+  };
+}
+
+// src/pixi-menu-overlay.ts
 function nextEnabledControlIndex(controls, current, direction, includeCurrent = true) {
   for (let step = 0; step < controls.length; step++) {
     const offset = step + (includeCurrent ? 0 : 1);
@@ -81825,9 +82020,12 @@ function isHistorySection(value) {
   return typeof item.title === "string" && Array.isArray(item.lines) && item.lines.every((line) => typeof line === "string");
 }
 function sliderAction(slider, requested) {
-  const clamped = Math.max(slider.min, Math.min(slider.max, requested));
-  const value = Math.round((clamped - slider.min) / slider.step) * slider.step + slider.min;
-  return `setting:${slider.key}:${Number(value.toFixed(2))}`;
+  return `setting:${slider.key}:${quantizeSetting(requested, slider.min, slider.max, slider.step)}`;
+}
+function settingsActionColors(action) {
+  if (action === "clear" || action === "confirm:clear") return { fill: 9714732, stroke: 14972757 };
+  if (action === "defaults" || action === "confirm:defaults") return { fill: 7494957, stroke: 14989928 };
+  return {};
 }
 async function createMenuOverlayRenderer(canvas, sink) {
   const host = getCollectionOverlayHost();
@@ -81837,6 +82035,8 @@ async function createMenuOverlayRenderer(canvas, sink) {
     canvas.style.width = "100%";
     canvas.style.height = "100%";
   }
+  const restoreCanvasPresentation = application ? installCanvasPresentationRecovery(application, canvas) : () => {
+  };
   const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const surface = canvas.parentElement;
   const dialogElement = surface?.closest("[role='dialog']") ?? surface;
@@ -81857,6 +82057,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
   let disposed = false;
   let width = 1;
   let height = 1;
+  const sliderDisposers = [];
   const submit = async (action) => {
     if (pending || disposed) return;
     pending = true;
@@ -81867,6 +82068,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     }
   };
   const clearContent = () => {
+    for (const dispose of sliderDisposers.splice(0)) dispose();
     for (const child of content.removeChildren()) child.destroy({ children: true });
     controls = [];
   };
@@ -81879,7 +82081,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
   const addButton = (label, action, x2, y2, buttonWidth, buttonHeight2 = 42, enabled = true) => {
     const index = controls.length;
     const activeTab = action.startsWith("tab:") && state?.settings?.tabIndex === Number(action.slice(4));
-    const button = new GameButton({ width: buttonWidth, height: buttonHeight2, label, enabled, selected: index === selectedIndex || activeTab, onPress: () => {
+    const button = new GameButton({ ...settingsActionColors(action), width: buttonWidth, height: buttonHeight2, label, enabled, selected: index === selectedIndex || activeTab, onPress: () => {
       selectedIndex = index;
       void submit(action);
     } });
@@ -81895,17 +82097,29 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const sliderLabel = addText(slider.label, 24, y2 + 8, compact ? 15 : 18, labelWidth);
     if (controls.length === selectedIndex) sliderLabel.style.fill = 16113563;
     const track = new Graphics();
-    track.roundRect(trackX, y2 + 18, trackWidth, 10, 5).fill({ color: 2640219 });
-    track.roundRect(trackX, y2 + 18, trackWidth * (slider.value - slider.min) / (slider.max - slider.min), 10, 5).fill({ color: 14989928 });
-    track.circle(trackX + trackWidth * (slider.value - slider.min) / (slider.max - slider.min), y2 + 23, 10).fill({ color: 16113563 });
     track.eventMode = "static";
     track.cursor = "pointer";
     track.hitArea = { contains: (x2, pointerY) => x2 >= trackX && x2 <= trackX + trackWidth && pointerY >= y2 && pointerY <= y2 + 46 };
-    track.on("pointertap", (event) => {
-      void submit(sliderAction(slider, slider.min + (event.global.x - trackX) / trackWidth * (slider.max - slider.min)));
-    });
     content.addChild(track);
-    addText(slider.value.toFixed(slider.key === "speed" ? 1 : 2), width - 94, y2 + 8, 16, 76);
+    const valueText = addText("", width - 94, y2 + 8, 16, 76);
+    const preview = (value) => {
+      const fraction = (value - slider.min) / (slider.max - slider.min);
+      track.clear().roundRect(trackX, y2 + 18, trackWidth, 10, 5).fill({ color: 2640219 }).roundRect(trackX, y2 + 18, trackWidth * fraction, 10, 5).fill({ color: 14989928 }).circle(trackX + trackWidth * fraction, y2 + 23, 10).fill({ color: 16113563 });
+      valueText.text = value.toFixed(slider.key === "speed" ? 1 : 2);
+    };
+    preview(slider.value);
+    sliderDisposers.push(installSettingsSliderInput(
+      host?.canvas ?? canvas,
+      { x: trackX, y: y2, width: trackWidth, sceneWidth: width, sceneHeight: height },
+      slider.value,
+      slider.min,
+      slider.max,
+      slider.step,
+      preview,
+      (value) => {
+        void submit(sliderAction(slider, value));
+      }
+    ));
     controls.push({ action: sliderAction(slider, slider.value + slider.step), label: slider.label, slider });
   };
   const layoutSettings = (settings) => {
@@ -81958,6 +82172,10 @@ async function createMenuOverlayRenderer(canvas, sink) {
   };
   const layout = () => {
     if (disposed || !state) return;
+    if (application) {
+      canvas.style.width = "100%";
+      canvas.style.height = "100%";
+    }
     width = Math.max(1, host?.width() ?? canvas.clientWidth ?? canvas.parentElement?.clientWidth ?? 800);
     height = Math.max(1, host?.height() ?? canvas.clientHeight ?? canvas.parentElement?.clientHeight ?? 600);
     application?.renderer.resize(width, height);
@@ -82102,7 +82320,9 @@ ${node.cost} XP \xB7 ${node.stat}`;
       document.removeEventListener("keydown", keydown, true);
       document.removeEventListener("focusin", focusin, true);
       restoreRunControls();
+      for (const dispose of sliderDisposers.splice(0)) dispose();
       root.destroy({ children: true });
+      restoreCanvasPresentation();
       application?.destroy({ removeView: false }, { children: true });
       if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     }
@@ -82114,6 +82334,7 @@ init_lib();
 async function createCardChoiceRenderer(canvas, sink) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 529183, canvas, preference: "canvas" });
+  const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
   canvas.tabIndex = 0;
   const root = new Container();
   const panel = new GamePanel({ width: 1, height: 1, fill: uiColors.panelFill, stroke: uiColors.panelStroke });
@@ -82351,6 +82572,7 @@ ${card.description}`;
       canvas.removeEventListener("pointermove", pointermove);
       canvas.removeEventListener("pointerup", pointerend);
       canvas.removeEventListener("pointercancel", pointerend);
+      restoreCanvasPresentation();
       application.destroy({ removeView: false }, { children: true });
     }
   };
@@ -82403,6 +82625,7 @@ var toolbarPriority = ["endTurn", "map", "inventory", "deck", "backpack", "disca
 async function createRunControlsRenderer(canvas, sink, initialState) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, backgroundAlpha: 0, canvas, preference: "canvas" });
+  const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
   canvas.tabIndex = 0;
   const root = new Container();
   const backdrop = new Graphics();
@@ -82415,6 +82638,8 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
   let state = { menuOpen: false, actions: [] };
   let buttons = [];
   const buttonActions = /* @__PURE__ */ new Map();
+  const retainedButtons = /* @__PURE__ */ new Map();
+  const visibleButtonActions = /* @__PURE__ */ new Set();
   let focusedAction = "menu";
   let page = 0;
   let pending = false;
@@ -82429,7 +82654,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     }
     if (action !== "menu" && !state.actions.some((entry) => entry.id === action && entry.enabled)) return false;
     pending = true;
-    buttons.forEach((button) => button.setEnabled(false));
+    controls.eventMode = "none";
     feedback.text = "Working\u2026";
     try {
       const accepted = await sink.invokeMethodAsync("HandleActionFromRendererAsync", action);
@@ -82445,26 +82670,44 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     }
   };
   const createButton = (action, label, enabled, width, height, x2, y2) => {
-    const button = new GameButton({ width, height, label, enabled: enabled && !pending, focused: action === focusedAction, onPress: () => void submit(action) });
+    let button = retainedButtons.get(action);
+    if (!button) {
+      const created = new GameButton({ width, height, label, onPress: () => void submit(action) });
+      created.on("pointerover", () => created.setFocused(true));
+      created.on("pointerout", () => created.setFocused(action === focusedAction));
+      created.on("pointerdown", () => created.setSelected(true));
+      created.on("pointerup", () => created.setSelected(false));
+      created.on("pointerupoutside", () => created.setSelected(false));
+      retainedButtons.set(action, created);
+      button = created;
+    }
+    visibleButtonActions.add(action);
+    button.label = label;
+    button.resize(width, height);
+    button.setEnabled(enabled);
+    button.setFocused(action === focusedAction);
     button.position.set(x2, y2);
-    button.on("pointerover", () => button.setFocused(true));
-    button.on("pointerout", () => button.setFocused(action === focusedAction));
-    button.on("pointerdown", () => button.setSelected(true));
-    button.on("pointerup", () => button.setSelected(false));
-    button.on("pointerupoutside", () => button.setSelected(false));
     controls.addChild(button);
     buttons.push(button);
     buttonActions.set(button, action);
+  };
+  const removeInactiveButtons = () => {
+    for (const [action, button] of retainedButtons) {
+      if (visibleButtonActions.has(action)) continue;
+      button.destroy({ children: true });
+      retainedButtons.delete(action);
+    }
   };
   const layout = () => {
     if (disposed) return;
     const width = Math.max(1, canvas.parentElement?.clientWidth ?? canvas.clientWidth);
     const height = Math.max(1, canvas.parentElement?.clientHeight ?? canvas.clientHeight);
     application.renderer.resize(width, height);
-    for (const button of buttons) button.destroy({ children: true });
+    visibleButtonActions.clear();
     buttons = [];
     buttonActions.clear();
     controls.removeChildren();
+    controls.eventMode = pending ? "none" : "passive";
     backdrop.clear();
     panel.clear();
     const barY = Math.max(0, height - toolbarHeight);
@@ -82477,6 +82720,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     createButton("menu", state.menuOpen ? "Close" : "Menu", true, 58, buttonHeight, 6, barY + 8);
     primaries.forEach((entry, index) => createButton(entry.id, entry.label, entry.enabled, primaryWidth, buttonHeight, menuWidth + 6 + index * (primaryWidth + buttonGap), barY + 8));
     if (!state.menuOpen) {
+      removeInactiveButtons();
       feedback.visible = false;
       return;
     }
@@ -82503,6 +82747,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     }
     feedback.visible = true;
     feedback.position.set(panelX + 12, barY - 22);
+    removeInactiveButtons();
   };
   const keydown = (event) => {
     if (event.key === "Escape" && state.menuOpen) {
@@ -82570,6 +82815,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
       canvas.removeEventListener("keydown", keydown);
       canvas.removeEventListener("pointerdown", focusCanvas);
       document.removeEventListener("keydown", globalKeydown);
+      restoreCanvasPresentation();
       application.destroy({ removeView: false }, { children: true });
     }
   };
@@ -82823,6 +83069,9 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     }
   };
   window.addEventListener("resize", handleViewportChange);
+  window.addEventListener("focus", refreshVisibleText);
+  window.addEventListener("pageshow", refreshVisibleText);
+  document.fonts?.addEventListener("loadingdone", refreshVisibleText);
   window.addEventListener("orientationchange", handleViewportChange);
   document.addEventListener("fullscreenchange", handleViewportChange);
   document.addEventListener("webkitfullscreenchange", handleViewportChange);
@@ -82935,7 +83184,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
         averageFrameTimeMs: runtimeDiagnostics.averageFrameTimeMs,
         maximumFrameTimeMs: runtimeDiagnostics.maximumFrameTimeMs,
         longFrameCount: runtimeDiagnostics.longFrameCount,
-        listenerCount: 12,
+        listenerCount: 14 + (document.fonts ? 1 : 0),
         appliedSequence,
         rendererType,
         suspended,
@@ -82974,6 +83223,9 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     cancelPendingAnimations("The encounter scene has been disposed.");
     resizeObserver.disconnect();
     window.removeEventListener("resize", handleViewportChange);
+    window.removeEventListener("focus", refreshVisibleText);
+    window.removeEventListener("pageshow", refreshVisibleText);
+    document.fonts?.removeEventListener("loadingdone", refreshVisibleText);
     window.removeEventListener("orientationchange", handleViewportChange);
     document.removeEventListener("fullscreenchange", handleViewportChange);
     document.removeEventListener("webkitfullscreenchange", handleViewportChange);
@@ -83031,8 +83283,13 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
         presentationRecoveryPending = true;
         continue;
       }
-      scene.refreshTextTextures();
+      refreshVisibleText();
     }
+  }
+  function refreshVisibleText() {
+    if (disposed || document.hidden || contextLost) return;
+    refreshCanvasText(application.stage);
+    application.render();
   }
 }
 function createTextureDiagnostics(assetDiagnostics, particleDiagnostics) {
