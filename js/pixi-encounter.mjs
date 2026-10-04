@@ -70628,6 +70628,38 @@ function findDialogOwner(value) {
 
 // src/particle-effect-manager.ts
 init_lib();
+
+// src/circle-particle-display.ts
+init_lib();
+var CircleParticleDisplay = class extends Container {
+  halo = new Graphics();
+  core = new Graphics();
+  constructor() {
+    super();
+    this.addChild(this.halo);
+    this.addChild(this.core);
+  }
+  /** Configures reusable geometry without tinting the halo with the core's color. */
+  configure(size, glowIntensity, glowColor, glowAlpha) {
+    this.core.clear().circle(0, 0, size).fill(16777215);
+    this.halo.clear();
+    this.halo.visible = glowIntensity > 0;
+    if (this.halo.visible) {
+      this.halo.circle(0, 0, size * (1 + glowIntensity / 12)).fill({ color: glowColor, alpha: glowAlpha });
+    }
+  }
+  /** Updates color and halo fading using display properties rather than rebuilding paths. */
+  update(color, progress) {
+    this.core.tint = color;
+    this.halo.alpha = 1 - progress;
+  }
+  /** Releases both owned graphics when the pool is trimmed or the runtime is disposed. */
+  destroy() {
+    super.destroy({ children: true });
+  }
+};
+
+// src/particle-effect-manager.ts
 var ParticleEffectManager = class {
   constructor(layer, options = {}) {
     this.layer = layer;
@@ -70647,6 +70679,8 @@ var ParticleEffectManager = class {
   maxPooledParticles;
   reducedMotion;
   disposed = false;
+  liveParticleCount = 0;
+  pooledParticleCount = 0;
   resolveAnchor;
   /**
    * Starts or replaces an emitter using the persisted C# particle option contract.
@@ -70660,17 +70694,25 @@ var ParticleEffectManager = class {
       return false;
     }
     this.destroy(options.id);
+    if (options.quality === 0) {
+      return true;
+    }
+    const anchor = options.anchorId ? this.resolveAnchor?.(options.anchorId) : void 0;
+    if (options.anchorId && !anchor) {
+      return false;
+    }
     const textOffsetKey = options.renderMode === "text" ? options.anchorId ?? "scene" : void 0;
     const emitter = {
       options,
       particles: [],
       textOffsetKey,
-      textOffset: textOffsetKey ? this.allocateTextOffset(textOffsetKey) : 0,
+      textOffset: textOffsetKey ? this.allocateTextOffset(textOffsetKey, options.font) : 0,
       elapsedSinceEmissionMs: 0,
-      hasEmitted: false
+      hasEmitted: false,
+      lastAnchor: anchor
     };
     this.emitters.set(options.id, emitter);
-    this.emit(emitter);
+    this.emit(emitter, anchor);
     emitter.hasEmitted = true;
     return true;
   }
@@ -70685,6 +70727,7 @@ var ParticleEffectManager = class {
     for (const particle of emitter.particles) {
       this.recycle(particle);
     }
+    this.liveParticleCount -= emitter.particles.length;
     if (emitter.textOffsetKey) {
       this.releaseTextOffset(emitter.textOffsetKey, emitter.textOffset);
     }
@@ -70698,7 +70741,7 @@ var ParticleEffectManager = class {
     if (this.disposed || !Number.isFinite(deltaMs) || deltaMs < 0) {
       return;
     }
-    for (const emitter of [...this.emitters.values()]) {
+    for (const emitter of this.emitters.values()) {
       this.updateEmitter(emitter, deltaMs);
       if (!emitter.options.loop && emitter.hasEmitted && emitter.particles.length === 0) {
         this.destroy(emitter.options.id);
@@ -70711,8 +70754,8 @@ var ParticleEffectManager = class {
   getDiagnostics() {
     return {
       activeEmitterCount: this.emitters.size,
-      liveParticleCount: this.getLiveParticleCount(),
-      pooledParticleCount: this.getPooledParticleCount(),
+      liveParticleCount: this.liveParticleCount,
+      pooledParticleCount: this.pooledParticleCount,
       cachedTextureCount: this.textureCache.size,
       cachedTextureByteEstimate: getTextureByteEstimate(this.textureCache.values())
     };
@@ -70751,21 +70794,25 @@ var ParticleEffectManager = class {
       }
     }
     this.pools.clear();
+    this.pooledParticleCount = 0;
     this.textureCache.clear();
   }
+  /** Keeps finite combat text readable after a lethal hit removes its target from the scene. */
   updateEmitter(emitter, deltaMs) {
     const anchor = emitter.options.anchorId ? this.resolveAnchor?.(emitter.options.anchorId) : void 0;
-    if (emitter.options.anchorId && !anchor) {
+    if (emitter.options.anchorId && !anchor && emitter.options.renderMode !== "text") {
       this.destroy(emitter.options.id);
       return;
     }
-    if (emitter.options.loop) {
-      emitter.elapsedSinceEmissionMs += deltaMs;
-      while (emitter.elapsedSinceEmissionMs >= emitter.options.emitRate) {
-        emitter.elapsedSinceEmissionMs -= emitter.options.emitRate;
-        this.emit(emitter);
-      }
+    emitter.lastAnchor = anchor ?? emitter.lastAnchor;
+    this.advanceParticles(emitter, deltaMs);
+    if (!emitter.options.anchorId || anchor) {
+      this.advanceEmission(emitter, deltaMs);
     }
+  }
+  /** Ages existing particles before spawning, and removes expired entries without array shifting. */
+  advanceParticles(emitter, deltaMs) {
+    const step = this.reducedMotion ? 0 : Math.min(deltaMs, 50) / (1e3 / 60);
     for (let index = emitter.particles.length - 1; index >= 0; index--) {
       const particle = emitter.particles[index];
       if (!particle) {
@@ -70773,32 +70820,81 @@ var ParticleEffectManager = class {
       }
       particle.ageMs += deltaMs;
       if (particle.ageMs >= particle.lifespanMs) {
-        emitter.particles.splice(index, 1);
-        this.recycle(particle);
+        this.removeParticle(emitter, index);
         continue;
       }
-      const step = deltaMs / (1e3 / 60);
       particle.velocityX += particle.accelerationX * step;
       particle.velocityY += particle.accelerationY * step;
       particle.x += (particle.directionX * particle.speed + particle.velocityX) * step;
       particle.y += (particle.directionY * particle.speed + particle.velocityY) * step;
       particle.speed *= Math.pow(particle.friction, step);
       particle.display.rotation += particle.rotationSpeed * step;
-      this.renderParticle(particle, emitter.options, anchor);
+      this.renderParticle(particle, emitter.options, emitter.lastAnchor);
     }
   }
-  emit(emitter) {
-    const requested = Math.max(0, Math.floor(randomInRange(emitter.options.particleCount) * emitter.options.quality));
+  /** Drops missed cosmetic bursts after a stall instead of replaying an unbounded catch-up loop. */
+  advanceEmission(emitter, deltaMs) {
+    if (!emitter.options.loop) {
+      return;
+    }
+    emitter.elapsedSinceEmissionMs += deltaMs;
+    if (emitter.elapsedSinceEmissionMs >= emitter.options.emitRate) {
+      emitter.elapsedSinceEmissionMs %= emitter.options.emitRate;
+      this.emit(emitter, emitter.lastAnchor);
+    }
+  }
+  /** Reserves space for combat text by recycling decorative particles only when the budget is full. */
+  makeRoomForText(requested) {
+    for (const emitter of this.emitters.values()) {
+      if (emitter.options.renderMode === "text") {
+        continue;
+      }
+      while (emitter.particles.length > 0 && this.maxParticles - this.liveParticleCount < requested) {
+        this.removeParticle(emitter, emitter.particles.length - 1);
+      }
+      if (this.maxParticles - this.liveParticleCount >= requested) {
+        return;
+      }
+    }
+  }
+  /** Emits a bounded burst, resolving its anchor once and using constant-time budget counters. */
+  emit(emitter, anchor) {
+    const requested = Math.min(
+      this.maxParticles,
+      emitter.options.maxParticles - emitter.particles.length,
+      Math.max(0, Math.floor(randomInRange(emitter.options.particleCount) * emitter.options.quality))
+    );
+    if (emitter.options.renderMode === "text" && this.maxParticles - this.liveParticleCount < requested) {
+      this.makeRoomForText(requested);
+    }
     const available = Math.max(0, Math.min(
       emitter.options.maxParticles - emitter.particles.length,
-      this.maxParticles - this.getLiveParticleCount()
+      this.maxParticles - this.liveParticleCount
     ));
     const count2 = Math.min(requested, available);
     for (let index = 0; index < count2; index++) {
       const particle = this.createParticle(emitter.options, emitter.textOffset);
+      this.renderParticle(particle, emitter.options, anchor);
+      if (particle.mode === "text") {
+        this.separateTextParticle(emitter, particle);
+      }
       emitter.particles.push(particle);
-      this.renderParticle(particle, emitter.options, emitter.options.anchorId ? this.resolveAnchor?.(emitter.options.anchorId) : void 0);
+      this.liveParticleCount++;
     }
+  }
+  /** Places new labels clear of older labels that have already risen out of their original lane. */
+  separateTextParticle(emitter, particle) {
+    const labels = [...this.emitters.values()].filter((active) => active.textOffsetKey === emitter.textOffsetKey).flatMap((active) => active.particles.map((label) => ({ particle: label, height: getTextLaneHeight(label.display) }))).sort((left, right) => right.particle.display.position.y - left.particle.display.position.y);
+    const height = getTextLaneHeight(particle.display);
+    let y2 = particle.display.position.y;
+    for (const label of labels) {
+      const spacing = (height + label.height) / 2;
+      if (Math.abs(y2 - label.particle.display.position.y) < spacing) {
+        y2 = label.particle.display.position.y - spacing;
+      }
+    }
+    particle.y += y2 - particle.display.position.y;
+    particle.display.position.set(particle.display.position.x, y2);
   }
   createParticle(options, textOffset) {
     const display = this.acquire(options);
@@ -70812,7 +70908,7 @@ var ParticleEffectManager = class {
       display,
       mode: options.renderMode,
       x: position.x,
-      y: position.y - textOffset * 24,
+      y: position.y - textOffset,
       velocityX: velocity.x,
       velocityY: velocity.y,
       accelerationX: acceleration.x,
@@ -70830,12 +70926,32 @@ var ParticleEffectManager = class {
       endAlpha: options.endAlpha
     };
     display.rotation = randomInRange(options.rotation);
+    this.initializeParticleDisplay(particle, options);
     return particle;
+  }
+  /** Builds circle geometry and sets immutable sprite/text properties once per pooled use. */
+  initializeParticleDisplay(particle, options) {
+    const display = particle.display;
+    display.blendMode = toPixiBlendMode(options.blendMode);
+    display.scale.set(1);
+    if (display instanceof CircleParticleDisplay) {
+      display.configure(particle.size, options.glowIntensity, toHexColor(options.glowColor), Math.min(0.38, options.glowIntensity / 40) * options.glowColor.a);
+    } else {
+      display.anchor.set(0.5);
+      if (display instanceof Sprite) {
+        display.width = particle.size * 2;
+        display.height = particle.size * 2;
+      }
+    }
   }
   acquire(options) {
     const pool = this.getPool(options.renderMode);
-    const display = pool.pop() ?? this.createDisplay(options);
-    this.configureDisplay(display, options);
+    const pooled = pool.pop();
+    if (pooled) {
+      this.pooledParticleCount--;
+      this.configureDisplay(pooled, options);
+    }
+    const display = pooled ?? this.createDisplay(options);
     display.visible = true;
     display.alpha = 1;
     if (display.parent !== this.layer) {
@@ -70852,7 +70968,7 @@ var ParticleEffectManager = class {
     if (options.renderMode === "image" && options.imageSrc) {
       return new Sprite(this.getTexture(options.imageSrc));
     }
-    return new Graphics();
+    return new CircleParticleDisplay();
   }
   configureDisplay(display, options) {
     if (display instanceof Text) {
@@ -70867,46 +70983,43 @@ var ParticleEffectManager = class {
     this.textureCache.set(source8, texture);
     return texture;
   }
+  /** Holds text at full opacity before a smooth fade; circle rendering only changes tint and alpha. */
   renderParticle(particle, options, anchor) {
     const progress = particle.ageMs / particle.lifespanMs;
-    const color = interpolateColor(particle.startColor, particle.endColor, progress);
-    const alpha = (1 - progress) * (1 - particle.endAlpha) + particle.endAlpha;
-    const position = anchor ? { x: anchor.x + options.offset.x + particle.x, y: anchor.y + options.offset.y + particle.y } : { x: options.position.x + options.offset.x + particle.x, y: options.position.y + options.offset.y + particle.y };
-    particle.display.position.set(position.x, position.y);
+    const color = particle.startColor === particle.endColor ? particle.startColor : interpolateColor(particle.startColor, particle.endColor, progress);
+    const fade = particle.mode === "text" ? textFadeProgress(progress) : progress;
+    const alpha = (1 - fade) * (1 - particle.endAlpha) + particle.endAlpha;
+    const origin = anchor ?? options.position;
+    particle.display.position.set(origin.x + options.offset.x + particle.x, origin.y + options.offset.y + particle.y);
     particle.display.alpha = alpha * color.a;
-    particle.display.blendMode = toPixiBlendMode(options.blendMode);
-    if (particle.mode === "default" && particle.display instanceof Graphics) {
-      particle.display.tint = 16777215;
-      particle.display.clear();
-      if (options.glowIntensity > 0) {
-        const glowAlpha = Math.min(0.38, options.glowIntensity / 40) * (1 - progress);
-        particle.display.circle(0, 0, particle.size * (1 + options.glowIntensity / 12)).fill({ color: toHexColor(options.glowColor), alpha: glowAlpha });
-      }
-      particle.display.circle(0, 0, particle.size).fill({ color: toHexColor(color) });
-      particle.display.scale.set(1);
+    if (particle.display instanceof CircleParticleDisplay) {
+      particle.display.update(toHexColor(color), progress);
     } else {
       particle.display.tint = toHexColor(color);
     }
-    if (particle.mode === "image" && particle.display instanceof Sprite) {
-      particle.display.width = particle.size * 2;
-      particle.display.height = particle.size * 2;
-      particle.display.anchor.set(0.5);
-    } else if (particle.mode === "text" && particle.display instanceof Text) {
-      particle.display.text = options.text;
-      particle.display.anchor.set(0.5);
+  }
+  /** Removes an unordered particle in constant time while keeping global diagnostics exact. */
+  removeParticle(emitter, index) {
+    const particle = emitter.particles[index];
+    const last = emitter.particles.pop();
+    if (!particle || !last) {
+      return;
     }
+    if (index < emitter.particles.length) {
+      emitter.particles[index] = last;
+    }
+    this.liveParticleCount--;
+    this.recycle(particle);
   }
   recycle(particle) {
     particle.display.removeFromParent();
     particle.display.visible = false;
-    if (this.getPooledParticleCount() >= this.maxPooledParticles) {
+    if (this.pooledParticleCount >= this.maxPooledParticles) {
       particle.display.destroy();
       return;
     }
     this.getPool(particle.mode).push(particle.display);
-  }
-  getPooledParticleCount() {
-    return [...this.pools.values()].reduce((total, pool) => total + pool.length, 0);
+    this.pooledParticleCount++;
   }
   getPool(mode) {
     const existing = this.pools.get(mode);
@@ -70917,21 +71030,19 @@ var ParticleEffectManager = class {
     this.pools.set(mode, pool);
     return pool;
   }
-  getLiveParticleCount() {
-    let count2 = 0;
-    for (const emitter of this.emitters.values()) {
-      count2 += emitter.particles.length;
-    }
-    return count2;
-  }
-  allocateTextOffset(key) {
-    const allocated = this.textOffsetSlots.get(key) ?? /* @__PURE__ */ new Set();
+  /** Allocates non-overlapping vertical lanes using each label's font size. */
+  allocateTextOffset(key, font) {
+    const allocated = this.textOffsetSlots.get(key) ?? /* @__PURE__ */ new Map();
     this.textOffsetSlots.set(key, allocated);
     let offset = 0;
-    while (allocated.has(offset)) {
-      offset++;
+    const height = Math.max(24, parseFont(font).size + 8);
+    for (const [start, occupiedHeight] of [...allocated.entries()].sort(([left], [right]) => left - right)) {
+      if (offset + height <= start) {
+        break;
+      }
+      offset = start + occupiedHeight;
     }
-    allocated.add(offset);
+    allocated.set(offset, height);
     return offset;
   }
   releaseTextOffset(key, offset) {
@@ -70959,9 +71070,9 @@ function parseOptions(value, maxParticlesPerEmitter, reducedMotion) {
     return void 0;
   }
   const requestedQuality = finiteNumber(value.qualityFactor, 1);
-  const quality = reducedMotion ? 0 : Math.min(1, Math.max(0.1, requestedQuality));
   const imageSrc = optionalString(value.imageSrc);
   const requestedRenderMode = readRenderMode(value.renderMode);
+  const quality = requestedRenderMode === "text" ? 1 : reducedMotion ? 0 : Math.min(1, Math.max(0.1, requestedQuality));
   return {
     id: value.id,
     effectDefinition: optionalString(value.effectDefinition),
@@ -71103,6 +71214,9 @@ function parseFontWeight(value) {
       return "normal";
   }
 }
+function getTextLaneHeight(display) {
+  return display instanceof Text ? Math.max(24, display.height + 8) : 24;
+}
 function randomInRange(range) {
   return range.min + Math.random() * (range.max - range.min);
 }
@@ -71130,6 +71244,10 @@ function randomDirection(options) {
 }
 function rotate(value, angle) {
   return { x: value.x * Math.cos(angle) - value.y * Math.sin(angle), y: value.x * Math.sin(angle) + value.y * Math.cos(angle) };
+}
+function textFadeProgress(progress) {
+  const fade = clampUnit((progress - 0.6) / 0.4);
+  return fade * fade * (3 - 2 * fade);
 }
 function interpolateColor(start, end, progress) {
   return { r: start.r + (end.r - start.r) * progress, g: start.g + (end.g - start.g) * progress, b: start.b + (end.b - start.b) * progress, a: start.a + (end.a - start.a) * progress };
