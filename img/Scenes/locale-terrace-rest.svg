@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
+  <title>Terrace — rest placeholder</title>
+  <rect width="1536" height="1024" fill="#243b47"/>
+
+  <circle cx="1190" cy="150" r="55" fill="#516773" opacity=".6"/>
+  <path d="M0 410L220 330L390 425L540 270L720 430L1000 310L1190 420L1536 285V574H0Z" fill="#344d58"/>
+  <path d="M90 535V355H160V315H230V355H300V535M1220 535V325H1290V280H1360V325H1445V535" fill="#516773"/>
+  <path d="M330 475H1210V518H330Z" fill="#172a33"/>
+  <path d="M330 475H1210M385 518V574M620 518V574M860 518V574M1120 518V574" fill="none" stroke="#344d58" stroke-width="24"/>
+
+  <rect y="574" width="1536" height="450" fill="#172a33"/>
+  <path d="M0 574H1536" stroke="#344d58" stroke-width="6"/>
+
+  <path d="M0 655H1536M0 770H1536M0 935H1536M730 574L570 1024M810 574L970 1024M705 655L765 770M840 770L935 935" fill="none" stroke="#344d58" stroke-width="3" opacity=".4"/>
+  <path d="M715 835L728 835L740 858M857 680L843 680L835 700" fill="none" stroke="#516773" stroke-width="3" opacity=".3"/>
+
+
+  <path d="M240 595L400 350L590 615Z" fill="#516773"/>
+  <path d="M395 385L490 603H310Z" fill="#172a33"/>
+  <ellipse cx="800" cy="780" rx="150" ry="42" fill="#344d58"/>
+  <path d="M725 775L845 740M735 740L865 775" stroke="#516773" stroke-width="18"/>
+  <path d="M765 752Q705 690 780 648Q785 692 815 670Q855 720 813 752Z" fill="#b49b6a"/>
+  <path d="M1080 850H1335V905H1080Z" fill="#344d58"/>
+
+</svg>

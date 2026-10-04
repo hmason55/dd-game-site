@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
+  <title>Chamber — rest placeholder</title>
+  <rect width="1536" height="1024" fill="#2b3243"/>
+
+  <path d="M0 0H1536V90H0Z" fill="#1b2332"/>
+  <path d="M135 574V280Q135 170 245 170H1290Q1400 170 1400 280V574" fill="none" stroke="#424c60" stroke-width="90"/>
+  <path d="M485 574V350Q485 155 768 155Q1050 155 1050 350V574Z" fill="#424c60"/>
+  <path d="M570 574V365Q570 240 768 240Q965 240 965 365V574Z" fill="#1b2332"/>
+  <path d="M75 574V330H210V574M1325 574V330H1460V574" fill="#667084"/>
+  <path d="M60 330H230V370H60M1305 330H1480V370H1305" fill="#424c60"/>
+  <circle cx="768" cy="135" r="36" fill="#667084"/>
+
+  <rect y="574" width="1536" height="450" fill="#1b2332"/>
+  <path d="M0 574H1536" stroke="#424c60" stroke-width="6"/>
+
+  <ellipse cx="768" cy="790" rx="255" ry="85" fill="none" stroke="#424c60" stroke-width="4" opacity=".45"/>
+  <ellipse cx="768" cy="790" rx="210" ry="62" fill="none" stroke="#667084" stroke-width="3" opacity=".25"/>
+  <path d="M0 645H1536M0 970H1536M765 574V705M765 875V1024M535 790H1000" fill="none" stroke="#424c60" stroke-width="3" opacity=".35"/>
+
+
+  <path d="M240 595L400 350L590 615Z" fill="#667084"/>
+  <path d="M395 385L490 603H310Z" fill="#1b2332"/>
+  <ellipse cx="800" cy="780" rx="150" ry="42" fill="#424c60"/>
+  <path d="M725 775L845 740M735 740L865 775" stroke="#667084" stroke-width="18"/>
+  <path d="M765 752Q705 690 780 648Q785 692 815 670Q855 720 813 752Z" fill="#b9a477"/>
+  <path d="M1080 850H1335V905H1080Z" fill="#424c60"/>
+
+</svg>

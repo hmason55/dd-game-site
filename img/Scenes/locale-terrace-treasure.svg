@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
+  <title>Terrace — treasure placeholder</title>
+  <rect width="1536" height="1024" fill="#243b47"/>
+
+  <circle cx="1190" cy="150" r="55" fill="#516773" opacity=".6"/>
+  <path d="M0 410L220 330L390 425L540 270L720 430L1000 310L1190 420L1536 285V574H0Z" fill="#344d58"/>
+  <path d="M90 535V355H160V315H230V355H300V535M1220 535V325H1290V280H1360V325H1445V535" fill="#516773"/>
+  <path d="M330 475H1210V518H330Z" fill="#172a33"/>
+  <path d="M330 475H1210M385 518V574M620 518V574M860 518V574M1120 518V574" fill="none" stroke="#344d58" stroke-width="24"/>
+
+  <rect y="574" width="1536" height="450" fill="#172a33"/>
+  <path d="M0 574H1536" stroke="#344d58" stroke-width="6"/>
+
+  <path d="M0 655H1536M0 770H1536M0 935H1536M730 574L570 1024M810 574L970 1024M705 655L765 770M840 770L935 935" fill="none" stroke="#344d58" stroke-width="3" opacity=".4"/>
+  <path d="M715 835L728 835L740 858M857 680L843 680L835 700" fill="none" stroke="#516773" stroke-width="3" opacity=".3"/>
+
+
+  <path d="M490 760H1050V825H490Z" fill="#344d58"/>
+  <path d="M620 760V620Q620 585 655 585H885Q920 585 920 620V760Z" fill="#516773"/>
+  <path d="M620 660H920M668 585V760M870 585V760" stroke="#b49b6a" stroke-width="14"/>
+  <path d="M750 642H790V700H750Z" fill="#b49b6a"/>
+  <path d="M430 735L500 700L530 750L480 775M990 750L1040 715L1105 770L1045 790Z" fill="#516773"/>
+
+</svg>

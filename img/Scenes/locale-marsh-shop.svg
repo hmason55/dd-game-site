@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
+  <title>Marsh — shop placeholder</title>
+  <rect width="1536" height="1024" fill="#243d3c"/>
+
+  <circle cx="1150" cy="175" r="48" fill="#587066" opacity=".5"/>
+  <path d="M0 440L250 365L430 450L670 330L950 430L1240 350L1536 420V574H0Z" fill="#34534b"/>
+  <path d="M0 485H1536V574H0Z" fill="#587066" opacity=".35"/>
+  <path d="M150 490V300H235V280H285V490M1220 490V360H1290V330H1340V490" fill="#34534b"/>
+  <path d="M125 570L105 385M145 574L172 418M1390 574L1410 395M1370 574L1342 425" fill="none" stroke="#587066" stroke-width="12"/>
+  <path d="M385 550H515M975 525H1100" stroke="#587066" stroke-width="5" opacity=".6"/>
+
+  <rect y="574" width="1536" height="450" fill="#172e2c"/>
+  <path d="M0 574H1536" stroke="#34534b" stroke-width="6"/>
+
+  <ellipse cx="655" cy="700" rx="140" ry="27" fill="#34534b" opacity=".4"/>
+  <ellipse cx="895" cy="880" rx="210" ry="48" fill="#34534b" opacity=".3"/>
+  <path d="M580 700H715M745 870H965M675 760H740M770 948H910" stroke="#587066" stroke-width="3" opacity=".3"/>
+  <path d="M748 625L799 625L815 650H735M685 800L754 775L800 820L742 833Z" fill="#34534b" opacity=".6"/>
+
+
+  <path d="M310 720V305H350V720M1180 720V305H1220V720" fill="#587066"/>
+  <path d="M260 300H1250L1340 465H210Z" fill="#b0a16d"/>
+  <path d="M310 690H1220V825H310Z" fill="#34534b"/>
+  <path d="M310 690H1220V730H310Z" fill="#587066"/>
+  <path d="M520 650H605V690H520M935 615H995V690H935" fill="#b0a16d" opacity=".75"/>
+  <path d="M690 685V600Q690 520 768 520Q846 520 846 600V685Z" fill="#172e2c"/>
+  <path d="M385 465V540M1150 465V540" stroke="#587066" stroke-width="8"/>
+  <path d="M364 525H407V582H364M1128 525H1172V582H1128Z" fill="#b0a16d"/>
+
+</svg>

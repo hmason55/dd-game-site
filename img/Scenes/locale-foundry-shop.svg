@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
+  <title>Foundry — shop placeholder</title>
+  <rect width="1536" height="1024" fill="#38343b"/>
+
+  <path d="M0 0H1536V115H0Z" fill="#25242d"/>
+  <path d="M120 115V574H220V115M1316 115V574H1416V115" fill="#50474c"/>
+  <path d="M420 574V310Q420 190 540 190H1000Q1120 190 1120 310V574Z" fill="#50474c"/>
+  <path d="M490 574V325Q490 270 545 270H990Q1050 270 1050 325V574Z" fill="#25242d"/>
+  <path d="M0 205H280V410H0M1536 240H1260V460H1536" fill="none" stroke="#75625a" stroke-width="34"/>
+  <circle cx="285" cy="285" r="82" fill="#75625a"/>
+  <circle cx="285" cy="285" r="44" fill="#25242d"/>
+  <path d="M655 115V210M885 115V195" stroke="#75625a" stroke-width="8"/>
+  <path d="M605 115H935" stroke="#75625a" stroke-width="22"/>
+
+  <rect y="574" width="1536" height="450" fill="#25242d"/>
+  <path d="M0 574H1536" stroke="#50474c" stroke-width="6"/>
+
+  <path d="M640 574L505 1024M675 574L600 1024M865 574L945 1024M900 574L1040 1024" stroke="#50474c" stroke-width="5" opacity=".5"/>
+  <path d="M650 700H890M565 900H975" stroke="#75625a" stroke-width="3" opacity=".3"/>
+  <circle cx="725" cy="690" r="5" fill="#bd926a" opacity=".25"/>
+  <circle cx="815" cy="690" r="5" fill="#bd926a" opacity=".25"/>
+  <circle cx="665" cy="905" r="7" fill="#bd926a" opacity=".25"/>
+  <circle cx="875" cy="905" r="7" fill="#bd926a" opacity=".25"/>
+
+
+  <path d="M310 720V305H350V720M1180 720V305H1220V720" fill="#75625a"/>
+  <path d="M260 300H1250L1340 465H210Z" fill="#bd926a"/>
+  <path d="M310 690H1220V825H310Z" fill="#50474c"/>
+  <path d="M310 690H1220V730H310Z" fill="#75625a"/>
+  <path d="M520 650H605V690H520M935 615H995V690H935" fill="#bd926a" opacity=".75"/>
+  <path d="M690 685V600Q690 520 768 520Q846 520 846 600V685Z" fill="#25242d"/>
+  <path d="M385 465V540M1150 465V540" stroke="#75625a" stroke-width="8"/>
+  <path d="M364 525H407V582H364M1128 525H1172V582H1128Z" fill="#bd926a"/>
+
+</svg>

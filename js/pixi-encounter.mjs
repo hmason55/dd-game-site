@@ -72029,7 +72029,7 @@ var noOpAccessibilityOverlay = {
 };
 
 // src/scene-environment.ts
-var backgroundPattern = /^\/img\/Scenes\/locale-(crossroads|ruins|grove|shore|depths|vault|observatory|threshold)-(travel|rest|shop)\.svg$/;
+var backgroundPattern = /^\/img\/Scenes\/locale-(?:(crossroads|ruins|grove|shore|depths|vault|observatory|threshold)-(travel|rest|shop)|(terrace|marsh|foundry|chamber)-(travel|rest|shop|event|treasure|boss))\.svg$/;
 function getSceneEnvironment(value) {
   if (typeof value !== "object" || value === null) return void 0;
   const candidate = value;
@@ -72210,6 +72210,124 @@ var combatSceneTreatmentRegistry = {
 function getCombatSceneTreatment(value) {
   return typeof value === "string" && Object.hasOwn(combatSceneTreatmentRegistry, value) ? combatSceneTreatmentRegistry[value] ?? foldCombatSceneTreatment : foldCombatSceneTreatment;
 }
+
+// src/scroll-content-fade.ts
+init_lib();
+function hasFadedEdges(viewport) {
+  return viewport !== void 0 && [viewport.left, viewport.right, viewport.top, viewport.bottom].some(Boolean);
+}
+function fadeScrollContent(context2, bounds, resolution) {
+  context2.save();
+  context2.setTransform(resolution, 0, 0, resolution, 0, 0);
+  context2.globalCompositeOperation = "destination-out";
+  context2.globalAlpha = 1;
+  fadeHorizontalEdges(context2, bounds);
+  fadeVerticalEdges(context2, bounds);
+  context2.restore();
+}
+function fadeHorizontalEdges(context2, bounds) {
+  const width = Math.min(28, bounds.width / 4);
+  if (bounds.left) drawFade(context2, bounds.x, bounds.y, width, bounds.height, bounds.x, 0, bounds.x + width, 0);
+  if (bounds.right) drawFade(
+    context2,
+    bounds.x + bounds.width - width,
+    bounds.y,
+    width,
+    bounds.height,
+    bounds.x + bounds.width,
+    0,
+    bounds.x + bounds.width - width,
+    0
+  );
+}
+function fadeVerticalEdges(context2, bounds) {
+  const height = Math.min(20, bounds.height / 4);
+  if (bounds.top) drawFade(context2, bounds.x, bounds.y, bounds.width, height, 0, bounds.y, 0, bounds.y + height);
+  if (bounds.bottom) drawFade(
+    context2,
+    bounds.x,
+    bounds.y + bounds.height - height,
+    bounds.width,
+    height,
+    0,
+    bounds.y + bounds.height,
+    0,
+    bounds.y + bounds.height - height
+  );
+}
+function drawFade(context2, x2, y2, width, height, startX, startY, endX, endY) {
+  const gradient = context2.createLinearGradient(startX, startY, endX, endY);
+  gradient.addColorStop(0, "rgba(0,0,0,1)");
+  gradient.addColorStop(0.5, "rgba(0,0,0,0.25)");
+  gradient.addColorStop(1, "rgba(0,0,0,0)");
+  context2.fillStyle = gradient;
+  context2.fillRect(x2, y2, width, height);
+}
+var ScrollContentFade = class extends Container {
+  content;
+  viewport;
+  coordinates;
+  surface;
+  originalContext;
+  /** Wraps existing content without changing its controls, masks, or input ownership. */
+  constructor(content = new Container()) {
+    super();
+    this.content = content;
+    this.coordinates = this;
+    const begin3 = new RenderContainer((renderer) => this.begin(renderer));
+    const end = new RenderContainer((renderer) => this.end(renderer));
+    begin3.eventMode = end.eventMode = "none";
+    this.addChild(begin3, content, end);
+  }
+  /** Updates clipping-edge feedback in the coordinate system of its viewport owner. */
+  setViewport(viewport, coordinates = this) {
+    this.viewport = viewport;
+    this.coordinates = coordinates;
+  }
+  /** Redirects just this layer's draw calls into a reusable transparent surface. */
+  begin(renderer) {
+    const viewport = this.viewport;
+    if (!(renderer instanceof CanvasRenderer) || !hasFadedEdges(viewport)) return;
+    this.surface ??= document.createElement("canvas");
+    const original = renderer.canvasContext.activeContext;
+    if (this.surface.width !== renderer.canvas.width) this.surface.width = renderer.canvas.width;
+    if (this.surface.height !== renderer.canvas.height) this.surface.height = renderer.canvas.height;
+    const context2 = this.surface.getContext("2d");
+    if (!context2) return;
+    context2.setTransform(1, 0, 0, 1, 0, 0);
+    context2.clearRect(0, 0, this.surface.width, this.surface.height);
+    context2.globalCompositeOperation = "source-over";
+    context2.imageSmoothingEnabled = original.imageSmoothingEnabled;
+    this.originalContext = original;
+    renderer.canvasContext.activeContext = context2;
+    renderer.canvasContext.setBlendMode("normal");
+  }
+  /** Masks the isolated pixels and composites them before subsequent scene overlays draw. */
+  end(renderer) {
+    if (!(renderer instanceof CanvasRenderer) || !this.originalContext || !this.surface || !this.viewport) return;
+    const original = this.originalContext;
+    this.originalContext = void 0;
+    const context2 = this.surface.getContext("2d");
+    renderer.canvasContext.activeContext = original;
+    if (!context2) return;
+    const origin = this.coordinates.toGlobal({ x: this.viewport.x, y: this.viewport.y });
+    fadeScrollContent(context2, { ...this.viewport, x: origin.x, y: origin.y }, renderer.canvasContext.activeResolution);
+    original.save();
+    original.setTransform(1, 0, 0, 1, 0, 0);
+    original.globalCompositeOperation = "source-over";
+    original.globalAlpha = 1;
+    original.drawImage(this.surface, 0, 0);
+    original.restore();
+    renderer.canvasContext.setBlendMode("normal");
+    original.globalCompositeOperation = "source-over";
+  }
+  /** Releases the offscreen pixel allocation with its owning scene. */
+  destroy(options) {
+    if (this.surface) this.surface.width = this.surface.height = 0;
+    this.surface = void 0;
+    super.destroy(options);
+  }
+};
 
 // src/ui-primitives.ts
 init_lib();
@@ -72750,6 +72868,7 @@ var ScrollContainer = class extends Container {
   viewport = new Container();
   viewportMask = new Graphics();
   contentLayer = new Container();
+  contentFade;
   viewportWidth;
   viewportHeight;
   totalContentHeight;
@@ -72762,7 +72881,8 @@ var ScrollContainer = class extends Container {
     this.viewportWidth = normalizeSize(options.width);
     this.viewportHeight = normalizeSize(options.height);
     this.totalContentHeight = normalizeSize(options.contentHeight ?? options.height);
-    this.viewport.addChild(this.viewportMask, this.contentLayer);
+    this.contentFade = options.fadeEdges ? new ScrollContentFade(this.contentLayer) : void 0;
+    this.viewport.addChild(this.viewportMask, this.contentFade ?? this.contentLayer);
     this.viewport.mask = this.viewportMask;
     this.addChild(this.viewport);
     this.redrawViewport();
@@ -72833,6 +72953,14 @@ var ScrollContainer = class extends Container {
   }
   updateContentPosition() {
     this.contentLayer.position.set(0, -this.offset);
+    this.contentFade?.setViewport({
+      x: 0,
+      y: 0,
+      width: this.viewportWidth,
+      height: this.viewportHeight,
+      top: this.offset > 0,
+      bottom: this.offset < this.maximumScrollOffset
+    }, this.viewport);
   }
 };
 var Tooltip = class extends GamePanel {
@@ -79507,7 +79635,7 @@ async function createShopRenderer(canvas, sink) {
   sceneArt.setImage("/img/Scenes/journey-shop.svg");
   background.addChild(sceneArt);
   const merchant = new Graphics();
-  const merchandiseScroll = new ScrollContainer({ width: 1, height: 1 });
+  const merchandiseScroll = new ScrollContainer({ width: 1, height: 1, fadeEdges: true });
   const title = new Text({ text: "Shop", style: new TextStyle(titleStyle3) });
   const currency = new Text({ text: "", style: new TextStyle(currencyStyle) });
   const feedback = new Text({ text: "", style: new TextStyle(feedbackStyle4) });
@@ -80307,24 +80435,52 @@ var noOpTreasureAccessibilityOverlay = {
   }
 };
 
-// src/map-edge-fade.ts
-function drawMapEdgeFade(context2, bounds, resolution) {
-  const fadeWidth = Math.min(28, bounds.width / 4);
-  context2.save();
-  context2.setTransform(resolution, 0, 0, resolution, 0, 0);
-  context2.globalCompositeOperation = "destination-out";
-  context2.globalAlpha = 1;
-  for (const side of [0, 1]) {
-    const outer = side === 0 ? bounds.left : bounds.left + bounds.width;
-    const inner = outer + (side === 0 ? fadeWidth : -fadeWidth);
-    const gradient = context2.createLinearGradient(outer, 0, inner, 0);
-    gradient.addColorStop(0, "rgba(0,0,0,1)");
-    gradient.addColorStop(0.5, "rgba(0,0,0,0.25)");
-    gradient.addColorStop(1, "rgba(0,0,0,0)");
-    context2.fillStyle = gradient;
-    context2.fillRect(Math.min(outer, inner), bounds.top, fadeWidth, bounds.height);
+// src/map-node-icons.ts
+function drawMapNodeIcon(graphics, kind, color) {
+  graphics.clear();
+  switch (kind) {
+    case "Encounter":
+      graphics.moveTo(-5, 2).lineTo(6, -10).lineTo(12, -12).lineTo(10, -6).lineTo(-2, 5).fill({ color });
+      graphics.moveTo(-8, -1).lineTo(1, 8).stroke({ color, width: 2.5 });
+      graphics.moveTo(-4, 4).lineTo(-10, 10).stroke({ color, width: 3 });
+      graphics.circle(-11, 11, 2).fill({ color });
+      return;
+    case "Elite":
+      graphics.roundRect(-8, -8, 16, 15, 6).fill({ color });
+      graphics.moveTo(-7, -4).lineTo(-12, -11).lineTo(-11, -2).lineTo(-6, 1).fill({ color });
+      graphics.moveTo(7, -4).lineTo(12, -11).lineTo(11, -2).lineTo(6, 1).fill({ color });
+      graphics.circle(-3.5, -1, 2.3).fill({ color: 1058874 });
+      graphics.circle(3.5, -1, 2.3).fill({ color: 1058874 });
+      graphics.rect(-5, 5, 3, 5).fill({ color });
+      graphics.rect(2, 5, 3, 5).fill({ color });
+      return;
+    case "Boss":
+      graphics.rect(-9, -4, 18, 12).fill({ color });
+      graphics.moveTo(-10, -8).lineTo(-5, -13).lineTo(0, -8).lineTo(5, -13).lineTo(10, -8).stroke({ color, width: 3 });
+      return;
+    case "Treasure":
+      graphics.rect(-10, -2, 20, 12).fill({ color });
+      graphics.rect(-12, -7, 24, 7).fill({ color });
+      graphics.rect(-2, -5, 4, 15).fill({ color: 1058874 });
+      return;
+    case "Rest":
+      graphics.moveTo(-10, 8).lineTo(-2, -10).lineTo(2, -3).lineTo(7, -12).lineTo(11, 8).stroke({ color, width: 3 });
+      return;
+    case "Shop":
+      graphics.rect(-10, -1, 20, 11).fill({ color });
+      graphics.moveTo(-12, -2).lineTo(-7, -10).lineTo(7, -10).lineTo(12, -2).stroke({ color, width: 3 });
+      return;
+    case "Event":
+      graphics.circle(0, 0, 9).stroke({ color, width: 3 });
+      graphics.circle(0, -5, 1.8).fill({ color });
+      graphics.rect(-1.5, -1, 3, 8).fill({ color });
+      return;
+    case "Map":
+      graphics.moveTo(-10, -8).lineTo(-3, -11).lineTo(4, -8).lineTo(11, -11).lineTo(11, 10).lineTo(4, 7).lineTo(-3, 10).lineTo(-10, 7).lineTo(-10, -8).stroke({ color, width: 3 });
+      return;
+    default:
+      graphics.circle(0, 0, 7).fill({ color });
   }
-  context2.restore();
 }
 
 // src/pixi-map.ts
@@ -80419,6 +80575,7 @@ async function createMapRenderer(canvas, sink) {
   const root = new Container();
   const background = new Graphics();
   const graph = new Container();
+  const graphFade = new ScrollContentFade(graph);
   const localeLayer = new Container();
   localeLayer.eventMode = "none";
   const localeBands = [];
@@ -80436,19 +80593,12 @@ async function createMapRenderer(canvas, sink) {
   const destinationArt = new JourneyArtwork();
   graph.addChild(connectionLayer, nodeLayer, travelMarker);
   graph.mask = graphMask;
-  root.addChild(background, graph, region, contextPanel, contextTitle, contextDetails, controls, feedback, graphMask);
+  root.addChild(background, graphFade, region, contextPanel, contextTitle, contextDetails, controls, feedback, graphMask);
   root.addChild(destinationArt);
   application.stage.addChild(root);
   const nodeViews = /* @__PURE__ */ new Map();
   const connectionViews = /* @__PURE__ */ new Map();
   let state;
-  let fadeBounds;
-  const edgeFade = { postrender: () => {
-    if (!fadeBounds) return;
-    const context2 = canvas.getContext("2d");
-    if (context2) drawMapEdgeFade(context2, fadeBounds, application.renderer.resolution);
-  } };
-  application.renderer.runners.postrender.add(edgeFade);
   let sequence = 0;
   let selectedNodeId;
   let focusedIndex = 0;
@@ -80716,7 +80866,16 @@ async function createMapRenderer(canvas, sink) {
     });
     background.clear().rect(0, 0, width, height).fill({ color: 530204, alpha: 0.16 }).rect(0, 0, width, Math.min(height * 0.18, 84)).fill({ color: 1520456, alpha: 0.38 });
     graphMask.clear().rect(metrics.graphBounds.left, metrics.graphBounds.top, metrics.graphBounds.width, metrics.graphBounds.height).fill(16777215);
-    fadeBounds = metrics.minimumPanX < 0 ? metrics.graphBounds : void 0;
+    graphFade.setViewport({
+      x: metrics.graphBounds.left,
+      y: metrics.graphBounds.top,
+      width: metrics.graphBounds.width,
+      height: metrics.graphBounds.height,
+      left: metrics.minimumPanX < 0,
+      right: metrics.minimumPanX < 0,
+      top: metrics.minimumPanY < 0,
+      bottom: metrics.minimumPanY < 0
+    });
     graph.removeChildren();
     if (localeBands.length > 0) graph.addChild(localeLayer);
     graph.addChild(connectionLayer, nodeLayer, travelMarker);
@@ -80942,7 +81101,6 @@ async function createMapRenderer(canvas, sink) {
       restoreBackdrop();
       accessibility.dispose();
       restoreCanvasPresentation();
-      application.renderer.runners.postrender.remove(edgeFade);
       application.destroy({ removeView: false }, { children: true });
       restorePreviewFocus();
     }
@@ -81022,42 +81180,6 @@ var MapControl = class extends Container {
     if (enabled) this.on("pointertap", onPress);
   }
 };
-function drawMapNodeIcon(graphics, kind, color) {
-  graphics.clear();
-  switch (kind) {
-    case "Encounter":
-    case "Elite":
-      graphics.moveTo(-10, 8).lineTo(10, -8).stroke({ color, width: 3 });
-      graphics.moveTo(-10, -8).lineTo(10, 8).stroke({ color, width: 3 });
-      return;
-    case "Boss":
-      graphics.rect(-9, -4, 18, 12).fill({ color });
-      graphics.moveTo(-10, -8).lineTo(-5, -13).lineTo(0, -8).lineTo(5, -13).lineTo(10, -8).stroke({ color, width: 3 });
-      return;
-    case "Treasure":
-      graphics.rect(-10, -2, 20, 12).fill({ color });
-      graphics.rect(-12, -7, 24, 7).fill({ color });
-      graphics.rect(-2, -5, 4, 15).fill({ color: 1058874 });
-      return;
-    case "Rest":
-      graphics.moveTo(-10, 8).lineTo(-2, -10).lineTo(2, -3).lineTo(7, -12).lineTo(11, 8).stroke({ color, width: 3 });
-      return;
-    case "Shop":
-      graphics.rect(-10, -1, 20, 11).fill({ color });
-      graphics.moveTo(-12, -2).lineTo(-7, -10).lineTo(7, -10).lineTo(12, -2).stroke({ color, width: 3 });
-      return;
-    case "Event":
-      graphics.circle(0, 0, 9).stroke({ color, width: 3 });
-      graphics.circle(0, -5, 1.8).fill({ color });
-      graphics.rect(-1.5, -1, 3, 8).fill({ color });
-      return;
-    case "Map":
-      graphics.moveTo(-10, -8).lineTo(-3, -11).lineTo(4, -8).lineTo(11, -11).lineTo(11, 10).lineTo(4, 7).lineTo(-3, 10).lineTo(-10, 7).lineTo(-10, -8).stroke({ color, width: 3 });
-      return;
-    default:
-      graphics.circle(0, 0, 7).fill({ color });
-  }
-}
 function drawTravelMarker(graphics, transition, nodes, pointFor, reducedMotion) {
   graphics.clear();
   if (!transition) return;
@@ -81481,6 +81603,20 @@ async function createLeaveRenderer(canvas, sink) {
   };
 }
 
+// src/collection-row-layout.ts
+function measureCollectionRow(text, textWidth) {
+  const nameHeight = Math.max(text.nameHeight ?? 0, estimateWrappedHeight(text.name, textWidth, 22, 9));
+  const detailHeight = text.detail ? Math.max(text.detailHeight ?? 0, estimateWrappedHeight(text.detail, textWidth, 19, 7)) + 3 : 0;
+  const descriptionHeight = Math.max(text.descriptionHeight ?? 0, estimateWrappedHeight(text.description, textWidth, 19, 7));
+  const detailY = 8 + nameHeight + 4;
+  const descriptionY = detailY + detailHeight;
+  return { detailY, descriptionY, height: Math.max(76, descriptionY + descriptionHeight + 12) };
+}
+function estimateWrappedHeight(value, width, lineHeight, characterWidth) {
+  const columns = Math.max(1, Math.floor(width / characterWidth));
+  return value.split("\n").reduce((lines, line) => lines + Math.max(1, Math.ceil(line.length / columns)), 0) * lineHeight;
+}
+
 // src/pixi-collection.ts
 init_lib();
 function planCollectionLayout(width, height) {
@@ -81544,15 +81680,17 @@ async function createCollectionRenderer(canvas, sink) {
   const title = new Text({ text: "", style: { ...uiTokens.typography.panelTitle, fill: 16113563 } });
   const tabLayer = new Container();
   const entriesLayer = new Container();
+  const entriesFade = new ScrollContentFade(entriesLayer);
   const listMask = new Graphics();
   const empty = new Text({ text: "", style: { ...uiTokens.typography.body, fill: 12109785 } });
   const compactDetail = new Text({ text: "", style: { ...uiTokens.typography.body, fill: 14214126, wordWrap: true } });
+  title.resolution = empty.resolution = compactDetail.resolution = 2;
   const close = new GameButton({ width: 1, height: 1, label: "Close", onPress: () => {
     void sink.invokeMethodAsync("HandleActionFromRendererAsync", "close");
   } });
   const content = new Container();
   const details = new Container();
-  content.addChild(title, tabLayer, entriesLayer, listMask, empty, compactDetail, close, details);
+  content.addChild(title, tabLayer, entriesFade, listMask, empty, compactDetail, close, details);
   root.addChild(background, content);
   entriesLayer.mask = listMask;
   (host?.layer ?? application.stage).addChild(root);
@@ -81568,6 +81706,9 @@ async function createCollectionRenderer(canvas, sink) {
   let viewportHeight = 1;
   let rendererWidth = 0;
   let rendererHeight = 0;
+  let rowOffsets = [];
+  let rowHeights = [];
+  let totalRowHeight = 0;
   const destroyChildren = (layer) => {
     for (const child of layer.removeChildren()) child.destroy({ children: true });
   };
@@ -81588,7 +81729,14 @@ async function createCollectionRenderer(canvas, sink) {
       }
     } else {
       const heading = new Text({ text: entry.name, style: { ...uiTokens.typography.panelTitle, fill: 16113563, wordWrap: true } });
-      const description = new Text({ text: entry.description, style: { ...uiTokens.typography.body, fill: 14214126, wordWrap: true } });
+      const description = new Text({ text: entry.description, style: {
+        ...uiTokens.typography.body,
+        fill: uiTokens.color.textMuted,
+        fontSize: 15,
+        lineHeight: 21,
+        wordWrap: true
+      } });
+      heading.resolution = description.resolution = 2;
       details.addChild(heading, description);
     }
   };
@@ -81596,8 +81744,10 @@ async function createCollectionRenderer(canvas, sink) {
     scrollMotion.stop();
     const count2 = state?.tabs[state.activeTabIndex]?.entries.length ?? 0;
     selectedIndex = Math.max(0, Math.min(count2 - 1, index));
-    if (selectedIndex * 88 < scrollOffset) scrollOffset = selectedIndex * 88;
-    if ((selectedIndex + 1) * 88 > scrollOffset + viewportHeight) scrollOffset = (selectedIndex + 1) * 88 - viewportHeight;
+    const top = rowOffsets[selectedIndex] ?? 0;
+    const bottom = top + (rowHeights[selectedIndex] ?? 76);
+    if (top < scrollOffset) scrollOffset = top;
+    if (bottom > scrollOffset + viewportHeight) scrollOffset = Math.max(top, bottom - viewportHeight);
     rebuildDetails();
     layout();
   };
@@ -81617,9 +81767,22 @@ async function createCollectionRenderer(canvas, sink) {
     empty.text = tab.entries.length === 0 ? "Nothing here yet." : "";
     tab.entries.forEach((entry, index) => {
       const card = new Graphics();
-      const name = new Text({ text: entry.name, style: { ...uiTokens.typography.button, fill: 15856888, wordWrap: true } });
+      const name = new Text({ text: entry.name, style: {
+        ...uiTokens.typography.button,
+        fill: uiTokens.color.text,
+        fontSize: 18,
+        lineHeight: 22,
+        wordWrap: true
+      } });
       const detail = new Text({ text: entry.detail, style: { ...uiTokens.typography.body, fill: 9425057 } });
-      const description = new Text({ text: entry.description, style: { ...uiTokens.typography.body, fill: 12109785, fontSize: 12, wordWrap: true } });
+      const description = new Text({ text: entry.description, style: {
+        ...uiTokens.typography.body,
+        fill: uiTokens.color.textMuted,
+        fontSize: 14,
+        lineHeight: 19,
+        wordWrap: true
+      } });
+      name.resolution = detail.resolution = description.resolution = 2;
       card.eventMode = "static";
       card.cursor = "pointer";
       card.on("pointertap", () => {
@@ -81652,31 +81815,55 @@ async function createCollectionRenderer(canvas, sink) {
     });
   };
   const layoutEntry = (child, index, plan, listWidth) => {
-    const y2 = plan.listTop + index * 88 - scrollOffset;
-    child.clear().roundRect(20, y2, listWidth, 76, 8).fill({ color: index === selectedIndex ? 2639453 : 1254710 }).stroke({ color: index === selectedIndex ? 16113563 : 3561587, width: 1 });
+    const y2 = plan.listTop + (rowOffsets[index] ?? 0) - scrollOffset;
     const [name, detail, description] = child.children.filter((entry) => entry instanceof Text);
     const image = child.children.find((entry) => entry instanceof Sprite);
     const textX = image ? 90 : 36;
-    if (name) {
-      name.style.wordWrapWidth = listWidth - (textX - 20) - 12;
-      name.position.set(textX, y2 + 8);
-    }
+    const textWidth = Math.max(1, listWidth - (textX - 20) - 12);
+    for (const label of [name, detail, description]) if (label) label.style.wordWrapWidth = textWidth;
+    const row = measureCollectionRow({
+      name: name?.text ?? "",
+      detail: detail?.text ?? "",
+      description: description?.text ?? "",
+      nameHeight: name?.height ?? 0,
+      detailHeight: detail?.height ?? 0,
+      descriptionHeight: description?.height ?? 0
+    }, textWidth);
+    child.clear().roundRect(20, y2, listWidth, row.height, 4).fill({ color: index === selectedIndex ? uiTokens.color.surfaceRaised : uiTokens.color.surface }).stroke({ color: index === selectedIndex ? uiTokens.color.selected : 4284778, width: 1 });
+    name?.position.set(textX, y2 + 8);
     if (detail) {
-      detail.style.wordWrapWidth = listWidth - (textX - 20) - 12;
-      detail.position.set(textX, y2 + 34);
+      detail.visible = detail.text.length > 0;
+      detail.position.set(textX, y2 + row.detailY);
     }
-    if (description) {
-      description.style.wordWrapWidth = listWidth - (textX - 20) - 12;
-      description.position.set(textX, y2 + 54);
-    }
+    description?.position.set(textX, y2 + row.descriptionY);
     if (image instanceof Sprite) fitImage(image, 56, 56, 28, y2 + 10);
-    child.visible = y2 >= plan.listTop - 88 && y2 < plan.listTop + plan.viewportHeight;
+    rowHeights[index] = row.height;
+    child.visible = y2 + row.height >= plan.listTop && y2 < plan.listTop + plan.viewportHeight;
+  };
+  const measureEntries = (plan, listWidth) => {
+    rowOffsets = [];
+    rowHeights = [];
+    totalRowHeight = 0;
+    entriesLayer.children.forEach((child, index) => {
+      rowOffsets[index] = totalRowHeight;
+      if (child instanceof Graphics) layoutEntry(child, index, plan, listWidth);
+      totalRowHeight += (rowHeights[index] ?? 76) + 12;
+    });
+    totalRowHeight = Math.max(0, totalRowHeight - 12);
   };
   const layoutEntries = (plan, listWidth) => {
     listMask.clear().rect(20, plan.listTop, listWidth, plan.viewportHeight).fill({ color: 16777215 });
     entriesLayer.children.forEach((child, index) => {
       if (child instanceof Graphics) layoutEntry(child, index, plan, listWidth);
     });
+    entriesFade.setViewport({
+      x: 20,
+      y: plan.listTop,
+      width: listWidth,
+      height: plan.viewportHeight,
+      top: scrollOffset > 0,
+      bottom: scrollOffset < Math.max(0, totalRowHeight - viewportHeight)
+    }, content);
   };
   const layoutDetails = (width, height, plan) => {
     const entry = selectedEntry();
@@ -81695,7 +81882,7 @@ async function createCollectionRenderer(canvas, sink) {
       details.children.forEach((child, index) => {
         if (child instanceof Text) {
           child.style.wordWrapWidth = width - 60;
-          child.position.set(0, index * 36);
+          child.position.set(0, index === 0 ? 0 : Math.max(36, (details.children[0]?.height ?? 22) + 10));
         }
       });
     } else {
@@ -81703,7 +81890,7 @@ async function createCollectionRenderer(canvas, sink) {
       details.children.forEach((child, index) => {
         if (child instanceof Text) {
           child.style.wordWrapWidth = 200;
-          child.position.set(0, index * 76);
+          child.position.set(0, index === 0 ? 0 : Math.max(36, (details.children[0]?.height ?? 22) + 10));
         }
       });
     }
@@ -81723,8 +81910,8 @@ async function createCollectionRenderer(canvas, sink) {
     const plan = planCollectionLayout(contentWidth, contentHeight);
     const listWidth = plan.compact ? contentWidth - 40 : Math.max(240, contentWidth - 280);
     viewportHeight = plan.viewportHeight;
-    const entryCount = state?.tabs[state.activeTabIndex]?.entries.length ?? 0;
-    scrollOffset = Math.min(scrollOffset, Math.max(0, entryCount * 88 - viewportHeight));
+    measureEntries(plan, listWidth);
+    scrollOffset = Math.min(scrollOffset, Math.max(0, totalRowHeight - viewportHeight));
     background.clear().roundRect(0, 0, width, height, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill, alpha: 0.98 }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
     background.eventMode = "static";
     content.position.set(bounds.x, bounds.y);
@@ -81738,8 +81925,7 @@ async function createCollectionRenderer(canvas, sink) {
     layoutDetails(contentWidth, contentHeight, plan);
   };
   const scroll = (amount) => {
-    const entryCount = state?.tabs[state.activeTabIndex]?.entries.length ?? 0;
-    scrollOffset = Math.max(0, Math.min(Math.max(0, entryCount * 88 - viewportHeight), scrollOffset + amount));
+    scrollOffset = Math.max(0, Math.min(Math.max(0, totalRowHeight - viewportHeight), scrollOffset + amount));
     layout();
   };
   const wheel = (event) => {
