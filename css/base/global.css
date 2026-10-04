@@ -768,13 +768,33 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     transition: opacity 0.4s ease-in;
 }
 
-.mud-button:not(.mud-toggle-item),
 .mud-tabs-tabbar-wrapper,
 .mud-snackbar {
     --notch: calc(var(--mud-typography-button-lineheight) * 0.5em);
     height: var(--mud-typography-button-lineheight);
     clip-path: polygon( var(--notch) 0, calc(100% - var(--notch)) 0, 100% 50%, calc(100% - var(--notch)) 100%, var(--notch) 100%, 0 50% );
     margin-top: 4px;
+}
+
+.mud-button:not(.mud-toggle-item) {
+    min-height: 2.75rem;
+    height: auto;
+    margin-top: 4px;
+    border-radius: 3px;
+    clip-path: none;
+    font-family: "Alegreya", Georgia, serif;
+    letter-spacing: 0.07em;
+    font-weight: 600;
+    border: 1px solid #536d72;
+    background: #10252c;
+    color: #f2eee4;
+    box-shadow: inset 0 1px rgb(242 238 228 / 14%);
+}
+
+.mud-button-filled-primary,
+.mud-button-filled-error {
+    background: #9c4432 !important;
+    border-color: #e47d5a !important;
 }
 
 .mud-snackbar {
@@ -793,7 +813,8 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
 }
 
 .mud-icon-button:not(.mud-icon-button-size-small) {
-    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%) !important;
+    border-radius: 3px;
+    clip-path: none !important;
 }
 
 .mud-button-label {

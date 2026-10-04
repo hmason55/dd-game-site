@@ -72226,7 +72226,7 @@ var uiTokens = {
     bodyText: 12897224
   },
   typography: {
-    button: { fill: 15920868, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 16, fontWeight: "700", align: "center" },
+    button: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 16, fontWeight: "600", letterSpacing: 1.1, align: "center" },
     panelTitle: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "700" },
     body: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 14 },
     caption: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 12 },
@@ -72235,7 +72235,7 @@ var uiTokens = {
     cardEffect: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 14 },
     enemyName: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "700" },
     numericResource: { fill: 15920868, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 16, fontWeight: "700" },
-    endTurn: { fill: 15920868, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 16, fontWeight: "700", align: "center" },
+    endTurn: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 16, fontWeight: "600", letterSpacing: 1.1, align: "center" },
     secondaryHud: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 12, fontWeight: "600" },
     relicDetail: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 13 }
   },
@@ -72356,9 +72356,9 @@ var GamePanel = class extends Container {
    */
   constructor(options) {
     super();
-    this.fill = options.fill ?? uiColors.panelFill;
+    this.fill = options.fill ?? (options.surface === "button" ? 1058092 : uiColors.panelFill);
     this.stroke = options.stroke ?? uiColors.panelStroke;
-    this.cornerRadius = Math.max(0, options.cornerRadius ?? uiTokens.frame.panelCornerRadius);
+    this.cornerRadius = Math.max(0, options.cornerRadius ?? (options.surface === "button" ? 3 : uiTokens.frame.panelCornerRadius));
     this.surface = options.surface ?? "panel";
     this.panelWidth = normalizeSize(options.width);
     this.panelHeight = normalizeSize(options.height);
@@ -72386,6 +72386,13 @@ var GamePanel = class extends Container {
     this.redraw();
   }
   redraw() {
+    if (this.surface === "button") {
+      this.shadow.clear();
+      drawButtonSurface(this.background, this.panelWidth, this.panelHeight, this.fill, this.stroke);
+      this.innerFrame.clear();
+      this.ornaments.clear();
+      return;
+    }
     const inset = Math.min(uiTokens.frame.innerInset, this.panelWidth / 4, this.panelHeight / 4);
     const innerWidth = Math.max(0, this.panelWidth - inset * 2);
     const innerHeight = Math.max(0, this.panelHeight - inset * 2);
@@ -72394,14 +72401,7 @@ var GamePanel = class extends Container {
     const ornamentOffset = inset + uiTokens.frame.borderWidth;
     this.shadow.clear().roundRect(2, 4, Math.max(0, this.panelWidth - 2), Math.max(0, this.panelHeight - 2), this.cornerRadius).fill({ color: uiColors.panelShadow, alpha: 0.56 });
     this.background.clear().roundRect(0, 0, this.panelWidth, this.panelHeight, this.cornerRadius).fill({ color: this.fill }).stroke({ color: this.stroke, width: uiTokens.frame.borderWidth });
-    if (this.surface === "button") {
-      this.background.rect(10, 3, Math.max(0, this.panelWidth - 20), 1).fill({ color: 12968415, alpha: 0.25 });
-      this.innerFrame.clear();
-      this.ornaments.clear();
-      return;
-    } else {
-      this.background.rect(12, 4, Math.max(0, this.panelWidth - 24), 2).fill({ color: uiColors.panelOrnament, alpha: 0.38 });
-    }
+    this.background.rect(12, 4, Math.max(0, this.panelWidth - 24), 2).fill({ color: uiColors.panelOrnament, alpha: 0.38 });
     this.innerFrame.clear().roundRect(inset, inset, innerWidth, innerHeight, Math.max(0, this.cornerRadius - inset / 2)).stroke({ color: uiColors.panelInset, width: 1, alpha: 0.9 });
     this.ornaments.clear().roundRect(ornamentOffset, ornamentOffset, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.88 }).roundRect(this.panelWidth - ornamentOffset - ornamentLength, ornamentOffset, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.88 }).roundRect(ornamentOffset, this.panelHeight - ornamentOffset - ornamentThickness, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.62 }).roundRect(this.panelWidth - ornamentOffset - ornamentLength, this.panelHeight - ornamentOffset - ornamentThickness, ornamentLength, ornamentThickness, ornamentThickness / 2).fill({ color: uiColors.panelOrnament, alpha: 0.62 });
   }
@@ -72526,8 +72526,8 @@ var GameButton = class extends GamePanel {
   fitLabel() {
     this.labelText.text = this.fullLabel;
     this.accessibleTitle = this.fullLabel;
-    this.labelText.style.wordWrap = true;
-    fitTextToBox(this.labelText, this.panelSize.width - 16, this.panelSize.height - 12, 16, 12);
+    this.labelText.style.wordWrap = false;
+    fitTextToBox(this.labelText, this.panelSize.width - 16, this.panelSize.height - 12, 16, 11);
   }
   updatePresentation() {
     this.eventMode = this.isEnabled ? "static" : "none";
@@ -72537,21 +72537,23 @@ var GameButton = class extends GamePanel {
   }
   redrawStateOutline() {
     const { width, height } = this.panelSize;
-    const outlineWidth = Math.max(0, width - 4);
-    const outlineHeight = Math.max(0, height - 4);
     this.stateOutline.clear();
     if (!this.isEnabled) {
-      this.stateOutline.roundRect(uiTokens.frame.selectedInset, uiTokens.frame.selectedInset, outlineWidth, outlineHeight, uiTokens.frame.selectedCornerRadius).stroke({ color: uiTokens.color.disabled, width: uiTokens.frame.borderWidth });
       return;
     }
     if (this.isSelected) {
-      this.stateOutline.roundRect(uiTokens.frame.selectedInset, uiTokens.frame.selectedInset, outlineWidth, outlineHeight, uiTokens.frame.selectedCornerRadius).stroke({ color: uiColors.buttonSelected, width: uiTokens.frame.borderWidth });
+      this.stateOutline.roundRect(1, 1, Math.max(0, width - 2), Math.max(0, height - 2), 3).fill({ color: uiColors.buttonSelected, alpha: 0.08 }).stroke({ color: uiColors.buttonSelected, width: 1 });
     }
     if (this.isFocused) {
-      this.stateOutline.roundRect(uiTokens.frame.focusInset, uiTokens.frame.focusInset, Math.max(0, width - uiTokens.frame.focusInset * 2), Math.max(0, height - uiTokens.frame.focusInset * 2), uiTokens.frame.focusCornerRadius).stroke({ color: uiColors.buttonFocus, width: uiTokens.frame.borderWidth });
+      this.stateOutline.roundRect(1, 1, Math.max(0, width - 2), Math.max(0, height - 2), 3).stroke({ color: uiColors.buttonFocus, width: 1.5 });
     }
   }
 };
+function drawButtonSurface(graphics, width, height, fill = 1058092, stroke = 5467506) {
+  graphics.clear().roundRect(0, 0, width, height, 3).fill({ color: fill }).stroke({ color: stroke, width: 1 });
+  graphics.rect(4, 3, Math.max(0, width - 8), 1).fill({ color: 15920868, alpha: 0.14 });
+  graphics.rect(4, Math.max(0, height - 3), Math.max(0, width - 8), 1).fill({ color: 133646, alpha: 0.36 });
+}
 var SceneTitle = class extends Container {
   titleText;
   subtitleText;
@@ -73866,10 +73868,10 @@ var CardView = class extends Container {
       this.costPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.badgeWidth, header.badgeHeight, this.handPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.panelShadow, alpha: 0.94 }).stroke({ color: palette.accent, width: 2 });
     }
     if (header.hasEnergyCost) {
-      this.energyCostPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.energyBadgeWidth, header.badgeHeight, this.handPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.stamina, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
+      this.energyCostPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.energyBadgeWidth, header.badgeHeight, this.handPresentation || this.rewardPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.stamina, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
     }
     if (header.hasManaCost) {
-      this.manaCostPlate.roundRect(this.handPresentation ? artBounds.x + artBounds.width - header.manaBadgeWidth - 5 : artBounds.x + 9 + header.energyBadgeWidth, artBounds.y + 5, header.manaBadgeWidth, header.badgeHeight, this.handPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.mana, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
+      this.manaCostPlate.roundRect(this.handPresentation || this.rewardPresentation ? artBounds.x + artBounds.width - header.manaBadgeWidth - 5 : artBounds.x + 9 + header.energyBadgeWidth, artBounds.y + 5, header.manaBadgeWidth, header.badgeHeight, this.handPresentation || this.rewardPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.mana, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
     }
   }
   updateArtwork(artBounds) {
@@ -73897,8 +73899,8 @@ var CardView = class extends Container {
     const energyCost = getVisibleResourceCost(this.cardContent.energyCost);
     const manaCost = getVisibleResourceCost(this.cardContent.manaCost);
     this.costLabel.text = cost;
-    this.energyCostLabel.text = energyCost === void 0 ? "" : `\u26A1 ${energyCost}`;
-    this.manaCostLabel.text = manaCost === void 0 ? "" : `\u2726 ${manaCost}`;
+    this.energyCostLabel.text = energyCost === void 0 ? "" : this.rewardPresentation ? String(energyCost) : `\u26A1 ${energyCost}`;
+    this.manaCostLabel.text = manaCost === void 0 ? "" : this.rewardPresentation ? String(manaCost) : `\u2726 ${manaCost}`;
     const hasLegacyCost = cost.length > 0;
     const hasEnergyCost = energyCost !== void 0;
     const hasManaCost = manaCost !== void 0;
@@ -73908,14 +73910,14 @@ var CardView = class extends Container {
     const resourceBadgeWidth = energyBadgeWidth + manaBadgeWidth + (hasEnergyCost && hasManaCost ? 4 : 0);
     const activeBadgeWidth = Math.max(badgeWidth, resourceBadgeWidth);
     const hasCost = hasLegacyCost || hasEnergyCost || hasManaCost;
-    const stacked = hasCost && Math.max(badgeWidth, resourceBadgeWidth) > this.cardWidth * 0.35;
-    const headerHeight = this.rewardPresentation ? Math.max(50, this.cardHeight * 0.25) : stacked ? Math.max(82, this.cardHeight * 0.34) : Math.max(28, this.cardHeight * 0.22);
+    const stacked = hasCost && (this.rewardPresentation || Math.max(badgeWidth, resourceBadgeWidth) > this.cardWidth * 0.35);
+    const headerHeight = this.rewardPresentation ? Math.max(stacked ? badgeHeight + 54 : 50, this.cardHeight * 0.25) : stacked ? Math.max(82, this.cardHeight * 0.34) : Math.max(28, this.cardHeight * 0.22);
     this.costLabel.visible = hasLegacyCost;
     this.energyCostLabel.visible = hasEnergyCost;
     this.manaCostLabel.visible = hasManaCost;
     this.costLabel.position.set(uiTokens.frame.borderWidth + 5 + badgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
     this.energyCostLabel.position.set(uiTokens.frame.borderWidth + 5 + energyBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
-    this.manaCostLabel.position.set(uiTokens.frame.borderWidth + 9 + energyBadgeWidth + manaBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
+    this.manaCostLabel.position.set(this.rewardPresentation ? this.cardWidth - uiTokens.frame.borderWidth - 5 - manaBadgeWidth / 2 : uiTokens.frame.borderWidth + 9 + energyBadgeWidth + manaBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
     this.nameLabel.text = this.cardContent.name;
     this.nameLabel.position.set(
       stacked || !hasCost ? this.cardWidth / 2 : (this.cardWidth + activeBadgeWidth + textPadding) / 2,
@@ -73929,7 +73931,7 @@ var CardView = class extends Container {
     this.typeStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
     this.descriptionStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
     if (this.rewardPresentation) {
-      fitTextToBox(this.nameLabel, this.nameStyle.wordWrapWidth, headerHeight - 12, this.nameStyle.fontSize, 14);
+      fitTextToBox(this.nameLabel, this.nameStyle.wordWrapWidth, headerHeight - (stacked ? badgeHeight + 14 : 12), this.nameStyle.fontSize, 14);
       this.typeLabel.text = this.cardContent.rarity;
       fitTextToBox(
         this.descriptionLabel,
@@ -73939,7 +73941,7 @@ var CardView = class extends Container {
         12
       );
     }
-    this.costStyle.fill = palette.accent;
+    this.costStyle.fill = this.rewardPresentation ? uiTokens.color.text : palette.accent;
     return { badgeWidth, badgeHeight, hasLegacyCost, hasEnergyCost, hasManaCost, energyBadgeWidth, manaBadgeWidth, height: headerHeight };
   }
   /** Places readable names/effects below the illustration and resource costs in opposite corners. */
@@ -74265,8 +74267,11 @@ function formatPinnedRelics(relics) {
 // src/character-outline.ts
 init_lib();
 var CharacterOutline = class extends Container {
-  silhouettes = Array.from({ length: 12 }, () => new Sprite(Texture.EMPTY));
+  silhouettes = Array.from({ length: 36 }, () => new Sprite(Texture.EMPTY));
   fallback = new Graphics();
+  sourceTexture;
+  outlineTexture;
+  outlineColor;
   constructor() {
     super();
     this.eventMode = "none";
@@ -74279,22 +74284,63 @@ var CharacterOutline = class extends Container {
   }
   /** Matches the current artwork, including asynchronous loads and responsive resizing. */
   show(artwork, color, thickness, opacity) {
+    this.updateSilhouetteTexture(artwork.texture, color);
     this.visible = true;
     this.alpha = opacity;
     this.fallback.visible = !artwork.visible;
     this.fallback.clear();
     if (!artwork.visible) this.fallback.roundRect(-18, artwork.y + 54, 36, 3, 2).fill({ color });
     this.silhouettes.forEach((sprite, index) => {
-      const angle = index * Math.PI * 2 / this.silhouettes.length;
-      sprite.texture = artwork.texture;
+      const ring = Math.floor(index / 12);
+      const angle = index % 12 * Math.PI * 2 / 12;
+      const distance = thickness * (ring === 0 ? 1.8 : ring === 1 ? 1.35 : 1);
+      sprite.texture = this.outlineTexture ?? artwork.texture;
       sprite.visible = artwork.visible;
-      sprite.tint = color;
+      sprite.tint = this.outlineTexture ? 16777215 : color;
+      sprite.alpha = ring === 0 ? 0.07 : ring === 1 ? 0.18 : 0.7;
       sprite.width = artwork.width;
       sprite.height = artwork.height;
-      sprite.position.set(artwork.x + Math.cos(angle) * thickness, artwork.y + Math.sin(angle) * thickness);
+      sprite.position.set(artwork.x + Math.cos(angle) * distance, artwork.y + Math.sin(angle) * distance);
     });
   }
+  /** Releases only the generated silhouette; the original artwork remains asset-cache owned. */
+  destroy(options) {
+    if (this.destroyed) return;
+    for (const sprite of this.silhouettes) sprite.texture = Texture.EMPTY;
+    this.outlineTexture?.destroy(true);
+    this.outlineTexture = void 0;
+    super.destroy(options);
+  }
+  /** Recolors alpha once per artwork/color rather than multiplying its original RGB colors. */
+  updateSilhouetteTexture(texture, color) {
+    if (texture === this.sourceTexture && color === this.outlineColor) return;
+    for (const sprite of this.silhouettes) sprite.texture = Texture.EMPTY;
+    this.outlineTexture?.destroy(true);
+    this.sourceTexture = texture;
+    this.outlineColor = color;
+    this.outlineTexture = createSilhouetteTexture(texture, color);
+  }
 };
+function createSilhouetteTexture(texture, color) {
+  if (typeof document === "undefined" || texture === Texture.EMPTY) return void 0;
+  const source8 = texture.source?.resource;
+  if (!isDrawableSource(source8)) return void 0;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.ceil(texture.frame.width));
+  canvas.height = Math.max(1, Math.ceil(texture.frame.height));
+  const context2 = canvas.getContext("2d");
+  if (!context2) return void 0;
+  const { x: x2, y: y2, width, height } = texture.frame;
+  const resolution = texture.source.resolution;
+  context2.drawImage(source8, x2 * resolution, y2 * resolution, width * resolution, height * resolution, 0, 0, canvas.width, canvas.height);
+  context2.globalCompositeOperation = "source-in";
+  context2.fillStyle = "#" + color.toString(16).padStart(6, "0");
+  context2.fillRect(0, 0, canvas.width, canvas.height);
+  return Texture.from(canvas);
+}
+function isDrawableSource(value) {
+  return typeof HTMLImageElement !== "undefined" && value instanceof HTMLImageElement || typeof HTMLCanvasElement !== "undefined" && value instanceof HTMLCanvasElement || typeof ImageBitmap !== "undefined" && value instanceof ImageBitmap || typeof OffscreenCanvas !== "undefined" && value instanceof OffscreenCanvas;
+}
 
 // src/artwork-ground-contact.ts
 var groundContacts = /* @__PURE__ */ new WeakMap();
@@ -74416,8 +74462,8 @@ var EncounterScene = class {
     width: 144,
     height: 44,
     label: "END TURN",
-    fill: 6697017,
-    stroke: uiTokens.color.dangerIntent,
+    fill: 10241074,
+    stroke: 14974298,
     onPress: () => this.requestEndTurn()
   });
   background = new Graphics();
@@ -74450,6 +74496,7 @@ var EncounterScene = class {
   handLayoutTransitions = /* @__PURE__ */ new Map();
   animationLockResolver = () => false;
   intentPending = false;
+  endingTurnPending = false;
   inputReleased = false;
   pendingIntentSequence;
   pendingIntentMessage;
@@ -74648,7 +74695,7 @@ var EncounterScene = class {
       ...snapshot.pinnedRelics === void 0 ? {} : { pinnedRelics: snapshot.pinnedRelics },
       phase: snapshot.phase
     }, viewport);
-    this.runHud.setFeedbackVisible(this.intentPending || this.rejectionFeedbackRemainingMs > 0, viewport);
+    this.updateFeedbackVisibility();
     this.reconcileQueuedEntries(snapshot);
     this.reconcileEntities(snapshot.player, snapshot.enemies, viewport);
     this.reconcileHand(snapshot, viewport);
@@ -75173,6 +75220,7 @@ var EncounterScene = class {
     this.hoveredEntryId = void 0;
     this.focusedEntryId = void 0;
     this.intentPending = false;
+    this.endingTurnPending = false;
     this.pendingIntentSequence = void 0;
     this.pendingIntentMessage = void 0;
     this.rejectionFeedbackRemainingMs = 0;
@@ -75743,7 +75791,7 @@ var EncounterScene = class {
   }
   canSelectEntity(entity) {
     const entry = this.selectedEntryId ? this.selectableEntries.get(this.selectedEntryId) : void 0;
-    return !this.intentPending && entry !== void 0 && !this.isAnimationLockedForEntry(entry) && !this.isAnimationLockedForEntity(entity) && this.isValidTarget(entry.targetMode, entity);
+    return this.latestSnapshot?.phase === "WaitingForInput" && !this.intentPending && entry !== void 0 && !this.isAnimationLockedForEntry(entry) && !this.isAnimationLockedForEntity(entity) && this.isValidTarget(entry.targetMode, entity);
   }
   isAnimationLockedForEntry(entry) {
     return this.isAnimationLocked(`${isCardPresentationState2(entry) ? "card" : "item"}:${entry.id}`);
@@ -75983,7 +76031,7 @@ var EncounterScene = class {
   refreshTargetPresentation(tile, entity) {
     const targetingEntry = this.getTargetingEntry();
     const isTargeting = targetingEntry !== void 0 && targetingEntry.targetMode !== "none";
-    const isValidTarget = !this.inputReleased && entity !== void 0 && targetingEntry !== void 0 && !this.intentPending && !this.isAnimationLockedForEntry(targetingEntry) && !this.isAnimationLockedForEntity(entity) && this.isValidTarget(targetingEntry.targetMode, entity);
+    const isValidTarget = this.latestSnapshot?.phase === "WaitingForInput" && !this.inputReleased && entity !== void 0 && targetingEntry !== void 0 && !this.intentPending && !this.isAnimationLockedForEntry(targetingEntry) && !this.isAnimationLockedForEntity(entity) && this.isValidTarget(targetingEntry.targetMode, entity);
     const artwork = tile.artwork;
     const presentationKey = `${isTargeting}:${isValidTarget}:${artwork.visible}:${tile.artworkImage}:${artwork.x}:${artwork.y}:${artwork.width}:${artwork.height}`;
     if (tile.targetPresentationKey === presentationKey) {
@@ -75995,10 +76043,11 @@ var EncounterScene = class {
     tile.accent.alpha = 0;
     tile.targetHighlight.visible = false;
     if (isTargeting && isValidTarget) {
-      tile.targetHighlight.show(tile.artwork, uiTokens.color.text, 3, 0.9);
+      tile.targetHighlight.show(tile.artwork, 15759462, 5, 0.95);
     }
   }
   refreshInteractionState() {
+    this.endTurn.label = this.endingTurnPending || this.latestSnapshot?.phase !== "WaitingForInput" ? "ENEMY TURN" : "END TURN";
     this.endTurn.setEnabled(!this.inputReleased && !this.intentPending && !this.activeDrag && this.queuedEntryIds.size === 0 && this.latestSnapshot?.phase === "WaitingForInput");
     for (const [tileId, tile] of this.handTiles) {
       const entryId = tileId.substring(tileId.indexOf(":") + 1);
@@ -76356,6 +76405,7 @@ var EncounterScene = class {
   }
   releasePendingIntent() {
     this.intentPending = false;
+    this.endingTurnPending = false;
     this.pendingIntentSequence = void 0;
     this.pendingIntentMessage = void 0;
     this.updateFeedbackVisibility();
@@ -76367,12 +76417,14 @@ var EncounterScene = class {
    */
   beginPendingIntent(intent) {
     this.intentPending = true;
+    this.endingTurnPending = intent.kind === "endTurn";
     this.rejectionFeedbackRemainingMs = 0;
     this.pendingIntentSequence = intent.sequence;
     this.pendingIntentMessage = getPendingIntentMessage(intent.kind);
     this.intentStatusLabel.text = this.pendingIntentMessage;
     this.updateFeedbackVisibility();
     this.announceInteraction?.(this.pendingIntentMessage);
+    this.refreshInteractionState();
   }
   showRejectedIntent() {
     this.rejectionFeedbackRemainingMs = 1800;
@@ -76381,7 +76433,7 @@ var EncounterScene = class {
     this.announceInteraction?.("Action unavailable.");
   }
   updateFeedbackVisibility() {
-    const visible = this.intentPending || this.rejectionFeedbackRemainingMs > 0;
+    const visible = this.intentPending && !this.endingTurnPending || this.rejectionFeedbackRemainingMs > 0;
     this.intentStatusBackground.visible = visible;
     this.intentStatusLabel.visible = visible;
     if (this.viewport) {
@@ -76426,7 +76478,7 @@ function getEntrySceneId(entry) {
 function getPendingIntentMessage(kind) {
   switch (kind) {
     case "endTurn":
-      return "Ending turn\u2026";
+      return "Enemy turn";
     case "previewDeck":
       return "Opening deck\u2026";
     case "previewRelics":
@@ -77269,10 +77321,13 @@ function isRewardPresentationSnapshot(value) {
   return isRecord3(value) && value.protocolVersion === rewardRendererProtocolVersion && value.sceneId === rewardSceneId && isFiniteNumber3(value.sequence) && isString3(value.title) && isFiniteNumber3(value.currency) && typeof value.canSkip === "boolean" && isArrayOf2(value.choices, isRewardChoicePresentationState);
 }
 function isRewardChoicePresentationState(value) {
-  return isRecord3(value) && isString3(value.id) && isString3(value.kind) && isString3(value.name) && isString3(value.description) && isString3(value.image) && isString3(value.rarity) && typeof value.isAvailable === "boolean" && (value.options === void 0 || value.options === null || isArrayOf2(value.options, isRewardChoicePresentationState));
+  return isRecord3(value) && isString3(value.id) && isString3(value.kind) && isString3(value.name) && isString3(value.description) && isString3(value.image) && isString3(value.rarity) && typeof value.isAvailable === "boolean" && isOptionalCost(value.cardEnergyCost) && isOptionalCost(value.cardManaCost) && (value.options === void 0 || value.options === null || isArrayOf2(value.options, isRewardChoicePresentationState));
 }
 function isRecord3(value) {
   return typeof value === "object" && value !== null;
+}
+function isOptionalCost(value) {
+  return value === void 0 || value === null || isFiniteNumber3(value);
 }
 function isFiniteNumber3(value) {
   return typeof value === "number" && Number.isFinite(value);
@@ -77334,6 +77389,8 @@ var RewardScene = class {
   viewport = { width: 1, height: 1 };
   revealElapsedMs = 0;
   pendingAction = false;
+  actionAwaitingResponse = false;
+  submittedAction;
   resolution;
   nextChoiceSlot = 0;
   confirmationRequired = false;
@@ -77355,7 +77412,8 @@ var RewardScene = class {
     const selected = this.selectedOption ?? this.selectedReward;
     const choiceSummary = choices.map((choice) => `${choice.name}: ${choice.description}`).join(" ");
     const selectionSummary = selected ? ` Selected: ${selected.name}. ${selected.description}` : "";
-    return `${this.snapshot?.title ?? "Rewards"}. Gold: ${this.snapshot?.currency ?? 0}. ${choiceSummary}${selectionSummary} Use Tab or left and right arrows to inspect rewards, up and down arrows to choose an option, Enter to collect, S to skip, and Escape to clear the selection.`.trim();
+    const skipInstruction = this.selectedReward?.options?.length ? "Escape to return to the remaining rewards" : "S to skip remaining rewards, and Escape to clear the selection";
+    return `${this.snapshot?.title ?? "Rewards"}. Gold: ${this.snapshot?.currency ?? 0}. ${choiceSummary}${selectionSummary} Use Tab or left and right arrows to inspect rewards, up and down arrows to choose an option, Enter to collect, ${skipInstruction}.`.trim();
   }
   /** Reconciles a newer authoritative snapshot and preserves valid local inspection state. */
   reconcile(candidate, viewport) {
@@ -77367,7 +77425,7 @@ var RewardScene = class {
     this.snapshot = candidate;
     this.reconcileResolution(candidate.choices);
     this.viewport = normalizeViewport2(viewport);
-    this.pendingAction = this.resolution !== void 0;
+    this.reconcilePendingAction();
     if (previousChoiceIds !== nextChoiceIds) {
       this.revealElapsedMs = this.reducedMotion ? Number.POSITIVE_INFINITY : 0;
     }
@@ -77398,6 +77456,7 @@ var RewardScene = class {
   }
   /** Handles keyboard interaction without forwarding input events across the interop boundary. */
   handleKeyboardEvent(event) {
+    if (this.pendingAction) return true;
     this.confirmationRequired = true;
     this.tooltip.hide();
     if (event.key === "Tab" || event.key === "ArrowLeft" || event.key === "ArrowRight") {
@@ -77542,7 +77601,7 @@ var RewardScene = class {
     this.currency.visible = false;
     this.inventoryDestination.visible = false;
     this.backButton.position.set(panel.x + 16, panel.y + (short ? 12 : 46));
-    this.backButton.visible = hasOptions && (this.snapshot?.choices.length ?? 0) > 1;
+    this.backButton.visible = hasOptions;
     if (short && this.backButton.visible) {
       this.title.resize(panel.width - 142);
       this.title.position.set(panel.x + 126, panel.y + 12);
@@ -77565,6 +77624,7 @@ var RewardScene = class {
   }
   /** Shows confirmation for touch and keyboard selection while keeping mouse actions direct. */
   layoutControls(panel, footerY, mobile, hasOptions) {
+    this.skipButton.visible = !hasOptions;
     this.skipButton.resize(mobile ? panel.width - 32 : 150, 42);
     this.skipButton.position.set(mobile ? panel.x + 16 : panel.x + panel.width - 166, mobile ? this.viewport.height - 66 : footerY);
     this.takeButton.resize(mobile ? panel.width - 32 : Math.min(320, panel.width - 210), 44);
@@ -77610,6 +77670,14 @@ var RewardScene = class {
     if (resolution === void 0 || choices.some((choice) => choice.id === resolution.choiceId)) return;
     this.resolution = void 0;
     resolution.resolve();
+  }
+  /** Retains the input lock through both the action response and removal from authoritative rewards. */
+  reconcilePendingAction() {
+    const action = this.submittedAction;
+    if (action?.name === "collectReward" && !this.snapshot?.choices.some((choice) => choice.id === action.sourceId)) {
+      this.submittedAction = void 0;
+    }
+    this.pendingAction = this.actionAwaitingResponse || this.submittedAction !== void 0 || this.resolution !== void 0;
   }
   refreshInspection() {
     this.reconcileOptions();
@@ -77685,7 +77753,7 @@ ${choice.description}`, { x: view.x, y: view.y, width: view.width, height: view.
     });
   }
   async skipRewards() {
-    if (this.snapshot === void 0 || this.pendingAction || !this.snapshot.canSkip) {
+    if (this.snapshot === void 0 || this.pendingAction || !this.snapshot.canSkip || (this.selectedReward?.options?.length ?? 0) > 0) {
       return;
     }
     await this.submit({
@@ -77702,19 +77770,32 @@ ${choice.description}`, { x: view.x, y: view.y, width: view.width, height: view.
   async submit(action) {
     this.tooltip.hide();
     this.pendingAction = true;
+    this.actionAwaitingResponse = true;
+    this.submittedAction = action;
     this.feedback.text = "Resolving\u2026";
     this.updateInteractivity();
     this.onAccessibleStateChanged();
-    const result = await this.emitAction(action);
+    let result;
+    try {
+      result = await this.emitAction(action);
+    } catch {
+      result = { accepted: false };
+    }
+    this.actionAwaitingResponse = false;
+    if (this.displayObject.destroyed) return;
     if (result.accepted) {
       this.feedback.text = action.name === "skipReward" ? "Rewards skipped." : "Reward collected.";
       if (action.name === "collectReward" && action.sourceId !== null) {
         await this.resolveCollection(action.sourceId);
       }
+      if (this.displayObject.destroyed) return;
+      this.reconcilePendingAction();
+      this.updateInteractivity();
       this.onAccessibleStateChanged();
       return;
     }
-    this.pendingAction = false;
+    this.submittedAction = void 0;
+    this.reconcilePendingAction();
     this.feedback.text = "That reward is no longer available.";
     this.updateInteractivity();
     this.onAccessibleStateChanged();
@@ -77930,6 +78011,8 @@ var RewardOptionView = class extends Container {
       this.card = new CardView({
         presentation: "reward",
         cost: "",
+        energyCost: choice.cardEnergyCost ?? 0,
+        manaCost: choice.cardManaCost ?? 0,
         name: choice.name,
         description: choice.description,
         type: "Reward",
@@ -77961,7 +78044,7 @@ var RewardOptionView = class extends Container {
   setChoice(choice) {
     this.choice = choice;
     if (this.card !== void 0) {
-      this.card.setContent({ cost: "", name: choice.name, description: choice.description, type: "Reward", rarity: toCardRarity(choice.rarity), ...this.artTexture ? { artTexture: this.artTexture } : {} });
+      this.card.setContent({ cost: "", energyCost: choice.cardEnergyCost ?? 0, manaCost: choice.cardManaCost ?? 0, name: choice.name, description: choice.description, type: "Reward", rarity: toCardRarity(choice.rarity), ...this.artTexture ? { artTexture: this.artTexture } : {} });
     }
     if (this.relic !== void 0) {
       this.relic.setValue({ icon: choice.kind === "relic" ? "\u25C6" : "\u2022", name: choice.name, description: choice.description });
@@ -78202,6 +78285,200 @@ function normalizeSize2(value) {
   return Number.isFinite(value) ? Math.max(0, value) : 0;
 }
 
+// src/scroll-motion.ts
+function getWheelScrollDelta(delta, mode, pageSize) {
+  if (!Number.isFinite(delta)) return 0;
+  return delta * (mode === 2 ? pageSize : mode === 1 ? 24 : 1.5);
+}
+var ScrollMotion = class {
+  constructor(enabled = true) {
+    this.enabled = enabled;
+  }
+  enabled;
+  velocityX = 0;
+  velocityY = 0;
+  sampleTime = 0;
+  dragging = false;
+  frame;
+  /** Reports whether another frame can move the scroll position. */
+  get active() {
+    return !this.dragging && Math.hypot(this.velocityX, this.velocityY) >= 0.02;
+  }
+  /** Interrupts an old fling as soon as another gesture starts. */
+  begin(time) {
+    this.stop();
+    this.dragging = true;
+    this.sampleTime = time;
+  }
+  /** Samples direct drag movement without changing its one-to-one distance. */
+  drag(x2, y2, time) {
+    const elapsed = Math.max(8, time - this.sampleTime);
+    this.velocityX = Math.max(-3, Math.min(3, x2 / elapsed));
+    this.velocityY = Math.max(-3, Math.min(3, y2 / elapsed));
+    this.sampleTime = time;
+  }
+  /** Continues a quick release, but leaves held or cancelled gestures stationary. */
+  release(time, cancelled = false) {
+    this.dragging = false;
+    if (!this.enabled || cancelled || time - this.sampleTime > 100) this.stop();
+  }
+  /** Applies time-based decay so momentum feels the same at different frame rates. */
+  advance(deltaMs) {
+    if (!this.active) return { x: 0, y: 0 };
+    const elapsed = Math.max(0, Math.min(64, deltaMs));
+    const decay = Math.exp(-elapsed / 325);
+    const distance = 325 * (1 - decay);
+    const movement = { x: this.velocityX * distance, y: this.velocityY * distance };
+    this.velocityX *= decay;
+    this.velocityY *= decay;
+    return movement;
+  }
+  /** Runs frames only during a fling for overlays without an owned scene ticker. */
+  animate(apply) {
+    if (!this.active || this.frame !== void 0 || typeof requestAnimationFrame !== "function") return;
+    let previousTime;
+    const tick = (time) => {
+      this.frame = void 0;
+      if (!this.active) return;
+      const movement = this.advance(previousTime === void 0 ? 16 : time - previousTime);
+      previousTime = time;
+      if (!apply(movement)) {
+        this.stop();
+        return;
+      }
+      if (this.active) this.frame = requestAnimationFrame(tick);
+    };
+    this.frame = requestAnimationFrame(tick);
+  }
+  /** Stops motion on a boundary, selection, wheel event, or scene disposal. */
+  stop() {
+    if (this.frame !== void 0 && typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.frame);
+    this.frame = void 0;
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.dragging = false;
+  }
+};
+
+// src/choice-scroll-input.ts
+function installChoiceScrollInput(canvas, scroll, isBlocked, onScroll) {
+  const reducedMotion = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const motion = new ScrollMotion(!reducedMotion);
+  let gesture;
+  let suppressedPointerId;
+  const scrollBy = (amount) => {
+    scroll.scrollBy(amount);
+    onScroll();
+  };
+  const wheel = (event) => {
+    if (isBlocked() || scroll.maximumScrollOffset === 0 || event.deltaY === 0) return;
+    motion.stop();
+    scrollBy(getWheelScrollDelta(event.deltaY, event.deltaMode, scroll.viewportSize.height));
+    event.preventDefault();
+  };
+  const pointerdown = (event) => {
+    if (isBlocked() || event.pointerType !== "touch" || !isPrimaryPointer(event) || gesture) return;
+    suppressedPointerId = void 0;
+    motion.stop();
+    if (scroll.maximumScrollOffset === 0) return;
+    motion.begin(event.timeStamp);
+    gesture = { pointerId: getPointerId(event), x: event.clientX, y: event.clientY, currentY: event.clientY, moved: false };
+    canvas.setPointerCapture?.(gesture.pointerId);
+  };
+  const pointermove = (event) => {
+    if (!gesture || getPointerId(event) !== gesture.pointerId) return;
+    const amount = gesture.currentY - event.clientY;
+    gesture = { ...gesture, currentY: event.clientY, moved: gesture.moved || hasExceededPointerDragSlop(gesture, event) };
+    if (!gesture.moved) return;
+    suppressedPointerId = gesture.pointerId;
+    motion.drag(0, amount, event.timeStamp);
+    scrollBy(amount);
+    event.preventDefault();
+  };
+  const pointerup = (event) => {
+    if (!gesture || getPointerId(event) !== gesture.pointerId) return;
+    motion.release(event.timeStamp, event.type === "pointercancel" || !gesture.moved);
+    canvas.releasePointerCapture?.(gesture.pointerId);
+    gesture = void 0;
+  };
+  canvas.addEventListener("wheel", wheel, { passive: false });
+  canvas.addEventListener("pointerdown", pointerdown);
+  canvas.addEventListener("pointermove", pointermove);
+  canvas.addEventListener("pointerup", pointerup);
+  canvas.addEventListener("pointercancel", pointerup);
+  return {
+    advance(elapsedMs) {
+      if (isBlocked()) {
+        motion.stop();
+        return;
+      }
+      if (!motion.active) return;
+      const before = scroll.scrollOffset;
+      scrollBy(motion.advance(elapsedMs).y);
+      if (before === scroll.scrollOffset) motion.stop();
+    },
+    suppressesTap(pointerId) {
+      return suppressedPointerId !== void 0 && (pointerId === void 0 || pointerId === suppressedPointerId);
+    },
+    stop() {
+      motion.stop();
+    },
+    dispose() {
+      motion.stop();
+      if (gesture) canvas.releasePointerCapture?.(gesture.pointerId);
+      gesture = void 0;
+      canvas.removeEventListener("wheel", wheel);
+      canvas.removeEventListener("pointerdown", pointerdown);
+      canvas.removeEventListener("pointermove", pointermove);
+      canvas.removeEventListener("pointerup", pointerup);
+      canvas.removeEventListener("pointercancel", pointerup);
+    }
+  };
+}
+
+// src/event-deck-row.ts
+init_lib();
+var EventDeckRow = class extends Container {
+  layoutHeight;
+  /** Creates a row whose height expands to retain all card details at the current viewport width. */
+  constructor(name, details, image, width, selected, enabled, onPress) {
+    super();
+    const textX = image ? 80 : 14;
+    const textWidth = Math.max(1, width - textX - 14);
+    const heading = new Text({ text: name, style: { ...uiTokens.typography.button, fontSize: 18, wordWrap: true, wordWrapWidth: textWidth } });
+    const body = new Text({ text: details, style: {
+      ...uiTokens.typography.body,
+      fill: uiTokens.color.textMuted,
+      fontSize: 14,
+      lineHeight: 19,
+      wordWrap: true,
+      wordWrapWidth: textWidth
+    } });
+    heading.resolution = body.resolution = 2;
+    heading.position.set(textX, 8);
+    const bodyY = 12 + Math.max(heading.height, estimateHeight(name, textWidth, 22));
+    body.position.set(textX, bodyY);
+    this.layoutHeight = Math.max(80, bodyY + Math.max(body.height, estimateHeight(details, textWidth, 19)) + 10);
+    const frame = new Graphics().roundRect(0, 0, width, this.layoutHeight, 4).fill({ color: selected ? 2639453 : 1254710 }).stroke({ color: selected ? uiTokens.color.selected : 3561587, width: 1 });
+    this.addChild(frame, heading, body);
+    if (image) {
+      const artwork = new JourneyArtwork();
+      artwork.setImage(image);
+      artwork.resize(56, 56);
+      artwork.position.set(12, 12);
+      this.addChild(artwork);
+    }
+    this.eventMode = enabled ? "static" : "none";
+    this.cursor = enabled ? "pointer" : "default";
+    this.alpha = enabled ? 1 : 0.45;
+    if (enabled) this.on("pointertap", (event) => onPress(event?.pointerType === "touch", event?.pointerId));
+  }
+};
+function estimateHeight(text, width, lineHeight) {
+  const columns = Math.max(1, Math.floor(width / 7));
+  return text.split("\n").reduce((lines, line) => lines + Math.max(1, Math.ceil(line.length / columns)), 0) * lineHeight;
+}
+
 // src/pixi-event.ts
 var eventSceneProtocolVersion = runSceneProtocolVersion;
 async function createEventRenderer(canvas, sink) {
@@ -78220,16 +78497,18 @@ async function createEventRenderer(canvas, sink) {
   const contextTitle = new Text({ text: "Choose an option", style: new TextStyle(contextTitleStyle) });
   const contextDetails = new Text({ text: "Select a choice to inspect its outcome.", style: new TextStyle(contextBodyStyle) });
   const feedback = new Text({ text: "", style: new TextStyle(feedbackStyle2) });
-  const choiceLayer = new Container();
+  const choiceScroll = new ScrollContainer({ width: 1, height: 1 });
+  const choiceLayer = choiceScroll.content;
   const controlLayer = new Container();
   const tooltip = new Tooltip({ text: "", width: 272, height: 96, placement: "left" });
   const nestedOverlay = new ModalOverlay({ sceneWidth: 0, sceneHeight: 0, width: 360, height: 320 });
   const nestedTitle = new Text({ text: "", style: new TextStyle(contextTitleStyle) });
   const nestedDetails = new Text({ text: "", style: new TextStyle(contextBodyStyle) });
-  const nestedChoiceLayer = new Container();
+  const nestedChoiceScroll = new ScrollContainer({ width: 1, height: 1 });
+  const nestedChoiceLayer = nestedChoiceScroll.content;
   const nestedControlLayer = new Container();
-  nestedOverlay.content.addChild(nestedTitle, nestedDetails, nestedChoiceLayer, nestedControlLayer);
-  root.addChild(background, focal, title, narrative, choiceLayer, contextPanel, contextTitle, contextDetails, controlLayer, feedback, tooltip, nestedOverlay);
+  nestedOverlay.content.addChild(nestedTitle, nestedDetails, nestedChoiceScroll, nestedControlLayer);
+  root.addChild(background, focal, title, narrative, choiceScroll, contextPanel, contextTitle, contextDetails, controlLayer, feedback, tooltip, nestedOverlay);
   application.stage.addChild(root);
   let state;
   let sequence = 0;
@@ -78238,17 +78517,20 @@ async function createEventRenderer(canvas, sink) {
   let nestedChoiceOpen = false;
   let nestedIndex = 0;
   const selectedNestedItemIds = /* @__PURE__ */ new Set();
-  let nestedPage = 0;
   let pending = false;
+  let disposed = false;
   let acceptedActionAwaitingReconcile = false;
   let activeSubmissionGeneration = 0;
   let narrativeProgress = 0;
   let effectName;
   let effectElapsedMs = 0;
   let tooltipDelay;
+  const choiceScrollInput = installChoiceScrollInput(canvas, choiceScroll, () => disposed || pending || nestedChoiceOpen, () => hideTooltip());
+  const nestedScrollInput = installChoiceScrollInput(canvas, nestedChoiceScroll, () => disposed || pending || !nestedChoiceOpen, () => hideTooltip());
   const availableOptions = () => state?.options.filter((option) => option.isAvailable) ?? [];
   const isNarrativeComplete = () => state !== void 0 && narrativeProgress >= toPlainNarrative(state.narrative).length;
   const playEffect = (name) => {
+    if (disposed) return;
     effectName = name;
     effectElapsedMs = 0;
   };
@@ -78272,18 +78554,20 @@ async function createEventRenderer(canvas, sink) {
     }, delayMs);
   };
   const resize = () => {
+    if (disposed) return;
     const size = getEventSurfaceSize(canvas);
     application.renderer.resize(size.width, size.height);
     layout();
   };
   const submit = async (name, choiceId, selectionIds = null) => {
-    if (pending) return;
+    if (pending || disposed) return;
     pending = true;
     const submissionGeneration = ++activeSubmissionGeneration;
     acceptedActionAwaitingReconcile = true;
     try {
       const optionIndex = name === "chooseOption" && choiceId !== null ? state?.options.findIndex((option) => option.id === choiceId) ?? -1 : null;
       const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: eventSceneProtocolVersion, sceneId: "event", name, sequence, sourceId: null, targetId: null, optionIndex: optionIndex !== null && optionIndex >= 0 ? optionIndex : null, choiceId, selectionIds });
+      if (disposed) return;
       announce(result.accepted ? "Resolved." : "That choice is no longer available.");
       playEffect(result.accepted ? "choice-confirmed" : "choice-rejected");
       if (!result.accepted && submissionGeneration === activeSubmissionGeneration) {
@@ -78291,6 +78575,7 @@ async function createEventRenderer(canvas, sink) {
         pending = false;
       }
     } catch {
+      if (disposed) return;
       announce("The choice could not be completed. Please try again.");
       if (submissionGeneration === activeSubmissionGeneration) {
         acceptedActionAwaitingReconcile = false;
@@ -78375,16 +78660,15 @@ async function createEventRenderer(canvas, sink) {
     if (nested && nested.items.length > 0 && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
       const direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
       nestedIndex = (nestedIndex + direction + nested.items.length) % nested.items.length;
-      nestedPage = Math.floor(nestedIndex / getNestedPageSize(application.renderer.width, application.renderer.height));
       layout();
+      scrollNestedChoiceIntoView();
       event.preventDefault();
       return;
     }
     if (nested && (event.key === "PageUp" || event.key === "PageDown")) {
-      const pageCount = getNestedPageCount(nested, application.renderer.width, application.renderer.height);
-      nestedPage = event.key === "PageUp" ? Math.max(0, nestedPage - 1) : Math.min(pageCount - 1, nestedPage + 1);
+      nestedScrollInput.stop();
+      nestedChoiceScroll.scrollBy((event.key === "PageUp" ? -1 : 1) * nestedChoiceScroll.viewportSize.height * 0.8);
       event.preventDefault();
-      layout();
       return;
     }
     if (options.length > 0 && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
@@ -78392,10 +78676,19 @@ async function createEventRenderer(canvas, sink) {
       selectedIndex = (selectedIndex + direction + options.length) % options.length;
       selectedOptionId = options[selectedIndex]?.id;
       layout();
+      scrollSelectedChoiceIntoView();
+      event.preventDefault();
+    }
+    if (!nested && (event.key === "PageUp" || event.key === "PageDown")) {
+      choiceScrollInput.stop();
+      choiceScroll.scrollBy((event.key === "PageUp" ? -1 : 1) * choiceScroll.viewportSize.height * 0.8);
       event.preventDefault();
     }
   };
   const tick = () => {
+    if (disposed) return;
+    choiceScrollInput.advance(application.ticker.deltaMS);
+    nestedScrollInput.advance(application.ticker.deltaMS);
     const narrativeLength = state ? toPlainNarrative(state.narrative).length : 0;
     if (state && narrativeProgress < narrativeLength) {
       narrativeProgress = Math.min(narrativeLength, narrativeProgress + Math.max(1, Math.ceil(application.ticker.deltaMS / 20)));
@@ -78416,6 +78709,7 @@ async function createEventRenderer(canvas, sink) {
   visualViewport?.addEventListener("resize", resize);
   application.ticker.add(tick);
   function layout() {
+    if (disposed) return;
     const width = application.renderer.width;
     const height = application.renderer.height;
     const scene = getJourneyLayout(width, height);
@@ -78444,13 +78738,15 @@ async function createEventRenderer(canvas, sink) {
     const narrativeY = panel.y + titleHeight + 28;
     narrative.position.set(choiceX, narrativeY);
     const narrativeHeight = state?.narrative ? Math.max(narrative.height, estimateTextHeight(toPlainNarrative(state.narrative), choiceWidth, mobile ? 20 : 24)) : 0;
-    const trayHeight = selected || state?.isComplete ? Math.min(shortLandscape ? 58 : 146, panel.height * 0.34) : 0;
+    const showSelectionDetails = selected !== void 0 && !selected.effects?.length;
+    const trayHeight = showSelectionDetails || state?.isComplete ? Math.min(shortLandscape ? 58 : 146, panel.height * 0.34) : 0;
     const trayY = panel.y + panel.height - trayHeight - 12;
     const choiceTop = narrativeY + narrativeHeight + 18;
     const choiceBottom = trayY - 12;
     const choiceGap = mobile || shortLandscape ? 8 : 12;
-    const nestedItems = nested ? getNestedPageItems(nested, width, height) : [];
-    const choiceHeight = Math.max(32, Math.min(mobile ? 68 : 96, (choiceBottom - choiceTop - Math.max(0, choices.length - 1) * choiceGap) / Math.max(1, choices.length)));
+    const choiceHeight = Math.max(32, Math.min(mobile ? 104 : 120, (choiceBottom - choiceTop - Math.max(0, choices.length - 1) * choiceGap) / Math.max(1, choices.length)));
+    choiceScroll.position.set(choiceX, choiceTop);
+    choiceScroll.resize(choiceWidth, Math.max(32, choiceBottom - choiceTop));
     background.clear().rect(0, 0, width, height).fill({ color: 530204, alpha: 0.12 });
     focal.clear().roundRect(panel.x, panel.y, panel.width, panel.height, 4).fill({ color: 530204, alpha: 0.94 }).stroke({ color: 5467506, width: 1 });
     feedback.visible = feedback.text.length > 0;
@@ -78466,7 +78762,7 @@ async function createEventRenderer(canvas, sink) {
     contextPanel.clear();
     contextTitle.visible = false;
     contextTitle.text = nested?.title ?? selected?.text ?? "Choose an option";
-    contextDetails.visible = !shortLandscape && (selected !== void 0 || state?.isComplete === true);
+    contextDetails.visible = !shortLandscape && (showSelectionDetails || state?.isComplete === true);
     contextDetails.style.wordWrapWidth = choiceWidth;
     contextDetails.position.set(choiceX, trayY + 4);
     if (state?.isComplete) {
@@ -78477,73 +78773,88 @@ async function createEventRenderer(canvas, sink) {
       contextDetails.style.fontSize = 12;
       contextDetails.style.lineHeight = 16;
     }
-    layoutNestedOverlay(nested, nestedItems, width, height);
-    if (!nested) choices.forEach((option, index) => {
+    layoutNestedOverlay(nested, width, height);
+    let choiceY = 0;
+    if (!nested) choices.forEach((option) => {
       const availableIndex = availableOptions().findIndex((entry) => entry.id === option.id);
       const selected2 = option.id === selectedOptionId || selectedOptionId === void 0 && availableIndex === selectedIndex;
-      const choiceY = choiceTop + index * (choiceHeight + choiceGap);
       const choice = new EventChoice(
         option.text,
-        option.isAvailable ? [option.hint, option.details].filter(Boolean).join(" \xB7 ") : option.disabledReason ?? "Unavailable",
+        option.isAvailable ? option.effects?.length ? option.hint : [option.hint, option.details].filter(Boolean).join(" \xB7 ") : option.disabledReason ?? "Unavailable",
         option.isAvailable && isNarrativeComplete() && !pending,
         selected2,
-        () => pressOption(option),
-        () => scheduleTooltip(option.rewardTooltip, { x: choiceX, y: choiceY, width: choiceWidth, height: choiceHeight }, 0),
-        hideTooltip
+        (isTouch, pointerId) => {
+          if (!isTouch || !choiceScrollInput.suppressesTap(pointerId)) pressOption(option);
+        },
+        () => scheduleTooltip(getOptionContextDetails(option), { x: choiceX, y: choiceTop + choice.layoutTop - choiceScroll.scrollOffset, width: choiceWidth, height: choice.layoutHeight }, 0),
+        hideTooltip,
+        option.effects ?? []
       );
       choice.resize(choiceWidth, choiceHeight);
-      choice.position.set(choiceX, choiceY);
+      choice.layoutTop = choiceY;
+      choice.position.set(0, choiceY);
       choiceLayer.addChild(choice);
+      choiceY += choice.layoutHeight + choiceGap;
     });
+    choiceScroll.setContentHeight(Math.max(0, choiceY - choiceGap));
+  }
+  function scrollSelectedChoiceIntoView() {
+    const index = state?.options.findIndex((option) => option.id === selectedOptionId) ?? -1;
+    const choice = choiceLayer.children[index];
+    if (!(choice instanceof EventChoice)) return;
+    choiceScrollInput.stop();
+    const top = choice.layoutTop;
+    const bottom = top + choice.layoutHeight;
+    if (top < choiceScroll.scrollOffset) choiceScroll.setScrollOffset(top);
+    else if (bottom > choiceScroll.scrollOffset + choiceScroll.viewportSize.height) choiceScroll.setScrollOffset(Math.min(top, bottom - choiceScroll.viewportSize.height));
   }
   function getNestedChoice() {
     if (!nestedChoiceOpen || selectedOptionId === void 0) return void 0;
     return state?.options.find((option) => option.id === selectedOptionId)?.nestedChoice;
   }
-  function getNestedItemDetails(nested) {
-    const item = nested.items[nestedIndex] ?? nested.items.find((candidate) => selectedNestedItemIds.has(candidate.id));
-    if (!item) return "";
-    return `${item.name}
-${item.tooltip ?? item.description}`;
-  }
-  function layoutNestedOverlay(nested, items, sceneWidth, sceneHeight) {
+  function layoutNestedOverlay(nested, sceneWidth, sceneHeight) {
     nestedOverlay.setOpen(nested !== void 0);
     if (!nested) return;
-    const panelWidth = Math.min(Math.max(280, sceneWidth - 32), 520);
-    const panelHeight = Math.min(Math.max(220, sceneHeight - 24), 460);
+    const panelWidth = Math.min(sceneWidth - 24, 720);
+    const compact = sceneHeight < 400;
+    const panelHeight = Math.min(sceneHeight - (compact ? 16 : 32), 700);
     nestedOverlay.resize(sceneWidth, sceneHeight, panelWidth, panelHeight);
     nestedTitle.text = nested.title;
-    nestedTitle.position.set(18, 14);
-    nestedDetails.text = `${nested.description}
-
-${getNestedItemDetails(nested)}
-
+    nestedTitle.style.wordWrap = true;
+    nestedTitle.style.wordWrapWidth = panelWidth - 36;
+    nestedTitle.position.set(18, compact ? 8 : 14);
+    nestedDetails.text = compact ? formatSelectedItems(nested, selectedNestedItemIds.size) : `${nested.description}
 ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
     nestedDetails.style.wordWrapWidth = panelWidth - 36;
-    nestedDetails.position.set(18, 42);
-    const paginated = getNestedPageCount(nested, sceneWidth, sceneHeight) > 1;
+    const detailsY = (compact ? 16 : 22) + Math.max(nestedTitle.height, estimateTextHeight(nested.title, panelWidth - 36, 22));
+    nestedDetails.position.set(18, detailsY);
     const actionControlsY = panelHeight - 56;
-    const navigationControlsY = actionControlsY - 48;
     const detailsHeight = Math.max(nestedDetails.height, estimateTextHeight(nestedDetails.text, panelWidth - 36, 19));
-    const choiceTop = 42 + detailsHeight + 12;
-    const choiceBottom = (paginated ? navigationControlsY : actionControlsY) - 10;
+    const choiceTop = detailsY + detailsHeight + (compact ? 8 : 12);
+    const choiceBottom = actionControlsY - 10;
+    nestedChoiceScroll.position.set(18, choiceTop);
+    nestedChoiceScroll.resize(panelWidth - 36, Math.max(1, choiceBottom - choiceTop));
     const choiceGap = 8;
-    const choiceCount = Math.max(1, items.length);
-    const choiceHeight = Math.max(26, Math.min(52, (choiceBottom - choiceTop - (choiceCount - 1) * choiceGap) / choiceCount));
-    items.forEach((item, index) => {
-      const itemIndex = nested.items.findIndex((candidate) => candidate.id === item.id);
-      const itemSelected = selectedNestedItemIds.has(item.id) || selectedNestedItemIds.size === 0 && itemIndex === nestedIndex;
-      const choice = new EventChoice(item.name, item.description, !pending, itemSelected, () => toggleNestedItem(item));
-      choice.resize(panelWidth - 36, choiceHeight);
-      choice.position.set(18, choiceTop + index * (choiceHeight + choiceGap));
+    let choiceY = 0;
+    nested.items.forEach((item, index) => {
+      const itemSelected = selectedNestedItemIds.has(item.id) || index === nestedIndex;
+      const choice = new EventDeckRow(
+        item.name,
+        getNestedRowDetails(item),
+        item.image,
+        panelWidth - 36,
+        itemSelected,
+        !pending,
+        (isTouch, pointerId) => {
+          if (!isTouch || !nestedScrollInput.suppressesTap(pointerId)) toggleNestedItem(item);
+        }
+      );
+      choice.position.set(0, choiceY);
       nestedChoiceLayer.addChild(choice);
+      choiceY += choice.layoutHeight + choiceGap;
     });
-    const controlWidth = (panelWidth - 54) / 2;
+    nestedChoiceScroll.setContentHeight(Math.max(0, choiceY - choiceGap));
     addNestedControl("Back", "Return to event choices", !pending, 18, actionControlsY, panelWidth - 36, cancelSelection);
-    if (paginated) {
-      addNestedControl("Previous", "Previous choices", !pending && nestedPage > 0, 18, navigationControlsY, controlWidth, () => changeNestedPage(-1));
-      addNestedControl("Next", "Next choices", !pending && nestedPage < getNestedPageCount(nested, sceneWidth, sceneHeight) - 1, 36 + controlWidth, navigationControlsY, controlWidth, () => changeNestedPage(1));
-    }
   }
   function openNestedChoice(option) {
     const nested = option.nestedChoice;
@@ -78553,7 +78864,8 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
     }
     nestedChoiceOpen = true;
     nestedIndex = 0;
-    nestedPage = 0;
+    nestedScrollInput.stop();
+    nestedChoiceScroll.setScrollOffset(0);
     selectedNestedItemIds.clear();
     announce(`${nested.title}. ${nested.description}`);
     canvasFocus.focus();
@@ -78577,24 +78889,19 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
       void submit("chooseOption", selectedOptionId, [...selectedNestedItemIds]);
     }
   }
-  function getNestedPageSize(width, height) {
-    if (height < 400) return 1;
-    return height > width ? 3 : 4;
+  function scrollNestedChoiceIntoView() {
+    const choice = nestedChoiceLayer.children[nestedIndex];
+    if (!(choice instanceof EventDeckRow)) return;
+    const top = nestedChoiceLayer.children.slice(0, nestedIndex).reduce((height, row) => height + (row instanceof EventDeckRow ? row.layoutHeight + 8 : 0), 0);
+    const bottom = top + choice.layoutHeight;
+    nestedScrollInput.stop();
+    if (top < nestedChoiceScroll.scrollOffset) nestedChoiceScroll.setScrollOffset(top);
+    else if (bottom > nestedChoiceScroll.scrollOffset + nestedChoiceScroll.viewportSize.height) nestedChoiceScroll.setScrollOffset(Math.min(top, bottom - nestedChoiceScroll.viewportSize.height));
   }
-  function getNestedPageItems(nested, width, height) {
-    const pageSize = getNestedPageSize(width, height);
-    const pageCount = getNestedPageCount(nested, width, height);
-    nestedPage = Math.min(nestedPage, pageCount - 1);
-    return nested.items.slice(nestedPage * pageSize, (nestedPage + 1) * pageSize);
-  }
-  function getNestedPageCount(nested, width, height) {
-    return Math.max(1, Math.ceil(nested.items.length / getNestedPageSize(width, height)));
-  }
-  function changeNestedPage(direction) {
-    const nested = getNestedChoice();
-    if (!nested) return;
-    nestedPage = Math.max(0, Math.min(getNestedPageCount(nested, application.renderer.width, application.renderer.height) - 1, nestedPage + direction));
-    layout();
+  function getNestedRowDetails(item) {
+    const lines = (item.tooltip ?? item.description).split("\n");
+    if (lines[0] === `Card \xB7 ${item.name}` || lines[0] === `Relic \xB7 ${item.name}`) lines.shift();
+    return lines.join("\n");
   }
   function addControl(label, hint, enabled, x2, y2, width, onPress) {
     const control = new EventChoice(label, hint, enabled, false, onPress);
@@ -78622,9 +78929,13 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
   resize();
   return {
     reconcile(nextSequence, candidate) {
-      if (!isEventState(candidate) || nextSequence <= sequence) return false;
+      if (disposed || !isEventState(candidate) || nextSequence <= sequence) return false;
       sequence = nextSequence;
       state = candidate;
+      choiceScrollInput.stop();
+      choiceScroll.setScrollOffset(0);
+      nestedScrollInput.stop();
+      nestedChoiceScroll.setScrollOffset(0);
       updateJourneyBackdrop(canvas, "event", candidate.environment);
       selectedIndex = 0;
       selectedOptionId = void 0;
@@ -78642,6 +78953,10 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
     },
     playEffect,
     dispose() {
+      if (disposed) return;
+      disposed = true;
+      choiceScrollInput.dispose();
+      nestedScrollInput.dispose();
       canvas.removeEventListener("keydown", keydown);
       window.removeEventListener("resize", resize);
       visualViewport?.removeEventListener("resize", resize);
@@ -78683,30 +78998,54 @@ function formatSelectedItems(nested, selectedCount) {
   return `${selectedCount} of ${nested?.requiredSelectionCount ?? 0} ${plural} selected`;
 }
 var EventChoice = class extends Container {
-  frame = new Graphics();
-  heading = new Text({ text: "", style: new TextStyle(choiceHeadingStyle) });
-  hint = new Text({ text: "", style: new TextStyle(choiceHintStyle) });
-  constructor(text, hint, enabled, selected, onPress, onHoverStart = void 0, onHoverEnd = void 0) {
+  constructor(text, hint, enabled, selected, onPress, onHoverStart = void 0, onHoverEnd = void 0, effects = []) {
     super();
+    this.selected = selected;
     this.heading.text = text;
     this.hint.text = hint;
     this.addChild(this.frame, this.heading, this.hint);
+    this.effectLabels = effects.map((effect) => new Text({ text: effect.text, style: new TextStyle({
+      ...choiceHintStyle,
+      fill: effect.tone === "cost" ? uiTokens.color.health : effect.tone === "benefit" ? uiTokens.color.valid : uiTokens.color.textMuted
+    }) }));
+    if (this.effectLabels.length > 0) this.addChild(...this.effectLabels);
     this.eventMode = enabled || onHoverStart !== void 0 ? "static" : "none";
     this.cursor = enabled ? "pointer" : "default";
     this.alpha = enabled ? 1 : 0.45;
-    this.frame.tint = selected ? 16240238 : 16777215;
-    if (enabled) this.on("pointertap", (event) => onPress(event?.pointerType === "touch"));
+    if (enabled) this.on("pointertap", (event) => onPress(event?.pointerType === "touch", event?.pointerId));
     if (onHoverStart !== void 0) this.on("pointerover", onHoverStart);
     if (onHoverEnd !== void 0) this.on("pointerout", onHoverEnd);
   }
+  selected;
+  layoutTop = 0;
+  layoutHeight = 0;
+  frame = new Graphics();
+  heading = new Text({ text: "", style: new TextStyle(choiceHeadingStyle) });
+  hint = new Text({ text: "", style: new TextStyle(choiceHintStyle) });
+  effectLabels = [];
   resize(width, height) {
-    this.frame.clear().roundRect(0, 0, width, height, 3).fill({ color: this.heading.text === "Confirm" ? 9714732 : 1057062, alpha: 0.96 }).stroke({ color: 9545125, width: 1 });
-    this.heading.style.wordWrapWidth = Math.max(1, width - 40);
-    this.heading.style.fontSize = height < 54 ? 15 : 18;
+    height = Math.max(height, this.layoutEffects(width));
+    this.layoutHeight = height;
+    drawButtonSurface(this.frame, width, height, 1058092, this.selected ? uiTokens.color.selected : 5467506);
+    fitTextToBox(this.heading, width - 32, height < 54 ? height - 16 : 24, height < 54 ? 15 : 18, 14);
     this.heading.position.set(16, 8);
     this.hint.style.wordWrapWidth = Math.max(1, width - 32);
-    this.hint.visible = height >= 54;
+    this.hint.visible = height >= 54 && this.hint.text.length > 0;
     this.hint.position.set(16, 32);
+  }
+  /** Wraps independent semantic effects without coloring a whole mixed-outcome choice. */
+  layoutEffects(width) {
+    let y2 = this.hint.text.length > 0 ? 54 : 34;
+    for (const label of this.effectLabels) {
+      label.style.wordWrap = true;
+      label.style.wordWrapWidth = Math.max(1, width - 32);
+      label.style.fontSize = 14;
+      label.style.lineHeight = 20;
+      label.position.set(16, y2);
+      label.visible = true;
+      y2 += Math.max(label.height, estimateTextHeight(label.text, width - 32, 20)) + 4;
+    }
+    return this.effectLabels.length > 0 ? y2 + 8 : 0;
   }
 };
 var titleStyle = { fill: 16317180, fontFamily: "Alegreya, Georgia, serif", fontSize: 34, fontWeight: "bold" };
@@ -78714,7 +79053,7 @@ var narrativeStyle = { fill: 14412542, fontFamily: "Alegreya, Georgia, serif", f
 var contextTitleStyle = { fill: 16317180, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "bold" };
 var contextBodyStyle = { fill: 13358561, fontFamily: "Alegreya, Georgia, serif", fontSize: 14, lineHeight: 19, wordWrap: true };
 var feedbackStyle2 = { fill: 16113563, fontFamily: "Alegreya, Georgia, serif", fontSize: 15, align: "center" };
-var choiceHeadingStyle = { fill: 16317180, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "bold", wordWrap: true };
+var choiceHeadingStyle = { ...uiTokens.typography.button, fontSize: 18, align: "left", wordWrap: true };
 var choiceHintStyle = { fill: 12375521, fontFamily: "Alegreya, Georgia, serif", fontSize: 13, wordWrap: true };
 function getOptionSummary(option) {
   return [option.hint, option.details].filter(Boolean).join(" \xB7 ") || "This option has no additional preview.";
@@ -78791,11 +79130,13 @@ async function createRestRenderer(canvas, sink) {
   let selectedIndex = 0;
   let selectedActionId;
   let pending = false;
+  let disposed = false;
   let acceptedActionAwaitingReconcile = false;
   let effectName;
   let effectElapsedMs = 0;
   const availableActions = () => state?.actions.filter((action) => action.isAvailable) ?? [];
   const playEffect = (name) => {
+    if (disposed) return;
     effectName = name;
     effectElapsedMs = 0;
   };
@@ -78804,16 +79145,18 @@ async function createRestRenderer(canvas, sink) {
     accessibility.update(message);
   };
   const resize = () => {
+    if (disposed) return;
     application.renderer.resize(Math.max(1, canvas.parentElement?.clientWidth || canvas.clientWidth || canvas.width || 960), Math.max(1, canvas.parentElement?.clientHeight || canvas.clientHeight || canvas.height || 540));
     layout();
   };
   const submit = async (action) => {
-    if (pending) return;
+    if (pending || disposed) return;
     pending = true;
     acceptedActionAwaitingReconcile = true;
     const request = getActionRequest(action.id);
     try {
       const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: runSceneProtocolVersion, sceneId: "rest", name: request.name, sequence, sourceId: null, targetId: null, optionIndex: null, choiceId: request.choiceId });
+      if (disposed) return;
       announce(result.accepted ? `${action.name} accepted.` : "That action is no longer available.");
       playEffect(result.accepted ? getActionEffect(action.id) : "rejected");
       if (!result.accepted) {
@@ -78821,6 +79164,7 @@ async function createRestRenderer(canvas, sink) {
         pending = false;
       }
     } catch {
+      if (disposed) return;
       announce("The action could not be completed. Please try again.");
       pending = false;
       acceptedActionAwaitingReconcile = false;
@@ -78871,6 +79215,7 @@ async function createRestRenderer(canvas, sink) {
     }
   };
   const tick = () => {
+    if (disposed) return;
     if (effectName === void 0) return;
     effectElapsedMs += Math.max(0, application.ticker.deltaMS);
     if (effectElapsedMs >= 360) effectName = void 0;
@@ -78882,6 +79227,7 @@ async function createRestRenderer(canvas, sink) {
   resizeObserver?.observe(canvas.parentElement ?? canvas);
   application.ticker.add(tick);
   function layout() {
+    if (disposed) return;
     const width = application.renderer.width;
     const height = application.renderer.height;
     const scene = getJourneyLayout(width, height);
@@ -78953,7 +79299,7 @@ async function createRestRenderer(canvas, sink) {
   resize();
   return {
     reconcile(nextSequence, candidate) {
-      if (!isRestState(candidate) || nextSequence <= sequence) return false;
+      if (disposed || !isRestState(candidate) || nextSequence <= sequence) return false;
       sequence = nextSequence;
       state = candidate;
       updateJourneyBackdrop(canvas, "rest", candidate.environment);
@@ -78971,6 +79317,8 @@ async function createRestRenderer(canvas, sink) {
     },
     playEffect,
     dispose() {
+      if (disposed) return;
+      disposed = true;
       window.removeEventListener("resize", resize);
       resizeObserver?.disconnect();
       canvas.removeEventListener("keydown", keydown);
@@ -79012,7 +79360,7 @@ var RestButton = class extends Container {
   heading = new Text({ text: "", style: new TextStyle(buttonHeadingStyle) });
   description = new Text({ text: "", style: new TextStyle(buttonBodyStyle) });
   resize(width, height) {
-    this.background.clear().roundRect(0, 0, width, height, 4).fill({ color: this.heading.text === "Confirm" ? 9714732 : 1057062, alpha: 0.97 }).stroke({ color: this.selected ? 15759440 : 9083029, width: this.selected ? 2 : 1 });
+    this.background.clear().roundRect(0, 0, width, height, 3).fill({ color: this.heading.text === "Confirm" ? 10241074 : 1058092 }).stroke({ color: this.selected ? 13678460 : 5467506, width: 1 });
     this.heading.style.fontSize = width < 110 ? 13 : width < 180 ? 17 : 20;
     this.heading.style.wordWrap = true;
     this.heading.style.wordWrapWidth = width - 28;
@@ -79061,83 +79409,6 @@ var noOpRestAccessibilityOverlay = {
 
 // src/pixi-shop.ts
 init_lib();
-
-// src/scroll-motion.ts
-function getWheelScrollDelta(delta, mode, pageSize) {
-  if (!Number.isFinite(delta)) return 0;
-  return delta * (mode === 2 ? pageSize : mode === 1 ? 24 : 1.5);
-}
-var ScrollMotion = class {
-  constructor(enabled = true) {
-    this.enabled = enabled;
-  }
-  enabled;
-  velocityX = 0;
-  velocityY = 0;
-  sampleTime = 0;
-  dragging = false;
-  frame;
-  /** Reports whether another frame can move the scroll position. */
-  get active() {
-    return !this.dragging && Math.hypot(this.velocityX, this.velocityY) >= 0.02;
-  }
-  /** Interrupts an old fling as soon as another gesture starts. */
-  begin(time) {
-    this.stop();
-    this.dragging = true;
-    this.sampleTime = time;
-  }
-  /** Samples direct drag movement without changing its one-to-one distance. */
-  drag(x2, y2, time) {
-    const elapsed = Math.max(8, time - this.sampleTime);
-    this.velocityX = Math.max(-3, Math.min(3, x2 / elapsed));
-    this.velocityY = Math.max(-3, Math.min(3, y2 / elapsed));
-    this.sampleTime = time;
-  }
-  /** Continues a quick release, but leaves held or cancelled gestures stationary. */
-  release(time, cancelled = false) {
-    this.dragging = false;
-    if (!this.enabled || cancelled || time - this.sampleTime > 100) this.stop();
-  }
-  /** Applies time-based decay so momentum feels the same at different frame rates. */
-  advance(deltaMs) {
-    if (!this.active) return { x: 0, y: 0 };
-    const elapsed = Math.max(0, Math.min(64, deltaMs));
-    const decay = Math.exp(-elapsed / 325);
-    const distance = 325 * (1 - decay);
-    const movement = { x: this.velocityX * distance, y: this.velocityY * distance };
-    this.velocityX *= decay;
-    this.velocityY *= decay;
-    return movement;
-  }
-  /** Runs frames only during a fling for overlays without an owned scene ticker. */
-  animate(apply) {
-    if (!this.active || this.frame !== void 0 || typeof requestAnimationFrame !== "function") return;
-    let previousTime;
-    const tick = (time) => {
-      this.frame = void 0;
-      if (!this.active) return;
-      const movement = this.advance(previousTime === void 0 ? 16 : time - previousTime);
-      previousTime = time;
-      if (!apply(movement)) {
-        this.stop();
-        return;
-      }
-      if (this.active) this.frame = requestAnimationFrame(tick);
-    };
-    this.frame = requestAnimationFrame(tick);
-  }
-  /** Stops motion on a boundary, selection, wheel event, or scene disposal. */
-  stop() {
-    if (this.frame !== void 0 && typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.frame);
-    this.frame = void 0;
-    this.velocityX = 0;
-    this.velocityY = 0;
-    this.dragging = false;
-  }
-};
-
-// src/pixi-shop.ts
 async function createShopRenderer(canvas, sink) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 726562, backgroundAlpha: 0, canvas, preference: "canvas" });
@@ -79167,6 +79438,7 @@ async function createShopRenderer(canvas, sink) {
   let selectedIndex = 0;
   let selectedMerchandiseId;
   let pending = false;
+  let disposed = false;
   let acceptedActionAwaitingReconcile = false;
   let resolutionEffect;
   let resolutionEffectElapsedMs = 0;
@@ -79187,11 +79459,12 @@ async function createShopRenderer(canvas, sink) {
     accessibility.update(message);
   };
   const resize = () => {
+    if (disposed) return;
     application.renderer.resize(Math.max(1, canvas.parentElement?.clientWidth || canvas.clientWidth || canvas.width || 960), Math.max(1, canvas.parentElement?.clientHeight || canvas.clientHeight || canvas.height || 540));
     layout();
   };
   const submit = async (name, sourceId) => {
-    if (pending) return;
+    if (pending || disposed) return;
     scrollMotion.stop();
     pending = true;
     const awaitReconcile = name !== "inspect";
@@ -79208,6 +79481,7 @@ async function createShopRenderer(canvas, sink) {
         optionIndex: null,
         choiceId: null
       });
+      if (disposed) return;
       announce(result.accepted ? getAcceptedMessage(name) : name === "purchase" ? "That purchase is no longer available." : "That action is no longer available.");
       if (!result.accepted || !awaitReconcile) {
         pending = false;
@@ -79215,6 +79489,7 @@ async function createShopRenderer(canvas, sink) {
         pendingPurchaseMerchandiseId = void 0;
       }
     } catch {
+      if (disposed) return;
       announce("The shop could not complete that request. Please try again.");
       pending = false;
       acceptedActionAwaitingReconcile = false;
@@ -79328,6 +79603,7 @@ async function createShopRenderer(canvas, sink) {
   const resizeObserver = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(resize);
   resizeObserver?.observe(canvas.parentElement ?? canvas);
   const tick = () => {
+    if (disposed) return;
     if (scrollMotion.active) {
       const before = merchandiseScroll.scrollOffset;
       scrollInventory(scrollMotion.advance(application.ticker.deltaMS).y);
@@ -79353,6 +79629,7 @@ async function createShopRenderer(canvas, sink) {
   };
   application.ticker.add(tick);
   function layout() {
+    if (disposed) return;
     tooltip.hide();
     const width = application.renderer.width;
     const height = application.renderer.height;
@@ -79500,7 +79777,7 @@ ${getMerchandiseSummary(entry)}`, { x: 24 + placement.x, y: merchandiseLayout.gr
   resize();
   return {
     reconcile(nextSequence, candidate) {
-      if (!isShopState(candidate) || nextSequence <= sequence) return false;
+      if (disposed || !isShopState(candidate) || nextSequence <= sequence) return false;
       const previousState = state;
       const previousCurrency = previousState?.currency ?? candidate.currency;
       const completedPurchase = pending && acceptedActionAwaitingReconcile;
@@ -79542,6 +79819,8 @@ ${getMerchandiseSummary(entry)}`, { x: 24 + placement.x, y: merchandiseLayout.gr
       return true;
     },
     dispose() {
+      if (disposed) return;
+      disposed = true;
       scrollMotion.stop();
       canvas.removeEventListener("keydown", keydown);
       canvas.removeEventListener("wheel", wheel);
@@ -79572,18 +79851,21 @@ var ShopMerchandiseCard = class extends Container {
   itemArt = new JourneyArtwork();
   priceLabel = new Text({ text: "", style: new TextStyle(cardBodyStyle) });
   hasArtwork;
+  isControl;
   selected = false;
   resolutionIntensity = 0;
   resolutionKind;
   constructor(merchandise) {
     super();
     this.isCard = Boolean(merchandise.isCard);
+    this.isControl = merchandise.kind === "control";
     this.hasArtwork = Boolean(merchandise.image);
     this.itemArt.setImage(merchandise.image);
     if (merchandise.isCard) {
       this.card = new CardView({
         presentation: "reward",
-        cost: getCardCost(merchandise),
+        energyCost: merchandise.cardEnergyCost ?? 0,
+        manaCost: merchandise.cardManaCost ?? 0,
         name: merchandise.name,
         description: merchandise.description,
         type: merchandise.cardType ?? "Card",
@@ -79595,8 +79877,8 @@ var ShopMerchandiseCard = class extends Container {
       });
       this.addChild(this.card);
       void loadJourneyTexture(merchandise.image).then((texture) => {
-        if (!texture || this.destroyed) return;
-        this.card?.setContent({ cost: getCardCost(merchandise), name: merchandise.name, description: merchandise.description, type: merchandise.cardType ?? "Card", rarity: toCardRarity2(merchandise.cardRarity), artTexture: texture });
+        if (!texture || this.destroyed || !this.card) return;
+        this.card.setContent({ ...this.card.content, artTexture: texture });
       });
     } else {
       this.addChild(this.frame, this.heading, this.description, this.itemArt);
@@ -79606,6 +79888,7 @@ var ShopMerchandiseCard = class extends Container {
   /** Updates dynamic merchandise state without allocating another card display tree. */
   update(merchandise, selected, interactive, resolutionIntensity, resolutionKind, onPress, onHover, onExit) {
     this.selected = selected;
+    this.card?.setContent({ ...this.card.content, energyCost: merchandise.cardEnergyCost ?? 0, manaCost: merchandise.cardManaCost ?? 0 });
     this.priceLabel.text = merchandise.kind === "control" ? "" : merchandise.isSold ? "SOLD" : (merchandise.isOnSale ? "SALE \xB7 " : "") + merchandise.price + " gold";
     this.priceLabel.style.fill = merchandise.isAffordable ? 15259564 : 14972757;
     this.resolutionIntensity = resolutionIntensity;
@@ -79632,6 +79915,18 @@ var ShopMerchandiseCard = class extends Container {
     if (onExit) this.on("pointerout", onExit);
   }
   resize(width, height) {
+    if (this.isControl) {
+      const primary = this.heading.text.startsWith("Buy");
+      drawButtonSurface(this.frame, width, height, primary ? 10241074 : 1058092, primary ? 14974298 : 5467506);
+      Object.assign(this.heading.style, uiTokens.typography.button, { wordWrap: false });
+      fitTextToBox(this.heading, width - 24, height - 12, 16, 12);
+      this.heading.anchor.set(0.5);
+      this.heading.position.set(width / 2, height / 2);
+      this.description.visible = false;
+      this.itemArt.visible = false;
+      this.priceLabel.visible = false;
+      return;
+    }
     this.priceLabel.style.fontSize = width < 110 ? 12 : 15;
     this.priceLabel.anchor.set(0.5, 0);
     this.priceLabel.position.set(width / 2, height - 24);
@@ -79715,13 +80010,6 @@ function createMerchandiseLayout(width, height, merchandise) {
     contentHeight = Math.max(cardsBottom, serviceBottom);
   }
   return { mode, compact, trayHeight, trayY, gridTop, gridBottom, gridWidth, panelX, panelWidth, placements, sections, columns: compact ? 3 : 4, gap, cardWidth: 120, cardHeight: 180, contentHeight };
-}
-function getCardCost(merchandise) {
-  const costs = [
-    merchandise.cardEnergyCost ? `${merchandise.cardEnergyCost}\u26A1` : "",
-    merchandise.cardManaCost ? `${merchandise.cardManaCost}\u2726` : ""
-  ].filter(Boolean);
-  return costs.length > 0 ? costs.join(" ") : "0";
 }
 function toCardRarity2(rarity) {
   if (rarity === "Rare" || rarity === "Uncommon" || rarity === "Special") return rarity;
@@ -79816,13 +80104,15 @@ async function createTreasureRenderer(canvas, sink) {
     layout();
   };
   const submit = async (name) => {
-    if (pending || !isAvailable(name)) return;
+    if (pending || disposed || !isAvailable(name)) return;
     pending = true;
     try {
       const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: runSceneProtocolVersion, sceneId: "treasure", name, sequence, sourceId: null, targetId: null, optionIndex: null, choiceId: null });
+      if (disposed) return;
       feedback.text = result.accepted ? name === "collectTreasure" ? "Opening the cache\u2026" : "Returning to the map\u2026" : "That action is no longer available.";
       if (!result.accepted) pending = false;
     } catch {
+      if (disposed) return;
       feedback.text = "The action could not be completed. Please try again.";
       pending = false;
     }
@@ -79844,6 +80134,7 @@ async function createTreasureRenderer(canvas, sink) {
     return name === "collectTreasure" ? state?.canCollect === true : state?.canLeave === true;
   }
   function layout() {
+    if (disposed) return;
     const width = application.renderer.width;
     const height = application.renderer.height;
     const compact = width < 680 || height > width;
@@ -79878,7 +80169,7 @@ async function createTreasureRenderer(canvas, sink) {
   resize();
   return {
     reconcile(nextSequence, candidate) {
-      if (!isTreasureState(candidate) || nextSequence <= sequence) return false;
+      if (disposed || !isTreasureState(candidate) || nextSequence <= sequence) return false;
       sequence = nextSequence;
       state = candidate;
       updateJourneyBackdrop(canvas, "treasure", candidate.environment);
@@ -79937,7 +80228,7 @@ var endpointPadding = 34;
 function getMapLayoutMetrics(width, height, nodes) {
   const mode = getViewportLayoutMode({ width, height });
   const contextVisible = nodes.length > 0;
-  const contextSide = mode === "Wide" || width > height && height < 500;
+  const contextSide = width > height && height < 500;
   const contextBounds = getContextBounds(width, height, contextSide, contextVisible);
   const graphBounds = getGraphBounds(width, height, contextSide, contextVisible, contextBounds);
   const minColumn = nodes.length > 0 ? Math.min(...nodes.map((node) => node.column)) : 0;
@@ -79970,11 +80261,13 @@ function getMapLayoutMetrics(width, height, nodes) {
 function getContextBounds(width, height, contextSide, contextVisible) {
   if (!contextVisible) return { left: width / 2, top: height - 18, width: 0, height: 0 };
   if (contextSide) {
-    const panelWidth = height < 500 ? Math.min(240, width * 0.45) : 324;
-    return { left: width - panelWidth - 16, top: 48, width: panelWidth, height: Math.max(1, height - 64) };
+    const panelWidth2 = height < 500 ? Math.min(240, width * 0.45) : 272;
+    const panelHeight = Math.min(250, Math.max(1, height - 64));
+    return { left: width - panelWidth2 - 16, top: height - panelHeight - 16, width: panelWidth2, height: panelHeight };
   }
-  const contextHeight = 174;
-  return { left: 16, top: height - contextHeight - 18, width: Math.max(1, width - 32), height: contextHeight };
+  const contextHeight = 148;
+  const panelWidth = Math.max(1, Math.min(560, width - 32));
+  return { left: width - panelWidth - 16, top: height - contextHeight - 18, width: panelWidth, height: contextHeight };
 }
 function getGraphBounds(width, height, contextSide, contextVisible, context2) {
   if (contextVisible && contextSide) {
@@ -79986,11 +80279,11 @@ function getGraphBounds(width, height, contextSide, contextVisible, context2) {
 // src/map-destination-layout.ts
 function getMapDestinationLayout(metrics) {
   const { contextBounds: bounds, contextSide } = metrics;
-  const compactSide = contextSide && bounds.height < 300;
-  const artHeight = compactSide ? 0 : contextSide ? Math.min(240, Math.max(48, (bounds.height - 160) * 0.7)) : 98;
-  const artWidth = compactSide ? 0 : contextSide ? bounds.width - 32 : 80;
-  const textX = bounds.left + (contextSide ? 16 : 108);
-  const titleY = bounds.top + (compactSide ? 12 : contextSide ? artHeight + 28 : 14);
+  const compactSide = contextSide && bounds.height < 220;
+  const artHeight = compactSide ? 0 : contextSide ? 64 : 48;
+  const artWidth = compactSide ? 0 : contextSide ? 64 : 48;
+  const textX = bounds.left + (contextSide ? 16 : 76);
+  const titleY = bounds.top + (compactSide ? 12 : contextSide ? 88 : 14);
   const detailsY = titleY + 30;
   const controlY = bounds.top + bounds.height - 54;
   return {
@@ -79999,7 +80292,7 @@ function getMapDestinationLayout(metrics) {
     textX,
     titleY,
     detailsY,
-    textWidth: Math.max(1, bounds.width - (contextSide ? 32 : 124)),
+    textWidth: Math.max(1, bounds.width - (contextSide ? 32 : 92)),
     detailsHeight: Math.max(1, controlY - detailsY - 8),
     controlY
   };
@@ -80029,6 +80322,7 @@ async function createMapRenderer(canvas, sink) {
   const contextTitle = new Text({ text: "Inspect a location", style: new TextStyle(contextTitleStyle4) });
   const contextDetails = new Text({ text: "Select a node to review its route and destination.", style: new TextStyle(contextBodyStyle3) });
   const feedback = new Text({ text: "", style: new TextStyle(feedbackStyle5) });
+  feedback.visible = false;
   const controls = new Container();
   const destinationArt = new JourneyArtwork();
   graph.addChild(connectionLayer, nodeLayer, travelMarker);
@@ -80061,8 +80355,9 @@ async function createMapRenderer(canvas, sink) {
   let previousPreviewFocus;
   const reducedMotion = prefersReducedMotion4();
   const scrollMotion = new ScrollMotion(!reducedMotion);
-  const announce = (message) => {
+  const announce = (message, isError = false) => {
     feedback.text = message;
+    feedback.visible = isError;
     accessibility.update(message);
   };
   const focusPreview = () => {
@@ -80113,13 +80408,15 @@ async function createMapRenderer(canvas, sink) {
         choiceId: null,
         selectionIds: null
       });
+      if (disposed) return;
       applyActionResult(name, result, submittedSequence, ownsPending);
     } catch {
+      if (disposed) return;
       if (ownsPending) {
         pending = false;
         acceptedActionAwaitingReconcile = false;
       }
-      announce("The map could not complete that request. Please try again.");
+      announce("The map could not complete that request. Please try again.", true);
     } finally {
       releaseAction();
     }
@@ -80156,7 +80453,7 @@ async function createMapRenderer(canvas, sink) {
         pending = false;
         acceptedActionAwaitingReconcile = false;
       }
-      announce(name === "commitTravel" ? "That route is no longer available." : "That map action is no longer available.");
+      announce(name === "commitTravel" ? "That route is no longer available." : "That map action is no longer available.", true);
     } else if (name === "commitTravel") {
       acceptedActionAwaitingReconcile = sequence === submittedSequence;
       pending = acceptedActionAwaitingReconcile;
@@ -80350,6 +80647,8 @@ async function createMapRenderer(canvas, sink) {
     region.anchor.set(0, 0);
     feedback.position.set(contextBounds.left + contextBounds.width / 2, metrics.contextVisible ? contextBounds.top - 22 : height - 28);
     feedback.anchor.set(0.5, 0);
+    feedback.style.wordWrap = true;
+    feedback.style.wordWrapWidth = Math.max(1, contextBounds.width);
     const selected = selectedNode() ?? nodes.find((node) => node.isCurrent);
     clearJourneyLayer(controls);
     if (state?.isPreview === true) {
@@ -80474,6 +80773,7 @@ async function createMapRenderer(canvas, sink) {
       updateJourneyBackdrop(canvas, "map", candidate.environment);
       reconcileViews(candidate);
       if (currentChanged) {
+        feedback.visible = false;
         selectedNodeId = void 0;
         focusedIndex = 0;
       }
@@ -80484,7 +80784,7 @@ async function createMapRenderer(canvas, sink) {
         acceptedActionAwaitingReconcile = false;
       }
       if (cancelledTravelTransition) {
-        announce("That route is no longer available.");
+        announce("That route is no longer available.", true);
       } else {
         accessibility.update(`${candidate.title}. ${candidate.regionName}. ${candidate.nodes.length} locations.`);
       }
@@ -80591,9 +80891,12 @@ var MapControl = class extends Container {
     super();
     this.caption.text = label;
     this.addChild(this.frame, this.caption);
-    this.frame.clear().roundRect(0, 2, width, 42, 10).fill({ color: 132631, alpha: 0.36 }).roundRect(0, 0, width, 42, 10).fill({ color: enabled && label === "Travel" ? 9714732 : 1057062, alpha: enabled ? 0.98 : 0.42 }).roundRect(0, 0, width, 42, 10).stroke({ color: enabled ? 12905969 : 9549506, width: 2 }).rect(9, 9, 3, 24).fill({ color: enabled ? 16113563 : 9549506, alpha: 0.9 });
+    drawButtonSurface(this.frame, width, 42, enabled && label === "Travel" ? 10241074 : 1058092, enabled && label === "Travel" ? 14974298 : 5467506);
+    this.alpha = enabled ? 1 : 0.5;
+    this.caption.style.wordWrap = false;
+    fitTextToBox(this.caption, width - 24, 26, 16, 12);
     this.caption.anchor.set(0.5);
-    this.caption.position.set(width / 2 + 4, 21);
+    this.caption.position.set(width / 2, 21);
     this.eventMode = enabled ? "static" : "none";
     this.cursor = enabled ? "pointer" : "default";
     this.accessibleTitle = hint;
@@ -80683,8 +80986,8 @@ var noOpAccessibilityOverlay3 = { update() {
 var regionStyle = { fill: 9549506, fontFamily: "Alegreya, Georgia, serif", fontSize: 14, fontWeight: "bold", letterSpacing: 0.6 };
 var contextTitleStyle4 = { fill: 16317180, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "bold" };
 var contextBodyStyle3 = { fill: 13358561, fontFamily: "Alegreya, Georgia, serif", fontSize: 14, lineHeight: 19, wordWrap: true };
-var feedbackStyle5 = { fill: 16113563, fontFamily: "Alegreya, Georgia, serif", fontSize: 15, align: "center" };
-var controlStyle = { fill: 16317180, fontFamily: "Alegreya, Georgia, serif", fontSize: 15, fontWeight: "bold" };
+var feedbackStyle5 = { fill: 14844014, fontFamily: "Alegreya, Georgia, serif", fontSize: 15, align: "center" };
+var controlStyle = uiTokens.typography.button;
 
 // src/pixi-main-menu.ts
 init_lib();
