@@ -76878,6 +76878,7 @@ var cardDescriptionTokens = {
   chainattack: "Chain Attack",
   chainskill: "Chain Skill",
   chainspell: "Chain Spell",
+  chill: "Chill",
   combo1: "Combo 1",
   combo2: "Combo 2",
   combo3: "Combo 3",
@@ -76894,6 +76895,7 @@ var cardDescriptionTokens = {
   skill: "Skill",
   spell: "Spell",
   stamina: "Stamina",
+  stealth: "Stealth",
   status: "Status",
   strength: "Strength",
   unplayable: "Unplayable"
