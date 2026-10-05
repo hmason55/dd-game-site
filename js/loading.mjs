@@ -1,23 +1,22 @@
 export function initLoadingMessages() {
     const messages = [
-        "Building deck",
-        "Creating dungeon",
-        "Spawning monsters"
+        "Opening the way",
+        "Listening beyond the veil",
+        "Gathering echoes"
     ];
 
     const loadingMessage = document.getElementById("loading-message");
     let intervalId = null;
 
-    function getRandomMessage() {
-        return messages[Math.floor(Math.random() * messages.length)];
-    }
+    let messageIndex = 0;
 
     function setMessage() {
         if (!loadingMessage) {
             return;
         }
 
-        loadingMessage.innerText = `${getRandomMessage()}...`;
+        loadingMessage.textContent = `${messages[messageIndex % messages.length]}…`;
+        messageIndex++;
     }
 
     window.stopLoadingMessages = function () {
@@ -41,5 +40,5 @@ export function initLoadingMessages() {
         } else {
             window.stopLoadingMessages();
         }
-    }, 1500);
+    }, 3200);
 }

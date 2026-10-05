@@ -75475,18 +75475,26 @@ var EncounterScene = class {
     const expectedIds = /* @__PURE__ */ new Set();
     const paged = isShortEncounter(viewport) && allEntries.length > getShortEncounterPageSize("hand", viewport);
     const handViewport = paged ? { width: viewport.width - pageControlInset * 2, height: viewport.height } : viewport;
-    const positions = layoutHand(entries.length, handViewport);
+    const layoutEntries = entries.filter((entry) => !isCardPresentationState2(entry) || !(entry.isQueued || this.committedCardSequences.has(entry.id) || this.queuedEntryIds.has(entry.id)));
+    const positions = layoutHand(layoutEntries.length, handViewport);
+    const fallbackPositions = layoutHand(entries.length, handViewport);
+    const previousPositions = new Map(this.handLayoutPositions);
     this.selectableEntries.clear();
     this.handLayoutPositions.clear();
     entries.forEach((entry, index) => {
-      const position = positions[index];
+      const layoutIndex = layoutEntries.indexOf(entry);
+      const position = layoutIndex >= 0 ? positions[layoutIndex] : fallbackPositions[index];
       if (!position) {
         return;
       }
       const id = snapshot.inventoryMode ? `item:${entry.id}` : `card:${entry.id}`;
       expectedIds.add(id);
-      const actualPosition = paged ? { ...position, x: position.x + pageControlInset } : position;
+      const previousPosition = previousPositions.get(id);
+      const actualPosition = layoutIndex < 0 && previousPosition ? previousPosition : paged ? { ...position, x: position.x + pageControlInset } : position;
       this.handLayoutPositions.set(id, actualPosition);
+      if (previousPosition && !this.isEntryInteractionOwned(id, entry.id) && !this.isAnimationLocked(id) && (previousPosition.x !== actualPosition.x || previousPosition.y !== actualPosition.y || previousPosition.scale !== actualPosition.scale || previousPosition.rotation !== actualPosition.rotation)) {
+        this.startHandLayoutTransition(id);
+      }
       this.updateHandTile(id, entry, actualPosition);
       this.selectableEntries.set(entry.id, entry);
     });
@@ -75508,10 +75516,10 @@ var EncounterScene = class {
     const tile = this.getOrCreateTile(this.entityTiles, id, layer);
     this.drawEntityPresentation(tile, entity, position);
     delete tile.targetPresentationKey;
-    if (!this.isDragPositionManaged(id)) {
+    if (!this.isAnimationLocked(id)) {
       tile.container.position.set(position.x, position.y);
+      tile.container.scale.set(position.scale ?? 1);
     }
-    tile.container.scale.set(position.scale ?? 1);
     tile.container.alpha = entity.health > 0 ? 1 : 0.45;
     tile.container.eventMode = this.isAnimationLocked(id) ? "none" : "static";
     tile.container.cursor = this.canSelectEntity(entity) ? "pointer" : "default";
@@ -75648,7 +75656,7 @@ var EncounterScene = class {
       tile.detail.position.set(0, 42);
     }
     tile.container.alpha = entry.isDraggable ? 1 : isQueued ? 0.72 : 0.52;
-    if (!this.isDragPositionManaged(id)) {
+    if (!this.isEntryInteractionOwned(id, entry.id) && !this.isAnimationLocked(id) && !this.handLayoutTransitions.has(id)) {
       this.applyHandLayoutTransform(id, tile, position);
     }
     const isInteractive = this.isEntryInteractive(id, entry);
@@ -76364,7 +76372,7 @@ ${entry.unavailableReason}` : ""),
     let closestEnemy;
     let closestDistanceSquared = Number.POSITIVE_INFINITY;
     for (const entity of this.entities.values()) {
-      if (entity.isPlayer || !entity.isTargetable || this.isAnimationLockedForEntity(entity)) {
+      if (entity.isPlayer || !entity.isTargetable) {
         continue;
       }
       const tile = this.entityTiles.get(`enemy:${entity.id}`);
@@ -76439,13 +76447,10 @@ ${entry.unavailableReason}` : ""),
   }
   canSelectEntity(entity) {
     const entry = this.selectedEntryId ? this.selectableEntries.get(this.selectedEntryId) : void 0;
-    return this.latestSnapshot?.phase === "WaitingForInput" && !this.intentPending && entry !== void 0 && !this.isAnimationLockedForEntry(entry) && !this.isAnimationLockedForEntity(entity) && this.isValidTarget(entry.targetMode, entity);
+    return this.latestSnapshot?.phase === "WaitingForInput" && !this.intentPending && entry !== void 0 && !this.isAnimationLockedForEntry(entry) && this.isValidTarget(entry.targetMode, entity);
   }
   isAnimationLockedForEntry(entry) {
     return this.isAnimationLocked(`${isCardPresentationState2(entry) ? "card" : "item"}:${entry.id}`);
-  }
-  isAnimationLockedForEntity(entity) {
-    return this.isAnimationLocked(`${entity.isPlayer ? "player" : "enemy"}:${entity.id}`);
   }
   isAnimationLocked(id) {
     return this.animationLockResolver(id);
@@ -76679,7 +76684,7 @@ ${entry.unavailableReason}` : ""),
     if (entry.targetMode === "none") {
       return true;
     }
-    return entity !== void 0 && !this.isAnimationLockedForEntity(entity) && this.isValidTarget(entry.targetMode, entity);
+    return entity !== void 0 && this.isValidTarget(entry.targetMode, entity);
   }
   /**
    * Gives targetable entities a clear, low-obstruction visual treatment while an action is selected.
@@ -76687,7 +76692,7 @@ ${entry.unavailableReason}` : ""),
   refreshTargetPresentation(tile, entity) {
     const targetingEntry = this.getTargetingEntry();
     const isTargeting = targetingEntry !== void 0 && targetingEntry.targetMode !== "none";
-    const isValidTarget = this.latestSnapshot?.phase === "WaitingForInput" && !this.inputReleased && entity !== void 0 && targetingEntry !== void 0 && !this.intentPending && !this.isAnimationLockedForEntry(targetingEntry) && !this.isAnimationLockedForEntity(entity) && this.isValidTarget(targetingEntry.targetMode, entity);
+    const isValidTarget = this.latestSnapshot?.phase === "WaitingForInput" && !this.inputReleased && entity !== void 0 && targetingEntry !== void 0 && !this.intentPending && !this.isAnimationLockedForEntry(targetingEntry) && this.isValidTarget(targetingEntry.targetMode, entity);
     const artwork = tile.artwork;
     const presentationKey = `${isTargeting}:${isValidTarget}:${artwork.visible}:${tile.artworkImage}:${artwork.x}:${artwork.y}:${artwork.width}:${artwork.height}`;
     if (tile.targetPresentationKey === presentationKey) {
@@ -76857,7 +76862,8 @@ ${entry.unavailableReason}` : ""),
   refreshHandLayoutTransforms() {
     for (const [tileId, position] of this.handLayoutPositions) {
       const tile = this.handTiles.get(tileId);
-      if (tile && !this.isDragPositionManaged(tileId) && !this.handLayoutTransitions.has(tileId)) {
+      const entryId = tileId.substring(tileId.indexOf(":") + 1);
+      if (tile && !this.isEntryInteractionOwned(tileId, entryId) && !this.isAnimationLocked(tileId) && !this.handLayoutTransitions.has(tileId)) {
         this.applyHandLayoutTransform(tileId, tile, position);
       }
     }
@@ -76937,7 +76943,7 @@ ${entry.unavailableReason}` : ""),
     if (!entry || !snapshot) {
       return;
     }
-    const targetIds = [snapshot.player, ...snapshot.enemies].filter((entity2) => !this.isAnimationLockedForEntity(entity2) && this.isValidTarget(entry.targetMode, entity2)).map((entity2) => entity2.id);
+    const targetIds = [snapshot.player, ...snapshot.enemies].filter((entity2) => this.isValidTarget(entry.targetMode, entity2)).map((entity2) => entity2.id);
     if (targetIds.length === 0) {
       return;
     }
@@ -77032,6 +77038,8 @@ ${entry.unavailableReason}` : ""),
     this.selectedEntryId = void 0;
     this.refreshHandInspection(previousSelectedTileId);
     this.focusedEntityId = void 0;
+    this.hoveredEntryId = void 0;
+    if (this.latestSnapshot && this.viewport) this.reconcileHand(this.latestSnapshot, this.viewport);
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
     void this.emitIntent(intent).then((result) => {
@@ -77055,6 +77063,7 @@ ${entry.unavailableReason}` : ""),
     this.queuedEntryIds.delete(sourceId);
     this.committedCardSequences.delete(sourceId);
     this.returnReleasedEntry("playCard", sourceId);
+    if (this.latestSnapshot && this.viewport) this.reconcileHand(this.latestSnapshot, this.viewport);
     this.showRejectedIntent();
     this.refreshInteractionState();
     this.refreshSelectionHighlights();

@@ -30,11 +30,21 @@
 <body>
 
     <div id="app" class="content">
-        <div id="loading-container" class="loading-container">
-            <h2 id="loading-message">...</h2>
-            <div class="loading-progress">
+        <div id="loading-container" class="loading-container" role="status" aria-live="polite" aria-busy="true">
+            <div class="loading-emblem" aria-hidden="true">
+                <span class="loading-orbit"></span>
+                <span class="loading-card loading-card-left"></span>
+                <span class="loading-card loading-card-center"></span>
+                <span class="loading-card loading-card-right"></span>
+                <span class="loading-spark"></span>
+            </div>
+            <p class="loading-eyebrow">BEYOND THE VEIL</p>
+            <h1 class="loading-title">The Fold awaits</h1>
+            <p id="loading-message" class="loading-message">Opening the way…</p>
+            <div class="loading-progress" aria-hidden="true">
                 <div class="loading-bar"></div>
             </div>
+            <p class="loading-caption">A journey written in cards.</p>
         </div>
     </div>
 
