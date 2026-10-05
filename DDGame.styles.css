@@ -79,6 +79,13 @@
 
 .pixi-character-select-help[b-oywb2u3hc5] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
 
+@media (max-height: 540px) {
+    .pixi-character-select-surface[b-oywb2u3hc5] {
+        height: calc(100dvh - 2rem);
+        margin-block: 1rem;
+    }
+}
+
 /* /Components/PixiCollectionSurface.razor.rz.scp.css */
 .pixi-collection-surface[b-16jlx61uh4] { background: rgba(3, 10, 18, .78); inset: 0; padding: clamp(1rem, 5vh, 4rem); position: fixed; z-index: 1400; }
 .pixi-collection-surface canvas[b-16jlx61uh4] { display: block; height: 100%; margin: auto; max-height: 48rem; max-width: 72rem; touch-action: none; width: 100%; }

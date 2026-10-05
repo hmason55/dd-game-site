@@ -81871,6 +81871,22 @@ var watermarkStyle = new TextStyle({ ...uiTokens.typography.body, align: "right"
 
 // src/pixi-character-select.ts
 init_lib();
+
+// src/remembrance-progress.ts
+function isRemembranceTrack(value) {
+  if (typeof value !== "object" || value === null) return false;
+  const item = value;
+  return Number.isInteger(item.points) && (item.points ?? -1) >= 0 && (item.nextMilestone === null || Number.isInteger(item.nextMilestone) && (item.nextMilestone ?? 0) > (item.points ?? 0)) && Array.isArray(item.reachedMilestones) && item.reachedMilestones.every((threshold) => typeof threshold === "number" && Number.isInteger(threshold) && threshold > 0 && threshold <= (item.points ?? 0));
+}
+function remembranceLabel(label, track) {
+  const points = track?.points ?? 0;
+  const next = track?.nextMilestone === null ? "all milestones reached" : `next at ${track?.nextMilestone ?? 50}`;
+  const reached = track?.reachedMilestones.length ? track.reachedMilestones.join(", ") : "none";
+  return `${label}: ${points} points \xB7 ${next}
+Milestones reached: ${reached}`;
+}
+
+// src/pixi-character-select.ts
 async function createCharacterSelectRenderer(canvas, sink, initialState) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 529183, canvas, preference: "canvas" });
@@ -81881,12 +81897,16 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
   const panel = new Graphics();
   const heading = new Text({ text: "Choose a character", style: headingStyle });
   const seedLabel = new Text({ text: "", style: bodyStyle2 });
+  const sharedProgress = new Text({ text: "", style: bodyStyle2 });
+  const characterProgress = new Text({ text: "", style: bodyStyle2 });
+  const milestoneNotice = new Text({ text: "Milestone rewards are planned for a later release.", style: bodyStyle2 });
   const buttons = new Container();
   const controls = new Container();
-  root.addChild(background, panel, heading, buttons, seedLabel, controls);
+  root.addChild(background, panel, heading, buttons, seedLabel, controls, sharedProgress, characterProgress, milestoneNotice);
   application.stage.addChild(root);
   heading.anchor.set(0.5, 0);
   seedLabel.anchor.set(0.5, 0);
+  [sharedProgress, characterProgress, milestoneNotice].forEach((text) => text.anchor.set(0.5, 0));
   let state;
   let selection = 0;
   let characterButtons = [];
@@ -81922,6 +81942,7 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
     localCharacter = character;
     const revision = ++selectionRevision;
     updateButtons();
+    layout();
     void send(`select:${character}`).then((accepted) => {
       if (!accepted) rejectSelection(revision);
     }).catch(() => rejectSelection(revision));
@@ -81969,29 +81990,45 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
     const height = Math.max(1, canvas.parentElement?.clientHeight || canvas.clientHeight || 560);
     application.renderer.resize(width, height);
     const panelWidth = Math.min(width - 28, 430);
-    const panelHeight = Math.min(height - 28, 500);
+    const panelHeight = Math.min(height - 28, 600);
     const x2 = (width - panelWidth) / 2;
     const y2 = (height - panelHeight) / 2;
     background.clear().rect(0, 0, width, height).fill(529183);
     panel.clear().roundRect(x2, y2, panelWidth, panelHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
-    const headingY = y2 + Math.max(12, panelHeight * 0.06);
-    const footerHeight = Math.max(70, panelHeight * 0.27);
-    const characterTop = headingY + Math.max(30, panelHeight * 0.1);
-    const characterHeight = Math.max(24, Math.min(48, (panelHeight - footerHeight - (characterTop - y2)) / Math.max(1, characterButtons.length) - 5));
-    const characterGap = Math.max(3, Math.min(10, characterHeight * 0.2));
+    const compact = panelHeight < 420;
+    const headingY = y2 + 12;
+    heading.style.fontSize = compact ? 20 : 24;
+    const columns = compact ? 2 : 1;
+    const rows = Math.ceil(characterButtons.length / columns);
+    const characterTop = headingY + (compact ? 30 : 42);
+    const characterHeight = Math.max(24, Math.min(42, (panelHeight - 220) / Math.max(1, rows)));
+    const characterGap = compact ? 4 : 7;
+    const characterWidth = (panelWidth - 48 - (columns - 1) * 8) / columns;
     heading.position.set(width / 2, headingY);
     characterButtons.forEach((button, index) => {
-      button.resize(panelWidth - 64, characterHeight);
-      button.position.set(x2 + 32, characterTop + index * (characterHeight + characterGap));
+      button.resize(characterWidth, characterHeight);
+      button.position.set(x2 + 24 + index % columns * (characterWidth + 8), characterTop + Math.floor(index / columns) * (characterHeight + characterGap));
       button.setSelected(index === selection);
     });
+    sharedProgress.text = remembranceLabel("Shared Remembrance", state?.sharedRemembrance);
+    const selectedName = state?.characters[selection] ?? state?.selectedCharacter ?? "Character";
+    characterProgress.text = remembranceLabel(`${selectedName} Remembrance`, state?.characterRemembrance?.[selectedName]);
+    let progressY = characterTop + rows * (characterHeight + characterGap) + 8;
+    [sharedProgress, characterProgress, milestoneNotice].forEach((text) => {
+      text.style.fontSize = compact ? 11 : 13;
+      text.style.wordWrap = true;
+      text.style.wordWrapWidth = panelWidth - 32;
+      text.position.set(width / 2, progressY);
+      progressY += text.height + (compact ? 4 : 8);
+    });
     seedLabel.text = `Seed: ${state?.seed ?? "0"}`;
-    seedLabel.position.set(width / 2, y2 + panelHeight - footerHeight);
     const controlWidth = (panelWidth - 72) / 3;
     const controlHeight = Math.max(28, Math.min(46, panelHeight * 0.12));
+    const controlY = y2 + panelHeight - controlHeight - Math.max(12, panelHeight * 0.06);
+    seedLabel.position.set(width / 2, controlY - 24);
     seedButtons.forEach((button, index) => {
       button.resize(controlWidth, controlHeight);
-      button.position.set(x2 + 28 + index * (controlWidth + 8), y2 + panelHeight - controlHeight - Math.max(12, panelHeight * 0.06));
+      button.position.set(x2 + 28 + index * (controlWidth + 8), controlY);
     });
   };
   const keydown = (event) => {
@@ -82037,7 +82074,17 @@ function toCharacterSelectState(value) {
   const characters = candidate.characters ?? candidate.Characters;
   const selectedCharacter = candidate.selectedCharacter ?? candidate.SelectedCharacter;
   const seed = candidate.seed ?? candidate.Seed;
-  return Array.isArray(characters) && characters.every((character) => typeof character === "string") && typeof selectedCharacter === "string" && typeof seed === "string" ? { characters, selectedCharacter, seed } : void 0;
+  const shared = candidate.sharedRemembrance ?? candidate.SharedRemembrance;
+  const character = candidate.characterRemembrance ?? candidate.CharacterRemembrance;
+  if (shared != null && !isRemembranceTrack(shared)) return void 0;
+  if (character != null && (typeof character !== "object" || Array.isArray(character) || !Object.values(character).every(isRemembranceTrack))) return void 0;
+  return Array.isArray(characters) && characters.every((character2) => typeof character2 === "string") && typeof selectedCharacter === "string" && typeof seed === "string" ? {
+    characters,
+    selectedCharacter,
+    seed,
+    ...shared == null ? {} : { sharedRemembrance: shared },
+    ...character == null ? {} : { characterRemembrance: character }
+  } : void 0;
 }
 var headingStyle = new TextStyle({ ...uiTokens.typography.panelTitle, align: "center", fill: 16113563, fontSize: 24 });
 var bodyStyle2 = new TextStyle({ ...uiTokens.typography.body, align: "center", fill: 14148078, fontSize: 15 });
@@ -82561,7 +82608,7 @@ function toCardRarity3(value) {
 }
 function compactTabLabel(label) {
   if (label === "Equipment") return "Gear";
-  if (label === "Progression") return "XP";
+  if (label === "Training") return "XP";
   if (label === "Discard") return "Used";
   if (label === "Exhaust") return "Gone";
   return label;
@@ -82668,7 +82715,7 @@ function isMenuOverlayState(value) {
   const outcome = candidate.outcome;
   if (typeof outcome === "object" && outcome !== null) {
     const item2 = outcome;
-    return typeof item2.title === "string" && typeof item2.message === "string" && typeof item2.actionLabel === "string";
+    return typeof item2.title === "string" && typeof item2.message === "string" && typeof item2.actionLabel === "string" && (item2.remembranceLines == null || Array.isArray(item2.remembranceLines) && item2.remembranceLines.every((line) => typeof line === "string")) && (item2.isSaveFailure === void 0 || typeof item2.isSaveFailure === "boolean");
   }
   const confirmation = candidate.confirmation;
   if (typeof confirmation === "object" && confirmation !== null) {
@@ -82678,7 +82725,7 @@ function isMenuOverlayState(value) {
   const settings = candidate.settings;
   if (typeof settings !== "object" || settings === null) return false;
   const item = settings;
-  return Number.isInteger(item.tabIndex) && Number.isFinite(item.masterVolume) && Number.isFinite(item.sfxVolume) && Number.isFinite(item.musicVolume) && Number.isFinite(item.ambientVolume) && Number.isFinite(item.speed) && typeof item.cardTiltEnabled === "boolean" && typeof item.particleLevel === "string" && typeof item.debugProgressionEnabled === "boolean" && Number.isInteger(item.metaExperience) && Number.isInteger(item.unlockedMetaRewards);
+  return Number.isInteger(item.tabIndex) && Number.isFinite(item.masterVolume) && Number.isFinite(item.sfxVolume) && Number.isFinite(item.musicVolume) && Number.isFinite(item.ambientVolume) && Number.isFinite(item.speed) && typeof item.cardTiltEnabled === "boolean" && typeof item.particleLevel === "string" && typeof item.debugProgressionEnabled === "boolean" && Number.isInteger(item.metaExperience) && Number.isInteger(item.unlockedMetaRewards) && (item.sharedRemembrancePoints === void 0 || Number.isInteger(item.sharedRemembrancePoints));
 }
 function isProgressionNode(value) {
   if (typeof value !== "object" || value === null) return false;
@@ -82821,9 +82868,11 @@ async function createMenuOverlayRenderer(canvas, sink) {
       const next = levels[(levels.indexOf(settings.particleLevel) + 1) % levels.length] ?? "High";
       addButton(`Particles: ${settings.particleLevel}`, `particle:${next}`, 24, top + rowHeight * 2, Math.min(240, width - 48));
       if (settings.debugProgressionEnabled) {
-        addText(`Meta XP ${settings.metaExperience}  \u2022  Rewards ${settings.unlockedMetaRewards}`, 24, top + rowHeight * 3, 16);
+        addText(`Character Remembrance ${settings.metaExperience} \xB7 ${settings.unlockedMetaRewards} milestones
+Shared Remembrance ${settings.sharedRemembrancePoints ?? 0}`, 24, top + rowHeight * 3, 14, width - 48);
         const debugWidth = Math.min(210, (width - 64) / 3);
-        [["+25 XP", "debug:xp:25"], ["+100 XP", "debug:xp:100"], ["Reset unlocks", "debug:reset"]].forEach(([label, action], index) => addButton(label, action, 24 + index * (debugWidth + 8), top + rowHeight * 4, debugWidth, 40));
+        [["Character +25", "debug:xp:25"], ["Character +100", "debug:xp:100"], ["Reset character", "debug:reset"]].forEach(([label, action], index) => addButton(label, action, 24 + index * (debugWidth + 8), top + rowHeight * 4, debugWidth, 40));
+        [["Shared +25", "debug:shared:25"], ["Reset shared", "debug:shared:reset"]].forEach(([label, action], index) => addButton(label, action, 24 + index * (debugWidth + 8), top + rowHeight * 4 + 44, debugWidth, 40));
       }
     }
     const footerY = height - (width < 520 && !short ? 102 : 50);
@@ -82840,11 +82889,16 @@ async function createMenuOverlayRenderer(canvas, sink) {
     addButton("Confirm", `confirm:${confirmation.action}`, width - 24 - buttonWidth, height - 70, buttonWidth);
   };
   const layoutOutcome = (outcome) => {
-    const title = addText(outcome.title, 24, Math.max(20, height / 3 - 50), 34);
+    const title = addText(outcome.title, 24, 20, height < 440 ? 26 : 34);
     title.style.fill = outcome.title === "Victory!" ? 16113563 : 15699855;
-    addText(outcome.message, 24, Math.max(78, height / 3 + 16), 18, width - 48);
+    const message = addText(outcome.message, 24, 66, 16, width - 48);
+    let lineY = 66 + message.height + 12;
+    for (const line of outcome.remembranceLines ?? []) {
+      const text = addText(line, 24, lineY, height < 440 ? 12 : 15, width - 48);
+      lineY += text.height + 8;
+    }
     const buttonWidth = Math.min(260, width - 48);
-    addButton(outcome.actionLabel, "outcome:continue", (width - buttonWidth) / 2, height - 78, buttonWidth, 48);
+    addButton(outcome.actionLabel, outcome.isSaveFailure ? "outcome:retry" : "outcome:continue", (width - buttonWidth) / 2, height - 62, buttonWidth, 42);
   };
   const layout = () => {
     if (disposed || !state) return;
@@ -82898,8 +82952,8 @@ async function createMenuOverlayRenderer(canvas, sink) {
     addButton("Close", "history:close", stackedButtons ? 32 + buttonWidth : width - 24 - buttonWidth, y2 + (stackedButtons ? 48 : 0), buttonWidth);
   };
   const layoutProgression = (progression) => {
-    addText("Progression", 24, 16, 27);
-    addText(`Available experience: ${progression.experience} XP`, 24, 52, 16);
+    addText("Training", 24, 16, 27);
+    addText(`Experience: ${progression.experience} XP \xB7 resets each run`, 24, 52, 16);
     const compact = width < 520;
     const short = height < 440;
     const columns = compact && !short ? 1 : 2;
