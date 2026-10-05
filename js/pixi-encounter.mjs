@@ -74669,8 +74669,8 @@ var RunHud = class extends Container {
   requestRelicCollection;
   health = new ResourceCounter({ icon: "\u2665", label: "", value: "0/0", valueLayout: "inline" });
   healthBar = new ProgressIndicator({ width: 64, height: 5, value: 0, maximum: 1, fill: uiTokens.color.health });
-  stamina = new ResourceCounter({ label: "STAMINA", value: "0 / 0", valueLayout: "stacked" });
-  mana = new ResourceCounter({ label: "MANA", value: "0 / 0", valueLayout: "stacked" });
+  stamina = new ResourceCounter({ icon: "\u03DF", label: "", value: "0 / 0", valueLayout: "inline" });
+  mana = new ResourceCounter({ icon: "\u2726", label: "", value: "0 / 0", valueLayout: "inline" });
   currency = new ResourceCounter({ icon: "\u25C6", label: "", value: 0, valueLayout: "inline" });
   deck = new ResourceCounter({ icon: "\u25A3", label: "", value: 0, valueLayout: "inline" });
   relics = new ResourceCounter({ icon: "\u2726", label: "Relics", value: 0, valueLayout: "inline" });
@@ -74680,6 +74680,25 @@ var RunHud = class extends Container {
   sceneTitle = new Text({ text: "", style: { ...getUiTextStyle("Caption"), letterSpacing: 3 } });
   frame = new Graphics();
   relicCollectionAvailable = false;
+  /** Makes the resource glyphs inspectable by hover and tap while retaining compact numeric pairs. */
+  bindResourceInspection(inspect, dismiss) {
+    for (const [counter, name, color] of [[this.stamina, "Stamina", uiTokens.color.stamina], [this.mana, "Mana", uiTokens.color.mana]]) {
+      const icon = counter.children[0];
+      if (icon instanceof Text) {
+        icon.style.fill = color;
+        icon.style.fontSize = 24;
+      }
+      counter.eventMode = "static";
+      counter.cursor = "help";
+      const show = (pinned) => inspect(`${name}: ${counter.value}`, { x: counter.x, y: counter.y, width: 88, height: 28 }, pinned);
+      counter.on("pointerover", () => show(false));
+      counter.on("pointerout", dismiss);
+      counter.on("pointertap", (event) => {
+        event.stopPropagation();
+        show(true);
+      });
+    }
+  }
   /** Reconciles resource values and a concise, human-readable phase label. */
   reconcile(state, viewport) {
     this.block.setValue(state.block ?? 0);
@@ -74802,6 +74821,24 @@ var CharacterOutline = class extends Container {
       sprite.position.set(artwork.x + Math.cos(angle) * distance, artwork.y + Math.sin(angle) * distance);
     });
   }
+  /** Flashes one translucent silhouette so overlapping outline copies cannot wash out the artwork. */
+  showFlash(artwork, opacity) {
+    this.updateSilhouetteTexture(artwork.texture, 16777215);
+    this.visible = artwork.visible;
+    this.alpha = opacity;
+    this.fallback.visible = false;
+    this.silhouettes.forEach((sprite2, index) => {
+      sprite2.visible = index === 0 && artwork.visible;
+    });
+    const sprite = this.silhouettes[0];
+    if (!sprite) return;
+    sprite.texture = this.outlineTexture ?? artwork.texture;
+    sprite.tint = 16777215;
+    sprite.alpha = 1;
+    sprite.width = artwork.width;
+    sprite.height = artwork.height;
+    sprite.position.set(artwork.x, artwork.y);
+  }
   /** Releases only the generated silhouette; the original artwork remains asset-cache owned. */
   destroy(options) {
     if (this.destroyed) return;
@@ -74887,6 +74924,10 @@ var StatusIcon = class extends GamePanel {
   constructor(content, compact = false) {
     super({ width: compact ? 27 : 52, height: 28 });
     this.compact = compact;
+    this.children.forEach((child) => {
+      child.visible = child === this.content;
+    });
+    this.hitArea = { contains: (x2, y2) => x2 >= 0 && x2 <= (compact ? 28 : 52) && y2 >= 0 && y2 <= 28 };
     this.status = normalizeContent(content);
     this.iconLabel.anchor.set(0.5);
     this.content.addChild(this.iconLabel, this.stackLabel);
@@ -74948,20 +74989,26 @@ var statusEffectSymbols = {
   Ritual: "\u2726"
 };
 var StatusEffectsView = class extends Container {
+  constructor(inspect, dismiss) {
+    super();
+    this.inspect = inspect;
+    this.dismiss = dismiss;
+    this.addChild(this.overflow, this.tooltip);
+  }
+  inspect;
+  dismiss;
   icons = [];
   overflow = new Text({ text: "", style: { ...uiTokens.typography.caption, fontSize: 12 } });
   tooltip = new Tooltip({ text: "", width: 220, height: 64, placement: "above" });
   stateKey = "";
-  constructor() {
-    super();
-    this.addChild(this.overflow, this.tooltip);
-  }
+  pinned = false;
   /** Reconciles compact visible effects, retaining inspectable names for every hidden stack. */
   update(entity) {
     const statuses = [...entity.statuses, ...entity.rituals.map((ritual) => ({ name: `Ritual: ${ritual.name}`, stacks: 1 }))];
     const key = JSON.stringify(statuses);
     if (key === this.stateKey) return;
     this.stateKey = key;
+    this.pinned = false;
     this.tooltip.hide();
     const visible = statuses.slice(0, statuses.length > 6 ? 5 : 6);
     visible.forEach((status, index) => {
@@ -74978,8 +75025,13 @@ var StatusEffectsView = class extends Container {
       icon.eventMode = "static";
       icon.removeAllListeners("pointerover");
       icon.removeAllListeners("pointerout");
+      icon.removeAllListeners("pointertap");
       icon.on("pointerover", () => this.showTooltip(`${status.name}: ${status.stacks}`));
-      icon.on("pointerout", () => this.tooltip.hide());
+      icon.on("pointerout", () => this.hideTooltip());
+      icon.on("pointertap", (event) => {
+        event.stopPropagation();
+        this.showTooltip(`${status.name}: ${status.stacks}`, true);
+      });
     });
     this.icons.slice(visible.length).forEach((icon) => {
       icon.visible = false;
@@ -74990,17 +75042,80 @@ var StatusEffectsView = class extends Container {
     this.overflow.eventMode = "static";
     this.overflow.removeAllListeners("pointerover");
     this.overflow.removeAllListeners("pointerout");
+    this.overflow.removeAllListeners("pointertap");
     this.overflow.on("pointerover", () => this.showTooltip(statuses.slice(visible.length).map((status) => `${status.name}: ${status.stacks}`).join(" \xB7 ")));
-    this.overflow.on("pointerout", () => this.tooltip.hide());
+    this.overflow.on("pointerout", () => this.hideTooltip());
+    this.overflow.on("pointertap", (event) => {
+      event.stopPropagation();
+      this.showTooltip(statuses.slice(visible.length).map((status) => `${status.name}: ${status.stacks}`).join(" \xB7 "), true);
+    });
     this.addChild(this.tooltip);
   }
   /** Positions the effect explanation above its row in the scene's coordinate system. */
-  showTooltip(text) {
+  showTooltip(text, pinned = false) {
+    this.pinned = pinned;
+    if (this.inspect) {
+      this.inspect(text, pinned);
+      return;
+    }
     this.tooltip.setText(text);
     this.tooltip.resize(220, Math.max(54, Math.ceil(text.length / 25) * 19 + 16));
     this.tooltip.show({ x: -84, y: 0, width: 168, height: 28 });
   }
+  /** Dismisses the scene-owned explanation when the pointer leaves an effect. */
+  hideTooltip() {
+    if (this.pinned) return;
+    this.tooltip.hide();
+    this.dismiss?.();
+  }
 };
+
+// src/choice-tooltip.ts
+init_lib();
+var ChoiceTooltip = class extends Container {
+  frame = new Graphics();
+  body = new Text({ text: "", style: new TextStyle({ ...uiTokens.typography.body, fontSize: 16, wordWrap: true }) });
+  constructor() {
+    super();
+    this.addChild(this.frame, this.body);
+    this.eventMode = "none";
+    this.interactiveChildren = false;
+    this.visible = false;
+  }
+  /** Shows readable copy beside a choice, clamped inside the owning canvas. */
+  show(text, anchor, viewport) {
+    const width = Math.max(1, Math.min(300, viewport.width - 24));
+    const maximumHeight = Math.max(1, viewport.height - 24);
+    this.body.text = text;
+    fitTextToBox(this.body, width - 24, maximumHeight - 24, 16, 14);
+    const height = Math.min(maximumHeight, Math.max(64, this.body.height + 24));
+    this.frame.clear().roundRect(0, 0, width, height, 6).fill({ color: 530204, alpha: 0.98 }).stroke({ color: 13280860, width: 1 });
+    this.body.position.set(12, 12);
+    const above = anchor.y - height - 8;
+    const y2 = above >= 12 ? above : anchor.y + anchor.height + 8;
+    this.position.set(Math.max(12, Math.min(viewport.width - width - 12, anchor.x + (anchor.width - width) / 2)), Math.max(12, Math.min(viewport.height - height - 12, y2)));
+    this.visible = true;
+  }
+  /** Dismisses stale descriptions after pointer exit, scrolling, or an action. */
+  hide() {
+    this.visible = false;
+  }
+};
+
+// src/enemy-intent-symbols.ts
+function getEnemyIntentSymbol(telegraph) {
+  const label = telegraph.toLowerCase();
+  if (label.includes("stunn")) return { icon: "\u2738", value: "" };
+  if (label === "guard attack") return { icon: "\u25C7", value: "" };
+  if (/attack|damage|strike|hit/.test(label)) return { icon: "\u2694", value: telegraph.match(/\d+(?:\s*[x×]\s*\d+)?/i)?.[0] ?? "" };
+  if (/block|defen|guard/.test(label)) return { icon: "\u25C7", value: telegraph.match(/\d+/)?.[0] ?? "" };
+  if (/heal|recover/.test(label)) return { icon: "\u2665", value: telegraph.match(/\d+/)?.[0] ?? "" };
+  if (/buff|strength|power/.test(label)) return { icon: "\u2197", value: "" };
+  if (/debuff|weak|poison|bleed|chill|shock/.test(label)) return { icon: "\u2620", value: "" };
+  if (/summon|spawn/.test(label)) return { icon: "\u2726", value: "" };
+  if (/wait|idle|sleep/.test(label)) return { icon: "\u263E", value: "" };
+  return { icon: "\u25C6", value: "" };
+}
 
 // src/encounter-scene.ts
 var supportedAnimationNames = /* @__PURE__ */ new Set([
@@ -75056,6 +75171,7 @@ var EncounterScene = class {
     this.root.on("pointerup", (event) => this.releaseDrag(event));
     this.root.on("pointerupoutside", (event) => this.cancelDrag(event));
     this.root.on("pointercancel", (event) => this.cancelDrag(event));
+    this.root.on("pointertap", () => this.dismissInspection(true));
     this.backgroundLayer.addChild(this.background, this.backdrop);
     this.effectsLayer.addChild(this.dragAimArrow, this.attackTrail);
     this.intentStatusLabel.anchor.set(0.5, 0.5);
@@ -75067,8 +75183,13 @@ var EncounterScene = class {
       this.nextEnemyPage,
       this.previousHandPage,
       this.nextHandPage,
-      this.endTurn
+      this.endTurn,
+      this.inspectionTooltip
     );
+    this.runHud.bindResourceInspection((text, anchor, pinned) => {
+      this.inspectionPinned = pinned;
+      if (this.viewport) this.inspectionTooltip.show(text, anchor, this.viewport);
+    }, () => this.dismissInspection());
     this.root.addChild(this.backgroundLayer, this.enemyLayer, this.playerLayer, this.handLayer, this.effectsLayer, this.overlayLayer, this.dragLayer);
   }
   emitIntent;
@@ -75083,6 +75204,8 @@ var EncounterScene = class {
   dragLayer = new Container();
   effectsLayer = new Container();
   overlayLayer = new Container();
+  inspectionTooltip = new ChoiceTooltip();
+  inspectionPinned = false;
   runHud;
   endTurn = new GameButton({
     width: 144,
@@ -75133,6 +75256,7 @@ var EncounterScene = class {
   enemyPage = 0;
   handPage = 0;
   animationStarts = /* @__PURE__ */ new Map();
+  pendingEntityLayouts = /* @__PURE__ */ new Map();
   animationCommandHandlers = /* @__PURE__ */ new Map([
     ["idle", (_source, _target, tile, start, progress) => tile.container.scale.set(start.scale * (1 + Math.sin(progress * Math.PI * 2) * 0.015))],
     ["enter", (_source, _target, tile, start, progress) => {
@@ -75166,7 +75290,7 @@ var EncounterScene = class {
     ["hand-reflow", (_source, _target, tile, start, progress) => tile.container.scale.set(start.scale * (1 + Math.sin(progress * Math.PI) * 0.08))],
     ["lunge", (source8, target, _tile, start, progress) => this.lunge(source8, target, start, progress)],
     ["nudge", (source8, target, tile, start, progress) => this.nudge(source8, target, tile, start, progress)],
-    ["shake", (_source, _target, tile, start, progress) => tile.container.position.set(start.x + Math.sin(progress * Math.PI * 8) * (1 - progress) * getMotionIntensity(14, this.reducedMotion), start.y)],
+    ["shake", (_source, _target, tile, start, progress) => this.recoil(tile, start, progress, 8)],
     ["hit-flash", (_source, _target, tile, _start, progress) => this.flashArtwork(tile, progress)],
     ["status-change", (_source, _target, tile, _start, progress) => tile.accent.alpha = 0.4 + Math.sin(progress * Math.PI) * 0.6],
     ["resource-change", (_source, _target, tile, _start, progress) => tile.detail.scale.set(1 + Math.sin(progress * Math.PI) * 0.15)],
@@ -75246,8 +75370,19 @@ var EncounterScene = class {
     if (this.activeDrag && this.isAnimationLockedForEntry(this.activeDrag.entry)) {
       this.returnActiveDrag();
     }
+    this.restorePendingEntityLayouts();
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
+  }
+  /** Applies the latest authoritative entity layout once all timelines release its transform. */
+  restorePendingEntityLayouts() {
+    for (const [id, position] of this.pendingEntityLayouts) {
+      if (this.isAnimationLocked(id)) continue;
+      const tile = this.entityTiles.get(id);
+      tile?.container.position.set(position.x, position.y);
+      tile?.container.scale.set(position.scale ?? 1);
+      this.pendingEntityLayouts.delete(id);
+    }
   }
   /**
    * Processes a keyboard interaction without forwarding high-frequency input to .NET.
@@ -75295,6 +75430,7 @@ var EncounterScene = class {
     if (snapshot.sequence < this.currentSequence) {
       return;
     }
+    if (snapshot.sequence !== this.currentSequence || this.hasViewportChanged(viewport)) this.dismissInspection(true);
     const shouldReleasePendingIntent = this.intentPending && this.pendingIntentSequence !== void 0 && snapshot.sequence > this.pendingIntentSequence;
     if (this.hasViewportChanged(viewport)) {
       this.resetTransientLayoutState();
@@ -75368,6 +75504,7 @@ var EncounterScene = class {
     this.releasedDragPositions.clear();
     this.root.destroy({ children: true });
     this.entityTiles.clear();
+    this.pendingEntityLayouts.clear();
     this.handTiles.clear();
     this.selectableEntries.clear();
     this.entities.clear();
@@ -75516,12 +75653,15 @@ var EncounterScene = class {
     const tile = this.getOrCreateTile(this.entityTiles, id, layer);
     this.drawEntityPresentation(tile, entity, position);
     delete tile.targetPresentationKey;
-    if (!this.isAnimationLocked(id)) {
+    if (this.isAnimationLocked(id)) {
+      this.pendingEntityLayouts.set(id, position);
+    } else {
       tile.container.position.set(position.x, position.y);
       tile.container.scale.set(position.scale ?? 1);
+      this.pendingEntityLayouts.delete(id);
     }
     tile.container.alpha = entity.health > 0 ? 1 : 0.45;
-    tile.container.eventMode = this.isAnimationLocked(id) ? "none" : "static";
+    tile.container.eventMode = "static";
     tile.container.cursor = this.canSelectEntity(entity) ? "pointer" : "default";
     tile.container.removeAllListeners("pointertap");
     tile.container.on("pointertap", (event) => {
@@ -75613,8 +75753,22 @@ var EncounterScene = class {
     tile.title.style.fontSize = 18;
     tile.title.style.stroke = { color: uiTokens.color.panelShadow, width: 3 };
     tile.description.style.stroke = { color: uiTokens.color.panelShadow, width: 3 };
-    tile.description.text = formatEntityTelegraph(entity.telegraph);
-    tile.description.visible = !entity.isPlayer;
+    const telegraph = entity.telegraph ?? "";
+    const intent = getEnemyIntentSymbol(telegraph);
+    tile.description.text = `${intent.icon}${intent.value ? ` ${intent.value}` : ""}`;
+    tile.description.visible = !entity.isPlayer && Boolean(entity.telegraph);
+    tile.description.eventMode = "static";
+    tile.description.cursor = "help";
+    tile.description.hitArea = new Rectangle(-32, -18, 64, 36);
+    tile.description.removeAllListeners("pointerover");
+    tile.description.removeAllListeners("pointerout");
+    tile.description.removeAllListeners("pointertap");
+    tile.description.on("pointerover", () => this.inspectEntity(tile, telegraph, tile.description.y));
+    tile.description.on("pointerout", () => this.dismissInspection());
+    tile.description.on("pointertap", (event) => {
+      event.stopPropagation();
+      this.inspectEntity(tile, telegraph, tile.description.y, true);
+    });
     tile.detail.text = entity.isPlayer ? "" : `${entity.health} / ${entity.maxHealth}`;
     tile.defenses.text = entity.isPlayer ? "" : `Block ${entity.block}${entity.maxPosture > 0 ? `  \xB7  Posture ${entity.posture}/${entity.maxPosture}` : ""}`;
     tile.effects.visible = false;
@@ -75689,6 +75843,8 @@ var EncounterScene = class {
     const accent = new Graphics();
     const targetHighlight = new CharacterOutline();
     targetHighlight.visible = false;
+    const impactHighlight = new CharacterOutline();
+    impactHighlight.visible = false;
     const artwork = new Sprite(Texture.EMPTY);
     artwork.anchor.set(0.5, 0.5);
     const title = new Text({ text: "", style: { ...uiTokens.typography.panelTitle, align: "center", stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true, wordWrapWidth: 156 } });
@@ -75713,11 +75869,29 @@ var EncounterScene = class {
     effects.position.set(0, 38);
     container.addChild(background, targetHighlight, artwork, accent, title, description, detail, healthBar, postureBar, effects, defenses);
     layer.addChild(container);
-    const statusIcons = new StatusEffectsView();
-    container.addChild(statusIcons);
-    const tile = { container, background, accent, targetHighlight, artwork, title, description, detail, effects, statusIcons, healthBar, postureBar, defenses };
+    const statusIcons = new StatusEffectsView((text, pinned) => this.inspectEntity(tile, text, statusIcons.y, pinned), () => this.dismissInspection());
+    container.addChild(statusIcons, impactHighlight);
+    const tile = { container, background, accent, targetHighlight, impactHighlight, artwork, title, description, detail, effects, statusIcons, healthBar, postureBar, defenses };
     tiles.set(id, tile);
     return tile;
+  }
+  /** Shows icon explanations above all figures and clamps them inside the encounter canvas. */
+  inspectEntity(tile, text, localY, pinned = false) {
+    if (!this.viewport) return;
+    this.inspectionPinned = pinned;
+    const scale = tile.container.scale.x;
+    this.inspectionTooltip.show(text, {
+      x: tile.container.x - 36 * scale,
+      y: tile.container.y + localY * scale,
+      width: 72 * scale,
+      height: 28 * scale
+    }, this.viewport);
+  }
+  /** Keeps tap explanations visible after touch pointer exit until another tap or state change. */
+  dismissInspection(force = false) {
+    if (this.inspectionPinned && !force) return;
+    this.inspectionPinned = false;
+    this.inspectionTooltip.hide();
   }
   removeMissingTiles(tiles, expectedIds) {
     for (const [id, tile] of tiles) {
@@ -75726,6 +75900,7 @@ var EncounterScene = class {
       }
       tile.container.destroy({ children: true });
       this.clearDragMotion(id);
+      this.pendingEntityLayouts.delete(id);
       tiles.delete(id);
     }
   }
@@ -75981,7 +76156,8 @@ var EncounterScene = class {
     cardView.position.set(-handCardVisualSize.width / 2, -handCardVisualSize.height / 2);
     cardView.scale.set(handCardViewScale);
     tile.container.removeAllListeners();
-    tile.container.removeChild(tile.background, tile.accent, tile.targetHighlight, tile.artwork, tile.title, tile.description, tile.detail, tile.healthBar, tile.postureBar, tile.effects, tile.defenses, tile.statusIcons);
+    tile.container.removeChild(tile.background, tile.accent, tile.targetHighlight, tile.impactHighlight, tile.artwork, tile.title, tile.description, tile.detail, tile.healthBar, tile.postureBar, tile.effects, tile.defenses, tile.statusIcons);
+    tile.impactHighlight.destroy({ children: true });
     tile.statusIcons.destroy({ children: true });
     tile.targetHighlight.destroy({ children: true });
     tile.defenses.destroy();
@@ -76476,13 +76652,15 @@ ${entry.unavailableReason}` : ""),
     const target = command.targetId ? this.getSceneTile(command.targetId) : void 0;
     const tile = command.name === "nudge" ? target : source8;
     const start = this.animationStarts.get(command.id);
-    if (tile && start) {
+    if (tile && start && command.name !== "hit-flash") {
       tile.container.position.set(start.x, start.y);
       tile.container.alpha = start.alpha;
       tile.container.rotation = start.rotation;
       tile.container.scale.set(start.scale);
       tile.artwork.alpha = start.artworkAlpha;
+      tile.impactHighlight.visible = false;
     }
+    if (tile && command.name === "hit-flash") tile.impactHighlight.visible = false;
     if (command.name === "attack") {
       this.attackTrail.clear();
     }
@@ -76575,22 +76753,25 @@ ${entry.unavailableReason}` : ""),
    * Combines a short positional impact, shake, and artwork emphasis without recoloring the entity tile.
    */
   hit(tile, start, progress) {
-    const impactOffset = Math.sin(progress * Math.PI * 6) * (1 - progress) * 8;
-    const shakeOffset = Math.sin(progress * Math.PI * 8) * (1 - progress) * getMotionIntensity(14, this.reducedMotion);
-    tile.container.position.set(start.x + impactOffset + shakeOffset, start.y);
-    tile.artwork.alpha = progress === 1 ? start.artworkAlpha : this.reducedMotion ? 0.86 : 1;
+    this.recoil(tile, start, progress, 13);
+    const impact = Math.sin(progress * Math.PI) * (1 - progress);
+    tile.container.rotation = start.rotation + getMotionIntensity(0.04, this.reducedMotion) * impact;
+    tile.container.scale.set(start.scale * (1 - getMotionIntensity(0.035, this.reducedMotion) * impact));
+    tile.artwork.alpha = start.artworkAlpha;
+  }
+  /** Delivers one clear recoil followed by a restrained, damped settle, with a stable final frame. */
+  recoil(tile, start, progress, intensity) {
+    const offset = Math.sin(progress * Math.PI * 3) * Math.pow(1 - progress, 2);
+    tile.container.position.set(start.x + offset * getMotionIntensity(intensity, this.reducedMotion), start.y);
   }
   /**
    * Flashes a loaded entity silhouette without replaying the positional hit shake.
    */
   flashArtwork(tile, progress) {
-    delete tile.targetPresentationKey;
-    tile.targetHighlight.visible = tile.artwork.visible && progress < 1;
-    if (tile.targetHighlight.visible) {
-      tile.targetHighlight.show(tile.artwork, 16777215, 3, Math.sin(progress * Math.PI) * (this.reducedMotion ? 0.35 : 0.75));
-      return;
+    tile.impactHighlight.visible = tile.artwork.visible && progress < 1;
+    if (tile.impactHighlight.visible) {
+      tile.impactHighlight.showFlash(tile.artwork, Math.sin(progress * Math.PI) * (this.reducedMotion ? 0.25 : 0.6));
     }
-    this.refreshSelectionHighlights();
   }
   /**
    * Enlarges a tile briefly while restoring its base scale at completion.
@@ -76722,7 +76903,7 @@ ${entry.unavailableReason}` : ""),
       const entityId = tileId.substring(tileId.indexOf(":") + 1);
       const entity = this.entities.get(entityId);
       const isInteractive = !this.inputReleased && entity !== void 0 && !this.isAnimationLocked(tileId) && this.canSelectEntity(entity);
-      tile.container.eventMode = isInteractive ? "static" : "none";
+      tile.container.eventMode = this.inputReleased ? "none" : isInteractive ? "static" : "passive";
       tile.container.cursor = isInteractive ? "pointer" : "default";
     }
   }
@@ -77205,12 +77386,6 @@ function getRarityColor(rarity) {
 }
 function getCharacterColor(character) {
   return character === "Hollowblade" ? 11623797 : character === "Gravetender" ? 7518106 : character === "Dredgecaller" ? 8745910 : character === "Oathbound" ? 13935439 : 8623272;
-}
-function formatEntityTelegraph(telegraph) {
-  if (!telegraph) {
-    return "";
-  }
-  return telegraph.replace(/^Intent:\s*/i, "").replace(/\s+damage\b/i, "").trim();
 }
 function toCardViewRarity(rarity) {
   return rarity === "Uncommon" || rarity === "Rare" || rarity === "Special" ? rarity : "Common";
@@ -77891,38 +78066,6 @@ init_lib();
 
 // src/reward-scene.ts
 init_lib();
-
-// src/choice-tooltip.ts
-init_lib();
-var ChoiceTooltip = class extends Container {
-  frame = new Graphics();
-  body = new Text({ text: "", style: new TextStyle({ ...uiTokens.typography.body, fontSize: 16, wordWrap: true }) });
-  constructor() {
-    super();
-    this.addChild(this.frame, this.body);
-    this.eventMode = "none";
-    this.interactiveChildren = false;
-    this.visible = false;
-  }
-  /** Shows readable copy beside a choice, clamped inside the owning canvas. */
-  show(text, anchor, viewport) {
-    const width = Math.max(1, Math.min(300, viewport.width - 24));
-    const maximumHeight = Math.max(1, viewport.height - 24);
-    this.body.text = text;
-    fitTextToBox(this.body, width - 24, maximumHeight - 24, 16, 14);
-    const height = Math.min(maximumHeight, Math.max(64, this.body.height + 24));
-    this.frame.clear().roundRect(0, 0, width, height, 6).fill({ color: 530204, alpha: 0.98 }).stroke({ color: 13280860, width: 1 });
-    this.body.position.set(12, 12);
-    const above = anchor.y - height - 8;
-    const y2 = above >= 12 ? above : anchor.y + anchor.height + 8;
-    this.position.set(Math.max(12, Math.min(viewport.width - width - 12, anchor.x + (anchor.width - width) / 2)), Math.max(12, Math.min(viewport.height - height - 12, y2)));
-    this.visible = true;
-  }
-  /** Dismisses stale descriptions after pointer exit, scrolling, or an action. */
-  hide() {
-    this.visible = false;
-  }
-};
 
 // src/relic-view.ts
 init_lib();
@@ -80576,7 +80719,7 @@ var ShopMerchandiseCard = class extends Container {
     this.itemArt.setImage(merchandise.image);
     if (merchandise.isCard) {
       this.card = new CardView({
-        presentation: "reward",
+        presentation: "hand",
         energyCost: merchandise.cardEnergyCost ?? 0,
         manaCost: merchandise.cardManaCost ?? 0,
         name: merchandise.name,
@@ -82187,6 +82330,25 @@ function planCollectionDetailVisibility(plan, kind) {
   if (!plan.compact) return { compactDetail: false, details: true };
   return { compactDetail: kind === "card", details: kind !== "card" };
 }
+function planCollectionCardGrid(width, count2) {
+  const gap = 12;
+  const columns = Math.max(1, Math.min(5, Math.floor((width + gap) / 172)));
+  const cardWidth = Math.min(220, (width - gap * (columns - 1)) / columns);
+  const height = cardWidth * 252 / 180;
+  return { columns, width: cardWidth, height, contentHeight: Math.max(0, Math.ceil(count2 / columns) * (height + gap) - gap) };
+}
+function createCollectionCard(entry) {
+  return new CardView({
+    presentation: "hand",
+    name: entry.name,
+    description: entry.description,
+    type: entry.cardType ?? "Card",
+    rarity: toCardRarity3(entry.rarity),
+    energyCost: entry.energyCost ?? Number(entry.cost ?? 0),
+    manaCost: entry.manaCost ?? 0,
+    enabled: true
+  });
+}
 var fallbackRenderer;
 async function acquireFallbackRenderer() {
   fallbackRenderer ??= (async () => {
@@ -82264,8 +82426,9 @@ async function createCollectionRenderer(canvas, sink) {
     const entry = selectedEntry();
     compactDetail.text = entry ? `${entry.name} \u2014 ${entry.description}` : "";
     if (!entry) return;
+    if (isCardGrid()) return;
     if (entry.kind === "card") {
-      const card = new CardView({ cost: entry.cost ?? "0", name: entry.name, description: entry.description, type: "Card", rarity: toCardRarity3(entry.rarity), enabled: false });
+      const card = createCollectionCard(entry);
       details.addChild(card);
       if (entry.image && isSafeImagePath(entry.image)) {
         const currentGeneration = generation;
@@ -82312,6 +82475,22 @@ async function createCollectionRenderer(canvas, sink) {
     if (!tab) return;
     empty.text = tab.entries.length === 0 ? "Nothing here yet." : "";
     tab.entries.forEach((entry, index) => {
+      if (entry.kind === "card") {
+        const face = createCollectionCard(entry);
+        face.eventMode = "static";
+        face.cursor = "pointer";
+        face.on("pointertap", () => {
+          if (!suppressedTap) selectEntry(index);
+        });
+        entriesLayer.addChild(face);
+        if (entry.image && isSafeImagePath(entry.image)) {
+          const currentGeneration = generation;
+          void Assets.load(entry.image).then((texture) => {
+            if (!disposed && currentGeneration === generation && !face.destroyed) face.setContent({ ...face.content, artTexture: texture });
+          }).catch(() => void 0);
+        }
+        return;
+      }
       const card = new Graphics();
       const name = new Text({ text: entry.name, style: {
         ...uiTokens.typography.button,
@@ -82390,16 +82569,35 @@ async function createCollectionRenderer(canvas, sink) {
     rowOffsets = [];
     rowHeights = [];
     totalRowHeight = 0;
+    if (isCardGrid()) {
+      const grid = planCollectionCardGrid(listWidth, entriesLayer.children.length);
+      entriesLayer.children.forEach((_child, index) => {
+        rowOffsets[index] = Math.floor(index / grid.columns) * (grid.height + 12);
+        rowHeights[index] = grid.height;
+      });
+      totalRowHeight = grid.contentHeight;
+      return;
+    }
     entriesLayer.children.forEach((child, index) => {
       rowOffsets[index] = totalRowHeight;
       if (child instanceof Graphics) layoutEntry(child, index, plan, listWidth);
+      if (child instanceof CardView) rowHeights[index] = planCollectionCardGrid(Math.min(220, listWidth), 1).height;
       totalRowHeight += (rowHeights[index] ?? 76) + 12;
     });
     totalRowHeight = Math.max(0, totalRowHeight - 12);
   };
   const layoutEntries = (plan, listWidth) => {
     listMask.clear().rect(20, plan.listTop, listWidth, plan.viewportHeight).fill({ color: 16777215 });
+    const grid = planCollectionCardGrid(isCardGrid() ? listWidth : Math.min(220, listWidth), entriesLayer.children.length);
     entriesLayer.children.forEach((child, index) => {
+      if (child instanceof CardView) {
+        const y2 = plan.listTop + (rowOffsets[index] ?? 0) - scrollOffset;
+        const gridX = 20 + Math.max(0, (listWidth - grid.width * grid.columns - (grid.columns - 1) * 12) / 2);
+        child.resize({ width: grid.width, height: grid.height });
+        child.position.set(gridX + index % grid.columns * (grid.width + 12), y2);
+        child.setInteractionState({ enabled: true, focused: false, selected: index === selectedIndex });
+        child.visible = y2 + grid.height >= plan.listTop && y2 < plan.listTop + plan.viewportHeight;
+      }
       if (child instanceof Graphics) layoutEntry(child, index, plan, listWidth);
     });
     entriesFade.setViewport({
@@ -82453,8 +82651,10 @@ async function createCollectionRenderer(canvas, sink) {
     const bounds = planCollectionContentBounds(width, height, readCollectionSafeArea(inputCanvas));
     const contentWidth = Math.max(1, bounds.width);
     const contentHeight = Math.max(1, bounds.height);
-    const plan = planCollectionLayout(contentWidth, contentHeight);
-    const listWidth = plan.compact ? contentWidth - 40 : Math.max(240, contentWidth - 280);
+    const cardGrid = isCardGrid();
+    const basePlan = planCollectionLayout(contentWidth, contentHeight);
+    const plan = cardGrid ? { ...basePlan, viewportHeight: Math.max(44, contentHeight - basePlan.listTop - (basePlan.short ? 16 : 72)) } : basePlan;
+    const listWidth = cardGrid || plan.compact ? contentWidth - 40 : Math.max(240, contentWidth - 280);
     viewportHeight = plan.viewportHeight;
     measureEntries(plan, listWidth);
     scrollOffset = Math.min(scrollOffset, Math.max(0, totalRowHeight - viewportHeight));
@@ -82469,6 +82669,14 @@ async function createCollectionRenderer(canvas, sink) {
     layoutTabs(contentWidth, plan);
     layoutEntries(plan, listWidth);
     layoutDetails(contentWidth, contentHeight, plan);
+    if (cardGrid) {
+      details.visible = false;
+      compactDetail.visible = false;
+    }
+  };
+  const isCardGrid = () => {
+    const entries = state?.tabs[state.activeTabIndex]?.entries;
+    return Boolean(entries?.length && entries.every((entry) => entry.kind === "card"));
   };
   const scroll = (amount) => {
     scrollOffset = Math.max(0, Math.min(Math.max(0, totalRowHeight - viewportHeight), scrollOffset + amount));
@@ -82609,8 +82817,11 @@ function isState(value) {
   return typeof state.title === "string" && Array.isArray(state.tabs) && Number.isInteger(state.activeTabIndex) && state.activeTabIndex >= 0 && state.activeTabIndex < state.tabs.length && state.tabs.every((tab) => typeof tab.label === "string" && Array.isArray(tab.entries) && tab.entries.every((entry) => {
     if (typeof entry !== "object" || entry === null) return false;
     const value2 = entry;
-    return typeof value2.name === "string" && typeof value2.description === "string" && typeof value2.detail === "string";
+    return typeof value2.name === "string" && typeof value2.description === "string" && typeof value2.detail === "string" && (value2.cardType === void 0 || value2.cardType === null || typeof value2.cardType === "string") && isOptionalResourceCost(value2.energyCost) && isOptionalResourceCost(value2.manaCost);
   }));
+}
+function isOptionalResourceCost(value) {
+  return value === void 0 || value === null || typeof value === "number" && Number.isFinite(value);
 }
 function toCardRarity3(value) {
   return value === "Uncommon" || value === "Rare" || value === "Special" ? value : "Common";
@@ -82623,7 +82834,7 @@ function compactTabLabel(label) {
   return label;
 }
 function isSafeImagePath(path2) {
-  return /^(\.\/)?img\/[a-zA-Z0-9/_ .-]+$/.test(path2) && !path2.includes("..");
+  return /^(\.\/|\/)?img\/[a-zA-Z0-9/_ .-]+$/.test(path2) && !path2.includes("..");
 }
 function fitImage(sprite, width, height, x2, y2) {
   if (sprite.texture.width <= 1 || sprite.texture.height <= 1) return;
