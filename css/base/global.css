@@ -832,41 +832,29 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     right: 16px;
     width: 48px;
     height: 48px;
-    border-radius: 50%;
-    display: inline-block;
-    border-top: 3px solid #FFF;
-    border-right: 3px solid transparent;
+    border-radius: 12px;
+    display: grid;
+    padding: 5px;
+    background: #102126ed;
+    border: 1px solid #536d72;
+    box-shadow: 0 3px 16px #0006;
     box-sizing: border-box;
     z-index: 2000;
     pointer-events: none;
-    color: white;
-    animation: saving-spinner-animation 2s linear infinite;
+    color: #f2d295;
 }
 
-@keyframes saving-spinner-animation {
-    0% {
-        opacity: 0;
-        transform: rotate(0deg);
-    }
-
-    25% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 1;
-        transform: rotate(360deg);
-    }
-
-    75% {
-        opacity: 1;
-    }
-
-    100% {
-        opacity: 0;
-        transform: rotate(720deg);
-    }
+.saving-spinner svg { width: 100%; height: 100%; fill: none; stroke: currentColor; }
+.spinner-track { stroke: #536d72; stroke-width: 2; }
+.spinner-orbit {
+    stroke-width: 3;
+    stroke-linecap: round;
+    transform-origin: 24px 24px;
+    animation: saving-spinner-animation 1.2s linear infinite;
 }
+.spinner-sigil { stroke-width: 1.5; stroke-linejoin: round; }
+@keyframes saving-spinner-animation { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner-orbit { animation: none; } }
 
 /* Limit dialog tab widths so they stay visible without scrolling */
 

@@ -70232,7 +70232,10 @@ function isRitualPresentationState(value) {
   return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.image);
 }
 function isCardPresentationState(value) {
-  return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.description) && isString(value.image) && isString(value.cardType) && isString(value.rarity) && isString(value.character) && isCardTargetMode(value.targetMode) && isFiniteNumber(value.energyCost) && isFiniteNumber(value.manaCost) && typeof value.isDraggable === "boolean" && typeof value.isInteractionLocked === "boolean" && typeof value.isQueued === "boolean" && (value.unavailableReason === void 0 || value.unavailableReason === null || isString(value.unavailableReason));
+  return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.description) && isString(value.image) && isString(value.cardType) && isString(value.rarity) && isString(value.character) && isCardTargetMode(value.targetMode) && isFiniteNumber(value.energyCost) && isFiniteNumber(value.manaCost) && typeof value.isDraggable === "boolean" && typeof value.isInteractionLocked === "boolean" && typeof value.isQueued === "boolean" && (value.unavailableReason === void 0 || value.unavailableReason === null || isString(value.unavailableReason)) && isOptionalNumber(value.baseDamage) && isOptionalNumber(value.damage) && (value.targetDamage === void 0 || value.targetDamage === null || isRecord(value.targetDamage) && Object.values(value.targetDamage).every(isFiniteNumber));
+}
+function isOptionalNumber(value) {
+  return value === void 0 || value === null || isFiniteNumber(value);
 }
 function isItemPresentationState(value) {
   return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.description) && isString(value.image) && isFiniteNumber(value.uses) && isCardTargetMode(value.targetMode) && typeof value.isDraggable === "boolean";
@@ -73883,6 +73886,220 @@ function normalizeDimension2(value) {
   return Number.isFinite(value) ? Math.max(0, value) : 0;
 }
 
+// src/card-description.ts
+var keywords = {
+  aoe: "AoE",
+  attack: "Attack",
+  bleed: "Bleed",
+  block: "Block",
+  burn: "Burn",
+  chainattack: "Chain Attack",
+  chainskill: "Chain Skill",
+  chainspell: "Chain Spell",
+  chill: "Chill",
+  combo1: "Combo 1",
+  combo2: "Combo 2",
+  combo3: "Combo 3",
+  damage: "Damage",
+  discard: "Discard",
+  discardrandom: "Discard Random",
+  draw: "Draw",
+  drawrandom: "Draw Random",
+  execute: "Execute",
+  exhaust: "Exhaust",
+  health: "Health",
+  ritual: "Ritual",
+  skill: "Skill",
+  spell: "Spell",
+  stamina: "Stamina",
+  stealth: "Stealth",
+  status: "Status",
+  strength: "Strength",
+  unplayable: "Unplayable",
+  vulnerable: "Vulnerable",
+  weak: "Weak",
+  poison: "Poison",
+  shock: "Shock",
+  frail: "Frail",
+  reflect: "Reflect",
+  retain: "Retain",
+  chain: "Chain",
+  combo: "Combo",
+  exploit: "Exploit",
+  transmute: "Transmute",
+  heal: "Heal",
+  energy: "Energy",
+  mana: "Mana",
+  intangible: "Intangible",
+  slow: "Slow",
+  heavy: "Heavy",
+  fatigue: "Fatigue",
+  guarded: "Guarded",
+  endure: "Endure",
+  bloodcast: "Bloodcast",
+  whisper: "Whisper",
+  setup: "Setup",
+  fullblock: "Full Block",
+  perfectblock: "Perfect Block",
+  full: "Full",
+  perfect: "Perfect"
+};
+function cardDescriptionRuns(description) {
+  const normalized = description.replace(/\{newline\}|<br\s*\/?>/gi, "\n").replace(/\{([a-z0-9]+)\}/gi, (_token, key) => keywords[key.toLowerCase()] ?? key);
+  const fragments = normalized.split(/(\*\*|<\/?(?:b|strong)>)/gi);
+  const runs = [];
+  let emphasized = false;
+  for (const fragment8 of fragments) {
+    if (/^(?:\*\*|<\/?(?:b|strong)>)$/i.test(fragment8)) {
+      emphasized = fragment8.startsWith("</") ? false : fragment8.startsWith("<") ? true : !emphasized;
+      continue;
+    }
+    for (const match of fragment8.matchAll(/\n|[^\S\n]+|[^\s]+/g)) {
+      const text = match[0];
+      const word = text.replace(/^[^a-z]+|[^a-z]+$/gi, "").toLowerCase();
+      runs.push({ text, bold: emphasized || word in keywords, damage: false });
+    }
+  }
+  let primaryDamageFound = false;
+  return runs.map((run, index) => {
+    const following = runs.slice(index + 1).filter((next) => !/^\s+$/.test(next.text)).slice(0, 3).map((next) => next.text).join(" ");
+    const damage = !primaryDamageFound && /^\d+(?:[x×]\d+)?$/i.test(run.text) && /^(?:[x×]\s*\d+\s*)?damage\b/i.test(following);
+    primaryDamageFound ||= damage;
+    return { ...run, damage };
+  });
+}
+function plainCardDescription(description) {
+  return cardDescriptionRuns(description).map((run) => run.text).join("");
+}
+function withTargetDamage(description, damage) {
+  return damage === void 0 ? description : description.replace(/(?<![\d+-])\d+(?=(?:\*\*|<\/?(?:b|strong)>)*\s*(?:[x×]\s*\d+\s*)?(?:\*\*|<\/?(?:b|strong)>)*\s*(?:\*\*|<\/?(?:b|strong)>)*(?:\{damage\}|damage\b))/i, String(damage));
+}
+function damageTextColor(damage, baseDamage, normal) {
+  return damage === void 0 || baseDamage === void 0 || damage === baseDamage ? normal : damage > baseDamage ? 8315560 : 16744827;
+}
+
+// src/card-rules-view.ts
+init_lib();
+var CardRulesView = class extends Container {
+  labels = [];
+  /** Reuses text objects while fitting and centering styled rules inside the card's caption area. */
+  update(description, style, width, damage, baseDamage, height = Infinity) {
+    const fontSize = Number(style.fontSize) || 14;
+    const maxLines = Math.max(1, Math.floor(height / (fontSize * 1.22)));
+    const layout = this.layoutRuns(cardDescriptionRuns(description), style, width, fontSize, damage, baseDamage);
+    if (layout.lines.length > maxLines && fontSize > 12) {
+      this.update(description, new TextStyle({
+        fontFamily: style.fontFamily,
+        fontSize: fontSize - 1,
+        stroke: style.stroke,
+        fill: style.fill
+      }), width, damage, baseDamage, height);
+      return;
+    }
+    this.hideLines(layout.lines.slice(maxLines));
+    if (layout.lines.length > maxLines) this.ellipsize(layout.lines[maxLines - 1]?.labels ?? []);
+    this.centerLines(layout.lines.slice(0, maxLines), width);
+    this.labels.slice(layout.count).forEach((label) => {
+      label.visible = false;
+    });
+  }
+  /** Wraps styled words while retaining explicit line breaks. */
+  layoutRuns(runs, style, width, fontSize, damage, baseDamage) {
+    const lines = [{ labels: [], width: 0 }];
+    let count2 = 0;
+    for (const run of runs) {
+      let line = lines[lines.length - 1];
+      if (!line) continue;
+      if (run.text === "\n") {
+        lines.push({ labels: [], width: 0 });
+        continue;
+      }
+      if (/^\s+$/.test(run.text)) {
+        line.width += fontSize * 0.26;
+        continue;
+      }
+      const label = this.getLabel(count2, run, style, fontSize, damage, baseDamage);
+      const labelWidth = Number.isFinite(label.width) ? label.width : fontSize * 0.55 * run.text.length;
+      if (line.width + labelWidth > width && line.labels.length > 0) {
+        line = { labels: [], width: 0 };
+        lines.push(line);
+      }
+      label.position.set(line.width, (lines.length - 1) * fontSize * 1.22);
+      line.labels.push(label);
+      line.width += labelWidth;
+      count2++;
+    }
+    return { lines, count: count2 };
+  }
+  /** Reconciles one reusable word label from safe semantic rules text. */
+  getLabel(index, run, style, fontSize, damage, baseDamage) {
+    let label = this.labels[index];
+    if (!label) {
+      label = new Text({ text: "", style });
+      label.resolution = 2;
+      this.labels.push(label);
+      this.addChild(label);
+    }
+    label.text = run.text;
+    label.style = new TextStyle({
+      fontFamily: style.fontFamily,
+      fontSize,
+      stroke: style.stroke,
+      wordWrap: false,
+      fontWeight: run.bold ? "700" : "400",
+      fill: run.damage ? damageTextColor(damage, baseDamage, uiTokens.color.text) : style.fill
+    });
+    label.visible = true;
+    return label;
+  }
+  /** Centers independently wrapped lines inside the caption width. */
+  centerLines(lines, width) {
+    for (const line of lines) {
+      const offset = (width - line.width) / 2;
+      for (const label of line.labels) label.position.set(label.x + offset, label.y);
+    }
+  }
+  /** Hides words beyond the available caption height. */
+  hideLines(lines) {
+    for (const line of lines) {
+      for (const label of line.labels) label.visible = false;
+    }
+  }
+  /** Marks an overlong paragraph without drawing outside the card frame. */
+  ellipsize(labels) {
+    const last = labels[labels.length - 1];
+    if (last) last.text = "\u2026";
+  }
+};
+
+// src/card-placeholder-art.ts
+function drawCardPlaceholder(graphics, type, width, top, bottom) {
+  const x2 = width / 2;
+  const y2 = (top + bottom) / 2;
+  const size = Math.max(8, Math.min(width * 0.28, (bottom - top) * 0.42));
+  const colors2 = { Attack: 15837831, Spell: 10013439, Skill: 10477757, Ritual: 13481204 };
+  const color = colors2[type] ?? 12044248;
+  graphics.roundRect(x2 - size * 1.5, y2 - size * 1.5, size * 3, size * 3, size * 1.5).fill({ color, alpha: 0.06 });
+  if (type === "Attack") drawBlade(graphics, x2, y2, size, color);
+  else if (type === "Skill") drawShield(graphics, x2, y2, size, color);
+  else drawSigil(graphics, x2, y2, size, color, type === "Ritual");
+}
+function drawBlade(g2, x2, y2, s2, color) {
+  g2.rect(x2 - s2 * 0.15, y2 - s2, s2 * 0.3, s2 * 1.35).fill(color).rect(x2, y2 - s2, s2 * 0.07, s2 * 1.35).fill(16772562).roundRect(x2 - s2 * 0.65, y2 + s2 * 0.25, s2 * 1.3, s2 * 0.16, s2 * 0.08).fill(14393940).rect(x2 - s2 * 0.11, y2 + s2 * 0.4, s2 * 0.22, s2 * 0.5).fill(6440508).roundRect(x2 - s2 * 0.2, y2 + s2 * 0.9, s2 * 0.4, s2 * 0.2, s2 * 0.1).fill(color);
+  for (const offset of [-0.75, 0.75]) g2.rect(x2 + s2 * offset, y2 - s2 * 0.65, s2 * 0.08, s2 * 0.7).fill({ color, alpha: 0.3 });
+}
+function drawShield(g2, x2, y2, s2, color) {
+  g2.roundRect(x2 - s2 * 0.72, y2 - s2 * 0.9, s2 * 1.44, s2 * 1.8, s2 * 0.55).fill({ color, alpha: 0.75 }).roundRect(x2 - s2 * 0.55, y2 - s2 * 0.73, s2 * 1.1, s2 * 1.42, s2 * 0.42).fill(1588535).rect(x2 - s2 * 0.07, y2 - s2 * 0.5, s2 * 0.14, s2).fill(color).rect(x2 - s2 * 0.35, y2 - s2 * 0.14, s2 * 0.7, s2 * 0.14).fill(color);
+}
+function drawSigil(g2, x2, y2, s2, color, ritual) {
+  g2.roundRect(x2 - s2, y2 - s2, s2 * 2, s2 * 2, s2).stroke({ color, width: ritual ? 2 : 1, alpha: 0.8 }).roundRect(x2 - s2 * 0.7, y2 - s2 * 0.7, s2 * 1.4, s2 * 1.4, s2 * 0.7).fill({ color, alpha: 0.18 }).roundRect(x2 - s2 * 0.28, y2 - s2 * 0.28, s2 * 0.56, s2 * 0.56, ritual ? 2 : s2 * 0.28).fill(color);
+  for (let index = 0; index < 8; index++) {
+    const angle = index * Math.PI / 4;
+    const radius = s2 * (ritual ? 0.85 : 1.22);
+    g2.roundRect(x2 + Math.cos(angle) * radius - 2, y2 + Math.sin(angle) * radius - 2, 4, 4, 1).fill({ color, alpha: 0.9 });
+  }
+}
+
 // src/card-view.ts
 var defaultCardWidth = 180;
 var defaultCardHeight = 252;
@@ -73909,6 +74126,7 @@ var CardView = class extends Container {
   nameLabel = new Text({ text: "", style: this.nameStyle });
   typeLabel = new Text({ text: "", style: this.typeStyle });
   descriptionLabel = new Text({ text: "", style: this.descriptionStyle });
+  rules = new CardRulesView();
   handPresentation;
   rewardPresentation;
   cardWidth;
@@ -73974,7 +74192,8 @@ var CardView = class extends Container {
       this.descriptionLabel,
       this.stateOverlay,
       this.playabilityOutline,
-      this.stateOutline
+      this.stateOutline,
+      this.rules
     );
     this.redraw();
   }
@@ -74123,15 +74342,24 @@ var CardView = class extends Container {
     this.artMask.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.frame.panelCornerRadius - 1).fill({ color: 16777215 });
     this.updateArtwork(artBounds);
     this.drawTextScrims(artBounds, palette, header);
+    this.descriptionLabel.visible = false;
+    this.rules.position.set(textPadding, this.descriptionLabel.y);
+    this.rules.update(
+      this.cardContent.description,
+      this.descriptionStyle,
+      this.cardWidth - textPadding * 2,
+      this.cardContent.damage,
+      this.cardContent.baseDamage,
+      this.cardHeight - this.descriptionLabel.y - 6
+    );
     this.statePresentationKey = "";
     this.applyStatePresentation(palette);
   }
   drawFallbackArt(artBounds, palette, header) {
-    const medallionSize = Math.min(artBounds.width, artBounds.height) * 0.3;
-    const medallionX = artBounds.x + (artBounds.width - medallionSize) / 2;
     const headerBottom = artBounds.y + header.height;
-    const medallionY = headerBottom + (this.cardHeight * 0.59 - headerBottom - medallionSize) / 2;
-    this.artFallback.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.spacing.xs).fill({ color: palette.artFill }).roundRect(artBounds.x + 3, artBounds.y + 3, artBounds.width - 6, artBounds.height - 6, uiTokens.spacing.xs - 1).stroke({ color: palette.accent, width: 1, alpha: 0.72 }).rect(artBounds.x, artBounds.y + artBounds.height * 0.56, artBounds.width, artBounds.height * 0.44).fill({ color: palette.accent, alpha: 0.4 }).roundRect(medallionX, medallionY, medallionSize, medallionSize, medallionSize / 2).fill({ color: palette.accent, alpha: 0.7 }).roundRect(medallionX + 4, medallionY + 4, medallionSize - 8, medallionSize - 8, Math.max(0, medallionSize / 2 - 4)).fill({ color: palette.artFill, alpha: 0.94 }).rect(artBounds.x + artBounds.width * 0.12, artBounds.y + artBounds.height * 0.16, artBounds.width * 0.18, 3).fill({ color: palette.accent, alpha: 0.74 }).rect(artBounds.x + artBounds.width * 0.7, artBounds.y + artBounds.height * 0.16, artBounds.width * 0.18, 3).fill({ color: palette.accent, alpha: 0.74 });
+    const typeFill = { Attack: 3416873, Spell: 2043978, Skill: 1653556, Ritual: 3417665 };
+    this.artFallback.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.spacing.xs).fill({ color: typeFill[this.cardContent.type] ?? palette.artFill }).roundRect(artBounds.x + 3, artBounds.y + 3, artBounds.width - 6, artBounds.height - 6, uiTokens.spacing.xs - 1).stroke({ color: palette.accent, width: 1, alpha: 0.72 }).rect(artBounds.x, artBounds.y + artBounds.height * 0.56, artBounds.width, artBounds.height * 0.44).fill({ color: palette.accent, alpha: 0.12 });
+    drawCardPlaceholder(this.artFallback, this.cardContent.type, this.cardWidth, headerBottom + 4, this.cardHeight * 0.58 - 4);
     this.artFallback.visible = !isUsableCardTexture(this.cardContent.artTexture);
   }
   /** Reserves a translucent title zone and an opaque lower caption without covering the focal center of the art. */
@@ -74184,11 +74412,7 @@ var CardView = class extends Container {
     const badgeWidth = hasLegacyCost ? Math.min(this.cardWidth - 14, Math.max(badgeHeight, this.costLabel.width + 14)) : 0;
     const energyBadgeWidth = hasEnergyCost ? Math.max(badgeHeight, this.energyCostLabel.width + 14) : 0;
     const manaBadgeWidth = hasManaCost ? Math.max(badgeHeight, this.manaCostLabel.width + 14) : 0;
-    const resourceBadgeWidth = energyBadgeWidth + manaBadgeWidth + (hasEnergyCost && hasManaCost ? 4 : 0);
-    const activeBadgeWidth = Math.max(badgeWidth, resourceBadgeWidth);
-    const hasCost = hasLegacyCost || hasEnergyCost || hasManaCost;
-    const stacked = hasCost && (this.rewardPresentation || Math.max(badgeWidth, resourceBadgeWidth) > this.cardWidth * 0.35);
-    const headerHeight = this.rewardPresentation ? Math.max(stacked ? badgeHeight + 54 : 50, this.cardHeight * 0.25) : stacked ? Math.max(82, this.cardHeight * 0.34) : Math.max(28, this.cardHeight * 0.22);
+    const headerHeight = this.rewardPresentation ? Math.max(badgeHeight + 42, this.cardHeight * 0.25) : Math.max(82, this.cardHeight * 0.34);
     this.costLabel.visible = hasLegacyCost;
     this.energyCostLabel.visible = hasEnergyCost;
     this.manaCostLabel.visible = hasManaCost;
@@ -74196,20 +74420,16 @@ var CardView = class extends Container {
     this.energyCostLabel.position.set(uiTokens.frame.borderWidth + 5 + energyBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
     this.manaCostLabel.position.set(this.rewardPresentation ? this.cardWidth - uiTokens.frame.borderWidth - 5 - manaBadgeWidth / 2 : uiTokens.frame.borderWidth + 9 + energyBadgeWidth + manaBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
     this.nameLabel.text = this.cardContent.name;
-    this.nameLabel.position.set(
-      stacked || !hasCost ? this.cardWidth / 2 : (this.cardWidth + activeBadgeWidth + textPadding) / 2,
-      uiTokens.frame.borderWidth + (stacked ? badgeHeight + 11 : 9)
-    );
-    this.typeLabel.text = `${this.cardContent.type} \xB7 ${this.cardContent.rarity}`;
+    this.nameLabel.position.set(this.cardWidth / 2, uiTokens.frame.borderWidth + badgeHeight + 11);
+    this.typeLabel.text = this.cardContent.type;
     this.typeLabel.position.set(this.cardWidth / 2, rulesY + 8 * textScale);
-    this.descriptionLabel.text = this.cardContent.description;
-    this.descriptionLabel.position.set(this.cardWidth / 2, rulesY + 31 * textScale);
-    this.nameStyle.wordWrapWidth = Math.max(0, this.cardWidth - (stacked || !hasCost ? textPadding * 2 : activeBadgeWidth + textPadding * 3));
+    this.descriptionLabel.text = plainCardDescription(this.cardContent.description);
+    this.descriptionLabel.position.set(this.cardWidth / 2, rulesY + 26 * textScale);
+    this.nameStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
     this.typeStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
     this.descriptionStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
     if (this.rewardPresentation) {
-      fitTextToBox(this.nameLabel, this.nameStyle.wordWrapWidth, headerHeight - (stacked ? badgeHeight + 14 : 12), this.nameStyle.fontSize, 14);
-      this.typeLabel.text = this.cardContent.rarity;
+      fitTextToBox(this.nameLabel, this.nameStyle.wordWrapWidth, headerHeight - badgeHeight - 14, this.nameStyle.fontSize, 14);
       fitTextToBox(
         this.descriptionLabel,
         this.descriptionStyle.wordWrapWidth,
@@ -74242,7 +74462,7 @@ var CardView = class extends Container {
     this.nameLabel.position.set(this.cardWidth / 2, rulesY + 5);
     fitTextToBox(this.nameLabel, this.cardWidth - 16, 40 * scale, 24 * scale, 16 * scale);
     this.typeLabel.visible = false;
-    this.descriptionLabel.text = this.cardContent.description;
+    this.descriptionLabel.text = plainCardDescription(this.cardContent.description);
     const descriptionY = rulesY + 8 + Math.min(40 * scale, this.nameLabel.height || 24 * scale);
     this.descriptionLabel.position.set(this.cardWidth / 2, descriptionY);
     fitTextToBox(this.descriptionLabel, this.cardWidth - 16, this.cardHeight - descriptionY - 8, 19 * scale, 14 * scale);
@@ -74304,13 +74524,15 @@ function toCardViewContent(options) {
     ...options.unavailableReason === void 0 ? {} : { unavailableReason: options.unavailableReason },
     name: options.name,
     description: options.description,
+    damage: options.damage,
+    baseDamage: options.baseDamage,
     type: options.type,
     rarity: options.rarity,
     ...options.artTexture === void 0 ? {} : { artTexture: options.artTexture }
   };
 }
 function areCardContentsEqual(left, right) {
-  return left.cost === right.cost && left.energyCost === right.energyCost && left.manaCost === right.manaCost && left.unavailableReason === right.unavailableReason && left.name === right.name && left.description === right.description && left.type === right.type && left.rarity === right.rarity && left.artTexture === right.artTexture;
+  return left.cost === right.cost && left.energyCost === right.energyCost && left.manaCost === right.manaCost && left.unavailableReason === right.unavailableReason && left.name === right.name && left.description === right.description && left.damage === right.damage && left.baseDamage === right.baseDamage && left.type === right.type && left.rarity === right.rarity && left.artTexture === right.artTexture;
 }
 function getVisibleResourceCost(cost) {
   return cost !== void 0 && Number.isFinite(cost) && cost > 0 ? cost : void 0;
@@ -74653,6 +74875,133 @@ function isCanvasImage(resource) {
   return typeof HTMLImageElement !== "undefined" && resource instanceof HTMLImageElement || typeof HTMLCanvasElement !== "undefined" && resource instanceof HTMLCanvasElement || typeof ImageBitmap !== "undefined" && resource instanceof ImageBitmap || typeof OffscreenCanvas !== "undefined" && resource instanceof OffscreenCanvas;
 }
 
+// src/status-effects-view.ts
+init_lib();
+
+// src/status-icon.ts
+init_lib();
+var StatusIcon = class extends GamePanel {
+  /**
+   * Creates a compact status presentation surface.
+   */
+  constructor(content, compact = false) {
+    super({ width: compact ? 27 : 52, height: 28 });
+    this.compact = compact;
+    this.status = normalizeContent(content);
+    this.iconLabel.anchor.set(0.5);
+    this.content.addChild(this.iconLabel, this.stackLabel);
+    this.redrawContent();
+  }
+  compact;
+  iconLabel = new Text({ text: "", style: getUiTextStyle("Button") });
+  stackLabel = new Text({ text: "", style: getUiTextStyle("Caption") });
+  status;
+  /**
+   * Gets the current semantic status data.
+   */
+  get value() {
+    return this.status;
+  }
+  /**
+   * Reconciles the status label and stack count without replacing the display tree.
+   */
+  setValue(content) {
+    this.status = normalizeContent(content);
+    this.redrawContent();
+  }
+  redrawContent() {
+    this.iconLabel.text = this.status.icon;
+    this.iconLabel.style.fontSize = this.compact ? 17 : 20;
+    this.iconLabel.position.set(this.compact ? 10 : uiTokens.spacing.md, this.compact ? 11 : 14);
+    this.stackLabel.text = this.compact || this.status.stacks !== 0 && this.status.stacks !== 1 ? String(this.status.stacks) : "";
+    this.stackLabel.style.fontSize = this.compact ? 10 : 12;
+    this.stackLabel.position.set(this.compact ? 17 : 28, this.compact ? 15 : uiTokens.spacing.sm);
+  }
+};
+function normalizeContent(content) {
+  return {
+    icon: content.icon,
+    name: content.name,
+    stacks: Number.isFinite(content.stacks) ? Math.trunc(content.stacks) : 0
+  };
+}
+
+// src/status-effects-view.ts
+var statusEffectSymbols = {
+  Vulnerable: "\u25C7",
+  Weak: "\u2198",
+  Bleed: "\u2665",
+  Poison: "\u2620",
+  Shock: "\u03DF",
+  Chill: "\u2744",
+  Stealth: "\u25D0",
+  Frail: "\u25B1",
+  Slow: "\u231B",
+  Heavy: "\u2693",
+  Fatigue: "\u263E",
+  Intangible: "\u25CC",
+  Attack: "\u2694",
+  Reflect: "\u21A9",
+  "Next Turn Energy": "\u2197",
+  "Energy Leech": "\u2296",
+  Stunned: "\u2738",
+  Ritual: "\u2726"
+};
+var StatusEffectsView = class extends Container {
+  icons = [];
+  overflow = new Text({ text: "", style: { ...uiTokens.typography.caption, fontSize: 12 } });
+  tooltip = new Tooltip({ text: "", width: 220, height: 64, placement: "above" });
+  stateKey = "";
+  constructor() {
+    super();
+    this.addChild(this.overflow, this.tooltip);
+  }
+  /** Reconciles compact visible effects, retaining inspectable names for every hidden stack. */
+  update(entity) {
+    const statuses = [...entity.statuses, ...entity.rituals.map((ritual) => ({ name: `Ritual: ${ritual.name}`, stacks: 1 }))];
+    const key = JSON.stringify(statuses);
+    if (key === this.stateKey) return;
+    this.stateKey = key;
+    this.tooltip.hide();
+    const visible = statuses.slice(0, statuses.length > 6 ? 5 : 6);
+    visible.forEach((status, index) => {
+      const content = { name: status.name, stacks: status.stacks, icon: statusEffectSymbols[status.name] ?? (status.name.startsWith("Ritual:") ? "\u2726" : "\u2022") };
+      let icon = this.icons[index];
+      if (!icon) {
+        icon = new StatusIcon(content, true);
+        this.icons.push(icon);
+        this.addChild(icon);
+      }
+      icon.setValue(content);
+      icon.position.set(index * 28 - visible.length * 14, 0);
+      icon.visible = true;
+      icon.eventMode = "static";
+      icon.removeAllListeners("pointerover");
+      icon.removeAllListeners("pointerout");
+      icon.on("pointerover", () => this.showTooltip(`${status.name}: ${status.stacks}`));
+      icon.on("pointerout", () => this.tooltip.hide());
+    });
+    this.icons.slice(visible.length).forEach((icon) => {
+      icon.visible = false;
+    });
+    this.overflow.visible = statuses.length > visible.length;
+    this.overflow.text = `+${statuses.length - visible.length}`;
+    this.overflow.position.set(visible.length * 14 + 2, 7);
+    this.overflow.eventMode = "static";
+    this.overflow.removeAllListeners("pointerover");
+    this.overflow.removeAllListeners("pointerout");
+    this.overflow.on("pointerover", () => this.showTooltip(statuses.slice(visible.length).map((status) => `${status.name}: ${status.stacks}`).join(" \xB7 ")));
+    this.overflow.on("pointerout", () => this.tooltip.hide());
+    this.addChild(this.tooltip);
+  }
+  /** Positions the effect explanation above its row in the scene's coordinate system. */
+  showTooltip(text) {
+    this.tooltip.setText(text);
+    this.tooltip.resize(220, Math.max(54, Math.ceil(text.length / 25) * 19 + 16));
+    this.tooltip.show({ x: -84, y: 0, width: 168, height: 28 });
+  }
+};
+
 // src/encounter-scene.ts
 var supportedAnimationNames = /* @__PURE__ */ new Set([
   "wait",
@@ -74767,6 +75116,7 @@ var EncounterScene = class {
   focusedEntryId;
   focusedEntityId;
   activeDrag;
+  aimedEntityId;
   ignoredPointerTapEntryId;
   releasedDragPositions = /* @__PURE__ */ new Map();
   dragReturns = /* @__PURE__ */ new Map();
@@ -75171,6 +75521,16 @@ var EncounterScene = class {
         this.handleEntitySelection(entity.id);
       }
     });
+    tile.container.removeAllListeners("pointerover");
+    tile.container.removeAllListeners("pointerout");
+    tile.container.on("pointerover", () => {
+      this.aimedEntityId = entity.id;
+      this.refreshSelectionHighlights();
+    });
+    tile.container.on("pointerout", () => {
+      if (this.aimedEntityId === entity.id) this.aimedEntityId = void 0;
+      this.refreshSelectionHighlights();
+    });
   }
   /** Separates combat labels from the battlefield figures on roomy canvases. */
   drawEntityPresentation(tile, entity, position) {
@@ -75227,6 +75587,7 @@ var EncounterScene = class {
     tile.detail.position.set(48, -35);
     tile.defenses.position.set(0, -18);
     tile.effects.position.set(0, 1);
+    tile.statusIcons.position.set(0, -10);
     tile.description.position.set(0, 56);
     tile.healthBar.position.set(0, 21);
     tile.postureBar.position.set(0, 18);
@@ -75248,12 +75609,14 @@ var EncounterScene = class {
     tile.description.visible = !entity.isPlayer;
     tile.detail.text = entity.isPlayer ? "" : `${entity.health} / ${entity.maxHealth}`;
     tile.defenses.text = entity.isPlayer ? "" : `Block ${entity.block}${entity.maxPosture > 0 ? `  \xB7  Posture ${entity.posture}/${entity.maxPosture}` : ""}`;
-    tile.effects.text = formatEntityEffects(entity);
+    tile.effects.visible = false;
+    tile.statusIcons.update(entity);
     tile.title.position.set(0, -80);
     tile.detail.position.set(48, -56);
     tile.defenses.position.set(0, -37);
     tile.description.position.set(0, artY + artHeight / 2 + 14);
     tile.effects.position.set(0, entity.isPlayer ? artY + artHeight / 2 + 10 : -14);
+    tile.statusIcons.position.set(0, entity.isPlayer ? artY + artHeight / 2 + 10 : -24);
     tile.healthBar.position.set(0, 0);
     tile.postureBar.position.set(0, 0);
     this.drawMeter(tile.healthBar, entity.health, entity.maxHealth, -78, -60, 84, 8, uiTokens.color.health);
@@ -75342,7 +75705,9 @@ var EncounterScene = class {
     effects.position.set(0, 38);
     container.addChild(background, targetHighlight, artwork, accent, title, description, detail, healthBar, postureBar, effects, defenses);
     layer.addChild(container);
-    const tile = { container, background, accent, targetHighlight, artwork, title, description, detail, effects, healthBar, postureBar, defenses };
+    const statusIcons = new StatusEffectsView();
+    container.addChild(statusIcons);
+    const tile = { container, background, accent, targetHighlight, artwork, title, description, detail, effects, statusIcons, healthBar, postureBar, defenses };
     tiles.set(id, tile);
     return tile;
   }
@@ -75476,6 +75841,7 @@ var EncounterScene = class {
     }
     drag.state = "dragging";
     const target = this.findDropTarget(position, drag.entry);
+    this.aimedEntityId = target?.id;
     if (isCardPresentationState2(drag.entry)) {
       applyTransform(drag.tile.container, this.getDraggedCardTransform(drag));
       this.drawDragAimArrow(drag, position, target);
@@ -75607,7 +75973,8 @@ var EncounterScene = class {
     cardView.position.set(-handCardVisualSize.width / 2, -handCardVisualSize.height / 2);
     cardView.scale.set(handCardViewScale);
     tile.container.removeAllListeners();
-    tile.container.removeChild(tile.background, tile.accent, tile.targetHighlight, tile.artwork, tile.title, tile.description, tile.detail, tile.healthBar, tile.postureBar, tile.effects, tile.defenses);
+    tile.container.removeChild(tile.background, tile.accent, tile.targetHighlight, tile.artwork, tile.title, tile.description, tile.detail, tile.healthBar, tile.postureBar, tile.effects, tile.defenses, tile.statusIcons);
+    tile.statusIcons.destroy({ children: true });
     tile.targetHighlight.destroy({ children: true });
     tile.defenses.destroy();
     tile.artwork.destroy();
@@ -75632,7 +75999,10 @@ var EncounterScene = class {
       energyCost: entry.energyCost,
       manaCost: entry.manaCost,
       name: entry.name,
-      description: formatCardDescription(entry.description, entry.unavailableReason),
+      description: withTargetDamage(entry.description, this.getPreviewDamage(entry)) + (entry.unavailableReason ? `
+${entry.unavailableReason}` : ""),
+      damage: this.getPreviewDamage(entry),
+      baseDamage: entry.baseDamage ?? void 0,
       type: entry.cardType,
       rarity: toCardViewRarity(entry.rarity),
       ...tile.cardArtwork === void 0 ? {} : { artTexture: tile.cardArtwork }
@@ -75777,6 +76147,7 @@ var EncounterScene = class {
   }
   releaseActiveDrag(clearSelection = true) {
     this.activeDrag = void 0;
+    this.aimedEntityId = void 0;
     this.hideDragAimArrow();
     const previousSelectedTileId = clearSelection ? this.getSelectedHandTileId() : void 0;
     if (clearSelection) {
@@ -76278,6 +76649,7 @@ var EncounterScene = class {
       const entry = this.selectableEntries.get(entryId);
       tile.background.tint = entry && !isCardPresentationState2(entry) ? entryId === this.focusedEntryId ? uiTokens.color.focus : entryId === this.selectedEntryId ? uiTokens.color.selected : 16777215 : 16777215;
       if (entry && isCardPresentationState2(entry) && tile.cardView) {
+        this.updateCardView(tile, entry, entry.isQueued || this.queuedEntryIds.has(entry.id));
         tile.cardView.setInteractionState({
           enabled: this.isEntryInteractive(id, entry),
           focused: entryId === this.focusedEntryId,
@@ -76294,8 +76666,15 @@ var EncounterScene = class {
     }
   }
   /**
-   * Determines whether a pointer release can commit an entry without treating untargeted cards as failed drops.
+   * Reads an authoritative target preview for the selected card without calculating gameplay in JavaScript.
    */
+  getPreviewDamage(entry) {
+    const targetId = this.aimedEntityId ?? this.focusedEntityId;
+    const target = targetId ? this.entities.get(targetId) : void 0;
+    const targeting = this.getTargetingEntry();
+    return targeting?.id === entry.id && target && this.isValidTarget(entry.targetMode, target) ? entry.targetDamage?.[target.id] ?? entry.damage ?? void 0 : entry.damage ?? void 0;
+  }
+  /** Determines whether the current pointer target accepts the selected entry. */
   isValidDrop(entry, entity) {
     if (entry.targetMode === "none") {
       return true;
@@ -76823,15 +77202,6 @@ function formatEntityTelegraph(telegraph) {
     return "";
   }
   return telegraph.replace(/^Intent:\s*/i, "").replace(/\s+damage\b/i, "").trim();
-}
-function formatEntityEffects(entity) {
-  const visibleStatuses = entity.statuses.slice(0, 3);
-  const statuses = visibleStatuses.map((status) => `${status.name} ${status.stacks}`);
-  if (entity.statuses.length > visibleStatuses.length) {
-    statuses.push(`+${entity.statuses.length - visibleStatuses.length} statuses`);
-  }
-  const rituals = entity.rituals.map((ritual) => `Ritual: ${ritual.name}`);
-  return [...statuses, ...rituals].join(" \xB7 ");
 }
 function toCardViewRarity(rarity) {
   return rarity === "Uncommon" || rarity === "Rare" || rarity === "Special" ? rarity : "Common";
@@ -77618,7 +77988,7 @@ function isRewardPresentationSnapshot(value) {
   return isRecord3(value) && value.protocolVersion === rewardRendererProtocolVersion && value.sceneId === rewardSceneId && isFiniteNumber3(value.sequence) && isString3(value.title) && isFiniteNumber3(value.currency) && typeof value.canSkip === "boolean" && isArrayOf2(value.choices, isRewardChoicePresentationState);
 }
 function isRewardChoicePresentationState(value) {
-  return isRecord3(value) && isString3(value.id) && isString3(value.kind) && isString3(value.name) && isString3(value.description) && isString3(value.image) && isString3(value.rarity) && typeof value.isAvailable === "boolean" && isOptionalCost(value.cardEnergyCost) && isOptionalCost(value.cardManaCost) && (value.options === void 0 || value.options === null || isArrayOf2(value.options, isRewardChoicePresentationState));
+  return isRecord3(value) && isString3(value.id) && isString3(value.kind) && isString3(value.name) && isString3(value.description) && isString3(value.image) && isString3(value.rarity) && typeof value.isAvailable === "boolean" && isOptionalCost(value.cardEnergyCost) && isOptionalCost(value.cardManaCost) && (value.cardType === void 0 || value.cardType === null || isString3(value.cardType)) && (value.options === void 0 || value.options === null || isArrayOf2(value.options, isRewardChoicePresentationState));
 }
 function isRecord3(value) {
   return typeof value === "object" && value !== null;
@@ -77728,7 +78098,7 @@ var RewardScene = class {
     }
     this.currency.setValue(candidate.currency);
     this.reconcileChoices(candidate.choices);
-    this.reconcileSelection(candidate.choices);
+    this.reconcileSelection(candidate.choices, firstSnapshot);
     this.layout();
     this.updateInteractivity();
     this.onAccessibleStateChanged();
@@ -77846,9 +78216,9 @@ var RewardScene = class {
       view.setRevealProgress(getRevealProgress(this.revealElapsedMs, this.choiceSlots.get(choice.id) ?? 0, this.reducedMotion));
     });
   }
-  reconcileSelection(choices) {
+  reconcileSelection(choices, firstSnapshot) {
     const selected = this.selectedReward === void 0 ? void 0 : choices.find((choice) => choice.id === this.selectedReward?.id);
-    this.selectedReward = selected ?? (choices.length === 1 && (choices[0]?.options?.length ?? 0) > 0 ? choices[0] : void 0);
+    this.selectedReward = selected ?? (firstSnapshot && choices.length === 1 && (choices[0]?.options?.length ?? 0) > 0 ? choices[0] : void 0);
     const selectedChoice = this.selectedReward;
     this.selectedOption = selectedChoice?.options?.find((option) => option.id === this.selectedOption?.id && option.isAvailable) ?? selectedChoice?.options?.find((option) => option.isAvailable);
     this.refreshInspection();
@@ -78307,7 +78677,7 @@ var RewardOptionView = class extends Container {
         manaCost: choice.cardManaCost ?? 0,
         name: choice.name,
         description: choice.description,
-        type: "Reward",
+        type: choice.cardType ?? "Attack",
         rarity: toCardRarity(choice.rarity),
         enabled: choice.isAvailable,
         width: 180,
@@ -78336,7 +78706,7 @@ var RewardOptionView = class extends Container {
   setChoice(choice) {
     this.choice = choice;
     if (this.card !== void 0) {
-      this.card.setContent({ cost: "", energyCost: choice.cardEnergyCost ?? 0, manaCost: choice.cardManaCost ?? 0, name: choice.name, description: choice.description, type: "Reward", rarity: toCardRarity(choice.rarity), ...this.artTexture ? { artTexture: this.artTexture } : {} });
+      this.card.setContent({ cost: "", energyCost: choice.cardEnergyCost ?? 0, manaCost: choice.cardManaCost ?? 0, name: choice.name, description: choice.description, type: choice.cardType ?? "Attack", rarity: toCardRarity(choice.rarity), ...this.artTexture ? { artTexture: this.artTexture } : {} });
     }
     if (this.relic !== void 0) {
       this.relic.setValue({ icon: choice.kind === "relic" ? "\u25C6" : "\u2022", name: choice.name, description: choice.description });
