@@ -74278,6 +74278,7 @@ var CardView = class extends Container {
       ...this.componentState.interaction,
       reducedMotion: this.componentState.reducedMotion
     });
+    if (this.cardWidth === normalizedSize.size.width && this.cardHeight === normalizedSize.size.height) return;
     this.componentState = normalizedSize;
     this.cardWidth = normalizedSize.size.width;
     this.cardHeight = normalizedSize.size.height;
@@ -74301,6 +74302,7 @@ var CardView = class extends Container {
    * Updates reduced-motion presentation without changing card content or interaction state.
    */
   setReducedMotion(reducedMotion) {
+    if (this.componentState.reducedMotion === reducedMotion) return;
     this.componentState = createUiComponentPresentationState({
       size: this.componentState.size,
       ...this.componentState.interaction,
@@ -74785,7 +74787,7 @@ function formatPinnedRelics(relics) {
 // src/character-outline.ts
 init_lib();
 var CharacterOutline = class extends Container {
-  silhouettes = Array.from({ length: 36 }, () => new Sprite(Texture.EMPTY));
+  silhouettes = [];
   fallback = new Graphics();
   sourceTexture;
   outlineTexture;
@@ -74794,14 +74796,11 @@ var CharacterOutline = class extends Container {
     super();
     this.eventMode = "none";
     this.visible = false;
-    for (const sprite of this.silhouettes) {
-      sprite.anchor.set(0.5);
-      this.addChild(sprite);
-    }
     this.addChild(this.fallback);
   }
   /** Matches the current artwork, including asynchronous loads and responsive resizing. */
   show(artwork, color, thickness, opacity) {
+    this.ensureSilhouettes(36);
     this.updateSilhouetteTexture(artwork.texture, color);
     this.visible = true;
     this.alpha = opacity;
@@ -74823,6 +74822,7 @@ var CharacterOutline = class extends Container {
   }
   /** Flashes one translucent silhouette so overlapping outline copies cannot wash out the artwork. */
   showFlash(artwork, opacity) {
+    this.ensureSilhouettes(1);
     this.updateSilhouetteTexture(artwork.texture, 16777215);
     this.visible = artwork.visible;
     this.alpha = opacity;
@@ -74846,6 +74846,18 @@ var CharacterOutline = class extends Container {
     this.outlineTexture?.destroy(true);
     this.outlineTexture = void 0;
     super.destroy(options);
+  }
+  /** Allocates only the sprite count needed by the effect, retaining it for subsequent frames. */
+  ensureSilhouettes(count2) {
+    if (this.silhouettes.length >= count2) return;
+    this.removeChild(this.fallback);
+    while (this.silhouettes.length < count2) {
+      const sprite = new Sprite(Texture.EMPTY);
+      sprite.anchor.set(0.5);
+      this.silhouettes.push(sprite);
+      this.addChild(sprite);
+    }
+    this.addChild(this.fallback);
   }
   /** Recolors alpha once per artwork/color rather than multiplying its original RGB colors. */
   updateSilhouetteTexture(texture, color) {
@@ -78829,7 +78841,7 @@ var RewardOptionView = class extends Container {
         manaCost: choice.cardManaCost ?? 0,
         name: choice.name,
         description: choice.description,
-        type: choice.cardType ?? "Attack",
+        type: choice.cardType ?? "Card",
         rarity: toCardRarity(choice.rarity),
         enabled: choice.isAvailable,
         width: 180,
@@ -78858,7 +78870,7 @@ var RewardOptionView = class extends Container {
   setChoice(choice) {
     this.choice = choice;
     if (this.card !== void 0) {
-      this.card.setContent({ cost: "", energyCost: choice.cardEnergyCost ?? 0, manaCost: choice.cardManaCost ?? 0, name: choice.name, description: choice.description, type: choice.cardType ?? "Attack", rarity: toCardRarity(choice.rarity), ...this.artTexture ? { artTexture: this.artTexture } : {} });
+      this.card.setContent({ cost: "", energyCost: choice.cardEnergyCost ?? 0, manaCost: choice.cardManaCost ?? 0, name: choice.name, description: choice.description, type: choice.cardType ?? "Card", rarity: toCardRarity(choice.rarity), ...this.artTexture ? { artTexture: this.artTexture } : {} });
     }
     if (this.relic !== void 0) {
       this.relic.setValue({ icon: choice.kind === "relic" ? "\u25C6" : "\u2022", name: choice.name, description: choice.description });
@@ -82417,6 +82429,7 @@ async function createCollectionRenderer(canvas, sink) {
   let rowOffsets = [];
   let rowHeights = [];
   let totalRowHeight = 0;
+  let scrollLayout;
   const destroyChildren = (layer) => {
     for (const child of layer.removeChildren()) child.destroy({ children: true });
   };
@@ -82540,6 +82553,7 @@ async function createCollectionRenderer(canvas, sink) {
     });
   };
   const layoutEntry = (child, index, plan, listWidth) => {
+    child.position.set(0, 0);
     const y2 = plan.listTop + (rowOffsets[index] ?? 0) - scrollOffset;
     const [name, detail, description] = child.children.filter((entry) => entry instanceof Text);
     const image = child.children.find((entry) => entry instanceof Sprite);
@@ -82668,6 +82682,7 @@ async function createCollectionRenderer(canvas, sink) {
     close.position.set(contentWidth - 124, plan.closeY);
     layoutTabs(contentWidth, plan);
     layoutEntries(plan, listWidth);
+    scrollLayout = { plan, listWidth };
     layoutDetails(contentWidth, contentHeight, plan);
     if (cardGrid) {
       details.visible = false;
@@ -82679,8 +82694,24 @@ async function createCollectionRenderer(canvas, sink) {
     return Boolean(entries?.length && entries.every((entry) => entry.kind === "card"));
   };
   const scroll = (amount) => {
+    const previousOffset = scrollOffset;
     scrollOffset = Math.max(0, Math.min(Math.max(0, totalRowHeight - viewportHeight), scrollOffset + amount));
-    layout();
+    if (previousOffset === scrollOffset || !scrollLayout) return;
+    const { plan, listWidth } = scrollLayout;
+    const delta = previousOffset - scrollOffset;
+    entriesLayer.children.forEach((child, index) => {
+      child.y += delta;
+      const y2 = plan.listTop + (rowOffsets[index] ?? 0) - scrollOffset;
+      child.visible = y2 + (rowHeights[index] ?? 76) >= plan.listTop && y2 < plan.listTop + viewportHeight;
+    });
+    entriesFade.setViewport({
+      x: 20,
+      y: plan.listTop,
+      width: listWidth,
+      height: viewportHeight,
+      top: scrollOffset > 0,
+      bottom: scrollOffset < Math.max(0, totalRowHeight - viewportHeight)
+    }, content);
   };
   const wheel = (event) => {
     scrollMotion.stop();
