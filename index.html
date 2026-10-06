@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>DDGame</title>
+    <title>Game</title>
 
     <!-- Hosted at the root of dd-game.hmason55.dev -->
     <base href="/" />
@@ -31,20 +31,11 @@
 
     <div id="app" class="content">
         <div id="loading-container" class="loading-container" role="status" aria-live="polite" aria-busy="true">
-            <div class="loading-emblem" aria-hidden="true">
-                <span class="loading-orbit"></span>
-                <span class="loading-card loading-card-left"></span>
-                <span class="loading-card loading-card-center"></span>
-                <span class="loading-card loading-card-right"></span>
-                <span class="loading-spark"></span>
-            </div>
-            <p class="loading-eyebrow">BEYOND THE VEIL</p>
-            <h1 class="loading-title">The Fold awaits</h1>
-            <p id="loading-message" class="loading-message">Opening the way…</p>
+            <div class="loading-mark" aria-hidden="true"></div>
+            <p id="loading-message" class="loading-message">Loading…</p>
             <div class="loading-progress" aria-hidden="true">
                 <div class="loading-bar"></div>
             </div>
-            <p class="loading-caption">A journey written in cards.</p>
         </div>
     </div>
 
@@ -56,7 +47,7 @@
 
     <script>
         (function () {
-            const WARNING_TEXT = "DDGame couldn't load because required scripts were blocked.";
+            const WARNING_TEXT = "This page couldn't load because required scripts were blocked.";
             const INSTRUCTIONS_TEXT = "Privacy tools such as Brave Shields or other script blockers can stop the app from loading. Please allow scripts for this site or temporarily disable the blocker, then reload.";
             const RECOVERY_STORAGE_FLAG = "__ddgRecoveryAttempted";
 

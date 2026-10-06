@@ -72892,15 +72892,22 @@ var ResourceCounter = class extends Container {
     this.resourceValue = options.value;
     let offsetX = 0;
     if (options.icon !== void 0) {
-      const iconText = new Text({ text: options.icon, style: getUiTextStyle("Button") });
-      this.addChild(iconText);
-      offsetX = 22;
+      const icon = typeof options.icon === "string" ? new Text({ text: options.icon, style: getUiTextStyle("Button") }) : options.icon;
+      icon.position.set(0, 2);
+      this.addChild(icon);
+      offsetX = 26;
     }
     const labelText = new Text({ text: options.label, style: getUiTextStyle("Body") });
     labelText.position.set(offsetX, 0);
-    this.valueText = new Text({ text: String(options.value), style: getUiTextStyle("Button") });
+    this.valueText = new Text({ text: String(options.value), style: getUiTextStyle("NumericResource") });
     const valueX = offsetX + (options.label && options.valueLayout === "inline" ? labelText.width + 8 : 0);
     this.valueText.position.set(options.valueOffsetX ?? valueX, options.valueLayout === "inline" ? 0 : 18);
+    if (options.valueLayout === "inline") {
+      labelText.anchor.set(0, 0.5);
+      labelText.position.set(offsetX, 12);
+      this.valueText.anchor.set(0, 0.5);
+      this.valueText.position.set(options.valueOffsetX ?? valueX, 12);
+    }
     if (options.label) {
       this.addChild(labelText);
     }
@@ -74656,6 +74663,50 @@ function getMotionIntensity(value, reducedMotion) {
 
 // src/run-hud.ts
 init_lib();
+
+// src/resource-icon.ts
+init_lib();
+function createResourceIcon(kind, color) {
+  const icon = new Graphics();
+  const polygon = (points) => {
+    icon.moveTo(points[0] ?? 0, points[1] ?? 0);
+    for (let index = 2; index < points.length; index += 2) icon.lineTo(points[index] ?? 0, points[index + 1] ?? 0);
+    icon.fill({ color });
+  };
+  switch (kind) {
+    case "health":
+      icon.moveTo(10, 19).bezierCurveTo(6, 15, 1, 11, 1, 6).bezierCurveTo(1, 0, 7, 0, 10, 5).bezierCurveTo(13, 0, 19, 0, 19, 6).bezierCurveTo(19, 11, 14, 15, 10, 19).fill({ color });
+      break;
+    case "block":
+      polygon([10, 1, 18, 4, 17, 12, 14, 16, 10, 19, 6, 16, 3, 12, 2, 4]);
+      icon.moveTo(10, 4).lineTo(10, 15).stroke({ color: 1186592, width: 1.5, alpha: 0.5 });
+      break;
+    case "currency":
+      icon.roundRect(1, 1, 18, 18, 9).stroke({ color, width: 2 });
+      icon.roundRect(8, 5, 4, 10, 1).fill({ color });
+      break;
+    case "deck":
+      icon.roundRect(5, 1, 13, 15, 2).stroke({ color, width: 1.5 });
+      icon.roundRect(1, 5, 13, 15, 2).fill({ color: 1845293 }).stroke({ color, width: 1.5 });
+      icon.moveTo(5, 10).lineTo(10, 10).moveTo(5, 13).lineTo(8, 13).stroke({ color, width: 1.5 });
+      break;
+    case "relic":
+      polygon([10, 0, 18, 7, 15, 15, 10, 20, 5, 15, 2, 7]);
+      icon.moveTo(10, 2).lineTo(10, 17).moveTo(3, 7).lineTo(17, 7).stroke({ color: 1186592, width: 1, alpha: 0.5 });
+      break;
+    case "stamina":
+      polygon([11, 0, 3, 11, 9, 11, 7, 20, 17, 7, 11, 7, 14, 0]);
+      break;
+    case "mana":
+      icon.moveTo(10, 0).lineTo(16, 9).bezierCurveTo(23, 20, -3, 24, 3, 11).lineTo(10, 0).fill({ color });
+      icon.moveTo(6, 12).lineTo(6, 15).lineTo(8, 17).stroke({ color: 15920868, width: 1.5, alpha: 0.7 });
+      break;
+  }
+  icon.eventMode = "none";
+  return icon;
+}
+
+// src/run-hud.ts
 var relicRailLimit = 24;
 var RunHud = class extends Container {
   constructor(requestRelicCollection) {
@@ -74669,33 +74720,36 @@ var RunHud = class extends Container {
     });
   }
   requestRelicCollection;
-  health = new ResourceCounter({ icon: "\u2665", label: "", value: "0/0", valueLayout: "inline" });
+  health = createHudCounter("health", uiTokens.color.health, "0/0");
   healthBar = new ProgressIndicator({ width: 64, height: 5, value: 0, maximum: 1, fill: uiTokens.color.health });
-  stamina = new ResourceCounter({ icon: "\u03DF", label: "", value: "0 / 0", valueLayout: "inline" });
-  mana = new ResourceCounter({ icon: "\u2726", label: "", value: "0 / 0", valueLayout: "inline" });
-  currency = new ResourceCounter({ icon: "\u25C6", label: "", value: 0, valueLayout: "inline" });
-  deck = new ResourceCounter({ icon: "\u25A3", label: "", value: 0, valueLayout: "inline" });
-  relics = new ResourceCounter({ icon: "\u2726", label: "Relics", value: 0, valueLayout: "inline" });
+  stamina = createHudCounter("stamina", uiTokens.color.stamina, "0 / 0");
+  mana = createHudCounter("mana", uiTokens.color.mana, "0 / 0");
+  currency = createHudCounter("currency", uiTokens.color.selected, 0);
+  deck = createHudCounter("deck", uiTokens.color.textMuted, 0);
+  relics = createHudCounter("relic", uiTokens.color.selected, 0);
   pinnedRelics = new Text({ text: "", style: getUiTextStyle("Caption") });
   turn = new Text({ text: "", style: getUiTextStyle("Body") });
-  block = new ResourceCounter({ icon: "\u25C7", label: "", value: 0, valueLayout: "inline" });
+  block = createHudCounter("block", uiTokens.color.block, 0);
   sceneTitle = new Text({ text: "", style: { ...getUiTextStyle("Caption"), letterSpacing: 3 } });
   frame = new Graphics();
   relicCollectionAvailable = false;
-  /** Makes the resource glyphs inspectable by hover and tap while retaining compact numeric pairs. */
+  /** Makes resource artwork inspectable by hover and tap while retaining compact numeric pairs. */
   bindResourceInspection(inspect, dismiss) {
-    for (const [counter, name, color] of [[this.stamina, "Stamina", uiTokens.color.stamina], [this.mana, "Mana", uiTokens.color.mana]]) {
-      const icon = counter.children[0];
-      if (icon instanceof Text) {
-        icon.style.fill = color;
-        icon.style.fontSize = 24;
-      }
+    for (const [counter, name] of [
+      [this.stamina, "Stamina"],
+      [this.mana, "Mana"],
+      [this.health, "Health"],
+      [this.block, "Block"],
+      [this.currency, "Gold"],
+      [this.deck, "Cards"],
+      [this.relics, "Relics"]
+    ]) {
       counter.eventMode = "static";
       counter.cursor = "help";
-      const show = (pinned) => inspect(`${name}: ${counter.value}`, { x: counter.x, y: counter.y, width: 88, height: 28 }, pinned);
+      const show = (pinned) => inspect(`${name}: ${counter.value}`, { x: counter.x, y: counter.y, width: counter.width || 88, height: 28 }, pinned);
       counter.on("pointerover", () => show(false));
       counter.on("pointerout", dismiss);
-      counter.on("pointertap", (event) => {
+      if (counter !== this.relics) counter.on("pointertap", (event) => {
         event.stopPropagation();
         show(true);
       });
@@ -74740,33 +74794,49 @@ var RunHud = class extends Container {
     const layout = calculateCombatLayout(viewport);
     const resourceY = short ? 44 : layout.regions.hand.y - 48;
     this.stamina.position.set(16, resourceY);
-    this.mana.position.set(portrait ? viewport.width - 88 : 144, resourceY);
+    const manaWidth = Math.max(72, this.mana.width || 0);
+    this.mana.position.set(portrait ? Math.max(16, viewport.width - 16 - manaWidth) : 144, resourceY);
     this.turn.position.set(portrait ? 16 : 240, portrait ? 44 : 38);
-    this.layoutHealth(portrait || short);
+    this.layoutRail(viewport);
     this.layoutMetadata(viewport, portrait, short);
-    this.frame.clear().roundRect(4, 4, Math.max(0, viewport.width - 8), 30, 3).stroke({ color: uiTokens.color.textMuted, width: 1, alpha: 0.65 });
+    this.frame.clear().roundRect(4, 4, Math.max(0, viewport.width - 8), 36, 4).stroke({ color: uiTokens.color.panelStroke, width: 1, alpha: 0.65 });
     this.frame.eventMode = "none";
   }
-  /** Keeps health and block together in the header on narrow and short canvases. */
-  layoutHealth(compact) {
-    const y2 = compact ? 8 : 38;
-    this.health.position.set(12, y2);
-    this.healthBar.position.set(34, y2 + 20);
-    this.block.position.set(120, y2);
+  /** Measures resource groups so changing counts cannot collide with neighboring icons. */
+  layoutRail(viewport) {
+    const gap = 12;
+    const healthWidth = Math.max(72, this.health.width || 0);
+    const blockWidth = this.block.visible ? (this.block.width || 40) + gap : 0;
+    this.health.position.set(12, 8);
+    this.healthBar.position.set(38, 32);
+    this.healthBar.resize(healthWidth - 26, 3);
+    this.block.position.set(12 + healthWidth + gap, 8);
+    const right = [this.currency, this.deck, this.relics];
+    right.forEach((counter) => {
+      counter.visible = true;
+    });
+    const width = (counter) => Math.max(36, counter.width || 0);
+    const groupWidth = () => right.filter((counter) => counter.visible).reduce((total, counter) => total + width(counter) + gap, -gap);
+    for (const optional of [this.currency, this.deck]) {
+      if (healthWidth + blockWidth + groupWidth() + gap > viewport.width - 24) optional.visible = false;
+    }
+    let x2 = viewport.width - 12 - groupWidth();
+    for (const counter of right.filter((counter2) => counter2.visible)) {
+      counter.position.set(x2, 8);
+      x2 += width(counter) + gap;
+    }
   }
   /** Fits collection counters and optional location details into the remaining header space. */
   layoutMetadata(viewport, portrait, short) {
-    this.currency.position.set(portrait ? 174 : viewport.width - 286, 8);
-    this.deck.position.set(viewport.width - 174, 8);
-    this.relics.position.set(viewport.width - 112, 8);
-    this.currency.visible = !portrait || viewport.width >= 420;
-    this.deck.visible = !portrait || viewport.width >= 360;
     this.pinnedRelics.visible = !portrait && !short && this.pinnedRelics.text.length > 0;
-    this.pinnedRelics.position.set(Math.max(8, viewport.width - 286), 38);
+    this.pinnedRelics.position.set(Math.max(8, viewport.width - 286), 44);
     this.sceneTitle.visible = !portrait && !short;
-    this.sceneTitle.position.set(16, 10);
+    this.sceneTitle.position.set(16, 44);
   }
 };
+function createHudCounter(kind, color, value) {
+  return new ResourceCounter({ icon: createResourceIcon(kind, color), label: "", value, valueLayout: "inline" });
+}
 function formatRelicRailCount(relicCount) {
   const normalizedCount = Math.max(0, Math.floor(relicCount));
   return normalizedCount >= relicRailLimit ? `${relicRailLimit}+` : normalizedCount;
@@ -82325,6 +82395,7 @@ function planCollectionLayout(width, height) {
   const compact = width < 700 || short;
   const listTop = short ? 96 : 108;
   return {
+    portrait: width <= 600 && height > width,
     compact,
     short,
     listTop,
@@ -82342,9 +82413,9 @@ function planCollectionDetailVisibility(plan, kind) {
   if (!plan.compact) return { compactDetail: false, details: true };
   return { compactDetail: kind === "card", details: kind !== "card" };
 }
-function planCollectionCardGrid(width, count2) {
+function planCollectionCardGrid(width, count2, portrait = false) {
   const gap = 12;
-  const columns = Math.max(1, Math.min(5, Math.floor((width + gap) / 172)));
+  const columns = portrait ? Math.max(1, Math.min(3, Math.floor((width + gap) / 76))) : Math.max(1, Math.min(5, Math.floor((width + gap) / 172)));
   const cardWidth = Math.min(220, (width - gap * (columns - 1)) / columns);
   const height = cardWidth * 252 / 180;
   return { columns, width: cardWidth, height, contentHeight: Math.max(0, Math.ceil(count2 / columns) * (height + gap) - gap) };
@@ -82584,7 +82655,7 @@ async function createCollectionRenderer(canvas, sink) {
     rowHeights = [];
     totalRowHeight = 0;
     if (isCardGrid()) {
-      const grid = planCollectionCardGrid(listWidth, entriesLayer.children.length);
+      const grid = planCollectionCardGrid(listWidth, entriesLayer.children.length, plan.portrait);
       entriesLayer.children.forEach((_child, index) => {
         rowOffsets[index] = Math.floor(index / grid.columns) * (grid.height + 12);
         rowHeights[index] = grid.height;
@@ -82602,7 +82673,7 @@ async function createCollectionRenderer(canvas, sink) {
   };
   const layoutEntries = (plan, listWidth) => {
     listMask.clear().rect(20, plan.listTop, listWidth, plan.viewportHeight).fill({ color: 16777215 });
-    const grid = planCollectionCardGrid(isCardGrid() ? listWidth : Math.min(220, listWidth), entriesLayer.children.length);
+    const grid = planCollectionCardGrid(isCardGrid() ? listWidth : Math.min(220, listWidth), entriesLayer.children.length, isCardGrid() && plan.portrait);
     entriesLayer.children.forEach((child, index) => {
       if (child instanceof CardView) {
         const y2 = plan.listTop + (rowOffsets[index] ?? 0) - scrollOffset;
