@@ -72411,6 +72411,17 @@ var noOpAccessibilityOverlay = {
   }
 };
 
+// src/item-view.ts
+function itemArtwork(name, image) {
+  if (image) return image;
+  if (name === "Throwing Knife") return "/img/Items/ThrowingKnife.svg";
+  if (name === "Healing Herb") return "/img/Items/HealingHerb.svg";
+  return "/img/Items/Supplies.svg";
+}
+function itemCardContent(name, description, uses) {
+  return { name, description: description + "\n" + uses, type: "Item", rarity: "Common", energyCost: 0, manaCost: 0 };
+}
+
 // src/scene-environment.ts
 var backgroundPattern = /^\/img\/Scenes\/locale-(?:(crossroads|ruins|grove|shore|depths|vault|observatory|threshold)-(travel|rest|shop)|(terrace|marsh|foundry|chamber)-(travel|rest|shop|event|treasure|boss))\.svg$/;
 function getSceneEnvironment(value) {
@@ -76224,22 +76235,18 @@ var EncounterScene = class {
   }
   updateHandTile(id, entry, position) {
     const isCard = isCardPresentationState2(entry);
-    const tile = isCard ? this.getOrCreateCardTile(id, entry) : this.getOrCreateTile(this.handTiles, id, this.handLayer);
-    const color = isCard ? getCardTypeColor(entry.cardType) : 4156503;
+    const tile = this.getOrCreateCardTile(id, entry);
     const isQueued = isCard && (entry.isQueued || this.queuedEntryIds.has(entry.id));
-    const secondaryText = isCard ? `${entry.cardType}  \u26A1 ${entry.energyCost}  \u2726 ${entry.manaCost}${isQueued ? "\nQueued" : ""}` : `${entry.uses} uses`;
-    if (isCard && tile.cardView) {
+    if (isCard) {
       this.updateCardView(tile, entry, isQueued);
-    } else {
-      tile.background.clear().roundRect(-54, -64, 108, 128, 8).fill({ color }).stroke({ color: isCard ? getRarityColor(entry.rarity) : 12179646, width: 3 });
-      tile.accent.clear().roundRect(-51, -61, 102, 7, 4).fill({ color: isCard ? getCharacterColor(entry.character) : 9425057 });
-      this.updateArtwork(tile, entry.image, 102, 116);
-      tile.title.text = entry.name;
-      tile.description.text = formatCardDescription(entry.description);
-      tile.detail.text = secondaryText;
-      tile.title.position.set(0, -35);
-      tile.description.position.set(0, 0);
-      tile.detail.position.set(0, 42);
+    } else if (tile.cardView) {
+      tile.cardView.setContent({
+        ...itemCardContent(entry.name, entry.description, entry.uses + (entry.uses === 1 ? " use" : " uses")),
+        ...tile.cardArtwork ? { artTexture: tile.cardArtwork } : {}
+      });
+      tile.cardView.setInteractionState({ enabled: this.isEntryInteractive(id, entry), focused: entry.id === this.focusedEntryId, selected: entry.id === this.selectedEntryId });
+      tile.cardView.setMotionState(this.getCardMotionState(id, entry.id));
+      this.updateCardArtwork(tile, itemArtwork(entry.name, entry.image));
     }
     tile.container.alpha = entry.isDraggable ? 1 : isQueued ? 0.72 : 0.52;
     if (!this.isEntryInteractionOwned(id, entry.id) && !this.isAnimationLocked(id) && !this.handLayoutTransitions.has(id)) {
@@ -76581,13 +76588,15 @@ var EncounterScene = class {
     const tile = this.getOrCreateTile(this.handTiles, id, this.handLayer);
     const cardView = new CardView({
       presentation: "hand",
-      energyCost: entry.energyCost,
-      manaCost: entry.manaCost,
-      name: entry.name,
-      description: formatCardDescription(entry.description),
-      type: entry.cardType,
-      rarity: toCardViewRarity(entry.rarity),
-      conditionalEffectActive: entry.isConditionalEffectActive === true,
+      ...isCardPresentationState2(entry) ? {
+        energyCost: entry.energyCost,
+        manaCost: entry.manaCost,
+        name: entry.name,
+        description: formatCardDescription(entry.description),
+        type: entry.cardType,
+        rarity: toCardViewRarity(entry.rarity),
+        conditionalEffectActive: entry.isConditionalEffectActive === true
+      } : itemCardContent(entry.name, entry.description, entry.uses + (entry.uses === 1 ? " use" : " uses")),
       width: handCardVisualSize.width / handCardViewScale,
       height: handCardVisualSize.height / handCardViewScale
     });
@@ -77363,7 +77372,7 @@ ${entry.unavailableReason}` : ""),
   }
   /** Opens the existing collection overlay at the authoritative relic inventory. */
   requestRelicCollection() {
-    if (this.inputReleased || this.intentPending || !this.latestSnapshot || this.latestSnapshot.relicCount <= 0) {
+    if (this.inputReleased || this.intentPending || !this.latestSnapshot) {
       return;
     }
     this.submitIntent({
@@ -77823,15 +77832,6 @@ function getDirection(fromX, fromY, toX, toY) {
   const y2 = toY - fromY;
   const length2 = Math.hypot(x2, y2);
   return length2 === 0 ? { x: 0, y: 0 } : { x: x2 / length2, y: y2 / length2 };
-}
-function getCardTypeColor(cardType) {
-  return cardType === "Attack" ? 7684680 : cardType === "Spell" ? 4084092 : cardType === "Skill" ? 4025181 : 5324911;
-}
-function getRarityColor(rarity) {
-  return rarity === "Rare" ? 16042333 : rarity === "Uncommon" ? 9032063 : 14148078;
-}
-function getCharacterColor(character) {
-  return character === "Hollowblade" ? 11623797 : character === "Gravetender" ? 7518106 : character === "Dredgecaller" ? 8745910 : character === "Oathbound" ? 13935439 : 8623272;
 }
 function toCardViewRarity(rarity) {
   return rarity === "Uncommon" || rarity === "Rare" || rarity === "Special" ? rarity : "Common";
@@ -78459,12 +78459,17 @@ function registerCollectionOverlayHost(host) {
 function getCollectionOverlayHost() {
   return activeHost?.canvas.isConnected ? activeHost : void 0;
 }
-function suspendRunControls(controls) {
+function suspendRunControls(controls, preserveResourceRail = false) {
   if (!controls) return () => void 0;
-  const wasInert = controls.inert;
-  controls.inert = true;
+  const targets = preserveResourceRail ? [...controls.querySelectorAll(":scope > :not(.pixi-run-resource-rail)")] : [controls];
+  const previous = targets.map((target) => target.inert);
+  targets.forEach((target) => {
+    target.inert = true;
+  });
   return () => {
-    controls.inert = wasInert;
+    targets.forEach((target, index) => {
+      target.inert = previous[index] ?? false;
+    });
   };
 }
 
@@ -79323,7 +79328,7 @@ var RewardChoiceView = class extends Container {
     this.redraw();
   }
   redraw() {
-    const accent = getRarityColor2(this.choice.rarity);
+    const accent = getRarityColor(this.choice.rarity);
     this.frame.clear().roundRect(0, 0, this.choiceWidth, this.choiceHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill }).stroke({ color: this.selected ? uiColors.buttonSelected : accent, width: this.selected ? 4 : uiTokens.frame.borderWidth });
     drawRewardIcon(this.rewardIcon, this.choice.kind, accent, this.choiceHeight);
     this.title.text = this.choice.name;
@@ -79472,7 +79477,7 @@ function getRevealProgress(elapsedMs, index, reducedMotion) {
   const delay = getMotionStagger(index, reducedMotion);
   return getMotionProgress(Math.max(0, elapsedMs - delay), getMotionDuration("standard", reducedMotion));
 }
-function getRarityColor2(rarity) {
+function getRarityColor(rarity) {
   switch (rarity) {
     case "Rare":
       return 14132535;
@@ -82926,6 +82931,7 @@ function planCollectionCardGrid(width, count2, portrait = false) {
   return { columns, width: cardWidth, height, contentHeight: Math.max(0, Math.ceil(count2 / columns) * (height + gap) - gap) };
 }
 function createCollectionCard(entry) {
+  if (entry.kind === "item") return new CardView({ presentation: "hand", ...itemCardContent(entry.name, entry.description, entry.detail), enabled: true });
   return new CardView({
     presentation: "hand",
     name: entry.name,
@@ -82937,12 +82943,21 @@ function createCollectionCard(entry) {
     enabled: true
   });
 }
+function planCollectionDashboard(width) {
+  const columns = Math.max(1, Math.min(3, Math.floor((width + 12) / 280)));
+  return { columns, width: (width - (columns - 1) * 12) / columns };
+}
 var fallbackRenderer;
+function planCollectionFallbackBounds(width, height, safeArea) {
+  const top = safeArea.top + 44;
+  const canvas = { x: 0, y: top, width, height: Math.max(1, height - top) };
+  return { canvas, content: planCollectionContentBounds(width, canvas.height, { ...safeArea, top: 0 }) };
+}
 async function acquireFallbackRenderer() {
   fallbackRenderer ??= (async () => {
     const fallbackCanvas = document.createElement("canvas");
     fallbackCanvas.className = "pixi-collection-fallback-canvas";
-    fallbackCanvas.style.cssText = "position:fixed;inset:0;width:100vw;height:100dvh;z-index:1399;display:none;touch-action:none";
+    fallbackCanvas.style.cssText = "position:fixed;inset:calc(44px + env(safe-area-inset-top)) 0 0;width:100vw;height:calc(100dvh - 44px - env(safe-area-inset-top));z-index:1399;display:none;touch-action:none";
     document.body.appendChild(fallbackCanvas);
     const application = new Application();
     try {
@@ -82967,7 +82982,7 @@ async function createCollectionRenderer(canvas, sink) {
   const inputCanvas = host?.canvas ?? fallback.canvas;
   const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const dialogElement = canvas.parentElement;
-  const restoreRunControls = suspendRunControls(document.querySelector(".pixi-run-controls-surface"));
+  const restoreRunControls = suspendRunControls(document.querySelector(".pixi-run-controls-surface"), true);
   dialogElement?.classList.add("shared-runtime");
   inputCanvas.tabIndex = 0;
   dialogElement?.focus({ preventScroll: true });
@@ -83016,12 +83031,12 @@ async function createCollectionRenderer(canvas, sink) {
     compactDetail.text = entry ? `${entry.name} \u2014 ${entry.description}` : "";
     if (!entry) return;
     if (isCardGrid()) return;
-    if (entry.kind === "card") {
+    if (entry.kind === "card" || entry.kind === "item") {
       const card = createCollectionCard(entry);
       details.addChild(card);
-      if (entry.image && isSafeImagePath(entry.image)) {
+      if (artworkPath(entry) && isSafeImagePath(artworkPath(entry))) {
         const currentGeneration = generation;
-        void Assets.load(entry.image).then((texture) => {
+        void Assets.load(artworkPath(entry)).then((texture) => {
           if (!disposed && currentGeneration === generation && !card.destroyed) card.setContent({ ...card.content, artTexture: texture });
         }).catch(() => void 0);
       }
@@ -83064,7 +83079,7 @@ async function createCollectionRenderer(canvas, sink) {
     if (!tab) return;
     empty.text = tab.entries.length === 0 ? "Nothing here yet." : "";
     tab.entries.forEach((entry, index) => {
-      if (entry.kind === "card") {
+      if (entry.kind === "card" || entry.kind === "item") {
         const face = createCollectionCard(entry);
         face.eventMode = "static";
         face.cursor = "pointer";
@@ -83072,9 +83087,9 @@ async function createCollectionRenderer(canvas, sink) {
           if (!suppressedTap) selectEntry(index);
         });
         entriesLayer.addChild(face);
-        if (entry.image && isSafeImagePath(entry.image)) {
+        if (artworkPath(entry) && isSafeImagePath(artworkPath(entry))) {
           const currentGeneration = generation;
-          void Assets.load(entry.image).then((texture) => {
+          void Assets.load(artworkPath(entry)).then((texture) => {
             if (!disposed && currentGeneration === generation && !face.destroyed) face.setContent({ ...face.content, artTexture: texture });
           }).catch(() => void 0);
         }
@@ -83088,7 +83103,7 @@ async function createCollectionRenderer(canvas, sink) {
         lineHeight: 22,
         wordWrap: true
       } });
-      const detail = new Text({ text: entry.detail, style: { ...uiTokens.typography.body, fill: 9425057 } });
+      const detail = new Text({ text: entry.detail, style: { ...uiTokens.typography.body, fill: 9425057, fontSize: 14, lineHeight: 19, wordWrap: true } });
       const description = new Text({ text: entry.description, style: {
         ...uiTokens.typography.body,
         fill: uiTokens.color.textMuted,
@@ -83096,6 +83111,11 @@ async function createCollectionRenderer(canvas, sink) {
         lineHeight: 19,
         wordWrap: true
       } });
+      if (tab.label === "Stats") {
+        description.style.fontSize = 28;
+        description.style.lineHeight = 34;
+        description.style.fill = 16113563;
+      }
       name.resolution = detail.resolution = description.resolution = 2;
       card.eventMode = "static";
       card.cursor = "pointer";
@@ -83103,11 +83123,11 @@ async function createCollectionRenderer(canvas, sink) {
         if (!suppressedTap) selectEntry(index);
       });
       card.addChild(name, detail, description);
-      if (entry.image && isSafeImagePath(entry.image)) {
+      if (artworkPath(entry) && isSafeImagePath(artworkPath(entry))) {
         const image = new Sprite(Texture.EMPTY);
         card.addChild(image);
         const currentGeneration = generation;
-        void Assets.load(entry.image).then((texture) => {
+        void Assets.load(artworkPath(entry)).then((texture) => {
           if (disposed || currentGeneration !== generation || image.destroyed) return;
           image.texture = texture;
           layout();
@@ -83128,13 +83148,16 @@ async function createCollectionRenderer(canvas, sink) {
       tab.position.set(20 + index * tabWidth, plan.tabY);
     });
   };
+  const isDashboard = () => ["Stats", "Training"].includes(state?.tabs[state.activeTabIndex]?.label ?? "");
   const layoutEntry = (child, index, plan, listWidth) => {
-    child.position.set(0, 0);
+    const grid = planCollectionDashboard(listWidth);
+    const tileWidth = isDashboard() ? grid.width : listWidth;
+    child.position.set(isDashboard() ? index % grid.columns * (grid.width + 12) : 0, 0);
     const y2 = plan.listTop + (rowOffsets[index] ?? 0) - scrollOffset;
     const [name, detail, description] = child.children.filter((entry) => entry instanceof Text);
     const image = child.children.find((entry) => entry instanceof Sprite);
     const textX = image ? 90 : 36;
-    const textWidth = Math.max(1, listWidth - (textX - 20) - 12);
+    const textWidth = Math.max(1, tileWidth - (textX - 20) - 12);
     for (const label of [name, detail, description]) if (label) label.style.wordWrapWidth = textWidth;
     const row = measureCollectionRow({
       name: name?.text ?? "",
@@ -83144,7 +83167,7 @@ async function createCollectionRenderer(canvas, sink) {
       detailHeight: detail?.height ?? 0,
       descriptionHeight: description?.height ?? 0
     }, textWidth);
-    child.clear().roundRect(20, y2, listWidth, row.height, 4).fill({ color: index === selectedIndex ? uiTokens.color.surfaceRaised : uiTokens.color.surface }).stroke({ color: index === selectedIndex ? uiTokens.color.selected : 4284778, width: 1 });
+    child.clear().roundRect(20, y2, tileWidth, row.height, 8).fill({ color: index === selectedIndex ? uiTokens.color.surfaceRaised : uiTokens.color.surface }).stroke({ color: isDashboard() ? detail?.text.startsWith("Unlocked") ? 9425057 : detail?.text.startsWith("Locked") ? 4284778 : 13280860 : index === selectedIndex ? uiTokens.color.selected : 4284778, width: 1 });
     name?.position.set(textX, y2 + 8);
     if (detail) {
       detail.visible = detail.text.length > 0;
@@ -83152,6 +83175,7 @@ async function createCollectionRenderer(canvas, sink) {
     }
     description?.position.set(textX, y2 + row.descriptionY);
     if (image instanceof Sprite) fitImage(image, 56, 56, 28, y2 + 10);
+    if (detail) detail.style.fill = detail.text.startsWith("Locked") ? uiTokens.color.textMuted : 9425057;
     rowHeights[index] = row.height;
     child.visible = y2 + row.height >= plan.listTop && y2 < plan.listTop + plan.viewportHeight;
   };
@@ -83160,7 +83184,7 @@ async function createCollectionRenderer(canvas, sink) {
     rowHeights = [];
     totalRowHeight = 0;
     if (isCardGrid()) {
-      const grid = planCollectionCardGrid(listWidth, entriesLayer.children.length, plan.portrait);
+      const grid = planCollectionCardGrid(listWidth, entriesLayer.children.length, plan.portrait && !isItemGrid());
       entriesLayer.children.forEach((_child, index) => {
         rowOffsets[index] = Math.floor(index / grid.columns) * (grid.height + 12);
         rowHeights[index] = grid.height;
@@ -83168,17 +83192,23 @@ async function createCollectionRenderer(canvas, sink) {
       totalRowHeight = grid.contentHeight;
       return;
     }
+    const columns = isDashboard() ? planCollectionDashboard(listWidth).columns : 1;
+    let rowHeight = 0;
     entriesLayer.children.forEach((child, index) => {
       rowOffsets[index] = totalRowHeight;
       if (child instanceof Graphics) layoutEntry(child, index, plan, listWidth);
       if (child instanceof CardView) rowHeights[index] = planCollectionCardGrid(Math.min(220, listWidth), 1).height;
-      totalRowHeight += (rowHeights[index] ?? 76) + 12;
+      rowHeight = Math.max(rowHeight, rowHeights[index] ?? 76);
+      if (index % columns === columns - 1 || index === entriesLayer.children.length - 1) {
+        totalRowHeight += rowHeight + 12;
+        rowHeight = 0;
+      }
     });
     totalRowHeight = Math.max(0, totalRowHeight - 12);
   };
   const layoutEntries = (plan, listWidth) => {
     listMask.clear().rect(20, plan.listTop, listWidth, plan.viewportHeight).fill({ color: 16777215 });
-    const grid = planCollectionCardGrid(isCardGrid() ? listWidth : Math.min(220, listWidth), entriesLayer.children.length, isCardGrid() && plan.portrait);
+    const grid = planCollectionCardGrid(isCardGrid() ? listWidth : Math.min(220, listWidth), entriesLayer.children.length, isCardGrid() && plan.portrait && !isItemGrid());
     entriesLayer.children.forEach((child, index) => {
       if (child instanceof CardView) {
         const y2 = plan.listTop + (rowOffsets[index] ?? 0) - scrollOffset;
@@ -83231,26 +83261,29 @@ async function createCollectionRenderer(canvas, sink) {
   };
   const layout = () => {
     if (disposed) return;
-    const width = host?.width() ?? Math.max(1, window.innerWidth);
-    const height = host?.height() ?? Math.max(1, window.innerHeight);
+    const safeArea = readCollectionSafeArea(inputCanvas);
+    const fallbackBounds = planCollectionFallbackBounds(Math.max(1, window.innerWidth), Math.max(1, window.innerHeight), safeArea);
+    const width = host?.width() ?? fallbackBounds.canvas.width;
+    const railHeight = host ? 44 : 0;
+    const height = host ? host.height() - railHeight : fallbackBounds.canvas.height;
     if (application && (rendererWidth !== width || rendererHeight !== height)) {
       application.renderer.resize(width, height);
       rendererWidth = width;
       rendererHeight = height;
     }
-    const bounds = planCollectionContentBounds(width, height, readCollectionSafeArea(inputCanvas));
-    const contentWidth = Math.max(1, bounds.width);
+    const bounds = host ? planCollectionContentBounds(width, height, safeArea) : fallbackBounds.content;
+    const contentWidth = Math.max(1, isDashboard() ? Math.min(1100, bounds.width) : bounds.width);
     const contentHeight = Math.max(1, bounds.height);
-    const cardGrid = isCardGrid();
+    const cardGrid = isCardGrid() || isDashboard();
     const basePlan = planCollectionLayout(contentWidth, contentHeight);
     const plan = cardGrid ? { ...basePlan, viewportHeight: Math.max(44, contentHeight - basePlan.listTop - (basePlan.short ? 16 : 72)) } : basePlan;
     const listWidth = cardGrid || plan.compact ? contentWidth - 40 : Math.max(240, contentWidth - 280);
     viewportHeight = plan.viewportHeight;
     measureEntries(plan, listWidth);
     scrollOffset = Math.min(scrollOffset, Math.max(0, totalRowHeight - viewportHeight));
-    background.clear().roundRect(0, 0, width, height, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill, alpha: 0.98 }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
+    background.clear().roundRect(0, railHeight, width, height, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill, alpha: 0.98 }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
     background.eventMode = "static";
-    content.position.set(bounds.x, bounds.y);
+    content.position.set(bounds.x + (bounds.width - contentWidth) / 2, bounds.y + railHeight);
     title.anchor.x = plan.short ? 0 : 0.5;
     title.position.set(plan.short ? 20 : contentWidth / 2, 12);
     empty.position.set(30, plan.listTop + 18);
@@ -83265,9 +83298,10 @@ async function createCollectionRenderer(canvas, sink) {
       compactDetail.visible = false;
     }
   };
+  const isItemGrid = () => state?.tabs[state.activeTabIndex]?.entries.every((entry) => entry.kind === "item") ?? false;
   const isCardGrid = () => {
     const entries = state?.tabs[state.activeTabIndex]?.entries;
-    return Boolean(entries?.length && entries.every((entry) => entry.kind === "card"));
+    return Boolean(entries?.length && entries.every((entry) => entry.kind === "card" || entry.kind === "item"));
   };
   const scroll = (amount) => {
     const previousOffset = scrollOffset;
@@ -83448,6 +83482,9 @@ function fitImage(sprite, width, height, x2, y2) {
   const scale = Math.min(width / sprite.texture.width, height / sprite.texture.height);
   sprite.scale.set(scale);
   sprite.position.set(x2 + (width - sprite.texture.width * scale) / 2, y2 + (height - sprite.texture.height * scale) / 2);
+}
+function artworkPath(entry) {
+  return entry.kind === "item" ? itemArtwork(entry.name, entry.image) : entry.image ?? "";
 }
 
 // src/pixi-menu-overlay.ts
