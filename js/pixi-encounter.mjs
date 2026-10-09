@@ -70226,13 +70226,13 @@ function isRelicPresentationState(value) {
   return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.description) && isString(value.image);
 }
 function isEntityStatusPresentationState(value) {
-  return isRecord(value) && isString(value.name) && isFiniteNumber(value.stacks);
+  return isRecord(value) && isString(value.name) && isFiniteNumber(value.stacks) && (value.description === void 0 || isString(value.description));
 }
 function isRitualPresentationState(value) {
   return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.image);
 }
 function isCardPresentationState(value) {
-  return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.description) && isString(value.image) && isString(value.cardType) && isString(value.rarity) && isString(value.character) && isCardTargetMode(value.targetMode) && isFiniteNumber(value.energyCost) && isFiniteNumber(value.manaCost) && typeof value.isDraggable === "boolean" && typeof value.isInteractionLocked === "boolean" && typeof value.isQueued === "boolean" && (value.unavailableReason === void 0 || value.unavailableReason === null || isString(value.unavailableReason)) && isOptionalNumber(value.baseDamage) && isOptionalNumber(value.damage) && (value.targetDamage === void 0 || value.targetDamage === null || isRecord(value.targetDamage) && Object.values(value.targetDamage).every(isFiniteNumber));
+  return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.description) && isString(value.image) && isString(value.cardType) && isString(value.rarity) && isString(value.character) && isCardTargetMode(value.targetMode) && isFiniteNumber(value.energyCost) && isFiniteNumber(value.manaCost) && typeof value.isDraggable === "boolean" && typeof value.isInteractionLocked === "boolean" && typeof value.isQueued === "boolean" && (value.unavailableReason === void 0 || value.unavailableReason === null || isString(value.unavailableReason)) && (value.isConditionalEffectActive === void 0 || typeof value.isConditionalEffectActive === "boolean") && isOptionalNumber(value.baseDamage) && isOptionalNumber(value.damage) && (value.targetDamage === void 0 || value.targetDamage === null || isRecord(value.targetDamage) && Object.values(value.targetDamage).every(isFiniteNumber));
 }
 function isOptionalNumber(value) {
   return value === void 0 || value === null || isFiniteNumber(value);
@@ -70975,6 +70975,7 @@ var ParticleEffectManager = class {
   }
   configureDisplay(display, options) {
     if (display instanceof Text) {
+      display.unload();
       display.text = options.text;
       display.style = createTextStyle(options);
     } else if (display instanceof Sprite && options.imageSrc) {
@@ -74497,6 +74498,7 @@ var CardView = class extends Container {
       statePresentation.overlayColor,
       statePresentation.outlineColor ?? "",
       this.playability,
+      this.cardContent.conditionalEffectActive === true,
       palette.accent
     ].join(":");
     if (this.statePresentationKey === presentationKey) {
@@ -74510,7 +74512,7 @@ var CardView = class extends Container {
       this.stateOverlay.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: statePresentation.overlayColor, alpha: statePresentation.overlayAlpha });
     }
     if (this.playability === "playable") {
-      this.playabilityOutline.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).stroke({ color: palette.accent, width: uiTokens.frame.borderWidth });
+      this.playabilityOutline.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).stroke({ color: this.cardContent.conditionalEffectActive ? 16766826 : palette.accent, width: this.cardContent.conditionalEffectActive ? 5 : uiTokens.frame.borderWidth });
     }
     if (statePresentation.outlineColor !== void 0) {
       this.stateOutline.roundRect(uiTokens.frame.selectedInset, uiTokens.frame.selectedInset, this.cardWidth - uiTokens.frame.selectedInset * 2, this.cardHeight - uiTokens.frame.selectedInset * 2, uiTokens.frame.selectedCornerRadius).stroke({ color: statePresentation.outlineColor, width: uiTokens.frame.borderWidth + 1 });
@@ -74527,6 +74529,7 @@ function isUsableCardTexture(texture) {
 }
 function toCardViewContent(options) {
   return {
+    ...options.conditionalEffectActive === void 0 ? {} : { conditionalEffectActive: options.conditionalEffectActive },
     ...options.cost === void 0 ? {} : { cost: options.cost },
     ...options.energyCost === void 0 ? {} : { energyCost: options.energyCost },
     ...options.manaCost === void 0 ? {} : { manaCost: options.manaCost },
@@ -74541,7 +74544,7 @@ function toCardViewContent(options) {
   };
 }
 function areCardContentsEqual(left, right) {
-  return left.cost === right.cost && left.energyCost === right.energyCost && left.manaCost === right.manaCost && left.unavailableReason === right.unavailableReason && left.name === right.name && left.description === right.description && left.damage === right.damage && left.baseDamage === right.baseDamage && left.type === right.type && left.rarity === right.rarity && left.artTexture === right.artTexture;
+  return left.conditionalEffectActive === right.conditionalEffectActive && left.cost === right.cost && left.energyCost === right.energyCost && left.manaCost === right.manaCost && left.unavailableReason === right.unavailableReason && left.name === right.name && left.description === right.description && left.damage === right.damage && left.baseDamage === right.baseDamage && left.type === right.type && left.rarity === right.rarity && left.artTexture === right.artTexture;
 }
 function getVisibleResourceCost(cost) {
   return cost !== void 0 && Number.isFinite(cost) && cost > 0 ? cost : void 0;
@@ -75086,7 +75089,7 @@ var StatusEffectsView = class extends Container {
   pinned = false;
   /** Reconciles compact visible effects, retaining inspectable names for every hidden stack. */
   update(entity) {
-    const statuses = [...entity.statuses, ...entity.rituals.map((ritual) => ({ name: `Ritual: ${ritual.name}`, stacks: 1 }))];
+    const statuses = [...entity.statuses, ...entity.rituals.map((ritual) => ({ name: `Ritual: ${ritual.name}`, stacks: 1, description: "" }))];
     const key = JSON.stringify(statuses);
     if (key === this.stateKey) return;
     this.stateKey = key;
@@ -75108,11 +75111,13 @@ var StatusEffectsView = class extends Container {
       icon.removeAllListeners("pointerover");
       icon.removeAllListeners("pointerout");
       icon.removeAllListeners("pointertap");
-      icon.on("pointerover", () => this.showTooltip(`${status.name}: ${status.stacks}`));
+      icon.on("pointerover", (event) => {
+        if (event?.pointerType !== "touch") this.showTooltip(`${status.name}: ${status.stacks}${status.description ? "\n" + status.description : ""}`);
+      });
       icon.on("pointerout", () => this.hideTooltip());
       icon.on("pointertap", (event) => {
         event.stopPropagation();
-        this.showTooltip(`${status.name}: ${status.stacks}`, true);
+        this.showTooltip(`${status.name}: ${status.stacks}${status.description ? "\n" + status.description : ""}`, true);
       });
     });
     this.icons.slice(visible.length).forEach((icon) => {
@@ -75125,11 +75130,13 @@ var StatusEffectsView = class extends Container {
     this.overflow.removeAllListeners("pointerover");
     this.overflow.removeAllListeners("pointerout");
     this.overflow.removeAllListeners("pointertap");
-    this.overflow.on("pointerover", () => this.showTooltip(statuses.slice(visible.length).map((status) => `${status.name}: ${status.stacks}`).join(" \xB7 ")));
+    this.overflow.on("pointerover", (event) => {
+      if (event?.pointerType !== "touch") this.showTooltip(statuses.slice(visible.length).map((status) => `${status.name}: ${status.stacks}${status.description ? "\n" + status.description : ""}`).join(" \xB7 "));
+    });
     this.overflow.on("pointerout", () => this.hideTooltip());
     this.overflow.on("pointertap", (event) => {
       event.stopPropagation();
-      this.showTooltip(statuses.slice(visible.length).map((status) => `${status.name}: ${status.stacks}`).join(" \xB7 "), true);
+      this.showTooltip(statuses.slice(visible.length).map((status) => `${status.name}: ${status.stacks}${status.description ? "\n" + status.description : ""}`).join(" \xB7 "), true);
     });
     this.addChild(this.tooltip);
   }
@@ -75331,6 +75338,7 @@ var EncounterScene = class {
   endingTurnPending = false;
   inputReleased = false;
   pendingIntentSequence;
+  itemIntentAwaitingResponse = false;
   pendingIntentMessage;
   rejectionFeedbackRemainingMs = 0;
   viewport;
@@ -75513,12 +75521,13 @@ var EncounterScene = class {
       return;
     }
     if (snapshot.sequence !== this.currentSequence || this.hasViewportChanged(viewport)) this.dismissInspection(true);
-    const shouldReleasePendingIntent = this.intentPending && this.pendingIntentSequence !== void 0 && snapshot.sequence > this.pendingIntentSequence;
+    const shouldReleasePendingIntent = this.intentPending && !this.itemIntentAwaitingResponse && this.pendingIntentSequence !== void 0 && snapshot.sequence > this.pendingIntentSequence;
     if (this.hasViewportChanged(viewport)) {
       this.resetTransientLayoutState();
       this.alignPagesToFocusedObjects(snapshot, viewport);
     }
     this.viewport = { width: viewport.width, height: viewport.height };
+    this.dismissInspection(true);
     this.latestSnapshot = snapshot;
     this.currentSequence = snapshot.sequence;
     this.backdrop.setTreatment(snapshot.sceneTreatmentId);
@@ -75903,14 +75912,12 @@ var EncounterScene = class {
     tile.container.removeAllListeners("pointerdown");
     tile.container.removeAllListeners("pointerover");
     tile.container.removeAllListeners("pointerout");
-    if (isInteractive) {
-      tile.container.on("pointertap", (event) => {
-        if (this.isPrimaryPointerTap(event)) {
-          this.handleEntrySelection(entry);
-        }
-      });
-      tile.container.on("pointerdown", (event) => this.beginDrag(entry, tile, event));
-    }
+    tile.container.on("pointertap", (event) => {
+      if (this.isPrimaryPointerTap(event)) {
+        this.handleEntrySelection(entry);
+      }
+    });
+    tile.container.on("pointerdown", (event) => this.beginDrag(entry, tile, event));
     if (isHoverable) {
       tile.container.on("pointerover", () => this.handleEntryHover(entry));
       tile.container.on("pointerout", () => this.handleEntryHoverEnd(entry));
@@ -76107,12 +76114,9 @@ var EncounterScene = class {
     drag.state = "dragging";
     const target = this.findDropTarget(position, drag.entry);
     this.aimedEntityId = target?.id;
-    if (isCardPresentationState2(drag.entry)) {
-      applyTransform(drag.tile.container, this.getDraggedCardTransform(drag));
-      this.drawDragAimArrow(drag, position, target);
-    } else {
-      drag.tile.container.position.set(position.x, position.y);
-    }
+    this.dismissInspection(true);
+    applyTransform(drag.tile.container, this.getDraggedCardTransform(drag));
+    this.drawDragAimArrow(drag, position, target);
     this.entryInteractionStates.set(getEntrySceneId(drag.entry), this.isValidDrop(drag.entry, target) ? "valid-drop" : "invalid-drop");
     this.refreshSelectionHighlights();
   }
@@ -76232,6 +76236,7 @@ var EncounterScene = class {
       description: formatCardDescription(entry.description),
       type: entry.cardType,
       rarity: toCardViewRarity(entry.rarity),
+      conditionalEffectActive: entry.isConditionalEffectActive === true,
       width: handCardVisualSize.width / handCardViewScale,
       height: handCardVisualSize.height / handCardViewScale
     });
@@ -76271,6 +76276,7 @@ ${entry.unavailableReason}` : ""),
       baseDamage: entry.baseDamage ?? void 0,
       type: entry.cardType,
       rarity: toCardViewRarity(entry.rarity),
+      conditionalEffectActive: entry.isConditionalEffectActive === true,
       ...tile.cardArtwork === void 0 ? {} : { artTexture: tile.cardArtwork }
     });
     cardView.setPlayability(this.isEntryInteractive(getEntrySceneId(entry), entry) && !isQueued ? "playable" : "unplayable");
@@ -76463,9 +76469,9 @@ ${entry.unavailableReason}` : ""),
   isEntryInteractive(tileId, entry) {
     return !this.inputReleased && entry.isDraggable && !(isCardPresentationState2(entry) && entry.isInteractionLocked) && !this.intentPending && !this.queuedEntryIds.has(entry.id) && !this.isEntryInteractionOwned(tileId, entry.id) && !this.isAnimationLocked(tileId);
   }
-  /** Determines whether a card may be visually inspected without accepting gameplay input. */
+  /** Determines whether a hand entry may be visually inspected without accepting gameplay input. */
   isEntryHoverable(tileId, entry) {
-    return !this.inputReleased && isCardPresentationState2(entry) && !this.isEntryInteractionOwned(tileId, entry.id) && !this.isAnimationLocked(tileId);
+    return !this.inputReleased && !this.isEntryInteractionOwned(tileId, entry.id) && !this.isAnimationLocked(tileId);
   }
   clearDragMotion(tileId) {
     this.releasedDragPositions.delete(tileId);
@@ -76528,7 +76534,7 @@ ${entry.unavailableReason}` : ""),
     const end = drag.entry.targetMode !== "none" && isValidDrop && targetTile ? { x: targetTile.container.x, y: targetTile.container.y } : pointerPosition;
     const start = {
       x: drag.tile.container.x,
-      y: drag.tile.container.y - 74 * drag.tile.container.scale.x
+      y: drag.tile.container.y - (isCardPresentationState2(drag.entry) ? 74 : 64) * drag.tile.container.scale.x
     };
     const direction = getDirection(start.x, start.y, end.x, end.y);
     const distance = Math.hypot(end.x - start.x, end.y - start.y);
@@ -76606,7 +76612,7 @@ ${entry.unavailableReason}` : ""),
    */
   getHandAreaTransform(tileId, position, tile) {
     const drag = this.activeDrag;
-    if (drag && getEntrySceneId(drag.entry) === tileId && isCardPresentationState2(drag.entry) && drag.state === "dragging") {
+    if (drag && getEntrySceneId(drag.entry) === tileId && drag.state === "dragging") {
       return this.getDraggedCardTransform(drag);
     }
     return this.isHandEntryInspected(tileId) ? this.getHandLayoutTransform(tileId, position) : captureTransform(tile.container);
@@ -77278,7 +77284,14 @@ ${entry.unavailableReason}` : ""),
         this.returnReleasedEntry(intent.kind, intent.sourceId);
         this.releasePendingIntent();
         this.showRejectedIntent();
-      } else if (intent.kind === "previewDeck" || intent.kind === "previewRelics") {
+      } else if (intent.kind === "useItem" || intent.kind === "previewDeck" || intent.kind === "previewRelics") {
+        if (intent.kind === "useItem") {
+          this.returnReleasedEntry(intent.kind, intent.sourceId);
+          this.selectedEntryId = void 0;
+          this.focusedEntityId = void 0;
+          this.itemIntentAwaitingResponse = false;
+          if (this.pendingIntentSequence === void 0 || this.currentSequence <= this.pendingIntentSequence) return;
+        }
         this.releasePendingIntent();
       }
     }).catch(() => {
@@ -77350,6 +77363,7 @@ ${entry.unavailableReason}` : ""),
     }
   }
   releasePendingIntent() {
+    this.itemIntentAwaitingResponse = false;
     this.intentPending = false;
     this.endingTurnPending = false;
     this.pendingIntentSequence = void 0;
@@ -77362,6 +77376,7 @@ ${entry.unavailableReason}` : ""),
    * Locks scene-wide input while a non-queued semantic action awaits its authoritative outcome.
    */
   beginPendingIntent(intent) {
+    this.itemIntentAwaitingResponse = intent.kind === "useItem";
     this.intentPending = true;
     this.endingTurnPending = intent.kind === "endTurn";
     this.rejectionFeedbackRemainingMs = 0;
@@ -77409,7 +77424,9 @@ ${entry.unavailableReason}` : ""),
     for (const tileId of [...this.releasedDragPositions.keys()]) {
       const separator = tileId.indexOf(":");
       const entryId = separator < 0 ? tileId : tileId.slice(separator + 1);
-      if (visibleHandEntryIds.has(entryId) && !authoritativeQueuedEntryIds.has(entryId)) {
+      if (tileId.startsWith("item:") && snapshot.items.some((item) => item.id === entryId)) {
+        this.returnReleasedEntry("useItem", entryId);
+      } else if (visibleHandEntryIds.has(entryId) && !authoritativeQueuedEntryIds.has(entryId)) {
         this.returnReleasedEntry("playCard", entryId);
       }
     }
@@ -78151,6 +78168,22 @@ init_lib();
 
 // src/relic-view.ts
 init_lib();
+
+// src/collection-row-layout.ts
+function measureCollectionRow(text, textWidth) {
+  const nameHeight = Math.max(text.nameHeight ?? 0, estimateWrappedHeight(text.name, textWidth, 22, 9));
+  const detailHeight = text.detail ? Math.max(text.detailHeight ?? 0, estimateWrappedHeight(text.detail, textWidth, 19, 7)) + 3 : 0;
+  const descriptionHeight = Math.max(text.descriptionHeight ?? 0, estimateWrappedHeight(text.description, textWidth, 19, 7));
+  const detailY = 8 + nameHeight + 4;
+  const descriptionY = detailY + detailHeight;
+  return { detailY, descriptionY, height: Math.max(76, descriptionY + descriptionHeight + 12) };
+}
+function estimateWrappedHeight(value, width, lineHeight, characterWidth) {
+  const columns = Math.max(1, Math.floor(width / characterWidth));
+  return value.split("\n").reduce((lines, line) => lines + Math.max(1, Math.ceil(line.length / columns)), 0) * lineHeight;
+}
+
+// src/relic-view.ts
 var defaultHeight = 92;
 var defaultWidth = 184;
 var RelicView = class extends GamePanel {
@@ -78159,6 +78192,9 @@ var RelicView = class extends GamePanel {
   iconLabel = new Text({ text: "", style: getUiTextStyle("PanelTitle") });
   nameTextStyle = new TextStyle({ ...uiTokens.typography.panelTitle, breakWords: true, wordWrap: true });
   nameLabel = new Text({ text: "", style: this.nameTextStyle });
+  artwork = new Sprite(Texture.EMPTY);
+  selection = new Graphics();
+  selected = false;
   relicContent;
   /**
    * Creates a reusable relic presentation surface.
@@ -78167,7 +78203,8 @@ var RelicView = class extends GamePanel {
     super({ width: options.width ?? defaultWidth, height: options.height ?? defaultHeight });
     this.relicContent = toContent(options);
     this.iconLabel.anchor.set(0.5);
-    this.content.addChild(this.iconLabel, this.nameLabel, this.descriptionLabel);
+    this.artwork.anchor.set(0.5);
+    this.content.addChild(this.iconLabel, this.artwork, this.nameLabel, this.descriptionLabel, this.selection);
     this.redrawContent();
   }
   /**
@@ -78190,25 +78227,55 @@ var RelicView = class extends GamePanel {
     super.resize(width, height);
     this.redrawContent();
   }
+  /** Makes the chosen relic visible before touch or keyboard confirmation. */
+  setSelected(selected) {
+    this.selected = selected;
+    this.redrawContent();
+  }
+  /** Measures the complete effect text so scrollable reward rows keep readable font sizes. */
+  getReadableHeight(width) {
+    this.descriptionLabel.text = this.relicContent.description;
+    this.descriptionTextStyle.fontSize = 16;
+    this.descriptionTextStyle.wordWrapWidth = Math.max(1, width - 24);
+    const row = measureCollectionRow({
+      name: "",
+      detail: "",
+      description: this.relicContent.description,
+      descriptionHeight: this.descriptionLabel.height
+    }, width - 24);
+    return Math.max(120, Math.ceil(64 + row.height - row.descriptionY));
+  }
   redrawContent() {
     const size = this.panelSize;
-    const textOffsetX = uiTokens.spacing.lg * 2 + 18;
-    const textWidth = Math.max(0, size.width - textOffsetX - uiTokens.spacing.sm);
+    const textOffsetX = 64;
+    const textWidth = Math.max(1, size.width - textOffsetX - 12);
     this.nameTextStyle.wordWrapWidth = textWidth;
     this.descriptionTextStyle.wordWrapWidth = textWidth;
     this.iconLabel.text = this.relicContent.icon;
-    this.iconLabel.position.set(uiTokens.spacing.lg, size.height / 2);
+    this.iconLabel.position.set(32, 32);
+    this.artwork.texture = this.relicContent.artTexture ?? Texture.EMPTY;
+    this.artwork.visible = this.relicContent.artTexture !== void 0;
+    this.iconLabel.visible = !this.artwork.visible;
+    const artSize = Math.max(this.artwork.texture.width || 1, this.artwork.texture.height || 1);
+    this.artwork.scale.set(44 / artSize);
+    this.artwork.position.set(32, 32);
     this.nameLabel.text = this.relicContent.name;
-    this.nameLabel.position.set(textOffsetX, uiTokens.spacing.sm);
+    this.nameLabel.position.set(textOffsetX, 12);
+    fitTextToBox(this.nameLabel, textWidth, 42, 18, 14);
     this.descriptionLabel.text = this.relicContent.description;
-    this.descriptionLabel.position.set(textOffsetX, uiTokens.spacing.lg * 2 + 4);
+    this.descriptionLabel.position.set(12, 64);
+    fitTextToBox(this.descriptionLabel, Math.max(1, size.width - 24), Math.max(1, size.height - 76), 16, 13);
+    this.selection.clear();
+    if (this.selected) this.selection.roundRect(2, 2, size.width - 4, size.height - 4, 4).stroke({ color: 16766826, width: 3 });
+    this.selection.eventMode = "none";
   }
 };
 function toContent(content) {
   return {
     description: content.description,
     icon: content.icon,
-    name: content.name
+    name: content.name,
+    ...content.artTexture === void 0 ? {} : { artTexture: content.artTexture }
   };
 }
 
@@ -78263,12 +78330,15 @@ var RewardScene = class {
       this.takeButton,
       this.subtitle
     );
-    this.displayObject.addChild(this.tooltip);
+    this.displayObject.addChild(this.optionScroll, this.tooltip);
+    this.optionScroll.visible = false;
   }
   emitAction;
   reducedMotion;
   onAccessibleStateChanged;
   displayObject = new Container();
+  /** Keeps relic text at a readable size while short screens scroll through the options. */
+  optionScroll = new ScrollContainer({ width: 1, height: 1 });
   background = new Graphics();
   title = new SceneTitle({ title: "Rewards", width: 1 });
   currency = new ResourceCounter({ label: "Gold", value: 0, icon: "\xA4" });
@@ -78296,6 +78366,19 @@ var RewardScene = class {
   resolution;
   nextChoiceSlot = 0;
   confirmationRequired = false;
+  suppressesTap = () => false;
+  /** Prevents the end of a scrolling gesture from collecting its underlying reward. */
+  setTapSuppressor(suppressesTap) {
+    this.suppressesTap = suppressesTap;
+  }
+  /** Reports whether option scrolling is currently unavailable. */
+  get isOptionScrollBlocked() {
+    return this.pendingAction || !this.optionScroll.visible;
+  }
+  /** Removes a floating description when its option scrolls away. */
+  hideTooltip() {
+    this.tooltip.hide();
+  }
   /** Gets the stable display object for a choice, when it is currently present. */
   getChoiceView(id) {
     return this.choiceViews.get(id);
@@ -78421,6 +78504,7 @@ var RewardScene = class {
     this.feedback.text = "";
     this.refreshInspection();
     this.layout();
+    this.revealScrolledOption(id);
     this.updateInteractivity();
     this.onAccessibleStateChanged();
   }
@@ -78462,7 +78546,7 @@ var RewardScene = class {
     const optionIds = new Set(options.map((option) => option.id));
     for (const [id, view] of this.optionViews) {
       if (!optionIds.has(id)) {
-        this.optionLayer.removeChild(view);
+        view.parent?.removeChild(view);
         view.destroy();
         this.optionViews.delete(id);
       }
@@ -78496,6 +78580,8 @@ var RewardScene = class {
     const area2 = { x: panel.x + 16, y: choiceTop, width: panel.width - 32, height: Math.max(1, footerY - choiceTop - 12) };
     this.choiceLayer.visible = !hasOptions;
     this.optionLayer.visible = hasOptions;
+    this.optionScroll.visible = false;
+    if (!hasOptions) this.optionScroll.setContentHeight(0);
     this.layoutChoiceRows(area2);
     if (hasOptions) this.layoutOptions(area2, mobile);
   }
@@ -78517,6 +78603,7 @@ var RewardScene = class {
   /** Labels card choices distinctly from other selectable drops. */
   getRewardTitle(hasOptions) {
     if (!hasOptions) return this.snapshot?.title ?? "REWARDS";
+    if (this.selectedReward?.options?.every((option) => option.kind === "relic")) return this.viewport.height < 420 ? "RELICS" : "CHOOSE A RELIC";
     return this.selectedReward?.options?.every((option) => option.kind === "card") ? "CHOOSE A CARD" : "CHOOSE A REWARD";
   }
   /** Keeps optional instructions clear of the return control. */
@@ -78554,6 +78641,11 @@ var RewardScene = class {
   /** Uses larger native card faces and centers incomplete rows on portrait screens. */
   layoutOptions(area2, mobile) {
     const options = this.selectedReward?.options ?? [];
+    if (options.length > 0 && options.every((option) => option.kind !== "card")) {
+      this.layoutRelicOptions(area2, mobile, options);
+      return;
+    }
+    this.optionScroll.setContentHeight(0);
     const gap = mobile ? 8 : 20;
     const columns = Math.min(mobile ? 2 : 3, Math.max(1, options.length));
     const rows = Math.ceil(options.length / columns);
@@ -78563,12 +78655,45 @@ var RewardScene = class {
     options.forEach((option, index) => {
       const view = this.optionViews.get(option.id);
       if (!view) return;
+      if (view.parent !== this.optionLayer) this.optionLayer.addChild(view);
       view.resize(optionWidth, optionHeight);
       const row = Math.floor(index / columns);
       const rowColumns = Math.min(columns, options.length - row * columns);
       const rowX = area2.x + (area2.width - rowColumns * optionWidth - (rowColumns - 1) * gap) / 2;
       view.position.set(rowX + index % columns * (optionWidth + gap), area2.y + rowInset + row * (optionHeight + gap));
     });
+  }
+  /** Gives relic names, artwork, and effects enough horizontal space to read at native size. */
+  layoutRelicOptions(area2, mobile, options) {
+    const columns = mobile || this.viewport.width < 520 ? 1 : Math.min(2, options.length);
+    const gap = 12;
+    const rows = Math.ceil(options.length / columns);
+    const width = (area2.width - (columns - 1) * gap) / columns;
+    const preferredHeight = Math.max(120, ...options.map((option) => this.optionViews.get(option.id)?.getReadableHeight(width) ?? 120));
+    const height = Math.max(preferredHeight, Math.min(160, (area2.height - (rows - 1) * gap) / rows));
+    this.optionLayer.visible = false;
+    this.optionScroll.visible = true;
+    this.optionScroll.resize(area2.width, area2.height);
+    this.optionScroll.position.set(area2.x, area2.y);
+    this.optionScroll.setContentHeight(rows * (height + gap) - gap);
+    options.forEach((option, index) => {
+      const view = this.optionViews.get(option.id);
+      if (!view) return;
+      if (view.parent !== this.optionScroll.content) this.optionScroll.content.addChild(view);
+      view.resize(width, height);
+      view.position.set(index % columns * (width + gap), Math.floor(index / columns) * (height + gap));
+    });
+  }
+  /** Keeps explicit touch or keyboard inspection inside the clipped relic list. */
+  revealScrolledOption(id) {
+    if (!this.optionScroll.visible) return;
+    const view = this.optionViews.get(id);
+    if (!view) return;
+    const offset = this.optionScroll.scrollOffset;
+    if (view.y < offset) this.optionScroll.setScrollOffset(view.y);
+    else if (view.y + view.height > offset + this.optionScroll.viewportSize.height) {
+      this.optionScroll.setScrollOffset(view.y + view.height - this.optionScroll.viewportSize.height);
+    }
   }
   /** Stops an obsolete collection beat before it can disable the newer remaining reward rows. */
   reconcileResolution(choices) {
@@ -78616,7 +78741,7 @@ var RewardScene = class {
     else void this.collectSelection();
   }
   activateOption(option, event) {
-    if (this.selectedReward === void 0 || this.pendingAction || !option.isAvailable) {
+    if (this.selectedReward === void 0 || this.pendingAction || !option.isAvailable || this.suppressesTap(event?.pointerId)) {
       return;
     }
     this.confirmationRequired = event?.pointerType !== "mouse";
@@ -78628,8 +78753,10 @@ var RewardScene = class {
     if (!view || event?.pointerType !== "mouse" || this.pendingAction) return;
     this.confirmationRequired = false;
     this.takeButton.visible = false;
+    const x2 = view.x + (this.optionScroll.visible && view.parent === this.optionScroll.content ? this.optionScroll.x : 0);
+    const y2 = view.y + (this.optionScroll.visible && view.parent === this.optionScroll.content ? this.optionScroll.y - this.optionScroll.scrollOffset : 0);
     this.tooltip.show(`${choice.name}
-${choice.description}`, { x: view.x, y: view.y, width: view.width, height: view.height }, this.viewport);
+${choice.description}`, { x: x2, y: y2, width: view.width, height: view.height }, this.viewport);
   }
   returnToRewards() {
     if (this.pendingAction || (this.selectedReward?.options?.length ?? 0) === 0) {
@@ -78932,6 +79059,11 @@ var RewardOptionView = class extends Container {
         height: 120
       });
       this.addChild(this.relic);
+      void loadJourneyTexture(choice.image).then((texture) => {
+        if (!texture || this.destroyed) return;
+        this.artTexture = texture;
+        this.setChoice(this.choice);
+      });
     }
     this.on("pointertap", (event) => onSelect(this.choice, event));
     this.on("pointerover", (event) => onHover(this.choice, event));
@@ -78943,7 +79075,7 @@ var RewardOptionView = class extends Container {
       this.card.setContent({ cost: "", energyCost: choice.cardEnergyCost ?? 0, manaCost: choice.cardManaCost ?? 0, name: choice.name, description: choice.description, type: choice.cardType ?? "Card", rarity: toCardRarity(choice.rarity), ...this.artTexture ? { artTexture: this.artTexture } : {} });
     }
     if (this.relic !== void 0) {
-      this.relic.setValue({ icon: choice.kind === "relic" ? "\u25C6" : "\u2022", name: choice.name, description: choice.description });
+      this.relic.setValue({ icon: choice.kind === "relic" ? "\u25C6" : "\u2022", name: choice.name, description: choice.description, ...this.artTexture ? { artTexture: this.artTexture } : {} });
     }
   }
   setEnabled(enabled) {
@@ -78955,6 +79087,7 @@ var RewardOptionView = class extends Container {
   setSelected(selected) {
     this.selected = selected;
     this.card?.setInteractionState({ enabled: this.choice.isAvailable, focused: false, selected });
+    this.relic?.setSelected(selected);
   }
   resize(width, height) {
     if (this.card !== void 0) {
@@ -78963,6 +79096,10 @@ var RewardOptionView = class extends Container {
       return;
     }
     this.relic?.resize(width, height);
+  }
+  /** Measures a non-card option without clipping its effect description. */
+  getReadableHeight(width) {
+    return this.relic?.getReadableHeight(width) ?? 120;
   }
 };
 var feedbackStyle = { ...uiTokens.typography.body, fill: 16113563 };
@@ -79004,183 +79141,6 @@ function toCardRarity(rarity) {
 }
 function interpolate2(start, end, progress) {
   return start + (end - start) * progress;
-}
-
-// src/pixi-reward.ts
-async function createRewardRenderer(canvas, actionSink) {
-  const application = new Application();
-  await application.init({
-    antialias: true,
-    autoDensity: true,
-    resolution: Math.max(1, window.devicePixelRatio || 1),
-    background: 726562,
-    backgroundAlpha: 0,
-    canvas,
-    preference: "canvas"
-  });
-  const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
-  const restoreBackdrop = installJourneyBackdrop(canvas, "reward");
-  canvas.tabIndex = 0;
-  const canvasFocus = createCanvasFocusCoordinator(canvas);
-  const accessibility = createRewardAccessibilityOverlay(canvas);
-  let scene;
-  const updateAccessibility = () => accessibility.update(scene.getAccessibleSummary());
-  scene = new RewardScene(
-    (action) => actionSink.invokeMethodAsync("HandleActionFromRendererAsync", action),
-    prefersReducedMotion2(),
-    updateAccessibility
-  );
-  application.stage.addChild(scene.displayObject);
-  const resize = () => {
-    const viewport = getCanvasViewport(canvas);
-    application.renderer.resize(viewport.width, viewport.height, Math.max(1, window.devicePixelRatio || 1));
-    scene.resize(viewport);
-  };
-  const tick = () => scene.advance(application.ticker.deltaMS);
-  const handleKeyboardEvent = (event) => {
-    if (scene.handleKeyboardEvent(event)) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-  };
-  application.ticker.add(tick);
-  window.addEventListener("resize", resize);
-  const resizeObserver = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(resize);
-  resizeObserver?.observe(canvas.parentElement ?? canvas);
-  canvas.addEventListener("keydown", handleKeyboardEvent);
-  resize();
-  let disposed = false;
-  return {
-    reconcile(snapshot) {
-      if (disposed) {
-        return false;
-      }
-      const accepted = scene.reconcile(snapshot, getCanvasViewport(canvas));
-      if (accepted) updateJourneyBackdrop(canvas, "reward", getSnapshotEnvironment(snapshot));
-      return accepted;
-    },
-    dispose() {
-      if (disposed) {
-        return;
-      }
-      disposed = true;
-      window.removeEventListener("resize", resize);
-      resizeObserver?.disconnect();
-      canvas.removeEventListener("keydown", handleKeyboardEvent);
-      application.ticker.remove(tick);
-      canvasFocus.dispose();
-      restoreBackdrop();
-      accessibility.dispose();
-      restoreCanvasPresentation();
-      application.destroy({ removeView: false }, { children: true });
-    }
-  };
-}
-function createRewardAccessibilityOverlay(canvas) {
-  const parent = canvas.parentElement;
-  const ownerDocument = canvas.ownerDocument;
-  if (!parent || !ownerDocument) {
-    return noOpAccessibilityOverlay2;
-  }
-  const summary = ownerDocument.createElement("div");
-  summary.className = "pixi-reward-accessibility-overlay";
-  summary.setAttribute("aria-live", "polite");
-  summary.setAttribute("role", "status");
-  parent.appendChild(summary);
-  return {
-    update(message) {
-      summary.textContent = message;
-    },
-    dispose() {
-      summary.remove();
-    }
-  };
-}
-var noOpAccessibilityOverlay2 = {
-  update() {
-  },
-  dispose() {
-  }
-};
-function getCanvasViewport(canvas) {
-  return {
-    width: Math.max(1, canvas.parentElement?.clientWidth || canvas.clientWidth || canvas.width || 960),
-    height: Math.max(1, canvas.parentElement?.clientHeight || canvas.clientHeight || canvas.height || 540)
-  };
-}
-function prefersReducedMotion2() {
-  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
-// src/pixi-event.ts
-init_lib();
-
-// src/modal-overlay.ts
-init_lib();
-var ModalOverlay = class extends Container {
-  backdrop = new Graphics();
-  modalPanel;
-  sceneWidth;
-  sceneHeight;
-  open = false;
-  /**
-   * Creates a hidden modal surface centered in the supplied scene dimensions.
-   */
-  constructor(options) {
-    super();
-    this.sceneWidth = normalizeSize2(options.sceneWidth);
-    this.sceneHeight = normalizeSize2(options.sceneHeight);
-    this.modalPanel = new GamePanel(options);
-    this.backdrop.eventMode = "static";
-    this.addChild(this.backdrop, this.modalPanel);
-    this.redraw();
-    this.setOpen(false);
-  }
-  /**
-   * Gets the stable panel content layer for scene-specific modal content.
-   */
-  get content() {
-    return this.modalPanel.content;
-  }
-  /**
-   * Gets the current modal panel dimensions.
-   */
-  get panelSize() {
-    return this.modalPanel.panelSize;
-  }
-  /**
-   * Gets whether the modal is currently visible and intercepting pointer input.
-   */
-  get isOpen() {
-    return this.open;
-  }
-  /**
-   * Shows or hides the modal without rebuilding its display tree.
-   */
-  setOpen(open) {
-    this.open = open;
-    this.visible = open;
-    this.eventMode = open ? "static" : "none";
-  }
-  /**
-   * Updates scene dimensions and recenters the existing modal panel.
-   */
-  resize(sceneWidth, sceneHeight, panelWidth, panelHeight) {
-    this.sceneWidth = normalizeSize2(sceneWidth);
-    this.sceneHeight = normalizeSize2(sceneHeight);
-    if (panelWidth !== void 0 && panelHeight !== void 0) {
-      this.modalPanel.resize(panelWidth, panelHeight);
-    }
-    this.redraw();
-  }
-  redraw() {
-    this.backdrop.clear().rect(0, 0, this.sceneWidth, this.sceneHeight).fill({ color: 0, alpha: uiTokens.elevation.overlayAlpha });
-    const panelSize = this.modalPanel.panelSize;
-    this.modalPanel.position.set((this.sceneWidth - panelSize.width) / 2, (this.sceneHeight - panelSize.height) / 2);
-  }
-};
-function normalizeSize2(value) {
-  return Number.isFinite(value) ? Math.max(0, value) : 0;
 }
 
 // src/scroll-motion.ts
@@ -79332,6 +79292,189 @@ function installChoiceScrollInput(canvas, scroll, isBlocked, onScroll) {
       canvas.removeEventListener("pointercancel", pointerup);
     }
   };
+}
+
+// src/pixi-reward.ts
+async function createRewardRenderer(canvas, actionSink) {
+  const application = new Application();
+  await application.init({
+    antialias: true,
+    autoDensity: true,
+    resolution: Math.max(1, window.devicePixelRatio || 1),
+    background: 726562,
+    backgroundAlpha: 0,
+    canvas,
+    preference: "canvas"
+  });
+  const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
+  const restoreBackdrop = installJourneyBackdrop(canvas, "reward");
+  canvas.tabIndex = 0;
+  const canvasFocus = createCanvasFocusCoordinator(canvas);
+  const accessibility = createRewardAccessibilityOverlay(canvas);
+  let scene;
+  const updateAccessibility = () => accessibility.update(scene.getAccessibleSummary());
+  scene = new RewardScene(
+    (action) => actionSink.invokeMethodAsync("HandleActionFromRendererAsync", action),
+    prefersReducedMotion2(),
+    updateAccessibility
+  );
+  application.stage.addChild(scene.displayObject);
+  const scrollInput = installChoiceScrollInput(canvas, scene.optionScroll, () => scene.isOptionScrollBlocked, () => scene.hideTooltip());
+  scene.setTapSuppressor((pointerId) => scrollInput.suppressesTap(pointerId));
+  const resize = () => {
+    const viewport = getCanvasViewport(canvas);
+    application.renderer.resize(viewport.width, viewport.height, Math.max(1, window.devicePixelRatio || 1));
+    scene.resize(viewport);
+  };
+  const tick = () => {
+    scrollInput.advance(application.ticker.deltaMS);
+    scene.advance(application.ticker.deltaMS);
+  };
+  const handleKeyboardEvent = (event) => {
+    if (scene.handleKeyboardEvent(event)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
+  application.ticker.add(tick);
+  window.addEventListener("resize", resize);
+  const resizeObserver = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(resize);
+  resizeObserver?.observe(canvas.parentElement ?? canvas);
+  canvas.addEventListener("keydown", handleKeyboardEvent);
+  resize();
+  let disposed = false;
+  return {
+    reconcile(snapshot) {
+      if (disposed) {
+        return false;
+      }
+      const accepted = scene.reconcile(snapshot, getCanvasViewport(canvas));
+      if (accepted) updateJourneyBackdrop(canvas, "reward", getSnapshotEnvironment(snapshot));
+      return accepted;
+    },
+    dispose() {
+      if (disposed) {
+        return;
+      }
+      disposed = true;
+      window.removeEventListener("resize", resize);
+      resizeObserver?.disconnect();
+      canvas.removeEventListener("keydown", handleKeyboardEvent);
+      application.ticker.remove(tick);
+      scrollInput.dispose();
+      canvasFocus.dispose();
+      restoreBackdrop();
+      accessibility.dispose();
+      restoreCanvasPresentation();
+      application.destroy({ removeView: false }, { children: true });
+    }
+  };
+}
+function createRewardAccessibilityOverlay(canvas) {
+  const parent = canvas.parentElement;
+  const ownerDocument = canvas.ownerDocument;
+  if (!parent || !ownerDocument) {
+    return noOpAccessibilityOverlay2;
+  }
+  const summary = ownerDocument.createElement("div");
+  summary.className = "pixi-reward-accessibility-overlay";
+  summary.setAttribute("aria-live", "polite");
+  summary.setAttribute("role", "status");
+  parent.appendChild(summary);
+  return {
+    update(message) {
+      summary.textContent = message;
+    },
+    dispose() {
+      summary.remove();
+    }
+  };
+}
+var noOpAccessibilityOverlay2 = {
+  update() {
+  },
+  dispose() {
+  }
+};
+function getCanvasViewport(canvas) {
+  return {
+    width: Math.max(1, canvas.parentElement?.clientWidth || canvas.clientWidth || canvas.width || 960),
+    height: Math.max(1, canvas.parentElement?.clientHeight || canvas.clientHeight || canvas.height || 540)
+  };
+}
+function prefersReducedMotion2() {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+// src/pixi-event.ts
+init_lib();
+
+// src/modal-overlay.ts
+init_lib();
+var ModalOverlay = class extends Container {
+  backdrop = new Graphics();
+  modalPanel;
+  sceneWidth;
+  sceneHeight;
+  open = false;
+  /**
+   * Creates a hidden modal surface centered in the supplied scene dimensions.
+   */
+  constructor(options) {
+    super();
+    this.sceneWidth = normalizeSize2(options.sceneWidth);
+    this.sceneHeight = normalizeSize2(options.sceneHeight);
+    this.modalPanel = new GamePanel(options);
+    this.backdrop.eventMode = "static";
+    this.addChild(this.backdrop, this.modalPanel);
+    this.redraw();
+    this.setOpen(false);
+  }
+  /**
+   * Gets the stable panel content layer for scene-specific modal content.
+   */
+  get content() {
+    return this.modalPanel.content;
+  }
+  /**
+   * Gets the current modal panel dimensions.
+   */
+  get panelSize() {
+    return this.modalPanel.panelSize;
+  }
+  /**
+   * Gets whether the modal is currently visible and intercepting pointer input.
+   */
+  get isOpen() {
+    return this.open;
+  }
+  /**
+   * Shows or hides the modal without rebuilding its display tree.
+   */
+  setOpen(open) {
+    this.open = open;
+    this.visible = open;
+    this.eventMode = open ? "static" : "none";
+  }
+  /**
+   * Updates scene dimensions and recenters the existing modal panel.
+   */
+  resize(sceneWidth, sceneHeight, panelWidth, panelHeight) {
+    this.sceneWidth = normalizeSize2(sceneWidth);
+    this.sceneHeight = normalizeSize2(sceneHeight);
+    if (panelWidth !== void 0 && panelHeight !== void 0) {
+      this.modalPanel.resize(panelWidth, panelHeight);
+    }
+    this.redraw();
+  }
+  redraw() {
+    this.backdrop.clear().rect(0, 0, this.sceneWidth, this.sceneHeight).fill({ color: 0, alpha: uiTokens.elevation.overlayAlpha });
+    const panelSize = this.modalPanel.panelSize;
+    this.modalPanel.position.set((this.sceneWidth - panelSize.width) / 2, (this.sceneHeight - panelSize.height) / 2);
+  }
+};
+function normalizeSize2(value) {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
 }
 
 // src/event-deck-row.ts
@@ -81009,9 +81152,30 @@ var cardBodyStyle = { ...uiTokens.typography.body, fill: 13358561, fontSize: 14,
 
 // src/pixi-treasure.ts
 init_lib();
+
+// src/treasure-layout.ts
+function calculateTreasureLayout(width, height) {
+  const compact = width < 680 || height > width;
+  const stacked = compact && height >= 300;
+  const panelWidth = Math.max(1, Math.min(width - 24, compact ? 420 : 660));
+  const panelHeight = Math.max(1, Math.min(height - 24, stacked ? 330 : 280));
+  const panel = { x: (width - panelWidth) / 2, y: (height - panelHeight) / 2, width: panelWidth, height: panelHeight };
+  const padding = 16;
+  const gap = 12;
+  const buttonHeight2 = panelHeight < 260 ? 44 : 56;
+  const buttonWidth = stacked ? panelWidth - padding * 2 : (panelWidth - padding * 2 - gap) / 2;
+  const buttonY = panel.y + panelHeight - 36 - (stacked ? buttonHeight2 * 2 + gap : buttonHeight2);
+  return {
+    panel,
+    description: { x: panel.x + padding, y: panel.y + 72, width: panelWidth - padding * 2, height: Math.max(1, buttonY - panel.y - 84) },
+    buttons: [0, 1].map((index) => ({ x: panel.x + padding + (stacked ? 0 : index * (buttonWidth + gap)), y: buttonY + (stacked ? index * (buttonHeight2 + gap) : 0), width: buttonWidth, height: buttonHeight2 }))
+  };
+}
+
+// src/pixi-treasure.ts
 async function createTreasureRenderer(canvas, sink) {
   const application = new Application();
-  await application.init({ antialias: true, autoDensity: true, background: 726562, backgroundAlpha: 0, canvas, preference: "canvas" });
+  await application.init({ antialias: true, autoDensity: true, resolution: Math.max(1, window.devicePixelRatio || 1), background: 726562, backgroundAlpha: 0, canvas, preference: "canvas" });
   const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
   const restoreBackdrop = installJourneyBackdrop(canvas, "reward");
   canvas.tabIndex = 0;
@@ -81039,7 +81203,7 @@ async function createTreasureRenderer(canvas, sink) {
   application.stage.addChild(root);
   const resize = () => {
     if (disposed) return;
-    application.renderer.resize(Math.max(1, canvas.clientWidth || canvas.width || 960), Math.max(1, canvas.clientHeight || canvas.height || 540));
+    application.renderer.resize(Math.max(1, canvas.parentElement?.clientWidth || canvas.clientWidth || canvas.width || 960), Math.max(1, canvas.parentElement?.clientHeight || canvas.clientHeight || canvas.height || 540));
     layout();
   };
   const submit = async (name) => {
@@ -81074,37 +81238,36 @@ async function createTreasureRenderer(canvas, sink) {
   }
   function layout() {
     if (disposed) return;
-    const width = application.renderer.width;
-    const height = application.renderer.height;
-    const compact = width < 680 || height > width;
-    const panelWidth = Math.min(width - 32, compact ? 420 : 660);
-    const panelHeight = Math.min(height - 32, compact ? 330 : 280);
-    const panelX = (width - panelWidth) / 2;
-    const panelY = (height - panelHeight) / 2;
-    const buttonWidth = compact ? panelWidth - 48 : Math.min(260, (panelWidth - 64) / 2);
-    const buttonHeight2 = 56;
-    const buttonGap2 = compact ? 12 : 20;
-    const buttonY = compact ? panelY + panelHeight - 142 : panelY + panelHeight - 84;
+    const width = canvas.parentElement?.clientWidth || canvas.clientWidth || canvas.width || 960;
+    const height = canvas.parentElement?.clientHeight || canvas.clientHeight || canvas.height || 540;
+    const bounds = calculateTreasureLayout(width, height);
+    const { x: panelX, y: panelY, width: panelWidth, height: panelHeight } = bounds.panel;
     backdrop.resize(panelWidth, panelHeight);
     backdrop.position.set(panelX, panelY);
     title.title = state?.title ?? "Treasure room";
-    title.resize(panelWidth - 48);
-    title.position.set(panelX + 24, panelY + 28);
+    title.resize(panelWidth - 32);
+    title.position.set(panelX + 16, panelY + 16);
     description.text = state?.description ?? "Loading treasure\u2026";
-    description.style.wordWrapWidth = Math.max(1, panelWidth - 72);
-    description.position.set(width / 2, panelY + 98);
+    fitTextToBox(description, bounds.description.width, bounds.description.height, 18, 13);
+    description.position.set(width / 2, bounds.description.y);
     description.anchor.set(0.5, 0);
     buttons.forEach((button, index) => {
+      button.label = index === 0 && width < 360 && height < 300 ? "Collect" : index === 0 ? "Collect treasure" : "Leave";
       button.setEnabled(!pending && isAvailable(index === 0 ? "collectTreasure" : "leave"));
       button.setFocused(index === focusedIndex);
-      button.resize(buttonWidth, buttonHeight2);
-      button.position.set(compact ? panelX + 24 : panelX + (panelWidth - buttonWidth * 2 - buttonGap2) / 2 + index * (buttonWidth + buttonGap2), compact ? buttonY + index * (buttonHeight2 + buttonGap2) : buttonY);
+      const box = bounds.buttons[index];
+      if (!box) return;
+      button.resize(box.width, box.height);
+      button.position.set(box.x, box.y);
     });
     feedback.position.set(width / 2, panelY + panelHeight - 26);
     feedback.anchor.set(0.5, 0.5);
+    fitTextToBox(feedback, panelWidth - 32, 24, 14, 12);
   }
   canvas.addEventListener("keydown", keydown);
   window.addEventListener("resize", resize);
+  const resizeObserver = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(resize);
+  resizeObserver?.observe(canvas.parentElement ?? canvas);
   resize();
   return {
     reconcile(nextSequence, candidate) {
@@ -81124,6 +81287,7 @@ async function createTreasureRenderer(canvas, sink) {
       disposed = true;
       canvas.removeEventListener("keydown", keydown);
       window.removeEventListener("resize", resize);
+      resizeObserver?.disconnect();
       canvasFocus.dispose();
       restoreBackdrop();
       accessibility.dispose();
@@ -82372,20 +82536,6 @@ async function createLeaveRenderer(canvas, sink) {
       application.destroy({ removeView: false }, { children: true });
     }
   };
-}
-
-// src/collection-row-layout.ts
-function measureCollectionRow(text, textWidth) {
-  const nameHeight = Math.max(text.nameHeight ?? 0, estimateWrappedHeight(text.name, textWidth, 22, 9));
-  const detailHeight = text.detail ? Math.max(text.detailHeight ?? 0, estimateWrappedHeight(text.detail, textWidth, 19, 7)) + 3 : 0;
-  const descriptionHeight = Math.max(text.descriptionHeight ?? 0, estimateWrappedHeight(text.description, textWidth, 19, 7));
-  const detailY = 8 + nameHeight + 4;
-  const descriptionY = detailY + detailHeight;
-  return { detailY, descriptionY, height: Math.max(76, descriptionY + descriptionHeight + 12) };
-}
-function estimateWrappedHeight(value, width, lineHeight, characterWidth) {
-  const columns = Math.max(1, Math.floor(width / characterWidth));
-  return value.split("\n").reduce((lines, line) => lines + Math.max(1, Math.ceil(line.length / columns)), 0) * lineHeight;
 }
 
 // src/pixi-collection.ts
