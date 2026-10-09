@@ -70428,8 +70428,11 @@ var AnimationDirector = class {
     timeline.elapsedMs += deltaMs;
     try {
       for (const scheduledCommand of timeline.commands) {
+        if (scheduledCommand.finished) continue;
         const progress = getCommandProgress(timeline.elapsedMs, scheduledCommand);
-        if (progress !== void 0) this.executor.execute(scheduledCommand.command, progress);
+        if (progress === void 0) continue;
+        this.executor.execute(scheduledCommand.command, progress);
+        scheduledCommand.finished = progress === 1;
       }
     } catch {
       this.complete(timeline, "failed", "The animation command failed.");
@@ -70445,7 +70448,7 @@ var AnimationDirector = class {
       const durationMs = this.speedPolicy.scaleDuration(command.durationMs);
       const startMs = mode === "parallel" ? 0 : mode === "staggered" ? index * this.speedPolicy.scaleDuration(staggerMs) : nextStartMs;
       nextStartMs += durationMs;
-      return { command, startMs, durationMs };
+      return { command, startMs, durationMs, finished: false };
     });
   }
   validateRequest(id, commands, resolveObject) {
@@ -70635,26 +70638,30 @@ init_lib();
 // src/circle-particle-display.ts
 init_lib();
 var CircleParticleDisplay = class extends Container {
-  halo = new Graphics();
-  core = new Graphics();
-  constructor() {
+  halo;
+  core;
+  glowAlpha = 0;
+  constructor(context2) {
     super();
+    this.eventMode = "none";
+    this.halo = new Graphics(context2);
+    this.core = new Graphics(context2);
     this.addChild(this.halo);
     this.addChild(this.core);
   }
-  /** Configures reusable geometry without tinting the halo with the core's color. */
+  /** Sets size and glow through transforms without rebuilding shared circle paths. */
   configure(size, glowIntensity, glowColor, glowAlpha) {
-    this.core.clear().circle(0, 0, size).fill(16777215);
-    this.halo.clear();
+    this.core.scale.set(size / 32);
+    this.halo.scale.set(size * (1 + glowIntensity / 12) / 32);
+    this.halo.tint = glowColor;
+    this.halo.alpha = 1;
+    this.glowAlpha = glowAlpha;
     this.halo.visible = glowIntensity > 0;
-    if (this.halo.visible) {
-      this.halo.circle(0, 0, size * (1 + glowIntensity / 12)).fill({ color: glowColor, alpha: glowAlpha });
-    }
   }
   /** Updates color and halo fading using display properties rather than rebuilding paths. */
   update(color, progress) {
     this.core.tint = color;
-    this.halo.alpha = 1 - progress;
+    this.halo.alpha = this.glowAlpha * (1 - progress);
   }
   /** Releases both owned graphics when the pool is trimmed or the runtime is disposed. */
   destroy() {
@@ -70684,6 +70691,7 @@ var ParticleEffectManager = class {
   disposed = false;
   liveParticleCount = 0;
   pooledParticleCount = 0;
+  circleContext;
   resolveAnchor;
   /**
    * Starts or replaces an emitter using the persisted C# particle option contract.
@@ -70798,6 +70806,8 @@ var ParticleEffectManager = class {
     }
     this.pools.clear();
     this.pooledParticleCount = 0;
+    this.circleContext?.destroy();
+    this.circleContext = void 0;
     this.textureCache.clear();
   }
   /** Keeps finite combat text readable after a lethal hit removes its target from the scene. */
@@ -70955,6 +70965,7 @@ var ParticleEffectManager = class {
       this.configureDisplay(pooled, options);
     }
     const display = pooled ?? this.createDisplay(options);
+    display.eventMode = "none";
     display.visible = true;
     display.alpha = 1;
     if (display.parent !== this.layer) {
@@ -70971,7 +70982,8 @@ var ParticleEffectManager = class {
     if (options.renderMode === "image" && options.imageSrc) {
       return new Sprite(this.getTexture(options.imageSrc));
     }
-    return new CircleParticleDisplay();
+    this.circleContext ??= new GraphicsContext().circle(0, 0, 32).fill(16777215);
+    return new CircleParticleDisplay(this.circleContext);
   }
   configureDisplay(display, options) {
     if (display instanceof Text) {
@@ -74181,7 +74193,7 @@ var CardView = class extends Container {
     this.artwork.mask = this.artMask;
     this.textScrims.mask = this.artMask;
     for (const label of [this.costLabel, this.energyCostLabel, this.manaCostLabel, this.nameLabel, this.typeLabel, this.descriptionLabel]) {
-      label.resolution = Math.max(2, typeof window === "undefined" ? 1 : window.devicePixelRatio || 1);
+      label.resolution = 2;
     }
     this.addChild(
       this.frame,
@@ -74859,12 +74871,56 @@ function formatPinnedRelics(relics) {
 
 // src/character-outline.ts
 init_lib();
+
+// src/character-outline-texture.ts
+init_lib();
+function createCharacterOutlineTexture(artwork, thickness) {
+  if (typeof document === "undefined" || artwork.texture === Texture.EMPTY) return void 0;
+  const texture = artwork.texture;
+  const source8 = texture.source?.resource;
+  if (!isDrawableSource(source8)) return void 0;
+  const density = 2;
+  const width = Math.max(1, Math.ceil(artwork.width * density));
+  const height = Math.max(1, Math.ceil(artwork.height * density));
+  const silhouette = document.createElement("canvas");
+  silhouette.width = width;
+  silhouette.height = height;
+  const context2 = silhouette.getContext("2d");
+  if (!context2) return void 0;
+  const { x: x2, y: y2, width: frameWidth, height: frameHeight } = texture.frame;
+  const resolution = texture.source.resolution;
+  context2.drawImage(source8, x2 * resolution, y2 * resolution, frameWidth * resolution, frameHeight * resolution, 0, 0, width, height);
+  context2.globalCompositeOperation = "source-in";
+  context2.fillStyle = "#ffffff";
+  context2.fillRect(0, 0, width, height);
+  if (thickness === 0) return Texture.from(silhouette);
+  const padding = Math.ceil(thickness * 1.8 * density);
+  const canvas = document.createElement("canvas");
+  canvas.width = width + padding * 2;
+  canvas.height = height + padding * 2;
+  const outline = canvas.getContext("2d");
+  if (!outline) return void 0;
+  for (let index = 0; index < 36; index++) {
+    const ring = Math.floor(index / 12);
+    const angle = index % 12 * Math.PI * 2 / 12;
+    const distance = thickness * density * (ring === 0 ? 1.8 : ring === 1 ? 1.35 : 1);
+    outline.globalAlpha = ring === 0 ? 0.07 : ring === 1 ? 0.18 : 0.7;
+    outline.drawImage(silhouette, padding + Math.cos(angle) * distance, padding + Math.sin(angle) * distance);
+  }
+  return Texture.from(canvas);
+}
+function isDrawableSource(value) {
+  return typeof HTMLImageElement !== "undefined" && value instanceof HTMLImageElement || typeof HTMLCanvasElement !== "undefined" && value instanceof HTMLCanvasElement || typeof ImageBitmap !== "undefined" && value instanceof ImageBitmap || typeof OffscreenCanvas !== "undefined" && value instanceof OffscreenCanvas;
+}
+
+// src/character-outline.ts
 var CharacterOutline = class extends Container {
   silhouettes = [];
   fallback = new Graphics();
   sourceTexture;
   outlineTexture;
-  outlineColor;
+  outlineKey;
+  baked;
   constructor() {
     super();
     this.eventMode = "none";
@@ -74873,20 +74929,24 @@ var CharacterOutline = class extends Container {
   }
   /** Matches the current artwork, including asynchronous loads and responsive resizing. */
   show(artwork, color, thickness, opacity) {
-    this.ensureSilhouettes(36);
-    this.updateSilhouetteTexture(artwork.texture, color);
     this.visible = true;
     this.alpha = opacity;
     this.fallback.visible = !artwork.visible;
-    this.fallback.clear();
-    if (!artwork.visible) this.fallback.roundRect(-18, artwork.y + 54, 36, 3, 2).fill({ color });
+    if (!artwork.visible) {
+      if (this.baked) this.baked.visible = false;
+      for (const sprite of this.silhouettes) sprite.visible = false;
+      this.fallback.clear().roundRect(-18, artwork.y + 54, 36, 3, 2).fill({ color });
+      return;
+    }
+    if (this.showBaked(artwork, color, thickness)) return;
+    this.ensureSilhouettes(36);
     this.silhouettes.forEach((sprite, index) => {
       const ring = Math.floor(index / 12);
       const angle = index % 12 * Math.PI * 2 / 12;
       const distance = thickness * (ring === 0 ? 1.8 : ring === 1 ? 1.35 : 1);
-      sprite.texture = this.outlineTexture ?? artwork.texture;
+      sprite.texture = artwork.texture;
       sprite.visible = artwork.visible;
-      sprite.tint = this.outlineTexture ? 16777215 : color;
+      sprite.tint = color;
       sprite.alpha = ring === 0 ? 0.07 : ring === 1 ? 0.18 : 0.7;
       sprite.width = artwork.width;
       sprite.height = artwork.height;
@@ -74895,17 +74955,17 @@ var CharacterOutline = class extends Container {
   }
   /** Flashes one translucent silhouette so overlapping outline copies cannot wash out the artwork. */
   showFlash(artwork, opacity) {
-    this.ensureSilhouettes(1);
-    this.updateSilhouetteTexture(artwork.texture, 16777215);
     this.visible = artwork.visible;
     this.alpha = opacity;
     this.fallback.visible = false;
+    if (this.showBaked(artwork, 16777215, 0)) return;
+    this.ensureSilhouettes(1);
     this.silhouettes.forEach((sprite2, index) => {
       sprite2.visible = index === 0 && artwork.visible;
     });
     const sprite = this.silhouettes[0];
     if (!sprite) return;
-    sprite.texture = this.outlineTexture ?? artwork.texture;
+    sprite.texture = artwork.texture;
     sprite.tint = 16777215;
     sprite.alpha = 1;
     sprite.width = artwork.width;
@@ -74916,6 +74976,7 @@ var CharacterOutline = class extends Container {
   destroy(options) {
     if (this.destroyed) return;
     for (const sprite of this.silhouettes) sprite.texture = Texture.EMPTY;
+    if (this.baked) this.baked.texture = Texture.EMPTY;
     this.outlineTexture?.destroy(true);
     this.outlineTexture = void 0;
     super.destroy(options);
@@ -74932,36 +74993,34 @@ var CharacterOutline = class extends Container {
     }
     this.addChild(this.fallback);
   }
-  /** Recolors alpha once per artwork/color rather than multiplying its original RGB colors. */
-  updateSilhouetteTexture(texture, color) {
-    if (texture === this.sourceTexture && color === this.outlineColor) return;
-    for (const sprite of this.silhouettes) sprite.texture = Texture.EMPTY;
-    this.outlineTexture?.destroy(true);
-    this.sourceTexture = texture;
-    this.outlineColor = color;
-    this.outlineTexture = createSilhouetteTexture(texture, color);
+  /** Rebuilds only when artwork or geometry changes; color and pulse opacity remain display properties. */
+  showBaked(artwork, color, thickness) {
+    const key = `${artwork.width}:${artwork.height}:${thickness}`;
+    if (artwork.texture !== this.sourceTexture || key !== this.outlineKey) {
+      if (this.baked) this.baked.texture = Texture.EMPTY;
+      this.outlineTexture?.destroy(true);
+      this.sourceTexture = artwork.texture;
+      this.outlineKey = key;
+      this.outlineTexture = createCharacterOutlineTexture(artwork, thickness);
+    }
+    if (this.baked) this.baked.visible = artwork.visible && this.outlineTexture !== void 0;
+    if (!this.outlineTexture) return false;
+    if (!this.baked) {
+      this.baked = new Sprite(Texture.EMPTY);
+      this.baked.anchor.set(0.5);
+      this.addChild(this.baked);
+    }
+    this.baked.visible = artwork.visible;
+    for (const sprite of this.silhouettes) sprite.visible = false;
+    const padding = Math.ceil(thickness * 1.8 * 2) / 2;
+    this.baked.texture = this.outlineTexture;
+    this.baked.tint = color;
+    this.baked.width = Math.ceil(artwork.width * 2) / 2 + padding * 2;
+    this.baked.height = Math.ceil(artwork.height * 2) / 2 + padding * 2;
+    this.baked.position.set(artwork.x, artwork.y);
+    return true;
   }
 };
-function createSilhouetteTexture(texture, color) {
-  if (typeof document === "undefined" || texture === Texture.EMPTY) return void 0;
-  const source8 = texture.source?.resource;
-  if (!isDrawableSource(source8)) return void 0;
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.ceil(texture.frame.width));
-  canvas.height = Math.max(1, Math.ceil(texture.frame.height));
-  const context2 = canvas.getContext("2d");
-  if (!context2) return void 0;
-  const { x: x2, y: y2, width, height } = texture.frame;
-  const resolution = texture.source.resolution;
-  context2.drawImage(source8, x2 * resolution, y2 * resolution, width * resolution, height * resolution, 0, 0, canvas.width, canvas.height);
-  context2.globalCompositeOperation = "source-in";
-  context2.fillStyle = "#" + color.toString(16).padStart(6, "0");
-  context2.fillRect(0, 0, canvas.width, canvas.height);
-  return Texture.from(canvas);
-}
-function isDrawableSource(value) {
-  return typeof HTMLImageElement !== "undefined" && value instanceof HTMLImageElement || typeof HTMLCanvasElement !== "undefined" && value instanceof HTMLCanvasElement || typeof ImageBitmap !== "undefined" && value instanceof ImageBitmap || typeof OffscreenCanvas !== "undefined" && value instanceof OffscreenCanvas;
-}
 
 // src/artwork-ground-contact.ts
 var groundContacts = /* @__PURE__ */ new WeakMap();
@@ -78119,6 +78178,14 @@ function suspendRunControls(controls) {
   return () => {
     controls.inert = wasInert;
   };
+}
+
+// src/render-quality.ts
+function getRenderResolution(devicePixelRatio) {
+  return Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? Math.min(2, devicePixelRatio) : 1;
+}
+function getParticleBudgets(coarsePointer) {
+  return coarsePointer ? { maxParticles: 240, maxParticlesPerEmitter: 60 } : { maxParticles: 600, maxParticlesPerEmitter: 120 };
 }
 
 // src/journey-layout.ts
@@ -84131,6 +84198,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   });
   const animationDirector = new AnimationDirector(scene.createAnimationCommandExecutor());
   const particleEffects = new ParticleEffectManager(runtime.renderLayers.effect, {
+    ...getParticleBudgets(typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches),
     reducedMotion: prefersReducedMotion5(),
     resolveAnchor: (id) => scene.getEffectAnchor(id)
   });
@@ -84209,7 +84277,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     });
     applyViewportLayout(viewportUpdate);
     runtime.setTransitionViewport(getTransitionViewport());
-    application.renderer.resolution = viewportUpdate.descriptor.devicePixelRatio;
+    application.renderer.resolution = getRenderResolution(viewportUpdate.descriptor.devicePixelRatio);
     if (forceRendererResize || viewportUpdate.rendererMetricsChanged) {
       application.renderer.resize(viewportUpdate.descriptor.width, viewportUpdate.descriptor.height);
     }
