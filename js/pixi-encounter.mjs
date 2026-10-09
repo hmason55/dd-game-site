@@ -70211,7 +70211,7 @@ init_lib();
 var encounterRendererProtocolVersion = 4;
 var encounterSceneId = "encounter";
 function isEncounterPresentationSnapshot(value) {
-  if (!isRecord(value) || value.protocolVersion !== encounterRendererProtocolVersion || value.sceneId !== encounterSceneId || !isFiniteNumber(value.sequence) || !isString(value.phase) || typeof value.inventoryMode !== "boolean" || !isEntityPresentationState(value.player) || !isArrayOf(value.enemies, isEntityPresentationState) || !isArrayOf(value.hand, isCardPresentationState) || !isArrayOf(value.items, isItemPresentationState) || !isFiniteNumber(value.currency) || !isFiniteNumber(value.deckCount) || !isFiniteNumber(value.relicCount) || value.pinnedRelics !== void 0 && !isArrayOf(value.pinnedRelics, isRelicPresentationState) || value.sceneTreatmentId !== void 0 && !isString(value.sceneTreatmentId)) {
+  if (!isRecord(value) || value.protocolVersion !== encounterRendererProtocolVersion || value.sceneId !== encounterSceneId || !isFiniteNumber(value.sequence) || !isString(value.phase) || typeof value.inventoryMode !== "boolean" || !isEntityPresentationState(value.player) || !isArrayOf(value.enemies, isEntityPresentationState) || !isArrayOf(value.hand, isCardPresentationState) || !isArrayOf(value.items, isItemPresentationState) || !isFiniteNumber(value.currency) || !isFiniteNumber(value.deckCount) || !isFiniteNumber(value.relicCount) || value.pinnedRelics !== void 0 && !isArrayOf(value.pinnedRelics, isRelicPresentationState) || value.sceneTreatmentId !== void 0 && !isString(value.sceneTreatmentId) || value.roomName !== void 0 && !isString(value.roomName)) {
     return false;
   }
   return true;
@@ -70635,6 +70635,48 @@ function findDialogOwner(value) {
 // src/particle-effect-manager.ts
 init_lib();
 
+// src/resource-icon.ts
+init_lib();
+function createResourceIcon(kind, color) {
+  const icon = new Graphics();
+  const polygon = (points) => {
+    icon.moveTo(points[0] ?? 0, points[1] ?? 0);
+    for (let index = 2; index < points.length; index += 2) icon.lineTo(points[index] ?? 0, points[index + 1] ?? 0);
+    icon.fill({ color });
+  };
+  switch (kind) {
+    case "health":
+      icon.moveTo(10, 19).bezierCurveTo(6, 15, 1, 11, 1, 6).bezierCurveTo(1, 0, 7, 0, 10, 5).bezierCurveTo(13, 0, 19, 0, 19, 6).bezierCurveTo(19, 11, 14, 15, 10, 19).fill({ color });
+      break;
+    case "block":
+      polygon([10, 1, 18, 4, 17, 12, 14, 16, 10, 19, 6, 16, 3, 12, 2, 4]);
+      icon.moveTo(10, 4).lineTo(10, 15).stroke({ color: 1186592, width: 1.5, alpha: 0.5 });
+      break;
+    case "currency":
+      icon.roundRect(1, 1, 18, 18, 9).stroke({ color, width: 2 });
+      icon.roundRect(8, 5, 4, 10, 1).fill({ color });
+      break;
+    case "deck":
+      icon.roundRect(5, 1, 13, 15, 2).stroke({ color, width: 1.5 });
+      icon.roundRect(1, 5, 13, 15, 2).fill({ color: 1845293 }).stroke({ color, width: 1.5 });
+      icon.moveTo(5, 10).lineTo(10, 10).moveTo(5, 13).lineTo(8, 13).stroke({ color, width: 1.5 });
+      break;
+    case "relic":
+      polygon([10, 0, 18, 7, 15, 15, 10, 20, 5, 15, 2, 7]);
+      icon.moveTo(10, 2).lineTo(10, 17).moveTo(3, 7).lineTo(17, 7).stroke({ color: 1186592, width: 1, alpha: 0.5 });
+      break;
+    case "stamina":
+      polygon([11, 0, 3, 11, 9, 11, 7, 20, 17, 7, 11, 7, 14, 0]);
+      break;
+    case "mana":
+      icon.moveTo(10, 0).lineTo(16, 9).bezierCurveTo(23, 20, -3, 24, 3, 11).lineTo(10, 0).fill({ color });
+      icon.moveTo(6, 12).lineTo(6, 15).lineTo(8, 17).stroke({ color: 15920868, width: 1.5, alpha: 0.7 });
+      break;
+  }
+  icon.eventMode = "none";
+  return icon;
+}
+
 // src/circle-particle-display.ts
 init_lib();
 var CircleParticleDisplay = class extends Container {
@@ -70826,11 +70868,13 @@ var ParticleEffectManager = class {
     this.maxParticlesPerEmitter = Math.max(1, options.maxParticlesPerEmitter ?? 120);
     this.maxPooledParticles = Math.max(0, options.maxPooledParticles ?? this.maxParticles);
     this.reducedMotion = options.reducedMotion ?? prefersReducedMotion();
+    this.textMotionScale = options.textMotionScale ?? (() => 1);
     this.resolveAnchor = options.resolveAnchor;
     this.decorativeBatches = new DecorativeParticleBatches(layer);
     this.rendererBackend = options.rendererBackend ?? "gpu";
   }
   layer;
+  resourceIcons = /* @__PURE__ */ new WeakMap();
   emitters = /* @__PURE__ */ new Map();
   pools = /* @__PURE__ */ new Map();
   textureCache = /* @__PURE__ */ new Map();
@@ -70839,6 +70883,7 @@ var ParticleEffectManager = class {
   maxParticlesPerEmitter;
   maxPooledParticles;
   reducedMotion;
+  textMotionScale;
   disposed = false;
   liveParticleCount = 0;
   pooledParticleCount = 0;
@@ -70995,11 +71040,14 @@ var ParticleEffectManager = class {
         this.removeParticle(emitter, index);
         continue;
       }
-      particle.velocityX += particle.accelerationX * step;
-      particle.velocityY += particle.accelerationY * step;
-      particle.x += (particle.directionX * particle.speed + particle.velocityX) * step;
-      particle.y += (particle.directionY * particle.speed + particle.velocityY) * step;
-      particle.speed *= Math.pow(particle.friction, step);
+      const textScale = Math.max(1, Math.min(2.5, this.textMotionScale()));
+      const movementStep = particle.mode === "text" && !this.reducedMotion ? deltaMs / (1e3 / 60) * textScale : step;
+      particle.velocityX += particle.accelerationX * movementStep;
+      particle.velocityY += particle.accelerationY * movementStep;
+      particle.x += (particle.directionX * particle.speed + particle.velocityX) * movementStep;
+      particle.y += (particle.directionY * particle.speed + particle.velocityY) * movementStep;
+      if (particle.mode === "text" && this.reducedMotion) particle.y -= 16 * textScale * deltaMs / particle.lifespanMs;
+      particle.speed *= Math.pow(particle.friction, movementStep);
       particle.rotation += particle.rotationSpeed * step;
       this.renderParticle(particle, emitter.options, emitter.lastAnchor);
     }
@@ -71132,6 +71180,7 @@ var ParticleEffectManager = class {
       this.configureDisplay(pooled, options);
     }
     const display = pooled ?? this.createDisplay(options);
+    if (display instanceof Text) this.configureResourceIcon(display, options);
     if (!(display instanceof DecorativeParticleDisplay)) {
       display.eventMode = "none";
       display.visible = true;
@@ -71139,6 +71188,18 @@ var ParticleEffectManager = class {
       if (display.parent !== this.layer) this.attachSceneDisplay(display);
     }
     return display;
+  }
+  /** Adds the shared vector resource glyph and clears it when a text particle is recycled. */
+  configureResourceIcon(text, options) {
+    const previous = this.resourceIcons.get(text);
+    previous?.removeFromParent();
+    previous?.destroy();
+    this.resourceIcons.delete(text);
+    if (!options.resourceIcon) return;
+    const icon = createResourceIcon(options.resourceIcon, 16777215);
+    icon.position.set(-(text.width || 0) / 2 - 24, -10);
+    text.addChild(icon);
+    this.resourceIcons.set(text, icon);
   }
   /** Keeps readable labels above decorative Canvas displays and GPU batches. */
   attachSceneDisplay(display) {
@@ -71176,7 +71237,7 @@ var ParticleEffectManager = class {
     this.textureCache.set(source8, texture);
     return texture;
   }
-  /** Holds text at full opacity before a smooth fade; circle rendering only changes tint and alpha. */
+  /** Fades text smoothly as it rises; circle rendering only changes tint and alpha. */
   renderParticle(particle, options, anchor) {
     const progress = particle.ageMs / particle.lifespanMs;
     const color = particle.startColor === particle.endColor ? particle.startColor : interpolateColor(particle.startColor, particle.endColor, progress);
@@ -71215,7 +71276,7 @@ var ParticleEffectManager = class {
       particle.display.visible = false;
     }
     if (this.pooledParticleCount >= this.maxPooledParticles) {
-      particle.display.destroy();
+      particle.display.destroy({ children: true });
       return;
     }
     this.getPool(particle.mode).push(particle.display);
@@ -71295,6 +71356,7 @@ function parseOptions(value, maxParticlesPerEmitter, reducedMotion) {
     endAlpha: Math.min(1, Math.max(0, finiteNumber(value.endAlpha, 0))),
     renderMode: requestedRenderMode === "image" && !imageSrc ? "default" : requestedRenderMode,
     text: optionalString(value.text) ?? "*",
+    resourceIcon: value.resourceIcon === "stamina" || value.resourceIcon === "block" ? value.resourceIcon : void 0,
     imageSrc,
     font: optionalString(value.font) ?? "Arial",
     textOutlineColor: optionalString(value.textOutlineColor),
@@ -71376,7 +71438,10 @@ function createTextStyle(options) {
     fontFamily: font.family,
     fontSize: font.size,
     fontStyle: font.style,
-    fontWeight: font.weight
+    fontWeight: font.weight,
+    wordWrap: options.resourceIcon !== void 0,
+    wordWrapWidth: 260,
+    breakWords: true
   };
   return new TextStyle(options.textOutlineColor && options.textOutlineWidth > 0 ? { ...baseStyle, stroke: { color: options.textOutlineColor, width: options.textOutlineWidth } } : baseStyle);
 }
@@ -71446,7 +71511,7 @@ function rotate(value, angle) {
   return { x: value.x * Math.cos(angle) - value.y * Math.sin(angle), y: value.x * Math.sin(angle) + value.y * Math.cos(angle) };
 }
 function textFadeProgress(progress) {
-  const fade = clampUnit((progress - 0.6) / 0.4);
+  const fade = clampUnit((progress - 0.2) / 0.8);
   return fade * fade * (3 - 2 * fade);
 }
 function interpolateColor(start, end, progress) {
@@ -74862,63 +74927,38 @@ function getMotionIntensity(value, reducedMotion) {
 
 // src/run-hud.ts
 init_lib();
-
-// src/resource-icon.ts
-init_lib();
-function createResourceIcon(kind, color) {
-  const icon = new Graphics();
-  const polygon = (points) => {
-    icon.moveTo(points[0] ?? 0, points[1] ?? 0);
-    for (let index = 2; index < points.length; index += 2) icon.lineTo(points[index] ?? 0, points[index + 1] ?? 0);
-    icon.fill({ color });
-  };
-  switch (kind) {
-    case "health":
-      icon.moveTo(10, 19).bezierCurveTo(6, 15, 1, 11, 1, 6).bezierCurveTo(1, 0, 7, 0, 10, 5).bezierCurveTo(13, 0, 19, 0, 19, 6).bezierCurveTo(19, 11, 14, 15, 10, 19).fill({ color });
-      break;
-    case "block":
-      polygon([10, 1, 18, 4, 17, 12, 14, 16, 10, 19, 6, 16, 3, 12, 2, 4]);
-      icon.moveTo(10, 4).lineTo(10, 15).stroke({ color: 1186592, width: 1.5, alpha: 0.5 });
-      break;
-    case "currency":
-      icon.roundRect(1, 1, 18, 18, 9).stroke({ color, width: 2 });
-      icon.roundRect(8, 5, 4, 10, 1).fill({ color });
-      break;
-    case "deck":
-      icon.roundRect(5, 1, 13, 15, 2).stroke({ color, width: 1.5 });
-      icon.roundRect(1, 5, 13, 15, 2).fill({ color: 1845293 }).stroke({ color, width: 1.5 });
-      icon.moveTo(5, 10).lineTo(10, 10).moveTo(5, 13).lineTo(8, 13).stroke({ color, width: 1.5 });
-      break;
-    case "relic":
-      polygon([10, 0, 18, 7, 15, 15, 10, 20, 5, 15, 2, 7]);
-      icon.moveTo(10, 2).lineTo(10, 17).moveTo(3, 7).lineTo(17, 7).stroke({ color: 1186592, width: 1, alpha: 0.5 });
-      break;
-    case "stamina":
-      polygon([11, 0, 3, 11, 9, 11, 7, 20, 17, 7, 11, 7, 14, 0]);
-      break;
-    case "mana":
-      icon.moveTo(10, 0).lineTo(16, 9).bezierCurveTo(23, 20, -3, 24, 3, 11).lineTo(10, 0).fill({ color });
-      icon.moveTo(6, 12).lineTo(6, 15).lineTo(8, 17).stroke({ color: 15920868, width: 1.5, alpha: 0.7 });
-      break;
-  }
-  icon.eventMode = "none";
-  return icon;
-}
-
-// src/run-hud.ts
 var relicRailLimit = 24;
 var RunHud = class extends Container {
-  constructor(requestRelicCollection) {
+  constructor(requestRelicCollection, requestDeckCollection, showRail = true) {
     super();
     this.requestRelicCollection = requestRelicCollection;
-    this.addChild(this.health, this.healthBar, this.currency, this.deck, this.relics, this.turn, this.stamina, this.mana, this.pinnedRelics, this.block, this.sceneTitle, this.frame);
+    this.requestDeckCollection = requestDeckCollection;
+    this.showRail = showRail;
+    this.addChild(this.health, this.healthBar, this.currency, this.deck, this.relics, this.stamina, this.mana, this.block, this.sceneTitle, this.frame);
     this.relics.on("pointertap", () => {
       if (this.relicCollectionAvailable) {
         this.requestRelicCollection?.();
       }
     });
+    this.deck.on("pointertap", () => {
+      this.requestDeckCollection?.();
+    });
+    for (const counter of [this.deck, this.relics]) {
+      const frame = new Graphics();
+      frame.eventMode = "none";
+      counter.addChild(frame);
+      this.collectionFrames.set(counter, frame);
+      counter.on("pointerover", () => {
+        frame.alpha = 1;
+      });
+      counter.on("pointerout", () => {
+        frame.alpha = 0.65;
+      });
+    }
   }
   requestRelicCollection;
+  requestDeckCollection;
+  showRail;
   health = createHudCounter("health", uiTokens.color.health, "0/0");
   healthBar = new ProgressIndicator({ width: 64, height: 5, value: 0, maximum: 1, fill: uiTokens.color.health });
   stamina = createHudCounter("stamina", uiTokens.color.stamina, "0 / 0");
@@ -74926,11 +74966,10 @@ var RunHud = class extends Container {
   currency = createHudCounter("currency", uiTokens.color.selected, 0);
   deck = createHudCounter("deck", uiTokens.color.textMuted, 0);
   relics = createHudCounter("relic", uiTokens.color.selected, 0);
-  pinnedRelics = new Text({ text: "", style: getUiTextStyle("Caption") });
-  turn = new Text({ text: "", style: getUiTextStyle("Body") });
   block = createHudCounter("block", uiTokens.color.block, 0);
   sceneTitle = new Text({ text: "", style: { ...getUiTextStyle("Caption"), letterSpacing: 3 } });
   frame = new Graphics();
+  collectionFrames = /* @__PURE__ */ new Map();
   relicCollectionAvailable = false;
   /** Makes resource artwork inspectable by hover and tap while retaining compact numeric pairs. */
   bindResourceInspection(inspect, dismiss) {
@@ -74948,13 +74987,13 @@ var RunHud = class extends Container {
       const show = (pinned) => inspect(`${name}: ${counter.value}`, { x: counter.x, y: counter.y, width: counter.width || 88, height: 28 }, pinned);
       counter.on("pointerover", () => show(false));
       counter.on("pointerout", dismiss);
-      if (counter !== this.relics) counter.on("pointertap", (event) => {
+      if (counter !== this.relics && counter !== this.deck) counter.on("pointertap", (event) => {
         event.stopPropagation();
         show(true);
       });
     }
   }
-  /** Reconciles resource values and a concise, human-readable phase label. */
+  /** Reconciles resource values and the current location caption. */
   reconcile(state, viewport) {
     this.block.setValue(state.block ?? 0);
     this.block.visible = state.block !== void 0;
@@ -74975,16 +75014,37 @@ var RunHud = class extends Container {
     this.deck.setValue(state.deckCount);
     this.relics.setValue(formatRelicRailCount(state.relicCount));
     this.relicCollectionAvailable = state.relicCount > 0;
-    this.relics.eventMode = this.relicCollectionAvailable ? "static" : "none";
+    this.relics.eventMode = "static";
     this.relics.cursor = this.relicCollectionAvailable ? "pointer" : "default";
-    this.pinnedRelics.text = formatPinnedRelics(state.pinnedRelics);
-    this.pinnedRelics.visible = this.pinnedRelics.text.length > 0;
-    this.turn.text = describeTurnPhase(state.phase);
+    this.deck.eventMode = "static";
+    this.deck.cursor = "pointer";
     this.layout(viewport);
+    this.layoutInspectionAreas();
+    if (!this.showRail) {
+      for (const display of [this.health, this.healthBar, this.currency, this.deck, this.relics, this.block, this.frame]) display.visible = false;
+    }
+  }
+  /** Includes each icon, label and numeric value in a single padded inspection target. */
+  layoutInspectionAreas() {
+    for (const counter of [this.health, this.block, this.currency, this.deck, this.relics, this.stamina, this.mana]) {
+      const frame = this.collectionFrames.get(counter);
+      frame?.clear();
+      const width = Math.max(36, counter.width || 0);
+      counter.hitArea = new Rectangle(-4, -4, width + 8, 32);
+      counter.interactiveChildren = false;
+      if (frame) {
+        frame.roundRect(-4, -4, width + 8, 32, 4).fill({ color: uiTokens.color.surface, alpha: 0.18 }).stroke({ color: uiTokens.color.panelStroke, width: 1 });
+        frame.alpha = 0.65;
+      }
+    }
   }
   /** Temporarily gives the shared feedback row to a pending or rejected action. */
   setFeedbackVisible(visible, viewport) {
-    this.turn.visible = !visible || getViewportLayoutMode(viewport) !== "MobilePortrait";
+    this.sceneTitle.visible = !isShortEncounter(viewport) && (!visible || getViewportLayoutMode(viewport) !== "MobilePortrait");
+  }
+  /** Anchors stamina gain feedback above its current responsive counter position. */
+  getStaminaAnchor() {
+    return { x: this.stamina.x + Math.max(144, this.stamina.width / 2), y: this.stamina.y };
   }
   /** Shares the hand boundary between resource counters and the scene-owned controls. */
   layout(viewport) {
@@ -74995,14 +75055,14 @@ var RunHud = class extends Container {
     this.stamina.position.set(16, resourceY);
     const manaWidth = Math.max(72, this.mana.width || 0);
     this.mana.position.set(portrait ? Math.max(16, viewport.width - 16 - manaWidth) : 144, resourceY);
-    this.turn.position.set(portrait ? 16 : 240, portrait ? 44 : 38);
     this.layoutRail(viewport);
-    this.layoutMetadata(viewport, portrait, short);
+    this.layoutMetadata(viewport, short);
     this.frame.clear().roundRect(4, 4, Math.max(0, viewport.width - 8), 36, 4).stroke({ color: uiTokens.color.panelStroke, width: 1, alpha: 0.65 });
     this.frame.eventMode = "none";
   }
   /** Measures resource groups so changing counts cannot collide with neighboring icons. */
   layoutRail(viewport) {
+    for (const frame of this.collectionFrames.values()) frame.clear();
     const gap = 12;
     const healthWidth = Math.max(72, this.health.width || 0);
     const blockWidth = this.block.visible ? (this.block.width || 40) + gap : 0;
@@ -75025,16 +75085,16 @@ var RunHud = class extends Container {
       x2 += width(counter) + gap;
     }
   }
-  /** Fits collection counters and optional location details into the remaining header space. */
-  layoutMetadata(viewport, portrait, short) {
-    this.pinnedRelics.visible = !portrait && !short && this.pinnedRelics.text.length > 0;
-    this.pinnedRelics.position.set(Math.max(8, viewport.width - 286), 44);
-    this.sceneTitle.visible = !portrait && !short;
+  /** Fits locale and room names below the resource rail. */
+  layoutMetadata(viewport, short) {
+    this.sceneTitle.visible = !short;
     this.sceneTitle.position.set(16, 44);
+    fitTextToBox(this.sceneTitle, Math.max(1, viewport.width - 32), 18, 12, 10);
   }
 };
 function createHudCounter(kind, color, value) {
-  return new ResourceCounter({ icon: createResourceIcon(kind, color), label: "", value, valueLayout: "inline" });
+  const label = kind === "deck" ? "Cards" : kind === "relic" ? "Relics" : "";
+  return new ResourceCounter({ icon: createResourceIcon(kind, color), label, value, valueLayout: "inline" });
 }
 function formatRelicRailCount(relicCount) {
   const normalizedCount = Math.max(0, Math.floor(relicCount));
@@ -75045,12 +75105,6 @@ function formatResourceValue(current, available) {
 }
 function getResourceValue(current, available) {
   return typeof current === "number" && Number.isFinite(current) && typeof available === "number" && Number.isFinite(available) ? formatResourceValue(current, available) : void 0;
-}
-function formatPinnedRelics(relics) {
-  if (!relics || relics.length === 0) {
-    return "";
-  }
-  return relics.map((relic) => relic.name).join(" \xB7 ");
 }
 
 // src/character-outline.ts
@@ -75497,7 +75551,7 @@ var EncounterScene = class {
     this.assetLoader = assetLoader;
     this.announceInteraction = announceInteraction;
     this.reducedMotion = reducedMotion;
-    this.runHud = new RunHud(() => this.requestRelicCollection());
+    this.runHud = new RunHud(() => this.requestRelicCollection(), () => this.requestDeckCollection(), false);
     this.root.eventMode = "static";
     this.root.on("globalpointermove", (event) => this.moveDrag(event));
     this.root.on("pointerup", (event) => this.releaseDrag(event));
@@ -75673,6 +75727,12 @@ var EncounterScene = class {
    * Resolves a persisted entity or scene identifier to its current design-space position.
    */
   getEffectAnchor(id) {
+    if (id === "hud:stamina") return this.runHud.getStaminaAnchor();
+    if (id.startsWith("feedback:block:")) {
+      const entityId = id.slice("feedback:block:".length);
+      const unit = this.entityTiles.get(`player:${entityId}`) ?? this.entityTiles.get(`enemy:${entityId}`);
+      return unit ? { x: unit.container.x, y: unit.container.y + unit.artwork.y * unit.container.scale.x } : void 0;
+    }
     const tile = this.getSceneTile(id) ?? this.entityTiles.get(`player:${id}`) ?? this.entityTiles.get(`enemy:${id}`) ?? this.handTiles.get(`card:${id}`) ?? this.handTiles.get(`item:${id}`);
     return tile ? { x: tile.container.x, y: tile.container.y } : void 0;
   }
@@ -75704,6 +75764,10 @@ var EncounterScene = class {
       this.returnActiveDrag();
     }
     this.restorePendingEntityLayouts();
+    if (this.latestSnapshot && this.viewport && this.latestSnapshot.enemies.some((enemy) => enemy.health <= 0)) {
+      this.reconcileEntities(this.latestSnapshot.player, this.latestSnapshot.enemies, this.viewport);
+      this.layoutPageControls(this.latestSnapshot, this.viewport);
+    }
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
   }
@@ -75779,7 +75843,7 @@ var EncounterScene = class {
     this.layoutInputLockFeedback(viewport);
     this.runHud.reconcile({
       block: snapshot.player.block,
-      title: getSceneEnvironment(snapshot.environment)?.localeName.toUpperCase() ?? `THE ${getCombatSceneTreatment(snapshot.sceneTreatmentId).regionId.replaceAll("-", " ").toUpperCase()}`,
+      title: `${getSceneEnvironment(snapshot.environment)?.localeName ?? `The ${getCombatSceneTreatment(snapshot.sceneTreatmentId).regionId.replaceAll("-", " ")}`} \xB7 ${snapshot.roomName || "Encounter"}`,
       health: snapshot.player.health,
       maximumHealth: snapshot.player.maxHealth,
       currency: snapshot.currency,
@@ -75789,7 +75853,6 @@ var EncounterScene = class {
       turnStartEnergy: snapshot.player.turnStartEnergy,
       mana: snapshot.player.mana,
       turnStartMana: snapshot.player.turnStartMana,
-      ...snapshot.pinnedRelics === void 0 ? {} : { pinnedRelics: snapshot.pinnedRelics },
       phase: snapshot.phase
     }, viewport);
     this.updateFeedbackVisibility();
@@ -75865,7 +75928,7 @@ var EncounterScene = class {
     if (!isShortEncounter(viewport)) return;
     const entries = snapshot.inventoryMode ? snapshot.items : snapshot.hand;
     const handIndex = entries.findIndex((entry) => entry.id === (this.selectedEntryId ?? this.focusedEntryId));
-    const enemyIndex = snapshot.enemies.findIndex((enemy) => enemy.id === this.focusedEntityId);
+    const enemyIndex = this.getLayoutEnemies(snapshot.enemies).findIndex((enemy) => enemy.id === this.focusedEntityId);
     if (handIndex >= 0) this.handPage = Math.floor(handIndex / getShortEncounterPageSize("hand", viewport));
     if (enemyIndex >= 0) this.enemyPage = Math.floor(enemyIndex / getShortEncounterPageSize("enemy", viewport));
   }
@@ -75882,7 +75945,7 @@ var EncounterScene = class {
   /** Pages locally without changing the authoritative gameplay snapshot or scene IDs. */
   changePage(kind, direction) {
     if (!this.latestSnapshot || !this.viewport || !isShortEncounter(this.viewport) || this.activeDrag || this.intentPending) return false;
-    const count2 = kind === "enemy" ? this.latestSnapshot.enemies.length : (this.latestSnapshot.inventoryMode ? this.latestSnapshot.items : this.latestSnapshot.hand).length;
+    const count2 = kind === "enemy" ? this.getLayoutEnemies(this.latestSnapshot.enemies).length : (this.latestSnapshot.inventoryMode ? this.latestSnapshot.items : this.latestSnapshot.hand).length;
     const pageSize = getShortEncounterPageSize(kind, this.viewport);
     const pageCount = Math.ceil(count2 / pageSize);
     if (pageCount <= 1) return false;
@@ -75897,7 +75960,7 @@ var EncounterScene = class {
   /** Positions 44-pixel page controls beside compact target and hand bands. */
   layoutPageControls(snapshot, viewport) {
     const entryCount = snapshot.inventoryMode ? snapshot.items.length : snapshot.hand.length;
-    const showEnemies = isShortEncounter(viewport) && snapshot.enemies.length > getShortEncounterPageSize("enemy", viewport);
+    const showEnemies = isShortEncounter(viewport) && this.getLayoutEnemies(snapshot.enemies).length > getShortEncounterPageSize("enemy", viewport);
     const showHand = isShortEncounter(viewport) && entryCount > getShortEncounterPageSize("hand", viewport);
     this.previousEnemyPage.visible = this.nextEnemyPage.visible = showEnemies;
     this.previousHandPage.visible = this.nextHandPage.visible = showHand;
@@ -75912,14 +75975,19 @@ var EncounterScene = class {
       this.nextHandPage.position.set(viewport.width - 52, y2 - 22);
     }
   }
+  /** Keeps defeated actors in the formation while an animation owns their slot. */
+  getLayoutEnemies(enemies) {
+    return enemies.filter((enemy) => enemy.health > 0 || this.isAnimationLocked(`enemy:${enemy.id}`));
+  }
   reconcileEntities(player, enemies, viewport) {
     const expectedIds = /* @__PURE__ */ new Set();
     const playerId = `player:${player.id}`;
     expectedIds.add(playerId);
     this.entities.set(player.id, player);
     this.updateEntityTile(playerId, player, this.playerLayer, layoutPlayer(viewport));
-    const visibleEnemies = this.visiblePage(enemies, viewport, "enemy");
-    const paged = isShortEncounter(viewport) && enemies.length > getShortEncounterPageSize("enemy", viewport);
+    const formation = this.getLayoutEnemies(enemies);
+    const visibleEnemies = this.visiblePage(formation, viewport, "enemy");
+    const paged = isShortEncounter(viewport) && formation.length > getShortEncounterPageSize("enemy", viewport);
     const enemyViewport = paged ? { width: viewport.width - pageControlInset * 2, height: viewport.height } : viewport;
     const enemyPositions = layoutEnemies(visibleEnemies.length, enemyViewport);
     visibleEnemies.forEach((enemy, index) => {
@@ -75937,6 +76005,16 @@ var EncounterScene = class {
         paged ? { ...position, x: position.x + pageControlInset } : position
       );
     });
+    for (const enemy of enemies.filter((enemy2) => enemy2.health <= 0)) {
+      const id = `enemy:${enemy.id}`;
+      expectedIds.add(id);
+      this.entities.set(enemy.id, enemy);
+      const tile = this.entityTiles.get(id);
+      if (tile) {
+        tile.container.visible = false;
+        tile.container.eventMode = "none";
+      }
+    }
     this.removeMissingTiles(this.entityTiles, expectedIds);
     this.removeMissingEntities(expectedIds);
   }
@@ -75994,8 +76072,9 @@ var EncounterScene = class {
       tile.container.scale.set(position.scale ?? 1);
       this.pendingEntityLayouts.delete(id);
     }
+    tile.container.visible = entity.isPlayer || entity.health > 0;
     tile.container.alpha = entity.health > 0 ? 1 : 0.45;
-    tile.container.eventMode = "static";
+    tile.container.eventMode = tile.container.visible ? "static" : "none";
     tile.container.cursor = this.canSelectEntity(entity) ? "pointer" : "default";
     tile.container.removeAllListeners("pointertap");
     tile.container.on("pointertap", (event) => {
@@ -76047,13 +76126,13 @@ var EncounterScene = class {
   /** Keeps dense formations and short windows within the established compact tile bounds. */
   useCompactEntityPresentation() {
     if (!this.viewport || isShortEncounter(this.viewport)) return true;
-    const count2 = this.latestSnapshot?.enemies.length ?? 0;
+    const count2 = this.latestSnapshot ? this.getLayoutEnemies(this.latestSnapshot.enemies).length : 0;
     return count2 > 4 || getViewportLayoutMode(this.viewport) === "MobilePortrait" && count2 > 3;
   }
   /** Retains the compact fallback when multiple rows cannot accommodate full battlefield figures. */
   drawCompactEntityPresentation(tile, entity) {
     tile.hasGroundShadow = true;
-    tile.container.hitArea = new Rectangle(-94, -64, 188, 128);
+    tile.container.hitArea = new Rectangle(-94, -64, 188, 138);
     tile.accent.clear();
     const artHeight = entity.isPlayer ? 76 : 42;
     const artY = entity.isPlayer ? 20 : 27;
@@ -76067,7 +76146,7 @@ var EncounterScene = class {
   fitCompactBattlefieldLabels(tile) {
     tile.title.position.set(0, -53);
     tile.detail.position.set(48, -35);
-    tile.defenses.position.set(0, -18);
+    this.positionDefenseIndicators(tile, -18);
     tile.effects.position.set(0, 1);
     tile.statusIcons.position.set(0, -10);
     tile.description.position.set(0, 56);
@@ -76104,18 +76183,30 @@ var EncounterScene = class {
       this.inspectEntity(tile, telegraph, tile.description.y, true);
     });
     tile.detail.text = entity.isPlayer ? "" : `${entity.health} / ${entity.maxHealth}`;
-    tile.defenses.text = entity.isPlayer ? "" : `Block ${entity.block}${entity.maxPosture > 0 ? `  \xB7  Posture ${entity.posture}/${entity.maxPosture}` : ""}`;
+    tile.defenses.text = !entity.isPlayer && entity.maxPosture > 0 ? `${entity.posture}/${entity.maxPosture}` : "";
+    tile.blockIcon.visible = !entity.isPlayer && entity.block > 0;
+    tile.blockValue.visible = tile.blockIcon.visible;
+    tile.blockValue.text = String(entity.block);
     tile.effects.visible = false;
     tile.statusIcons.update(entity);
     tile.title.position.set(0, -80);
     tile.detail.position.set(48, -56);
-    tile.defenses.position.set(0, -37);
+    this.positionDefenseIndicators(tile, -37);
     tile.description.position.set(0, artY + artHeight / 2 + 14);
     tile.effects.position.set(0, entity.isPlayer ? artY + artHeight / 2 + 10 : -14);
     tile.statusIcons.position.set(0, entity.isPlayer ? artY + artHeight / 2 + 10 : -24);
     tile.healthBar.position.set(0, 0);
     tile.postureBar.position.set(0, 0);
-    this.drawMeter(tile.healthBar, entity.health, entity.maxHealth, -78, -60, 84, 8, uiTokens.color.health);
+    this.drawMeter(
+      tile.healthBar,
+      entity.health,
+      entity.maxHealth,
+      -78,
+      -60,
+      84,
+      8,
+      entity.block > 0 ? uiTokens.color.textMuted : uiTokens.color.health
+    );
     tile.healthBar.visible = !entity.isPlayer && entity.maxHealth > 0;
     this.drawMeter(tile.postureBar, entity.posture, entity.maxPosture, -70, -28, 140, 3, uiTokens.color.block);
     tile.postureBar.visible = !entity.isPlayer && entity.maxPosture > 0;
@@ -76123,6 +76214,13 @@ var EncounterScene = class {
     fitTextToBox(tile.detail, 70, 18, 14, 12);
     fitTextToBox(tile.effects, 176, 22, 14, 12);
     fitTextToBox(tile.description, 176, 26, 15, 13);
+  }
+  /** Keeps shield counts and posture values legible above the posture meter. */
+  positionDefenseIndicators(tile, y2) {
+    const hasPosture = tile.defenses.text.length > 0;
+    tile.defenses.position.set(tile.blockIcon.visible ? 36 : 0, y2);
+    tile.blockIcon.position.set(hasPosture ? -72 : -26, y2 - 10);
+    tile.blockValue.position.set(hasPosture ? -36 : 10, y2);
   }
   updateHandTile(id, entry, position) {
     const isCard = isCardPresentationState2(entry);
@@ -76187,12 +76285,21 @@ var EncounterScene = class {
     const postureBar = new Graphics();
     const defenses = new Text({ text: "", style: { ...uiTokens.typography.caption, align: "center", fill: uiTokens.color.block, stroke: { color: uiTokens.color.panelShadow, width: 2 } } });
     defenses.anchor.set(0.5);
+    const blockIcon = createResourceIcon("block", uiTokens.color.block);
+    const blockValue = new Text({ text: "", style: {
+      ...uiTokens.typography.numericResource,
+      fill: uiTokens.color.block,
+      stroke: { color: uiTokens.color.panelShadow, width: 2 }
+    } });
+    blockValue.anchor.set(0.5);
+    blockIcon.visible = false;
+    blockValue.visible = false;
     const container = new Container();
     title.anchor.set(0.5, 0.5);
     description.anchor.set(0.5, 0.5);
     detail.anchor.set(0.5, 0.5);
     effects.anchor.set(0.5, 0.5);
-    for (const label of [title, description, detail, effects, defenses]) {
+    for (const label of [title, description, detail, effects, defenses, blockValue]) {
       label.resolution = 2;
     }
     title.position.set(0, -42);
@@ -76202,8 +76309,8 @@ var EncounterScene = class {
     container.addChild(background, targetHighlight, artwork, accent, title, description, detail, healthBar, postureBar, effects, defenses);
     layer.addChild(container);
     const statusIcons = new StatusEffectsView((text, pinned) => this.inspectEntity(tile, text, statusIcons.y, pinned), () => this.dismissInspection());
-    container.addChild(statusIcons, impactHighlight);
-    const tile = { container, background, accent, targetHighlight, impactHighlight, artwork, title, description, detail, effects, statusIcons, healthBar, postureBar, defenses };
+    container.addChild(statusIcons, impactHighlight, blockIcon, blockValue);
+    const tile = { container, background, accent, targetHighlight, impactHighlight, artwork, title, description, detail, effects, statusIcons, healthBar, postureBar, defenses, blockIcon, blockValue };
     tiles.set(id, tile);
     return tile;
   }
@@ -76309,6 +76416,7 @@ var EncounterScene = class {
     }
     const tileId = getEntrySceneId(entry);
     const returningDrag = this.dragReturns.get(tileId);
+    this.ignoredPointerTapEntryId = void 0;
     this.cancelDragReturn(tileId);
     const pointerOrigin = event.getLocalPosition(this.root);
     this.activeDrag = {
@@ -76486,11 +76594,13 @@ var EncounterScene = class {
     cardView.position.set(-handCardVisualSize.width / 2, -handCardVisualSize.height / 2);
     cardView.scale.set(handCardViewScale);
     tile.container.removeAllListeners();
-    tile.container.removeChild(tile.background, tile.accent, tile.targetHighlight, tile.impactHighlight, tile.artwork, tile.title, tile.description, tile.detail, tile.healthBar, tile.postureBar, tile.effects, tile.defenses, tile.statusIcons);
+    tile.container.removeChild(tile.background, tile.accent, tile.targetHighlight, tile.impactHighlight, tile.artwork, tile.title, tile.description, tile.detail, tile.healthBar, tile.postureBar, tile.effects, tile.defenses, tile.statusIcons, tile.blockIcon, tile.blockValue);
     tile.impactHighlight.destroy({ children: true });
     tile.statusIcons.destroy({ children: true });
     tile.targetHighlight.destroy({ children: true });
     tile.defenses.destroy();
+    tile.blockIcon.destroy();
+    tile.blockValue.destroy();
     tile.artwork.destroy();
     tile.title.destroy();
     tile.description.destroy();
@@ -76614,16 +76724,16 @@ ${entry.unavailableReason}` : ""),
       this.releaseActiveDrag(false);
       return;
     }
-    this.returnActiveDrag(event.getLocalPosition(this.root));
+    this.returnActiveDrag();
   }
   cancelDrag(event) {
     const drag = this.activeDrag;
     if (!drag || drag.pointerId !== event.pointerId) {
       return;
     }
-    this.returnActiveDrag(event.getLocalPosition(this.root));
+    this.returnActiveDrag();
   }
-  returnActiveDrag(pointerPosition) {
+  returnActiveDrag() {
     const drag = this.activeDrag;
     if (!drag) {
       return;
@@ -76637,28 +76747,10 @@ ${entry.unavailableReason}` : ""),
       elapsedMs: 0
     });
     this.entryInteractionStates.set(tileId, "returning");
-    const shouldKeepInspection = pointerPosition !== void 0 && this.isPointerOverHandSlot(drag.entry, destination, pointerPosition);
-    if (!shouldKeepInspection) {
-      if (this.hoveredEntryId === drag.entry.id) {
-        this.hoveredEntryId = void 0;
-      }
-      if (this.selectedEntryId === drag.entry.id) {
-        this.selectedEntryId = void 0;
-      }
-    }
+    if (this.hoveredEntryId === drag.entry.id) this.hoveredEntryId = void 0;
+    if (this.selectedEntryId === drag.entry.id) this.selectedEntryId = void 0;
+    this.ignoredPointerTapEntryId = drag.entry.id;
     this.releaseActiveDrag(false);
-  }
-  /** Determines whether a cancellation pointer is still over the card's settled hand slot. */
-  isPointerOverHandSlot(entry, transform2, pointer) {
-    const horizontalOffset = pointer.x - transform2.x;
-    const verticalOffset = pointer.y - transform2.y;
-    const cosine = Math.cos(transform2.rotation);
-    const sine = Math.sin(transform2.rotation);
-    const localX = horizontalOffset * cosine + verticalOffset * sine;
-    const localY = -horizontalOffset * sine + verticalOffset * cosine;
-    const halfWidth = (isCardPresentationState2(entry) ? handCardVisualSize.width / 2 : 54) * transform2.scale;
-    const halfHeight = (isCardPresentationState2(entry) ? handCardVisualSize.height / 2 : 64) * transform2.scale;
-    return Math.abs(localX) <= halfWidth && Math.abs(localY) <= halfHeight;
   }
   releaseActiveDrag(clearSelection = true) {
     this.activeDrag = void 0;
@@ -77220,7 +77312,7 @@ ${entry.unavailableReason}` : ""),
     }
   }
   refreshInteractionState() {
-    this.endTurn.label = this.endingTurnPending || this.latestSnapshot?.phase !== "WaitingForInput" ? "ENEMY TURN" : "END TURN";
+    this.endTurn.label = this.latestSnapshot?.phase === "Victory" ? "VICTORY" : this.endingTurnPending || this.latestSnapshot?.phase !== "WaitingForInput" ? "ENEMY TURN" : "END TURN";
     this.endTurn.setEnabled(!this.inputReleased && !this.intentPending && !this.activeDrag && this.queuedEntryIds.size === 0 && this.latestSnapshot?.phase === "WaitingForInput");
     for (const [tileId, tile] of this.handTiles) {
       const entryId = tileId.substring(tileId.indexOf(":") + 1);
@@ -77234,7 +77326,7 @@ ${entry.unavailableReason}` : ""),
       const entityId = tileId.substring(tileId.indexOf(":") + 1);
       const entity = this.entities.get(entityId);
       const isInteractive = !this.inputReleased && entity !== void 0 && !this.isAnimationLocked(tileId) && this.canSelectEntity(entity);
-      tile.container.eventMode = this.inputReleased ? "none" : isInteractive ? "static" : "passive";
+      tile.container.eventMode = this.inputReleased || !tile.container.visible ? "none" : isInteractive ? "static" : "passive";
       tile.container.cursor = isInteractive ? "pointer" : "default";
     }
   }
@@ -77254,6 +77346,17 @@ ${entry.unavailableReason}` : ""),
       kind: isCardPresentationState2(entry) ? "playCard" : "useItem",
       sourceId: entry.id,
       targetId,
+      sequence: this.currentSequence,
+      sceneId: encounterSceneId
+    });
+  }
+  /** Opens the existing collection overlay at the authoritative deck. */
+  requestDeckCollection() {
+    if (this.inputReleased || this.intentPending || !this.latestSnapshot) return;
+    this.submitIntent({
+      kind: "previewDeck",
+      sourceId: null,
+      targetId: null,
       sequence: this.currentSequence,
       sceneId: encounterSceneId
     });
@@ -77460,15 +77563,16 @@ ${entry.unavailableReason}` : ""),
       return;
     }
     const currentIndex = this.focusedEntityId ? targetIds.indexOf(this.focusedEntityId) : -1;
-    const pageSize = this.viewport && isShortEncounter(this.viewport) ? getShortEncounterPageSize("enemy", this.viewport) : snapshot.enemies.length;
-    const pageTargets = snapshot.enemies.slice(this.enemyPage * pageSize, (this.enemyPage + 1) * pageSize).map((entity2) => entity2.id).filter((id) => targetIds.includes(id));
+    const formation = this.getLayoutEnemies(snapshot.enemies);
+    const pageSize = this.viewport && isShortEncounter(this.viewport) ? getShortEncounterPageSize("enemy", this.viewport) : formation.length;
+    const pageTargets = formation.slice(this.enemyPage * pageSize, (this.enemyPage + 1) * pageSize).map((entity2) => entity2.id).filter((id) => targetIds.includes(id));
     const focusedEntityId = currentIndex < 0 && this.enemyPage > 0 && pageTargets.length > 0 ? pageTargets[direction > 0 ? 0 : pageTargets.length - 1] : targetIds[(currentIndex + direction + targetIds.length) % targetIds.length];
     if (!focusedEntityId) {
       return;
     }
     this.focusedEntityId = focusedEntityId;
     const entity = [snapshot.player, ...snapshot.enemies].find((candidate) => candidate.id === focusedEntityId);
-    const enemyIndex = snapshot.enemies.findIndex((candidate) => candidate.id === focusedEntityId);
+    const enemyIndex = formation.findIndex((candidate) => candidate.id === focusedEntityId);
     if (enemyIndex >= 0 && this.viewport && isShortEncounter(this.viewport)) {
       const page = Math.floor(enemyIndex / getShortEncounterPageSize("enemy", this.viewport));
       if (page !== this.enemyPage) {
@@ -83448,7 +83552,7 @@ function isMenuOverlayState(value) {
   const settings = candidate.settings;
   if (typeof settings !== "object" || settings === null) return false;
   const item = settings;
-  return Number.isInteger(item.tabIndex) && Number.isFinite(item.masterVolume) && Number.isFinite(item.sfxVolume) && Number.isFinite(item.musicVolume) && Number.isFinite(item.ambientVolume) && Number.isFinite(item.speed) && typeof item.cardTiltEnabled === "boolean" && typeof item.particleLevel === "string" && typeof item.debugProgressionEnabled === "boolean" && Number.isInteger(item.metaExperience) && Number.isInteger(item.unlockedMetaRewards) && (item.sharedRemembrancePoints === void 0 || Number.isInteger(item.sharedRemembrancePoints));
+  return Number.isInteger(item.tabIndex) && Number.isFinite(item.masterVolume) && Number.isFinite(item.sfxVolume) && Number.isFinite(item.musicVolume) && Number.isFinite(item.ambientVolume) && Number.isFinite(item.speed) && typeof item.cardTiltEnabled === "boolean" && typeof item.particleLevel === "string" && (item.showResourceGainText === void 0 || typeof item.showResourceGainText === "boolean") && (item.showEffectSources === void 0 || typeof item.showEffectSources === "boolean") && typeof item.debugProgressionEnabled === "boolean" && Number.isInteger(item.metaExperience) && Number.isInteger(item.unlockedMetaRewards) && (item.sharedRemembrancePoints === void 0 || Number.isInteger(item.sharedRemembrancePoints));
 }
 function isProgressionNode(value) {
   if (typeof value !== "object" || value === null) return false;
@@ -83570,12 +83674,15 @@ async function createMenuOverlayRenderer(canvas, sink) {
   };
   const layoutSettings = (settings) => {
     const short = height < 440;
-    const rowHeight = short ? 42 : 54;
+    const top = short ? 98 : 116;
+    const footerY = height - (width < 520 && !short ? 102 : 50);
+    const gameplayRows = settings.debugProgressionEnabled ? 7 : 4;
+    const rowHeight = settings.tabIndex === 0 ? short ? 42 : 54 : Math.max(28, Math.min(short ? 42 : 54, (footerY - top - 8) / gameplayRows));
+    const controlHeight = Math.min(40, rowHeight - 4);
     addText("Settings", 24, 15, short ? 24 : 30);
     const tabWidth = Math.min(180, (width - 56) / 2);
     addButton("Audio", "tab:0", 24, short ? 48 : 60, tabWidth, 38);
     addButton("Gameplay", "tab:1", 32 + tabWidth, short ? 48 : 60, tabWidth, 38);
-    const top = short ? 98 : 116;
     if (settings.tabIndex === 0) {
       const sliders = [
         { key: "master", label: "Master", value: settings.masterVolume, min: 0, max: 1, step: 0.05 },
@@ -83586,19 +83693,21 @@ async function createMenuOverlayRenderer(canvas, sink) {
       sliders.forEach((slider, index) => addSlider(slider, top + index * rowHeight));
     } else {
       addSlider({ key: "speed", label: "Speed", value: settings.speed, min: 0.5, max: 2, step: 0.1 }, top);
-      addButton(`Card tilt: ${settings.cardTiltEnabled ? "On" : "Off"}`, "toggle:tilt", 24, top + rowHeight, Math.min(240, width - 48));
+      addButton(`Card tilt: ${settings.cardTiltEnabled ? "On" : "Off"}`, "toggle:tilt", 24, top + rowHeight, Math.min(240, width - 48), controlHeight);
       const levels = ["Low", "Medium", "High", "Maximum"];
       const next = levels[(levels.indexOf(settings.particleLevel) + 1) % levels.length] ?? "High";
-      addButton(`Particles: ${settings.particleLevel}`, `particle:${next}`, 24, top + rowHeight * 2, Math.min(240, width - 48));
+      addButton(`Particles: ${settings.particleLevel}`, `particle:${next}`, 24, top + rowHeight * 2, Math.min(240, width - 48), controlHeight);
+      const feedbackWidth = Math.min(240, (width - 56) / 2);
+      addButton(`Resource gains: ${settings.showResourceGainText === false ? "Off" : "On"}`, "toggle:resource-gains", 24, top + rowHeight * 3, feedbackWidth, controlHeight);
+      addButton(`Effect names: ${settings.showEffectSources === false ? "Off" : "On"}`, "toggle:effect-sources", 32 + feedbackWidth, top + rowHeight * 3, feedbackWidth, controlHeight);
       if (settings.debugProgressionEnabled) {
         addText(`Character Remembrance ${settings.metaExperience} \xB7 ${settings.unlockedMetaRewards} milestones
-Shared Remembrance ${settings.sharedRemembrancePoints ?? 0}`, 24, top + rowHeight * 3, 14, width - 48);
+Shared Remembrance ${settings.sharedRemembrancePoints ?? 0}`, 24, top + rowHeight * 4, rowHeight < 40 ? 12 : 14, width - 48);
         const debugWidth = Math.min(210, (width - 64) / 3);
-        [["Character +25", "debug:xp:25"], ["Character +100", "debug:xp:100"], ["Reset character", "debug:reset"]].forEach(([label, action], index) => addButton(label, action, 24 + index * (debugWidth + 8), top + rowHeight * 4, debugWidth, 40));
-        [["Shared +25", "debug:shared:25"], ["Reset shared", "debug:shared:reset"]].forEach(([label, action], index) => addButton(label, action, 24 + index * (debugWidth + 8), top + rowHeight * 4 + 44, debugWidth, 40));
+        [["Character +25", "debug:xp:25"], ["Character +100", "debug:xp:100"], ["Reset character", "debug:reset"]].forEach(([label, action], index) => addButton(label, action, 24 + index * (debugWidth + 8), top + rowHeight * 5, debugWidth, controlHeight));
+        [["Shared +25", "debug:shared:25"], ["Reset shared", "debug:shared:reset"]].forEach(([label, action], index) => addButton(label, action, 24 + index * (debugWidth + 8), top + rowHeight * 6, debugWidth, controlHeight));
       }
     }
-    const footerY = height - (width < 520 && !short ? 102 : 50);
     const twoRows = width < 520 && !short;
     const buttonWidth = twoRows ? (width - 56) / 2 : (width - 56) / 4;
     const footer = [["Defaults", "defaults"], ["Clear data", "clear"], ["Cancel", "cancel"], ["Save", "save"]];
@@ -84073,7 +84182,7 @@ var toolbarHeight = 64;
 var buttonHeight = 48;
 var menuButtonHeight = 44;
 var buttonGap = 6;
-var actionIds = /* @__PURE__ */ new Set(["deck", "discard", "inventory", "endTurn", "map", "backpack", "rewards", "history", "settings", "fullscreen", "title", "restart"]);
+var actionIds = /* @__PURE__ */ new Set(["deck", "relics", "discard", "inventory", "endTurn", "map", "backpack", "rewards", "history", "settings", "fullscreen", "title", "restart"]);
 var toolbarPriority = ["endTurn", "map", "inventory", "deck", "backpack", "discard", "fullscreen", "rewards"];
 async function createRunControlsRenderer(canvas, sink, initialState) {
   const application = new Application();
@@ -84293,6 +84402,82 @@ function toRunControlsState(value) {
   return { menuOpen, actions: validActions };
 }
 
+// src/pixi-run-hud.ts
+init_lib();
+async function createRunHudRenderer(canvas, sink, initialState) {
+  const application = new Application();
+  await application.init({ antialias: true, autoDensity: true, backgroundAlpha: 0, canvas, preference: "canvas" });
+  const restore = installCanvasPresentationRecovery(application, canvas);
+  let pending = false;
+  let disposed = false;
+  let state = toRunResourceState(initialState);
+  const submit = async (action) => {
+    if (pending || disposed) return;
+    pending = true;
+    try {
+      await sink.invokeMethodAsync("HandleActionFromRendererAsync", action);
+    } finally {
+      pending = false;
+    }
+  };
+  const hud = new RunHud(() => void submit("relics"), () => void submit("deck"));
+  application.stage.addChild(hud);
+  const tooltip = document.createElement("div");
+  tooltip.className = "run-resource-tooltip";
+  tooltip.hidden = true;
+  canvas.parentElement?.appendChild(tooltip);
+  hud.bindResourceInspection((text, anchor) => {
+    tooltip.textContent = text;
+    tooltip.hidden = false;
+    tooltip.style.left = `${Math.max(8, Math.min(canvas.clientWidth - 180, anchor.x))}px`;
+  }, () => {
+    tooltip.hidden = true;
+  });
+  const layout = () => {
+    if (disposed) return;
+    const width = Math.max(1, canvas.parentElement?.clientWidth ?? canvas.clientWidth);
+    application.renderer.resize(width, 44);
+    hud.visible = state !== void 0;
+    if (state) hud.reconcile(state, { width, height: 44 });
+    application.render();
+  };
+  const resizeObserver = new ResizeObserver(layout);
+  resizeObserver.observe(canvas.parentElement ?? canvas);
+  layout();
+  return {
+    reconcile(value) {
+      const parsed = toRunResourceState(value);
+      if (value != null && !parsed) return false;
+      state = parsed;
+      tooltip.hidden = true;
+      layout();
+      return true;
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      resizeObserver.disconnect();
+      tooltip.remove();
+      restore();
+      application.destroy({ removeView: false }, { children: true });
+    }
+  };
+}
+function toRunResourceState(value) {
+  if (typeof value !== "object" || value === null) return void 0;
+  const fields = value;
+  const read = (name, pascal) => fields[name] ?? fields[pascal];
+  const health = read("health", "Health");
+  const maximumHealth = read("maximumHealth", "MaximumHealth");
+  const currency = read("currency", "Currency");
+  const deckCount = read("deckCount", "DeckCount");
+  const relicCount = read("relicCount", "RelicCount");
+  const block = read("block", "Block");
+  if (typeof health !== "number" || typeof maximumHealth !== "number" || typeof currency !== "number" || typeof deckCount !== "number" || typeof relicCount !== "number" || ![health, maximumHealth, currency, deckCount, relicCount].every(Number.isFinite)) return void 0;
+  if (block != null && (typeof block !== "number" || !Number.isFinite(block))) return void 0;
+  return { health, maximumHealth, currency, deckCount, relicCount, ...typeof block === "number" ? { block } : {}, phase: "Exploring" };
+}
+
 // src/pixi-encounter.ts
 function activateModalFocus(dialog) {
   const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -84386,6 +84571,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     rendererBackend: application.renderer.type === 4 ? "canvas" : "gpu",
     ...getParticleBudgets(typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches),
     reducedMotion: prefersReducedMotion5(),
+    textMotionScale: () => viewport.height / encounterDesignViewport.height,
     resolveAnchor: (id) => scene.getEffectAnchor(id)
   });
   const runtimeScene = new EncounterRuntimeScene(scene, () => {
@@ -84976,6 +85162,7 @@ export {
   createRestRenderer,
   createRewardRenderer,
   createRunControlsRenderer,
+  createRunHudRenderer,
   createShopRenderer,
   createTreasureRenderer
 };
