@@ -70669,6 +70669,155 @@ var CircleParticleDisplay = class extends Container {
   }
 };
 
+// src/decorative-particle-display.ts
+init_lib();
+var DecorativeParticleDisplay = class {
+  core = new Particle({ texture: Texture.EMPTY, anchorX: 0.5, anchorY: 0.5 });
+  halo;
+  glowAlpha = 0;
+  /** Sets static quad geometry and independent halo color once per pooled use. */
+  configure(texture, size, glowIntensity, glowColor, glowAlpha) {
+    this.core.texture = texture;
+    this.core.scaleX = size * 2 / Math.max(1, texture.width);
+    this.core.scaleY = size * 2 / Math.max(1, texture.height);
+    this.glowAlpha = glowIntensity > 0 ? glowAlpha : 0;
+    if (this.glowAlpha > 0) {
+      this.halo ??= new Particle({ texture, anchorX: 0.5, anchorY: 0.5 });
+      this.halo.texture = texture;
+      this.halo.scaleX = this.core.scaleX * (1 + glowIntensity / 12);
+      this.halo.scaleY = this.core.scaleY * (1 + glowIntensity / 12);
+      this.halo.tint = glowColor;
+    }
+  }
+  /** Exposes only the quads used by this pooled configuration. */
+  get activeHalo() {
+    return this.glowAlpha > 0 ? this.halo : void 0;
+  }
+  /** Changes only dynamic position, rotation, color, and alpha during simulation. */
+  render(x2, y2, rotation, tint, alpha, progress) {
+    this.core.x = x2;
+    this.core.y = y2;
+    this.core.rotation = rotation;
+    this.core.tint = tint;
+    this.core.alpha = alpha;
+    const halo = this.activeHalo;
+    if (!halo) return;
+    halo.x = x2;
+    halo.y = y2;
+    halo.rotation = rotation;
+    halo.alpha = alpha * this.glowAlpha * (1 - progress);
+  }
+  /** Drops texture references when a pooled display is trimmed. Textures remain manager-owned. */
+  destroy() {
+    this.core.texture = Texture.EMPTY;
+    if (this.halo) this.halo.texture = Texture.EMPTY;
+  }
+};
+
+// src/decorative-particle-batches.ts
+init_lib();
+var DecorativeParticleBatches = class {
+  constructor(layer) {
+    this.layer = layer;
+  }
+  layer;
+  batches = /* @__PURE__ */ new Map();
+  memberships = /* @__PURE__ */ new Map();
+  /** Keeps halo quads behind core quads, with both passes grouped by source and blend mode. */
+  attach(display, blendMode) {
+    if (display.activeHalo) this.attachQuad(display.activeHalo, blendMode, true);
+    this.attachQuad(display.core, blendMode, false);
+  }
+  /** Inserts batches below labels, with a separate background pass for translucent halos. */
+  attachQuad(particle, blendMode, halo) {
+    const texture = particle.texture;
+    const key = `${blendMode}:${halo ? "halo" : "core"}`;
+    const modes = this.batches.get(texture.source) ?? /* @__PURE__ */ new Map();
+    this.batches.set(texture.source, modes);
+    let batch = modes.get(key);
+    if (!batch) {
+      const container = new ParticleContainer({ texture, dynamicProperties: { position: true, color: true, rotation: true, vertex: false, uvs: false } });
+      container.eventMode = "none";
+      container.blendMode = blendMode;
+      batch = { container, indices: /* @__PURE__ */ new Map() };
+      modes.set(key, batch);
+    }
+    if (batch.container.parent !== this.layer) {
+      const firstLabel = this.layer.children.findIndex((child) => !(child instanceof ParticleContainer));
+      this.layer.addChildAt(batch.container, halo ? 0 : firstLabel < 0 ? this.layer.children.length : firstLabel);
+    }
+    this.add(batch, particle);
+  }
+  /** Removes an unordered quad in constant time and detaches empty batches immediately. */
+  detach(display) {
+    this.remove(display.core);
+    if (display.halo) this.remove(display.halo);
+  }
+  /** Releases empty batches after all emissions for a frame have had a chance to reuse them. */
+  prune() {
+    for (const [source8, modes] of this.batches) {
+      for (const [mode, batch] of modes) {
+        if (batch.indices.size > 0) continue;
+        batch.container.destroy();
+        modes.delete(mode);
+      }
+      if (modes.size === 0) this.batches.delete(source8);
+    }
+  }
+  /** Releases batch buffers without destroying shared image or manager-owned circle textures. */
+  clear() {
+    for (const modes of this.batches.values()) {
+      for (const batch of modes.values()) {
+        batch.container.removeFromParent();
+        batch.container.particleChildren.length = 0;
+        batch.container.destroy();
+      }
+    }
+    this.batches.clear();
+    this.memberships.clear();
+  }
+  /** Rebinds cleared run-owned batching to another effect layer. */
+  rebind(layer) {
+    this.clear();
+    this.layer = layer;
+  }
+  /** Appends static quad data and marks its batch for one buffer refresh at the next render. */
+  add(batch, particle) {
+    batch.indices.set(particle, batch.container.particleChildren.length);
+    batch.container.addParticle(particle);
+    this.memberships.set(particle, batch);
+  }
+  /** Repairs the moved quad's index after swap removal; alpha ordering is decorative and unordered. */
+  remove(particle) {
+    const batch = this.memberships.get(particle);
+    const index = batch?.indices.get(particle);
+    if (!batch || index === void 0) return;
+    const particles = batch.container.particleChildren;
+    const last = particles.pop();
+    if (last && index < particles.length) {
+      particles[index] = last;
+      batch.indices.set(last, index);
+    }
+    batch.indices.delete(particle);
+    this.memberships.delete(particle);
+    batch.container.update();
+    if (particles.length === 0) batch.container.removeFromParent();
+  }
+};
+
+// src/circle-particle-texture.ts
+init_lib();
+function createCircleParticleTexture() {
+  const canvas = DOMAdapter.get().createCanvas(64, 64);
+  const context2 = canvas.getContext("2d");
+  if (!context2) throw new Error("A 2D context is required to prepare the particle texture.");
+  context2.fillStyle = "#ffffff";
+  context2.beginPath();
+  context2.arc(32, 32, 32, 0, Math.PI * 2);
+  context2.fill();
+  return Texture.from(canvas);
+}
+
 // src/particle-effect-manager.ts
 var ParticleEffectManager = class {
   constructor(layer, options = {}) {
@@ -70678,6 +70827,8 @@ var ParticleEffectManager = class {
     this.maxPooledParticles = Math.max(0, options.maxPooledParticles ?? this.maxParticles);
     this.reducedMotion = options.reducedMotion ?? prefersReducedMotion();
     this.resolveAnchor = options.resolveAnchor;
+    this.decorativeBatches = new DecorativeParticleBatches(layer);
+    this.rendererBackend = options.rendererBackend ?? "gpu";
   }
   layer;
   emitters = /* @__PURE__ */ new Map();
@@ -70691,7 +70842,10 @@ var ParticleEffectManager = class {
   disposed = false;
   liveParticleCount = 0;
   pooledParticleCount = 0;
+  circleTexture;
   circleContext;
+  rendererBackend;
+  decorativeBatches;
   resolveAnchor;
   /**
    * Starts or replaces an emitter using the persisted C# particle option contract.
@@ -70758,6 +70912,7 @@ var ParticleEffectManager = class {
         this.destroy(emitter.options.id);
       }
     }
+    this.decorativeBatches.prune();
   }
   /**
    * Gets deterministic manager counters for renderer diagnostics.
@@ -70767,8 +70922,8 @@ var ParticleEffectManager = class {
       activeEmitterCount: this.emitters.size,
       liveParticleCount: this.liveParticleCount,
       pooledParticleCount: this.pooledParticleCount,
-      cachedTextureCount: this.textureCache.size,
-      cachedTextureByteEstimate: getTextureByteEstimate(this.textureCache.values())
+      cachedTextureCount: this.textureCache.size + (this.circleTexture ? 1 : 0),
+      cachedTextureByteEstimate: getTextureByteEstimate(this.textureCache.values()) + (this.circleTexture ? getTextureByteEstimate([this.circleTexture]) : 0)
     };
   }
   /**
@@ -70778,6 +70933,7 @@ var ParticleEffectManager = class {
     for (const id of [...this.emitters.keys()]) {
       this.destroy(id);
     }
+    this.decorativeBatches.clear();
   }
   /**
    * Rebinds pooled effects to the active scene's persistent render layer and anchors.
@@ -70788,6 +70944,7 @@ var ParticleEffectManager = class {
     }
     this.clear();
     this.layer = layer;
+    this.decorativeBatches.rebind(layer);
     this.resolveAnchor = resolveAnchor;
   }
   /**
@@ -70806,6 +70963,8 @@ var ParticleEffectManager = class {
     }
     this.pools.clear();
     this.pooledParticleCount = 0;
+    this.circleTexture?.destroy(true);
+    this.circleTexture = void 0;
     this.circleContext?.destroy();
     this.circleContext = void 0;
     this.textureCache.clear();
@@ -70841,7 +71000,7 @@ var ParticleEffectManager = class {
       particle.x += (particle.directionX * particle.speed + particle.velocityX) * step;
       particle.y += (particle.directionY * particle.speed + particle.velocityY) * step;
       particle.speed *= Math.pow(particle.friction, step);
-      particle.display.rotation += particle.rotationSpeed * step;
+      particle.rotation += particle.rotationSpeed * step;
       this.renderParticle(particle, emitter.options, emitter.lastAnchor);
     }
   }
@@ -70897,17 +71056,19 @@ var ParticleEffectManager = class {
   }
   /** Places new labels clear of older labels that have already risen out of their original lane. */
   separateTextParticle(emitter, particle) {
-    const labels = [...this.emitters.values()].filter((active) => active.textOffsetKey === emitter.textOffsetKey).flatMap((active) => active.particles.map((label) => ({ particle: label, height: getTextLaneHeight(label.display) }))).sort((left, right) => right.particle.display.position.y - left.particle.display.position.y);
-    const height = getTextLaneHeight(particle.display);
-    let y2 = particle.display.position.y;
+    const display = particle.display;
+    if (!(display instanceof Text)) return;
+    const labels = [...this.emitters.values()].filter((active) => active.textOffsetKey === emitter.textOffsetKey).flatMap((active) => active.particles.map((label) => label.display).filter((label) => label instanceof Text)).sort((left, right) => right.position.y - left.position.y);
+    const height = getTextLaneHeight(display);
+    let y2 = display.position.y;
     for (const label of labels) {
-      const spacing = (height + label.height) / 2;
-      if (Math.abs(y2 - label.particle.display.position.y) < spacing) {
-        y2 = label.particle.display.position.y - spacing;
+      const spacing = (height + getTextLaneHeight(label)) / 2;
+      if (Math.abs(y2 - label.position.y) < spacing) {
+        y2 = label.position.y - spacing;
       }
     }
-    particle.y += y2 - particle.display.position.y;
-    particle.display.position.set(particle.display.position.x, y2);
+    particle.y += y2 - display.position.y;
+    display.position.set(display.position.x, y2);
   }
   createParticle(options, textOffset) {
     const display = this.acquire(options);
@@ -70934,22 +71095,28 @@ var ParticleEffectManager = class {
       lifespanMs: Math.max(1, randomInRange(options.lifespan)),
       ageMs: 0,
       rotationSpeed: randomInRange(options.rotationSpeed),
+      rotation: randomInRange(options.rotation),
       startColor: color,
       endColor,
       endAlpha: options.endAlpha
     };
-    display.rotation = randomInRange(options.rotation);
     this.initializeParticleDisplay(particle, options);
     return particle;
   }
-  /** Builds circle geometry and sets immutable sprite/text properties once per pooled use. */
+  /** Sets static quad geometry before attaching it, so WebGL uploads it only after membership changes. */
   initializeParticleDisplay(particle, options) {
     const display = particle.display;
-    display.blendMode = toPixiBlendMode(options.blendMode);
-    display.scale.set(1);
-    if (display instanceof CircleParticleDisplay) {
+    if (display instanceof DecorativeParticleDisplay) {
+      const texture = options.renderMode === "image" && options.imageSrc ? this.getTexture(options.imageSrc) : this.getCircleTexture();
+      const glow = options.renderMode === "default" ? options.glowIntensity : 0;
+      display.configure(texture, particle.size, glow, toHexColor(options.glowColor), Math.min(0.38, glow / 40) * options.glowColor.a);
+      this.decorativeBatches.attach(display, toPixiBlendMode(options.blendMode));
+    } else if (display instanceof CircleParticleDisplay) {
+      display.blendMode = toPixiBlendMode(options.blendMode);
       display.configure(particle.size, options.glowIntensity, toHexColor(options.glowColor), Math.min(0.38, options.glowIntensity / 40) * options.glowColor.a);
     } else {
+      display.blendMode = toPixiBlendMode(options.blendMode);
+      display.scale.set(1);
       display.anchor.set(0.5);
       if (display instanceof Sprite) {
         display.width = particle.size * 2;
@@ -70965,13 +71132,19 @@ var ParticleEffectManager = class {
       this.configureDisplay(pooled, options);
     }
     const display = pooled ?? this.createDisplay(options);
-    display.eventMode = "none";
-    display.visible = true;
-    display.alpha = 1;
-    if (display.parent !== this.layer) {
-      this.layer.addChild(display);
+    if (!(display instanceof DecorativeParticleDisplay)) {
+      display.eventMode = "none";
+      display.visible = true;
+      display.alpha = 1;
+      if (display.parent !== this.layer) this.attachSceneDisplay(display);
     }
     return display;
+  }
+  /** Keeps readable labels above decorative Canvas displays and GPU batches. */
+  attachSceneDisplay(display) {
+    const firstLabel = this.layer.children.findIndex((child) => child instanceof Text);
+    if (display instanceof Text || firstLabel < 0) this.layer.addChild(display);
+    else this.layer.addChildAt(display, firstLabel);
   }
   createDisplay(options) {
     if (options.renderMode === "text") {
@@ -70979,9 +71152,8 @@ var ParticleEffectManager = class {
       text.resolution = 2;
       return text;
     }
-    if (options.renderMode === "image" && options.imageSrc) {
-      return new Sprite(this.getTexture(options.imageSrc));
-    }
+    if (this.rendererBackend === "gpu") return new DecorativeParticleDisplay();
+    if (options.renderMode === "image" && options.imageSrc) return new Sprite(this.getTexture(options.imageSrc));
     this.circleContext ??= new GraphicsContext().circle(0, 0, 32).fill(16777215);
     return new CircleParticleDisplay(this.circleContext);
   }
@@ -70993,6 +71165,11 @@ var ParticleEffectManager = class {
     } else if (display instanceof Sprite && options.imageSrc) {
       display.texture = this.getTexture(options.imageSrc);
     }
+  }
+  /** Retains the manager-owned disc across bursts and scene reentry. */
+  getCircleTexture() {
+    this.circleTexture ??= createCircleParticleTexture();
+    return this.circleTexture;
   }
   getTexture(source8) {
     const texture = this.textureCache.get(source8) ?? Texture.from(source8);
@@ -71006,12 +71183,16 @@ var ParticleEffectManager = class {
     const fade = particle.mode === "text" ? textFadeProgress(progress) : progress;
     const alpha = (1 - fade) * (1 - particle.endAlpha) + particle.endAlpha;
     const origin = anchor ?? options.position;
-    particle.display.position.set(origin.x + options.offset.x + particle.x, origin.y + options.offset.y + particle.y);
-    particle.display.alpha = alpha * color.a;
-    if (particle.display instanceof CircleParticleDisplay) {
-      particle.display.update(toHexColor(color), progress);
+    const x2 = origin.x + options.offset.x + particle.x;
+    const y2 = origin.y + options.offset.y + particle.y;
+    if (particle.display instanceof DecorativeParticleDisplay) {
+      particle.display.render(x2, y2, particle.rotation, toHexColor(color), alpha * color.a, progress);
     } else {
-      particle.display.tint = toHexColor(color);
+      particle.display.position.set(x2, y2);
+      particle.display.rotation = particle.rotation;
+      particle.display.alpha = alpha * color.a;
+      if (particle.display instanceof CircleParticleDisplay) particle.display.update(toHexColor(color), progress);
+      else particle.display.tint = toHexColor(color);
     }
   }
   /** Removes an unordered particle in constant time while keeping global diagnostics exact. */
@@ -71028,8 +71209,11 @@ var ParticleEffectManager = class {
     this.recycle(particle);
   }
   recycle(particle) {
-    particle.display.removeFromParent();
-    particle.display.visible = false;
+    if (particle.display instanceof DecorativeParticleDisplay) this.decorativeBatches.detach(particle.display);
+    else {
+      particle.display.removeFromParent();
+      particle.display.visible = false;
+    }
     if (this.pooledParticleCount >= this.maxPooledParticles) {
       particle.display.destroy();
       return;
@@ -84198,6 +84382,8 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   });
   const animationDirector = new AnimationDirector(scene.createAnimationCommandExecutor());
   const particleEffects = new ParticleEffectManager(runtime.renderLayers.effect, {
+    // Pixi RendererType.CANVAS is 4; GPU batching would add tinted bitmap work on that backend.
+    rendererBackend: application.renderer.type === 4 ? "canvas" : "gpu",
     ...getParticleBudgets(typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches),
     reducedMotion: prefersReducedMotion5(),
     resolveAnchor: (id) => scene.getEffectAnchor(id)
