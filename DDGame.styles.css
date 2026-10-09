@@ -173,6 +173,7 @@
 .pixi-run-resource-rail[hidden][b-2ntaig32y6] { display: none; }
 .pixi-run-resource-rail[b-2ntaig32y6]  .run-resource-tooltip { position: absolute; top: 44px; max-width: calc(100vw - 24px); padding: 8px 12px; background: #08171c; color: #f4efe3; border: 1px solid #caa65c; border-radius: 4px; pointer-events: none; }
 .pixi-run-controls-surface canvas[b-2ntaig32y6] { display: block; height: 100%; outline: none; touch-action: manipulation; width: 100%; }
+.pixi-run-resource-rail canvas[b-2ntaig32y6] { height: 44px; }
 .pixi-run-controls-surface canvas:focus-visible[b-2ntaig32y6] { outline: 3px solid var(--mud-palette-secondary); outline-offset: -3px; }
 .pixi-run-controls-help[b-2ntaig32y6], .pixi-run-controls-accessibility[b-2ntaig32y6] {
     border: 0;
