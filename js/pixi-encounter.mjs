@@ -45816,13 +45816,13 @@ var init_DynamicBitmapFont = __esm({
         context2.font = fontStringFromTextStyle(style);
         style.fontSize = this.baseMeasurementFontSize;
         context2.textBaseline = style.textBaseline;
-        const stroke = style._stroke;
-        const strokeThickness = stroke?.width ?? 0;
-        if (stroke) {
+        const stroke2 = style._stroke;
+        const strokeThickness = stroke2?.width ?? 0;
+        if (stroke2) {
           context2.lineWidth = strokeThickness;
-          context2.lineJoin = stroke.join;
-          context2.miterLimit = stroke.miterLimit;
-          context2.strokeStyle = getCanvasFillStyle(stroke, context2);
+          context2.lineJoin = stroke2.join;
+          context2.miterLimit = stroke2.miterLimit;
+          context2.strokeStyle = getCanvasFillStyle(stroke2, context2);
         }
         if (style._fill) {
           context2.fillStyle = getCanvasFillStyle(style._fill, context2);
@@ -45846,8 +45846,8 @@ var init_DynamicBitmapFont = __esm({
       _drawGlyph(context2, metrics, x2, y2, fontScale, style) {
         const char = metrics.text;
         const fontProperties = metrics.fontProperties;
-        const stroke = style._stroke;
-        const strokeThickness = (stroke?.width ?? 0) * fontScale;
+        const stroke2 = style._stroke;
+        const strokeThickness = (stroke2?.width ?? 0) * fontScale;
         const tx = x2 + strokeThickness / 2;
         const ty = y2 - strokeThickness / 2;
         const descent = fontProperties.descent * fontScale;
@@ -62275,10 +62275,10 @@ var init_BitmapText = __esm({
         const offset = bitmapMeasurement.offsetY * scale;
         let width = bitmapMeasurement.width * scale;
         let height = bitmapMeasurement.height * scale;
-        const stroke = this._style._stroke;
-        if (stroke) {
-          width += stroke.width;
-          height += stroke.width;
+        const stroke2 = this._style._stroke;
+        if (stroke2) {
+          width += stroke2.width;
+          height += stroke2.width;
         }
         bounds.minX = -anchor._x * width;
         bounds.maxX = bounds.minX + width;
@@ -62335,7 +62335,7 @@ var init_BitmapText = __esm({
 
 // node_modules/pixi.js/lib/scene/text-html/utils/textStyleToCSS.mjs
 function textStyleToCSS(style) {
-  const stroke = style._stroke;
+  const stroke2 = style._stroke;
   const fill = style._fill;
   const color = Color.shared.setValue(fill.color).setAlpha(fill.alpha ?? 1).toHexa();
   const cssStyleString = [
@@ -62354,7 +62354,7 @@ function textStyleToCSS(style) {
       `word-break: ${style.breakWords ? "break-word" : "normal"}`,
       `max-width: ${style.wordWrapWidth}px`
     ] : [],
-    ...stroke ? [strokeToCSS(stroke)] : [],
+    ...stroke2 ? [strokeToCSS(stroke2)] : [],
     ...style.dropShadow ? [dropShadowToCSS(style.dropShadow)] : [],
     ...style.cssOverrides
   ].join(";");
@@ -62373,12 +62373,12 @@ function dropShadowToCSS(dropShadowStyle) {
   }
   return `text-shadow: ${position} ${color}`;
 }
-function strokeToCSS(stroke) {
-  const color = Color.shared.setValue(stroke.color).setAlpha(stroke.alpha ?? 1).toHexa();
+function strokeToCSS(stroke2) {
+  const color = Color.shared.setValue(stroke2.color).setAlpha(stroke2.alpha ?? 1).toHexa();
   return [
-    `-webkit-text-stroke-width: ${stroke.width}px`,
+    `-webkit-text-stroke-width: ${stroke2.width}px`,
     `-webkit-text-stroke-color: ${color}`,
-    `text-stroke-width: ${stroke.width}px`,
+    `text-stroke-width: ${stroke2.width}px`,
     `text-stroke-color: ${color}`,
     "paint-order: stroke"
   ].join(";");
@@ -72589,6 +72589,73 @@ function getCombatSceneTreatment(value) {
   return typeof value === "string" && Object.hasOwn(combatSceneTreatmentRegistry, value) ? combatSceneTreatmentRegistry[value] ?? foldCombatSceneTreatment : foldCombatSceneTreatment;
 }
 
+// src/menu-icons.ts
+init_lib();
+var stroke = { color: 13678460, width: 1.6 };
+var clock = (g2) => {
+  g2.circle(8, 8, 6).stroke(stroke).moveTo(8, 4).lineTo(8, 8).lineTo(11, 10).stroke(stroke);
+};
+var home = (g2) => {
+  g2.moveTo(1, 7).lineTo(8, 1).lineTo(15, 7).stroke(stroke).rect(4, 7, 8, 8).stroke(stroke);
+};
+var bag = (g2) => {
+  g2.roundRect(2, 5, 12, 10, 2).stroke(stroke).roundRect(5, 1, 6, 6, 2).stroke(stroke);
+};
+var sparkle = (g2) => {
+  g2.moveTo(8, 1).lineTo(11, 6).lineTo(15, 8).lineTo(11, 10).lineTo(8, 15).lineTo(5, 10).lineTo(1, 8).lineTo(5, 6).closePath().stroke(stroke);
+};
+var drawings = {
+  history: clock,
+  restart: clock,
+  home,
+  rooms: home,
+  inventory: bag,
+  shop: bag,
+  rewards: sparkle,
+  training: sparkle,
+  remembrance: sparkle,
+  settings: (g2) => {
+    g2.circle(8, 8, 4).stroke(stroke).circle(8, 8, 1.5).stroke(stroke);
+    for (let i2 = 0; i2 < 8; i2++) {
+      const a2 = i2 * Math.PI / 4;
+      g2.moveTo(8 + Math.cos(a2) * 5, 8 + Math.sin(a2) * 5).lineTo(8 + Math.cos(a2) * 7, 8 + Math.sin(a2) * 7).stroke(stroke);
+    }
+  },
+  fullscreen: (g2) => {
+    for (const [x2, y2, dx, dy] of [[1, 1, 1, 1], [15, 1, -1, 1], [1, 15, 1, -1], [15, 15, -1, -1]]) g2.moveTo(x2 + dx * 4, y2).lineTo(x2, y2).lineTo(x2, y2 + dy * 4).stroke(stroke);
+  },
+  previous: (g2) => {
+    g2.moveTo(11, 2).lineTo(5, 8).lineTo(11, 14).stroke(stroke);
+  },
+  next: (g2) => {
+    g2.moveTo(5, 2).lineTo(11, 8).lineTo(5, 14).stroke(stroke);
+  },
+  menu: (g2) => {
+    for (const y2 of [3, 8, 13]) g2.moveTo(1, y2).lineTo(15, y2).stroke(stroke);
+  },
+  close: (g2) => {
+    g2.moveTo(3, 3).lineTo(13, 13).moveTo(13, 3).lineTo(3, 13).stroke(stroke);
+  },
+  cards: (g2) => {
+    g2.rect(1, 1, 9, 12).stroke(stroke).rect(5, 4, 9, 11).stroke(stroke);
+  },
+  equipment: (g2) => {
+    g2.moveTo(8, 1).lineTo(14, 4).lineTo(12, 11).lineTo(8, 15).lineTo(4, 11).lineTo(2, 4).closePath().stroke(stroke);
+  },
+  events: (g2) => {
+    g2.rect(3, 1, 10, 14).stroke(stroke).moveTo(6, 5).lineTo(10, 5).moveTo(6, 9).lineTo(10, 9).stroke(stroke);
+  },
+  rest: (g2) => {
+    g2.moveTo(2, 11).lineTo(14, 11).moveTo(4, 15).lineTo(4, 7).moveTo(12, 15).lineTo(12, 7).stroke(stroke);
+  }
+};
+function createMenuIcon(name) {
+  const g2 = new Graphics();
+  drawings[name](g2);
+  g2.eventMode = "none";
+  return g2;
+}
+
 // src/scroll-content-fade.ts
 init_lib();
 function hasFadedEdges(viewport) {
@@ -72935,6 +73002,7 @@ var GamePanel = class extends Container {
 };
 var GameButton = class extends GamePanel {
   labelText;
+  navigationIcon;
   fullLabel;
   onPress;
   stateOutline = new Graphics();
@@ -72950,6 +73018,8 @@ var GameButton = class extends GamePanel {
     this.isEnabled = options.enabled ?? true;
     this.isFocused = this.isEnabled && (options.focused ?? false);
     this.isSelected = this.isEnabled && (options.selected ?? false);
+    this.navigationIcon = options.menuIcon ? createMenuIcon(options.menuIcon) : void 0;
+    if (this.navigationIcon) this.content.addChild(this.navigationIcon);
     this.fullLabel = options.label;
     this.labelText = new Text({ text: options.label, style: new TextStyle(uiTokens.typography.button) });
     this.labelText.resolution = 2;
@@ -73054,7 +73124,10 @@ var GameButton = class extends GamePanel {
     this.labelText.text = this.fullLabel;
     this.accessibleTitle = this.fullLabel;
     this.labelText.style.wordWrap = false;
-    fitTextToBox(this.labelText, this.panelSize.width - 16, this.panelSize.height - 12, 16, 11);
+    const inset = this.navigationIcon ? 32 : 0;
+    if (this.navigationIcon) this.navigationIcon.position.set(10, (this.panelSize.height - 16) / 2);
+    this.labelText.position.set((this.panelSize.width + inset) / 2, this.panelSize.height / 2);
+    fitTextToBox(this.labelText, this.panelSize.width - 16 - inset, this.panelSize.height - 12, 16, 11);
   }
   updatePresentation() {
     this.eventMode = this.isEnabled ? "static" : "none";
@@ -73076,8 +73149,8 @@ var GameButton = class extends GamePanel {
     }
   }
 };
-function drawButtonSurface(graphics, width, height, fill = 1058092, stroke = 5467506) {
-  graphics.clear().roundRect(0, 0, width, height, 3).fill({ color: fill }).stroke({ color: stroke, width: 1 });
+function drawButtonSurface(graphics, width, height, fill = 1058092, stroke2 = 5467506) {
+  graphics.clear().roundRect(0, 0, width, height, 3).fill({ color: fill }).stroke({ color: stroke2, width: 1 });
   graphics.rect(4, 3, Math.max(0, width - 8), 1).fill({ color: 15920868, alpha: 0.14 });
   graphics.rect(4, Math.max(0, height - 3), Math.max(0, width - 8), 1).fill({ color: 133646, alpha: 0.36 });
 }
@@ -82418,6 +82491,63 @@ var contextBodyStyle3 = { fill: 13358561, fontFamily: "Alegreya, Georgia, serif"
 var feedbackStyle5 = { fill: 14844014, fontFamily: "Alegreya, Georgia, serif", fontSize: 15, align: "center" };
 var controlStyle = uiTokens.typography.button;
 
+// src/menu-backdrop.ts
+function drawMenuBackdrop(g2, width, height, scene) {
+  g2.clear().rect(0, 0, width, height).fill(726813);
+  const horizon = height * 0.64;
+  for (let i2 = 0; i2 < 20; i2++) g2.rect(0, i2 * height / 20, width, height / 20 + 1).fill({ color: scene === "woodland" ? 4284779 : 4736588, alpha: 0.04 + i2 * 8e-3 });
+  const moonX = width * 0.76;
+  for (let i2 = 6; i2 > 0; i2--) g2.circle(moonX, height * 0.2, 24 + i2 * 15).fill({ color: 10337723, alpha: 0.012 });
+  g2.circle(moonX, height * 0.2, 23).fill({ color: 11913663, alpha: 0.65 });
+  for (let layer = 0; layer < 3; layer++) {
+    g2.moveTo(0, height);
+    for (let i2 = 0; i2 <= 18; i2++) g2.lineTo(i2 * width / 18, horizon - height * 0.16 + layer * height * 0.12 - Math.sin(i2 * 1.8 + layer * 2) * height * 0.035);
+    g2.lineTo(width, height).closePath().fill([2440519, 1781816, 1188907][layer]);
+  }
+  if (scene === "woodland") drawWoodland(g2, width, height);
+  else drawHall(g2, width, height);
+  g2.rect(0, height * 0.86, width, height * 0.14).fill({ color: 462869, alpha: 0.4 });
+}
+function drawWoodland(g2, w2, h2) {
+  g2.moveTo(0, h2 * 0.68).lineTo(w2, h2 * 0.68).lineTo(w2, h2 * 0.88).lineTo(0, h2 * 0.88).closePath().fill({ color: 4416369, alpha: 0.2 });
+  for (let i2 = 0; i2 < 12; i2++) {
+    const span = 24 + i2 * 8;
+    const x2 = w2 * 0.76 - span / 2;
+    g2.moveTo(x2, h2 * (0.7 + i2 * 0.012)).lineTo(x2 + span, h2 * (0.7 + i2 * 0.012)).stroke({ color: 12045250, alpha: 0.08, width: 2 });
+  }
+  for (const fraction of [0.02, 0.13, 0.88, 0.98]) {
+    const x2 = w2 * fraction;
+    const trunk = Math.min(44, w2 * 0.045);
+    g2.moveTo(x2 - trunk / 2, h2).lineTo(x2 - trunk * 0.2, h2 * 0.28).lineTo(x2 + trunk * 0.2, h2 * 0.28).lineTo(x2 + trunk / 2, h2).closePath().fill(793377);
+    for (let i2 = 0; i2 < 5; i2++) {
+      const branchX = x2 + Math.sin(i2 * 2) * Math.min(85, w2 * 0.07);
+      const branchY = h2 * (0.18 + i2 % 3 * 0.065);
+      g2.moveTo(x2, h2 * 0.52).lineTo(branchX, branchY).stroke({ color: 793377, width: Math.max(3, trunk * 0.25) });
+      g2.ellipse(branchX, branchY, Math.min(118, w2 * 0.12), h2 * 0.12).fill({ color: 1059371, alpha: 0.9 });
+    }
+  }
+  for (let i2 = 0; i2 < 34; i2++) {
+    const x2 = i2 * 137.1 % w2;
+    const y2 = h2 * 0.65 + i2 * 29 % Math.max(1, h2 * 0.28);
+    g2.circle(x2, y2, i2 % 2 + 1).fill({ color: 13945229, alpha: 0.4 }).circle(x2, y2, 6).fill({ color: 13945229, alpha: 0.025 });
+  }
+}
+function drawHall(g2, w2, h2) {
+  g2.rect(0, h2 * 0.7, w2, h2 * 0.3).fill(1515814);
+  for (const fraction of [0.08, 0.25, 0.75, 0.92]) {
+    const x2 = w2 * fraction;
+    const pillar = Math.min(55, w2 * 0.06);
+    g2.rect(x2 - pillar / 2, 0, pillar, h2 * 0.8).fill(1121572).rect(x2 - pillar / 2 - 8, h2 * 0.77, pillar + 16, 20).fill(2569274);
+    for (let i2 = 5; i2 > 0; i2--) g2.circle(x2, h2 * 0.38, 10 + i2 * 12).fill({ color: 15251317, alpha: 0.018 });
+    g2.roundRect(x2 - 6, h2 * 0.36, 12, 23, 3).fill(13674092).stroke({ color: 5784879, width: 2 });
+  }
+  for (let i2 = 0; i2 < 9; i2++) g2.moveTo(w2 / 2, h2 * 0.69).lineTo(i2 * w2 / 8, h2).stroke({ color: 6977398, alpha: 0.13, width: 1 });
+  for (let i2 = 0; i2 < 5; i2++) {
+    const y2 = h2 * (0.73 + i2 * i2 * 0.014);
+    g2.moveTo(0, y2).lineTo(w2, y2).stroke({ color: 6977398, alpha: 0.13, width: 1 });
+  }
+}
+
 // src/pixi-main-menu.ts
 init_lib();
 async function createMainMenuRenderer(canvas, sink, initialState) {
@@ -82451,8 +82581,8 @@ async function createMainMenuRenderer(canvas, sink, initialState) {
     const panelHeight = Math.max(1, Math.min(Math.max(1, height - 32), 388));
     const panelX = (width - panelWidth) / 2;
     const panelY = (height - panelHeight) / 2;
-    background.clear().rect(0, 0, width, height).fill(529183).rect(0, 0, width, height * 0.38).fill({ color: 1520456, alpha: 0.45 });
-    panel.clear().roundRect(panelX, panelY, panelWidth, panelHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
+    drawMenuBackdrop(background, width, height, "woodland");
+    panel.clear().roundRect(panelX, panelY, panelWidth, panelHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill, alpha: 0.88 }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
     watermark.position.set(width - 12, height - 10);
     const buttonWidth = Math.max(180, panelWidth - 72);
     const buttonGap2 = Math.max(8, Math.min(14, panelHeight * 0.05));
@@ -82495,7 +82625,7 @@ async function createMainMenuRenderer(canvas, sink, initialState) {
     if (focusedIndex >= entries.length) focusedIndex = Math.max(0, entries.length - 1);
     buttonLayer.removeChildren();
     buttons = entries.map((entry, index) => {
-      const button = new GameButton({ label: entry.label, width: 1, height: 1, enabled: !pending, focused: index === focusedIndex, onPress: () => void submit(entry.action) });
+      const button = new GameButton({ label: entry.label, menuIcon: entry.action === "runHistory" ? "history" : entry.action === "continue" ? "next" : "cards", width: 1, height: 1, enabled: !pending, focused: index === focusedIndex, onPress: () => void submit(entry.action) });
       buttonLayer.addChild(button);
       return button;
     });
@@ -82691,8 +82821,8 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
     const panelHeight = Math.min(height - 28, 600);
     const x2 = (width - panelWidth) / 2;
     const y2 = (height - panelHeight) / 2;
-    background.clear().rect(0, 0, width, height).fill(529183);
-    panel.clear().roundRect(x2, y2, panelWidth, panelHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
+    drawMenuBackdrop(background, width, height, "hall");
+    panel.clear().roundRect(x2, y2, panelWidth, panelHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill, alpha: 0.9 }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
     const compact = panelHeight < 420;
     const headingY = y2 + 12;
     heading.style.fontSize = compact ? 20 : 24;
@@ -83427,6 +83557,49 @@ function artworkPath(entry) {
   return entry.kind === "item" ? itemArtwork(entry.name, entry.image) : entry.image ?? "";
 }
 
+// src/history-pagination.ts
+function paginateHistoryLines(lines, maxHeight, measure) {
+  const pages = [];
+  let page = "";
+  for (const line of lines) {
+    let first = true;
+    for (const word of line.split(/\s+/)) {
+      if (measure(word) > maxHeight) {
+        if (page) {
+          pages.push(page);
+          page = "";
+        }
+        const fragments = splitLongWord(word, maxHeight, measure);
+        pages.push(...fragments.slice(0, -1));
+        page = fragments.at(-1) ?? "";
+        first = false;
+        continue;
+      }
+      const separator = page ? first ? "\n\n" : " " : "";
+      const candidate = page + separator + word;
+      if (page && measure(candidate) > maxHeight) {
+        pages.push(page);
+        page = word;
+      } else page = candidate;
+      first = false;
+    }
+  }
+  if (page) pages.push(page);
+  return pages.length ? pages : ["No entries recorded."];
+}
+function splitLongWord(word, maxHeight, measure) {
+  const fragments = [];
+  let fragment8 = "";
+  for (const character of word) {
+    if (fragment8 && measure(fragment8 + character) > maxHeight) {
+      fragments.push(fragment8);
+      fragment8 = character;
+    } else fragment8 += character;
+  }
+  if (fragment8) fragments.push(fragment8);
+  return fragments;
+}
+
 // src/pixi-menu-overlay.ts
 init_lib();
 
@@ -83582,11 +83755,25 @@ async function createMenuOverlayRenderer(canvas, sink) {
   let selectedIndex = 0;
   let pending = false;
   let disposed = false;
+  let historyPage = 0;
+  let historyPageCount = 1;
+  let runListPage = 0;
+  let historySelection = "";
   let width = 1;
   let height = 1;
   const sliderDisposers = [];
   const submit = async (action) => {
     if (pending || disposed) return;
+    if (action === "history:page:previous" || action === "history:page:next") {
+      historyPage = Math.max(0, Math.min(historyPageCount - 1, historyPage + (action.endsWith("next") ? 1 : -1)));
+      layout();
+      return;
+    }
+    if (action === "history:list:previous" || action === "history:list:next") {
+      runListPage += action.endsWith("next") ? 1 : -1;
+      layout();
+      return;
+    }
     pending = true;
     try {
       await sink.invokeMethodAsync("HandleActionFromRendererAsync", action);
@@ -83605,10 +83792,11 @@ async function createMenuOverlayRenderer(canvas, sink) {
     content.addChild(label);
     return label;
   };
-  const addButton = (label, action, x2, y2, buttonWidth, buttonHeight2 = 42, enabled = true) => {
+  const addButton = (label, action, x2, y2, buttonWidth, buttonHeight2 = 42, enabled = true, icon) => {
     const index = controls.length;
+    const activeSection = action === `history:section:${state?.history?.selectedSectionIndex}` || action === `history:run:${state?.history?.selectedRunId}`;
     const activeTab = action.startsWith("tab:") && state?.settings?.tabIndex === Number(action.slice(4));
-    const button = new GameButton({ ...settingsActionColors(action), width: buttonWidth, height: buttonHeight2, label, enabled, selected: index === selectedIndex || activeTab, onPress: () => {
+    const button = new GameButton({ ...settingsActionColors(action), menuIcon: icon, width: buttonWidth, height: buttonHeight2, label, enabled, selected: index === selectedIndex || activeTab || activeSection, onPress: () => {
       selectedIndex = index;
       void submit(action);
     } });
@@ -83637,7 +83825,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     preview(slider.value);
     sliderDisposers.push(installSettingsSliderInput(
       host?.canvas ?? canvas,
-      { x: trackX, y: y2, width: trackWidth, sceneWidth: width, sceneHeight: height },
+      { x: trackX, y: y2 + (host ? 44 : 0), width: trackWidth, sceneWidth: width, sceneHeight: height + (host ? 44 : 0) },
       slider.value,
       slider.min,
       slider.max,
@@ -83716,7 +83904,8 @@ Shared Remembrance ${settings.sharedRemembrancePoints ?? 0}`, 24, top + rowHeigh
       canvas.style.height = "100%";
     }
     width = Math.max(1, host?.width() ?? canvas.clientWidth ?? canvas.parentElement?.clientWidth ?? 800);
-    height = Math.max(1, host?.height() ?? canvas.clientHeight ?? canvas.parentElement?.clientHeight ?? 600);
+    height = Math.max(1, (host?.height() ?? canvas.clientHeight ?? canvas.parentElement?.clientHeight ?? 600) - (host ? 44 : 0));
+    root.position.set(0, host ? 44 : 0);
     application?.renderer.resize(width, height);
     backdrop.clear().rect(0, 0, width, height).fill({ color: uiColors.panelFill, alpha: 0.98 });
     backdrop.eventMode = "static";
@@ -83731,34 +83920,86 @@ Shared Remembrance ${settings.sharedRemembrancePoints ?? 0}`, 24, top + rowHeigh
   const layoutHistory = (history) => {
     const runIndex = Math.max(0, history.runs.findIndex((run2) => run2.id === history.selectedRunId));
     const run = history.runs[runIndex];
-    addText("Run History", 24, 18, 28);
+    addText("Run History", 24, 16, 26);
+    addButton("Close", "history:close", width - 116, 14, 92, 38, true, "close");
     if (!run) {
-      addText("No runs have been recorded yet. Complete a run or enter a room to start building history.", 24, 78, 18, width - 48);
-      addButton("Close", "history:close", 24, height - 66, Math.min(220, width - 48));
+      addText("Your story starts here. Embark on a run to record your journey, discoveries, and rewards.", 24, 88, 18, width - 48);
       return;
     }
-    addText(`${run.title} \xB7 ${run.outcome}`, 24, 62, 21, width - 48);
-    addText(run.subtitle, 24, 94, 15, width - 48).style.fill = 12175571;
-    const compact = width < 500;
-    const short = height < 440;
-    run.summary.forEach((line, index) => {
-      const columns = compact && !short ? 1 : 3;
-      addText(line, 24 + index % columns * ((width - 56) / columns), 124 + Math.floor(index / columns) * 24, 14, (width - 64) / columns);
-    });
-    const sectionIndex = Math.max(0, history.selectedSectionIndex);
-    const section = run.sections[sectionIndex];
-    if (section) {
-      const detailsY = compact && !short ? 270 : 190;
-      addText(section.title, 24, detailsY, 19, width - 48);
-      section.lines.forEach((line, index) => addText(`\u2022 ${line}`, 30, detailsY + 32 + index * 40, 14, width - 60));
+    const selection = run.id + ":" + history.selectedSectionIndex;
+    if (selection !== historySelection) {
+      historySelection = selection;
+      historyPage = 0;
     }
-    const stackedButtons = compact || short;
-    const buttonWidth = stackedButtons ? (width - 56) / 2 : (width - 80) / 4;
-    const y2 = height - (stackedButtons ? 108 : 66);
-    addButton("Previous run", "history:run:previous", 24, y2, buttonWidth, 42, history.runs.length > 1);
-    addButton("Next run", "history:run:next", 32 + buttonWidth, y2, buttonWidth, 42, history.runs.length > 1);
-    addButton("Next section", "history:section:next", stackedButtons ? 24 : 40 + buttonWidth * 2, y2 + (stackedButtons ? 48 : 0), buttonWidth);
-    addButton("Close", "history:close", stackedButtons ? 32 + buttonWidth : width - 24 - buttonWidth, y2 + (stackedButtons ? 48 : 0), buttonWidth);
+    const wide = width >= 760;
+    const short = height < 460;
+    const x2 = wide ? 258 : 24;
+    const detailWidth = width - x2 - 24;
+    const footerY = height - 54;
+    if (wide) layoutRunList(history, footerY);
+    const summaryBottom = layoutHistorySummary(run, x2, detailWidth, short);
+    const detailsTop = layoutHistoryCategories(run, x2, detailWidth, short, summaryBottom);
+    layoutHistoryDetails(run.sections[history.selectedSectionIndex], x2, detailWidth, short, detailsTop, footerY);
+    layoutHistoryFooter(history, runIndex, x2, footerY, wide);
+  };
+  const layoutHistorySummary = (run, x2, detailWidth, short) => {
+    addText(run.title + " \xB7 " + run.outcome, x2, 64, short ? 18 : 22, detailWidth);
+    const subtitle = addText(run.subtitle, x2, short ? 90 : 98, short ? 12 : 14, detailWidth);
+    subtitle.style.fill = uiColors.bodyText;
+    let y2 = subtitle.y + subtitle.height + 10;
+    const columns = detailWidth >= 500 ? 3 : 2;
+    let summaryHeight = 0;
+    run.summary.forEach((line, index) => {
+      const metric = addText(line, x2 + index % columns * (detailWidth / columns), y2 + Math.floor(index / columns) * 24, 13, detailWidth / columns - 8);
+      summaryHeight = Math.max(summaryHeight, metric.y + metric.height - y2);
+    });
+    y2 += summaryHeight + 12;
+    return y2;
+  };
+  const layoutHistoryCategories = (run, x2, detailWidth, short, y2) => {
+    const tabColumns = detailWidth >= 520 ? 5 : detailWidth >= 380 ? 3 : 2;
+    const tabHeight = short ? 30 : 36;
+    const tabWidth = (detailWidth - (tabColumns - 1) * 6) / tabColumns;
+    run.sections.forEach((section, index) => {
+      const label = { "Event choices": "Events", "Shop purchases": "Shop", "Rest stops": "Rest" }[section.title] ?? section.title;
+      addButton(label, "history:section:" + index, x2 + index % tabColumns * (tabWidth + 6), y2 + Math.floor(index / tabColumns) * (tabHeight + 6), tabWidth, tabHeight, true, historyCategoryIcon(section.title));
+    });
+    return y2 + Math.ceil(run.sections.length / tabColumns) * (tabHeight + 6) + 8;
+  };
+  const layoutHistoryDetails = (section, x2, detailWidth, short, y2, footerY) => {
+    const text = addText("", x2, y2, short ? 12 : 15, detailWidth);
+    text.style.breakWords = true;
+    const availableHeight = Math.max(20, footerY - y2 - 12);
+    const pages = paginateHistoryLines(section?.lines ?? [], availableHeight, (value) => {
+      text.text = value;
+      return text.height;
+    });
+    historyPageCount = pages.length;
+    historyPage = Math.max(0, Math.min(historyPage, pages.length - 1));
+    text.text = pages[historyPage] ?? "";
+  };
+  const layoutHistoryFooter = (history, runIndex, x2, footerY, wide) => {
+    if (!wide) {
+      addButton("Newer", "history:run:previous", x2, footerY, 82, 38, runIndex > 0);
+      addButton("Older", "history:run:next", x2 + 88, footerY, 82, 38, runIndex < history.runs.length - 1);
+      addText(runIndex + 1 + "/" + history.runs.length, x2 + 58, footerY - 20, 12, 80);
+    }
+    const pagerX = wide ? x2 : x2 + 178;
+    const pagerWidth = width - 24 - pagerX;
+    addButton("", "history:page:previous", pagerX, footerY, 38, 38, historyPage > 0, "previous");
+    addButton("", "history:page:next", width - 62, footerY, 38, 38, historyPage < historyPageCount - 1, "next");
+    addText(historyPage + 1 + "/" + historyPageCount, pagerX + 44, footerY + 9, 13, Math.max(30, pagerWidth - 88));
+  };
+  const layoutRunList = (history, footerY) => {
+    const rows = Math.max(1, Math.floor((footerY - 114) / 72));
+    const totalPages = Math.max(1, Math.ceil(history.runs.length / rows));
+    runListPage = Math.max(0, Math.min(runListPage, totalPages - 1));
+    addText("Journeys \xB7 " + history.runs.length, 24, 64, 16, 212);
+    history.runs.slice(runListPage * rows, (runListPage + 1) * rows).forEach((run, index) => {
+      addButton(run.title + " \xB7 " + run.outcome + "\n" + (run.subtitle.split(" \xB7 ")[0] ?? ""), "history:run:" + run.id, 24, 96 + index * 72, 212, 60, true, "history");
+    });
+    addButton("Newer", "history:list:previous", 24, footerY, 102, 38, runListPage > 0, "previous");
+    addButton("Older", "history:list:next", 134, footerY, 102, 38, runListPage < totalPages - 1, "next");
   };
   const layoutProgression = (progression) => {
     addText("Training", 24, 16, 27);
@@ -83866,6 +84107,10 @@ ${node.cost} XP \xB7 ${node.stat}`;
       if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     }
   };
+}
+function historyCategoryIcon(title) {
+  const icons = { Rooms: "rooms", Rewards: "rewards", Deck: "cards", Inventory: "inventory", Equipment: "equipment", "Event choices": "events", "Shop purchases": "shop", "Rest stops": "rest", Training: "training", Remembrance: "remembrance" };
+  return icons[title] ?? "history";
 }
 
 // src/pixi-card-choice.ts
@@ -84160,8 +84405,8 @@ var toolbarHeight = 64;
 var buttonHeight = 48;
 var menuButtonHeight = 44;
 var buttonGap = 6;
-var actionIds = /* @__PURE__ */ new Set(["deck", "relics", "discard", "inventory", "endTurn", "map", "backpack", "rewards", "history", "settings", "fullscreen", "title", "restart"]);
-var toolbarPriority = ["endTurn", "map", "inventory", "deck", "backpack", "discard", "fullscreen", "rewards"];
+var actionIds = /* @__PURE__ */ new Set(["deck", "relics", "discard", "inventory", "endTurn", "map", "backpack", "rewards", "history", "settings", "fullscreen", "title", "restart", "debug", "copySeed"]);
+var toolbarPriority = ["endTurn", "map", "inventory", "deck", "backpack", "discard", "fullscreen", "rewards", "history", "settings"];
 async function createRunControlsRenderer(canvas, sink, initialState) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, backgroundAlpha: 0, canvas, preference: "canvas" });
@@ -84183,6 +84428,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
   let focusedAction = "menu";
   let page = 0;
   let pending = false;
+  let transientFeedback = "";
   let disposed = false;
   let previousFocus = null;
   const submit = async (action) => {
@@ -84195,14 +84441,15 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     if (action !== "menu" && !state.actions.some((entry) => entry.id === action && entry.enabled)) return false;
     pending = true;
     controls.eventMode = "none";
-    feedback.text = "Working\u2026";
+    transientFeedback = "Working\u2026";
+    feedback.text = transientFeedback;
     try {
       const accepted = await sink.invokeMethodAsync("HandleActionFromRendererAsync", action);
       if (disposed) return false;
-      feedback.text = accepted ? "" : "That action is unavailable.";
+      transientFeedback = accepted ? action === "copySeed" ? "Seed copied" : "" : "That action is unavailable.";
       return accepted;
     } catch {
-      feedback.text = "The action could not be completed.";
+      transientFeedback = "The action could not be completed.";
       return false;
     } finally {
       pending = false;
@@ -84212,7 +84459,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
   const createButton = (action, label, enabled, width, height, x2, y2) => {
     let button = retainedButtons.get(action);
     if (!button) {
-      const created = new GameButton({ width, height, label, onPress: () => void submit(action) });
+      const created = new GameButton({ menuIcon: width >= 110 ? controlIcon(action) : void 0, width, height, label, onPress: () => void submit(action) });
       created.on("pointerover", () => created.setFocused(true));
       created.on("pointerout", () => created.setFocused(action === focusedAction));
       created.on("pointerdown", () => created.setSelected(true));
@@ -84253,13 +84500,16 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     const barY = Math.max(0, height - toolbarHeight);
     toolbar.clear().rect(0, barY, width, toolbarHeight).fill(uiColors.panelFill).rect(0, barY, width, 2).fill(uiColors.panelStroke);
     const menuWidth = 64;
-    const availableSlots = Math.max(0, Math.floor((width - menuWidth - 16) / 98));
-    const primaries = toolbarPriority.map((id) => state.actions.find((action) => action.id === id && action.primary)).filter((entry) => entry !== void 0).slice(0, availableSlots);
+    const slotWidth = state.statusLines ? 150 : 98;
+    const availableSlots = Math.max(0, Math.floor((width - menuWidth - 16) / slotWidth));
+    const priority = state.statusLines ? ["history", "settings", "fullscreen"] : toolbarPriority;
+    const primaries = priority.map((id) => state.actions.find((action) => action.id === id && action.primary)).filter((entry) => entry !== void 0).slice(0, availableSlots);
     const menuActions = state.actions.filter((entry) => !primaries.some((primary) => primary.id === entry.id));
-    const primaryWidth = Math.min(92, Math.max(44, (width - menuWidth - 16) / Math.max(1, primaries.length) - buttonGap));
+    const primaryWidth = Math.min(state.statusLines ? 144 : 92, Math.max(44, (width - menuWidth - 16) / Math.max(1, primaries.length) - buttonGap));
     createButton("menu", state.menuOpen ? "Close" : "Menu", true, 58, buttonHeight, 6, barY + 8);
     primaries.forEach((entry, index) => createButton(entry.id, entry.label, entry.enabled, primaryWidth, buttonHeight, menuWidth + 6 + index * (primaryWidth + buttonGap), barY + 8));
     if (!state.menuOpen) {
+      transientFeedback = "";
       removeInactiveButtons();
       feedback.visible = false;
       return;
@@ -84285,6 +84535,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
       createButton("previous", "Previous", page > 0, 96, menuButtonHeight, panelX + 12, barY - 56);
       createButton("next", "Next", page < totalPages - 1, 96, menuButtonHeight, panelX + panelWidth - 108, barY - 56);
     }
+    feedback.text = transientFeedback || state.statusLines?.join(" \xB7 ") || "";
     feedback.visible = true;
     feedback.position.set(panelX + 12, barY - 22);
     removeInactiveButtons();
@@ -84338,6 +84589,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     if (!next) return false;
     const wasOpen = state.menuOpen;
     state = next;
+    if (wasOpen !== state.menuOpen) transientFeedback = "";
     if (wasOpen && !state.menuOpen && previousFocus?.isConnected) {
       previousFocus.focus({ preventScroll: true });
       previousFocus = null;
@@ -84377,7 +84629,13 @@ function toRunControlsState(value) {
     if (typeof id !== "string" || !actionIds.has(id) || typeof label !== "string" || typeof enabled !== "boolean" || typeof primary !== "boolean") return void 0;
     validActions.push({ id, label, enabled, primary });
   }
-  return { menuOpen, actions: validActions };
+  const statusLines = candidate.statusLines ?? candidate.StatusLines;
+  if (statusLines != null && (!Array.isArray(statusLines) || !statusLines.every((line) => typeof line === "string"))) return void 0;
+  return { menuOpen, actions: validActions, statusLines };
+}
+function controlIcon(action) {
+  const icons = { menu: "menu", history: "history", settings: "settings", fullscreen: "fullscreen", title: "home", restart: "restart", previous: "previous", next: "next", deck: "cards", inventory: "inventory", backpack: "inventory", relics: "equipment", map: "rooms", rewards: "rewards" };
+  return icons[action];
 }
 
 // src/pixi-run-hud.ts

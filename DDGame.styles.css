@@ -61,13 +61,12 @@
 /* /Components/PixiCharacterSelectSurface.razor.rz.scp.css */
 .pixi-character-select-surface[b-oywb2u3hc5] {
     background: #08131f;
-    border: 1px solid var(--mud-palette-lines-default);
-    border-radius: var(--mud-default-borderradius);
-    height: min(40rem, calc(100dvh - 8rem));
-    margin: clamp(1rem, 6vh, 4rem) auto;
-    max-width: 42rem;
+    height: calc(100dvh - env(safe-area-inset-top, 0px) - 80px - env(safe-area-inset-bottom, 0px));
+    min-height: 240px;
+    margin: 0;
     overflow: hidden;
-    width: min(100%, 42rem);
+    position: relative;
+    width: 100%;
 }
 
 .pixi-character-select-surface canvas[b-oywb2u3hc5] {
@@ -78,13 +77,6 @@
 }
 
 .pixi-character-select-help[b-oywb2u3hc5] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
-
-@media (max-height: 540px) {
-    .pixi-character-select-surface[b-oywb2u3hc5] {
-        height: calc(100dvh - 2rem);
-        margin-block: 1rem;
-    }
-}
 
 /* /Components/PixiCollectionSurface.razor.rz.scp.css */
 .pixi-collection-surface[b-16jlx61uh4] { background: rgba(3, 10, 18, .78); inset: 0; padding: clamp(1rem, 5vh, 4rem); position: fixed; z-index: 1400; }
@@ -103,14 +95,12 @@
 /* /Components/PixiMainMenuSurface.razor.rz.scp.css */
 .pixi-main-menu-surface[b-22zhoaus0z] {
     background: #08131f;
-    border: 1px solid var(--mud-palette-lines-default);
-    border-radius: var(--mud-default-borderradius);
-    height: min(34rem, calc(100dvh - 8rem));
-    margin: clamp(1rem, 6vh, 4rem) auto;
-    max-width: 42rem;
+    height: calc(100dvh - env(safe-area-inset-top, 0px) - 80px - env(safe-area-inset-bottom, 0px));
+    min-height: 240px;
+    margin: 0;
     overflow: hidden;
     position: relative;
-    width: min(100%, 42rem);
+    width: 100%;
 }
 
 .pixi-main-menu-surface canvas[b-22zhoaus0z] {
