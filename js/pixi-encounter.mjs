@@ -74459,6 +74459,7 @@ var CardView = class extends Container {
   stateOverlay = new Graphics();
   playabilityOutline = new Graphics();
   stateOutline = new Graphics();
+  stateBadge = new Text({ text: "", style: { ...uiTokens.typography.caption, fontSize: 12, fontWeight: "bold", fill: 1515819 } });
   costStyle = new TextStyle({ ...uiTokens.typography.button, stroke: { color: uiTokens.color.panelShadow, width: 3 } });
   nameStyle = new TextStyle({ ...uiTokens.typography.cardTitle, align: "center", fontSize: 20, stroke: { color: uiTokens.color.panelShadow, width: 4 }, wordWrap: true });
   typeStyle = new TextStyle({ ...uiTokens.typography.body, align: "center", fontSize: 13, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true });
@@ -74536,7 +74537,8 @@ var CardView = class extends Container {
       this.stateOverlay,
       this.playabilityOutline,
       this.stateOutline,
-      this.rules
+      this.rules,
+      this.stateBadge
     );
     this.redraw();
   }
@@ -74833,6 +74835,7 @@ var CardView = class extends Container {
       statePresentation.overlayColor,
       statePresentation.outlineColor ?? "",
       this.playability,
+      this.componentState.interaction.selected === true,
       this.cardContent.conditionalEffectActive === true,
       palette.accent
     ].join(":");
@@ -74843,14 +74846,23 @@ var CardView = class extends Container {
     this.stateOverlay.clear();
     this.playabilityOutline.clear();
     this.stateOutline.clear();
+    const selected = this.componentState.interaction.selected === true;
+    const bonus = this.cardContent.conditionalEffectActive === true;
+    this.stateBadge.text = selected ? "SELECTED" : bonus ? "BONUS ACTIVE" : "";
+    this.stateBadge.visible = selected || bonus;
+    this.stateBadge.anchor.set(0.5);
+    this.stateBadge.position.set(this.cardWidth / 2, this.cardHeight * 0.43);
+    if (selected || bonus) {
+      this.stateOutline.roundRect(this.cardWidth / 2 - 52, this.cardHeight * 0.43 - 11, 104, 22, 5).fill({ color: selected ? uiTokens.color.selected : 16766826 });
+    }
     if (statePresentation.overlayAlpha > 0) {
       this.stateOverlay.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: statePresentation.overlayColor, alpha: statePresentation.overlayAlpha });
     }
     if (this.playability === "playable") {
-      this.playabilityOutline.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).stroke({ color: this.cardContent.conditionalEffectActive ? 16766826 : palette.accent, width: this.cardContent.conditionalEffectActive ? 5 : uiTokens.frame.borderWidth });
+      this.playabilityOutline.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).stroke({ color: this.cardContent.conditionalEffectActive ? 16766826 : palette.accent, width: this.cardContent.conditionalEffectActive ? 7 : uiTokens.frame.borderWidth });
     }
     if (statePresentation.outlineColor !== void 0) {
-      this.stateOutline.roundRect(uiTokens.frame.selectedInset, uiTokens.frame.selectedInset, this.cardWidth - uiTokens.frame.selectedInset * 2, this.cardHeight - uiTokens.frame.selectedInset * 2, uiTokens.frame.selectedCornerRadius).stroke({ color: statePresentation.outlineColor, width: uiTokens.frame.borderWidth + 1 });
+      this.stateOutline.roundRect(uiTokens.frame.selectedInset, uiTokens.frame.selectedInset, this.cardWidth - uiTokens.frame.selectedInset * 2, this.cardHeight - uiTokens.frame.selectedInset * 2, uiTokens.frame.selectedCornerRadius).stroke({ color: statePresentation.outlineColor, width: selected ? 6 : uiTokens.frame.borderWidth + 1 });
     }
   }
 };
@@ -75052,7 +75064,7 @@ var RunHud = class extends Container {
       [this.health, "Health"],
       [this.currency, "Gold"],
       [this.deck, "Cards"],
-      [this.relics, "Relics"]
+      [this.relics, "Equipment"]
     ]) {
       counter.eventMode = "static";
       counter.cursor = "help";
@@ -75083,7 +75095,7 @@ var RunHud = class extends Container {
     this.currency.setValue(state.currency);
     this.deck.setValue(state.deckCount);
     this.relics.setValue(formatRelicRailCount(state.relicCount));
-    this.relicCollectionAvailable = state.relicCount > 0;
+    this.relicCollectionAvailable = true;
     this.relics.eventMode = "static";
     this.relics.cursor = this.relicCollectionAvailable ? "pointer" : "default";
     this.deck.eventMode = "static";
@@ -75161,7 +75173,7 @@ var RunHud = class extends Container {
   }
 };
 function createHudCounter(kind, color, value) {
-  const label = kind === "deck" ? "Cards" : kind === "relic" ? "Relics" : "";
+  const label = kind === "deck" ? "Cards" : kind === "relic" ? "Equipment" : "";
   return new ResourceCounter({ icon: createResourceIcon(kind, color), label, value, valueLayout: "inline" });
 }
 function formatRelicRailCount(relicCount) {
@@ -75868,12 +75880,12 @@ var EncounterScene = class {
       this.cancelKeyboardInteraction();
       return true;
     }
-    if (this.intentPending) {
-      return false;
-    }
-    if (event.key.toLowerCase() === "r" && (this.latestSnapshot?.relicCount ?? 0) > 0) {
+    if (event.key.toLowerCase() === "r" && this.latestSnapshot) {
       this.requestRelicCollection();
       return true;
+    }
+    if (this.intentPending) {
+      return false;
     }
     if (event.key === "PageDown" || event.key === "PageUp") {
       return this.changePage(this.selectedEntryId ? "enemy" : "hand", event.key === "PageDown" ? 1 : -1);
@@ -77462,7 +77474,7 @@ ${entry.unavailableReason}` : ""),
   }
   /** Opens the existing collection overlay at the authoritative deck. */
   requestDeckCollection() {
-    if (this.inputReleased || this.intentPending || !this.latestSnapshot) return;
+    if (this.inputReleased || !this.latestSnapshot) return;
     this.submitIntent({
       kind: "previewDeck",
       sourceId: null,
@@ -77473,7 +77485,7 @@ ${entry.unavailableReason}` : ""),
   }
   /** Opens the existing collection overlay at the authoritative relic inventory. */
   requestRelicCollection() {
-    if (this.inputReleased || this.intentPending || !this.latestSnapshot) {
+    if (this.inputReleased || !this.latestSnapshot) {
       return;
     }
     this.submitIntent({
@@ -77698,7 +77710,19 @@ ${entry.unavailableReason}` : ""),
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
   }
+  /** Opens read-only backpack collections without changing a pending combat action. */
+  submitCollectionIntent(intent) {
+    void this.emitIntent(intent).then((result) => {
+      if (!this.inputReleased && !result.accepted) this.showRejectedIntent();
+    }).catch(() => {
+      if (!this.inputReleased) this.showRejectedIntent();
+    });
+  }
   submitIntent(intent) {
+    if (intent.kind === "previewDeck" || intent.kind === "previewRelics") {
+      this.submitCollectionIntent(intent);
+      return;
+    }
     if (intent.kind === "playCard" && intent.sourceId) {
       this.queueCardIntent(intent);
       return;
@@ -77875,7 +77899,7 @@ function getPendingIntentMessage(kind) {
     case "previewDeck":
       return "Opening deck\u2026";
     case "previewRelics":
-      return "Opening relics\u2026";
+      return "Opening equipment\u2026";
     case "useItem":
       return "Using item\u2026";
     default:
@@ -81916,6 +81940,8 @@ async function createMapRenderer(canvas, sink) {
   let actionQueue = Promise.resolve();
   let panX = 0;
   let panY = 0;
+  let layoutPanX = 0;
+  let layoutPanY = 0;
   let pointerStart;
   let travelTransition;
   let didPan = false;
@@ -82109,7 +82135,7 @@ async function createMapRenderer(canvas, sink) {
       panY = pointerStart.panY + event.clientY - pointerStart.y;
       constrainPan(getMapLayoutMetrics(application.renderer.width, application.renderer.height, state?.nodes ?? []));
       scrollMotion.drag(panX - previousX, panY - previousY, event.timeStamp);
-      layout();
+      panGraph();
     }
   };
   const pointerup = (event) => {
@@ -82125,7 +82151,7 @@ async function createMapRenderer(canvas, sink) {
     if (event.shiftKey) panY -= getWheelScrollDelta(event.deltaY, event.deltaMode, application.renderer.height);
     else panX -= getWheelScrollDelta(delta, event.deltaMode, application.renderer.width);
     constrainPan(getMapLayoutMetrics(application.renderer.width, application.renderer.height, state.nodes));
-    layout();
+    panGraph();
     event.preventDefault();
   };
   canvas.addEventListener("keydown", keydown);
@@ -82146,7 +82172,7 @@ async function createMapRenderer(canvas, sink) {
       panY += movement.y;
       constrainPan(getMapLayoutMetrics(application.renderer.width, application.renderer.height, state?.nodes ?? []));
       if (panX === previousX && panY === previousY) scrollMotion.stop();
-      layout();
+      panGraph();
     }
     if (!travelTransition) return;
     travelTransition.elapsedMs += Math.max(0, application.ticker.deltaMS);
@@ -82159,6 +82185,30 @@ async function createMapRenderer(canvas, sink) {
     layout();
   };
   application.ticker.add(tick);
+  function panGraph() {
+    if (disposed) return;
+    const metrics = getMapLayoutMetrics(application.renderer.width, application.renderer.height, state?.nodes ?? []);
+    const dx = panX - layoutPanX;
+    const dy = panY - layoutPanY;
+    layoutPanX = panX;
+    layoutPanY = panY;
+    localeLayer.position.set(localeLayer.x + dx, localeLayer.y + dy);
+    travelMarker.position.set(travelMarker.x + dx, travelMarker.y + dy);
+    visibleNodeCount = 0;
+    for (const view of nodeViews.values()) {
+      view.position.set(view.x + dx, view.y + dy);
+      view.visible = isNodeVisible(view, metrics.graphBounds);
+      if (view.visible) visibleNodeCount++;
+    }
+    visibleConnectionCount = 0;
+    for (const view of connectionViews.values()) {
+      view.graphics.position.set(view.graphics.x + dx, view.graphics.y + dy);
+      const from = nodeViews.get(view.state.sourceId);
+      const to = nodeViews.get(view.state.targetId);
+      view.graphics.visible = from !== void 0 && to !== void 0 && isRouteVisible(from, to, metrics.graphBounds);
+      if (view.graphics.visible) visibleConnectionCount++;
+    }
+  }
   function layout() {
     if (disposed) return;
     layoutCount++;
@@ -82166,6 +82216,10 @@ async function createMapRenderer(canvas, sink) {
     const height = application.renderer.height;
     const metrics = getMapLayoutMetrics(width, height, state?.nodes ?? []);
     constrainPan(metrics);
+    layoutPanX = panX;
+    layoutPanY = panY;
+    localeLayer.position.set(0, 0);
+    travelMarker.position.set(0, 0);
     const { minColumn, minRow, columnStep, rowStep, mapLeft, mapTop } = metrics;
     const { contextBounds } = metrics;
     const nodes = state?.nodes ?? [];
@@ -82190,17 +82244,20 @@ async function createMapRenderer(canvas, sink) {
     graph.addChild(connectionLayer, nodeLayer, travelMarker);
     layoutLocaleBands(pointFor, rowStep);
     let nextVisibleConnectionCount = 0;
-    for (const [key, connectionView] of connectionViews) {
-      const source8 = nodes.find((node) => node.id === key.split(":")[0]);
-      const target = nodes.find((node) => node.id === key.split(":")[1]);
+    const nodesById = new Map(nodes.map((node) => [node.id, node]));
+    for (const connectionView of connectionViews.values()) {
+      connectionView.graphics.position.set(0, 0);
+      const source8 = nodesById.get(connectionView.state.sourceId);
+      const target = nodesById.get(connectionView.state.targetId);
       if (!source8 || !target) continue;
       const from = pointFor(source8);
       const to = pointFor(target);
       eligibleConnectionUpdateCount++;
       const isVisible = isRouteVisible(from, to, metrics.graphBounds);
       connectionView.graphics.visible = isVisible;
-      if (!isVisible) continue;
-      nextVisibleConnectionCount++;
+      if (isVisible) {
+        nextVisibleConnectionCount++;
+      }
       updatedConnectionCount++;
       const selectedRoute = connectionView.state.isReachable && connectionView.state.targetId === selectedNodeId;
       const travelRoute = travelTransition?.sourceId === connectionView.state.sourceId && travelTransition.destinationId === connectionView.state.targetId;
@@ -82219,8 +82276,9 @@ async function createMapRenderer(canvas, sink) {
       eligibleNodeUpdateCount++;
       const isVisible = isNodeVisible(point, metrics.graphBounds);
       view.visible = isVisible;
-      if (!isVisible) continue;
-      nextVisibleNodeCount++;
+      if (isVisible) {
+        nextVisibleNodeCount++;
+      }
       updatedNodeCount++;
       view.update(node, node.id === selectedNodeId, !pending && !travelTransition, metrics.nodeRadius, 22);
     }
@@ -84453,8 +84511,8 @@ var toolbarHeight = 64;
 var buttonHeight = 48;
 var menuButtonHeight = 44;
 var buttonGap = 6;
-var actionIds = /* @__PURE__ */ new Set(["deck", "relics", "discard", "inventory", "endTurn", "map", "backpack", "rewards", "history", "settings", "fullscreen", "title", "restart", "debug", "copySeed"]);
-var toolbarPriority = ["endTurn", "map", "inventory", "deck", "backpack", "discard", "fullscreen", "rewards", "history", "settings"];
+var actionIds = /* @__PURE__ */ new Set(["encounterCards", "deck", "relics", "discard", "inventory", "endTurn", "map", "backpack", "rewards", "history", "settings", "fullscreen", "title", "restart", "debug", "copySeed"]);
+var toolbarPriority = ["endTurn", "map", "inventory", "encounterCards", "backpack", "discard", "fullscreen", "rewards", "history", "settings"];
 async function createRunControlsRenderer(canvas, sink, initialState) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, backgroundAlpha: 0, canvas, preference: "canvas" });
@@ -84682,7 +84740,7 @@ function toRunControlsState(value) {
   return { menuOpen, actions: validActions, statusLines };
 }
 function controlIcon(action) {
-  const icons = { menu: "menu", history: "history", settings: "settings", fullscreen: "fullscreen", title: "home", restart: "restart", previous: "previous", next: "next", deck: "cards", inventory: "inventory", backpack: "inventory", relics: "equipment", map: "rooms", rewards: "rewards" };
+  const icons = { menu: "menu", history: "history", settings: "settings", fullscreen: "fullscreen", title: "home", restart: "restart", previous: "previous", next: "next", deck: "cards", encounterCards: "cards", inventory: "inventory", backpack: "inventory", relics: "equipment", map: "rooms", rewards: "rewards" };
   return icons[action];
 }
 
