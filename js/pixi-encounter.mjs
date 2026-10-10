@@ -70944,6 +70944,12 @@ var ParticleEffectManager = class {
     this.emitters.delete(id);
     return true;
   }
+  /** Removes gain labels from earlier actions while retaining current damage and decorative effects. */
+  clearResourceFeedback() {
+    for (const [id, emitter] of this.emitters) {
+      if (emitter.options.effectDefinition === "resource-gain") this.destroy(id);
+    }
+  }
   /**
    * Advances every emitter from the shared Pixi ticker delta.
    */
@@ -71110,22 +71116,22 @@ var ParticleEffectManager = class {
       if (oldest) this.destroy(oldest.options.id);
     }
   }
-  /** Starts the newest label at the entity and nudges older labels upward without ratcheting the spawn point. */
+  /** Places only the new label in a nearby lane; existing hits keep their own drift and lifetime. */
   separateTextParticle(emitter, particle) {
     if (!(particle.display instanceof Text)) return;
-    const labels = [...this.emitters.values()].filter((active) => active.textAnchorKey === emitter.textAnchorKey).flatMap((active) => active.particles).filter((label) => label.display instanceof Text).sort((left, right) => right.display.position.y - left.display.position.y);
-    let ceiling = particle.display.position.y;
-    let height = getTextLaneHeight(particle.display);
-    for (const label of labels) {
-      const display = label.display;
-      if (!(display instanceof Text)) continue;
-      const labelHeight = getTextLaneHeight(display);
-      const y2 = Math.min(display.position.y, ceiling - (height + labelHeight) / 2);
-      label.y += y2 - display.position.y;
-      display.position.set(display.position.x, y2);
-      ceiling = y2;
-      height = labelHeight;
-    }
+    const labels = [...this.emitters.values()].filter((active) => active.textAnchorKey === emitter.textAnchorKey).flatMap((active) => active.particles).filter((label) => label.display instanceof Text);
+    const spacing = 24;
+    const spawnY = particle.display.position.y;
+    const lanes = [0, -spacing, -spacing * 2].map((offset) => ({
+      offset,
+      clearance: Math.min(...labels.map((label) => Math.abs(label.display.position.y - (spawnY + offset))))
+    }));
+    const lane = lanes.find((candidate) => candidate.clearance >= spacing) ?? lanes.sort((left, right) => right.clearance - left.clearance)[0];
+    const offsetX = emitter.options.resourceIcon ? 0 : randomInRange({ min: -14, max: 14 });
+    const offsetY = lane?.offset ?? 0;
+    particle.x += offsetX;
+    particle.y += offsetY;
+    particle.display.position.set(particle.display.position.x + offsetX, particle.display.position.y + offsetY);
   }
   createParticle(options) {
     const display = this.acquire(options);
@@ -71462,9 +71468,6 @@ function parseFontWeight(value) {
     default:
       return "normal";
   }
-}
-function getTextLaneHeight(display) {
-  return display instanceof Text ? Math.max(24, display.height + 8) : 24;
 }
 function randomInRange(range) {
   return range.min + Math.random() * (range.max - range.min);
@@ -72134,7 +72137,7 @@ var EncounterAssetLoader = class {
     ]);
   }
   /**
-   * Loads one image and returns its texture when available.
+   * Loads one image, sharing a single retry after a transient failure, and returns its texture when available.
    */
   async load(url) {
     const normalizedUrl = normalizeAssetUrl(url);
@@ -72146,7 +72149,10 @@ var EncounterAssetLoader = class {
       return retainedTexture;
     }
     const lease = this.getOrCreateLease(normalizedUrl);
-    const result = await lease.preload();
+    let result = await lease.preload();
+    if (!result.canceled && result.failedUrls.length > 0 && !this.disposed) {
+      result = await lease.preload();
+    }
     if (result.canceled || result.failedUrls.length > 0) {
       return void 0;
     }
@@ -73756,6 +73762,11 @@ function layoutPlayer(viewport) {
     ...viewport.width >= 1200 && viewport.height >= 700 ? { scale: 1.12 } : {}
   };
 }
+function getPlayerHudBottom(viewport) {
+  const player = layoutPlayer(viewport);
+  const bottom = isShortEncounter(viewport) ? 78 : viewport.height >= 650 ? 118 : 98;
+  return player.y + bottom * (player.scale ?? 1);
+}
 function layoutHand(count2, viewport) {
   if (count2 === 0) {
     return [];
@@ -73777,8 +73788,7 @@ function layoutHand(count2, viewport) {
   const step = count2 === 1 ? 0 : Math.min(cardWidth * 0.88, availableWidth / (count2 - 1));
   const rowWidth = cardWidth + step * (count2 - 1);
   const maximumRotation = Math.min(0.28, 0.1 + count2 * 0.02);
-  const player = layoutPlayer(viewport);
-  const playerBottom = player.y + 58 * (player.scale ?? 1);
+  const playerBottom = getPlayerHudBottom(viewport);
   const handClearance = 4;
   let cardScale = 1;
   let fanDepth = Math.min(38, 12 + count2 * 2.2);
@@ -73802,8 +73812,7 @@ function layoutHand(count2, viewport) {
 function layoutFlatHand(count2, viewport) {
   const gap = 6;
   const availableWidth = Math.max(0, viewport.width - 32);
-  const player = layoutPlayer(viewport);
-  const playerBottom = player.y + 72 * (player.scale ?? 1);
+  const playerBottom = getPlayerHudBottom(viewport);
   const scale = Math.max(0, Math.min(
     1,
     (availableWidth - (count2 - 1) * gap) / (count2 * handCardVisualSize.width),
@@ -75743,7 +75752,7 @@ var EncounterScene = class {
     ["hand-reflow", (_source, _target, tile, start, progress) => tile.container.scale.set(start.scale * (1 + Math.sin(progress * Math.PI) * 0.08))],
     ["lunge", (source8, target, _tile, start, progress) => this.lunge(source8, target, start, progress)],
     ["nudge", (source8, target, tile, start, progress) => this.nudge(source8, target, tile, start, progress)],
-    ["shake", (_source, _target, tile, start, progress) => this.recoil(tile, start, progress, 8)],
+    ["shake", (_source, _target, tile, start, progress) => this.recoil(tile, start, progress, 24)],
     ["hit-flash", (_source, _target, tile, _start, progress) => this.flashArtwork(tile, progress)],
     ["status-change", (_source, _target, tile, _start, progress) => tile.accent.alpha = 0.4 + Math.sin(progress * Math.PI) * 0.6],
     ["resource-change", (_source, _target, tile, _start, progress) => tile.detail.scale.set(1 + Math.sin(progress * Math.PI) * 0.15)],
@@ -76041,9 +76050,9 @@ var EncounterScene = class {
       this.nextHandPage.position.set(viewport.width - 52, y2 - 22);
     }
   }
-  /** Keeps defeated actors in the formation while an animation owns their slot. */
+  /** Reserves every original formation slot, including defeated actors, until the encounter ends. */
   getLayoutEnemies(enemies) {
-    return enemies.filter((enemy) => enemy.health > 0 || this.isAnimationLocked(`enemy:${enemy.id}`));
+    return [...enemies];
   }
   reconcileEntities(player, enemies, viewport) {
     const expectedIds = /* @__PURE__ */ new Set();
@@ -76212,8 +76221,10 @@ var EncounterScene = class {
   /** Fits every combat row inside a dense formation's tile without overlapping the next enemy. */
   fitCompactBattlefieldLabels(tile) {
     tile.title.position.set(0, -53);
-    tile.detail.position.set(48, -35);
+    tile.detail.position.set(10, -35);
     this.positionDefenseIndicators(tile, -16, 56);
+    tile.blockIcon.position.set(48, -49);
+    tile.blockValue.position.set(80, -35);
     tile.effects.position.set(0, 1);
     tile.statusIcons.position.set(0, -10);
     tile.description.position.set(0, 56);
@@ -76249,7 +76260,7 @@ var EncounterScene = class {
       event.stopPropagation();
       this.inspectEntity(tile, telegraph, tile.description.y, true);
     });
-    tile.detail.text = entity.isPlayer ? "" : `${entity.health} / ${entity.maxHealth}`;
+    tile.detail.text = `${entity.health} / ${entity.maxHealth}`;
     tile.defenses.text = !entity.isPlayer && entity.maxPosture > 0 ? `${entity.posture}/${entity.maxPosture}` : "";
     tile.blockIcon.visible = entity.block > 0;
     tile.blockValue.visible = tile.blockIcon.visible;
@@ -76257,29 +76268,36 @@ var EncounterScene = class {
     tile.effects.visible = false;
     tile.statusIcons.update(entity);
     tile.title.position.set(0, -80);
-    tile.detail.position.set(48, -56);
+    tile.detail.position.set(10, -56);
     this.positionDefenseIndicators(tile, -34, artY + artHeight / 2 + 14);
     if (entity.isPlayer) {
-      const blockY = artY + artHeight / 2 - 8;
-      tile.blockIcon.position.set(52, blockY - 10);
-      tile.blockValue.position.set(84, blockY);
+      const compact = this.useCompactEntityPresentation();
+      const healthY = artY + artHeight / 2 + (compact ? 10 : 18);
+      tile.healthBar.position.set(0, healthY + 60);
+      tile.detail.position.set(compact ? 10 : 0, healthY + (compact ? 0 : 17));
+      tile.blockIcon.position.set(48, healthY - 10);
+      tile.blockValue.position.set(80, healthY);
+    } else {
+      tile.blockIcon.position.set(48, -70);
+      tile.blockValue.position.set(80, -56);
     }
     tile.description.position.set(0, artY + artHeight / 2 + 14);
     tile.effects.position.set(0, entity.isPlayer ? artY + artHeight / 2 + 10 : -14);
-    tile.statusIcons.position.set(0, entity.isPlayer ? artY + artHeight / 2 + 10 : -24);
-    tile.healthBar.position.set(0, 0);
+    tile.statusIcons.position.set(0, entity.isPlayer ? artY + artHeight / 2 + 56 : -24);
+    if (!entity.isPlayer) tile.healthBar.position.set(0, 0);
     tile.postureBar.position.set(0, 0);
+    const wideHealthBar = entity.isPlayer && !this.useCompactEntityPresentation();
     this.drawMeter(
       tile.healthBar,
       entity.health,
       entity.maxHealth,
-      -78,
+      wideHealthBar ? -78 : -88,
       -60,
-      84,
+      wideHealthBar ? 112 : 64,
       8,
       entity.block > 0 ? uiTokens.color.textMuted : uiTokens.color.health
     );
-    tile.healthBar.visible = !entity.isPlayer && entity.maxHealth > 0;
+    tile.healthBar.visible = entity.maxHealth > 0;
     this.drawMeter(tile.postureBar, entity.posture, entity.maxPosture, -78, -36, 84, 4, uiTokens.color.block);
     tile.postureBar.visible = !entity.isPlayer && entity.maxPosture > 0;
     fitTextToBox(tile.defenses, 70, 18, 14, 12);
@@ -77124,6 +77142,7 @@ ${entry.unavailableReason}` : ""),
     return this.animationLockResolver(id);
   }
   executeAnimationCommand(command, progress) {
+    this.showAnimationEnemy(command);
     const source8 = command.sourceId ? this.getSceneTile(command.sourceId) : void 0;
     if (!source8) {
       return;
@@ -77142,6 +77161,22 @@ ${entry.unavailableReason}` : ""),
       this.clearDragMotion(command.sourceId);
     }
     this.animationCommandHandlers.get(command.name)?.(source8, target, animatedTile, start, progress);
+  }
+  /** Reveals an action's enemy without compacting the formation or resetting other animation transforms. */
+  showAnimationEnemy(command) {
+    const snapshot = this.latestSnapshot;
+    const viewport = this.viewport;
+    if (!snapshot || !viewport || !isShortEncounter(viewport) || this.animationStarts.has(command.id)) return;
+    const actorId = command.sourceId?.startsWith("enemy:") ? command.sourceId : command.targetId;
+    const index = snapshot.enemies.findIndex((enemy) => `enemy:${enemy.id}` === actorId);
+    if (index < 0) return;
+    const page = Math.floor(index / getShortEncounterPageSize("enemy", viewport));
+    if (page === this.enemyPage) return;
+    this.enemyPage = page;
+    this.focusedEntityId = void 0;
+    this.reconcileEntities(snapshot.player, snapshot.enemies, viewport);
+    this.layoutPageControls(snapshot, viewport);
+    this.refreshSelectionHighlights();
   }
   cancelAnimationCommand(command) {
     const source8 = command.sourceId ? this.getSceneTile(command.sourceId) : void 0;
@@ -77213,7 +77248,8 @@ ${entry.unavailableReason}` : ""),
     if (!target) {
       return;
     }
-    const distance = Math.sin(progress * Math.PI) * 15;
+    const gap = Math.hypot(target.container.x - start.x, target.container.y - start.y);
+    const distance = Math.sin(progress * Math.PI) * getMotionIntensity(Math.min(72, gap * 0.25), this.reducedMotion);
     const direction = getDirection(start.x, start.y, target.container.x, target.container.y);
     source8.container.position.set(start.x + direction.x * distance, start.y + direction.y * distance);
   }
@@ -77249,7 +77285,7 @@ ${entry.unavailableReason}` : ""),
    * Combines a short positional impact, shake, and artwork emphasis without recoloring the entity tile.
    */
   hit(tile, start, progress) {
-    this.recoil(tile, start, progress, 13);
+    this.recoil(tile, start, progress, 32);
     const impact = Math.sin(progress * Math.PI) * (1 - progress);
     tile.container.rotation = start.rotation + getMotionIntensity(0.04, this.reducedMotion) * impact;
     tile.container.scale.set(start.scale * (1 - getMotionIntensity(0.035, this.reducedMotion) * impact));
@@ -77258,7 +77294,8 @@ ${entry.unavailableReason}` : ""),
   /** Delivers one clear recoil followed by a restrained, damped settle, with a stable final frame. */
   recoil(tile, start, progress, intensity) {
     const offset = Math.sin(progress * Math.PI * 3) * Math.pow(1 - progress, 2);
-    tile.container.position.set(start.x + offset * getMotionIntensity(intensity, this.reducedMotion), start.y);
+    const shove = Math.sin(progress * Math.PI) * (1 - progress);
+    tile.container.position.set(start.x + offset * getMotionIntensity(intensity, this.reducedMotion), start.y + shove * getMotionIntensity(intensity * 0.7, this.reducedMotion));
   }
   /**
    * Flashes a loaded entity silhouette without replaying the positional hit shake.
@@ -77456,16 +77493,27 @@ ${entry.unavailableReason}` : ""),
   }
   /** Builds the final hand transform for either a resting or inspected entry. */
   getHandLayoutTransform(tileId, position) {
-    const isInspected = this.isHandEntryInspected(tileId);
+    const transform2 = { x: position.x, y: position.y, rotation: position.rotation ?? 0, scale: position.scale ?? 1 };
+    if (!this.isHandEntryInspected(tileId)) return transform2;
     const isMobilePortrait = this.viewport !== void 0 && getViewportLayoutMode(this.viewport) === "MobilePortrait";
     const inspectionScale = this.getHandInspectionScale(position, isMobilePortrait);
-    const lift = this.viewport && (isShortEncounter(this.viewport) || isMobilePortrait) ? handCardVisualSize.height * (inspectionScale - 1) * (position.scale ?? 1) / 2 : focusedHandLift * (position.scale ?? 1);
-    return {
-      x: position.x,
-      y: position.y - (isInspected ? lift : 0),
-      rotation: isInspected ? 0 : position.rotation ?? 0,
-      scale: (position.scale ?? 1) * (isInspected ? inspectionScale : 1)
-    };
+    transform2.y -= this.getHandInspectionLift(position, inspectionScale, isMobilePortrait);
+    transform2.rotation = 0;
+    transform2.scale *= inspectionScale;
+    return this.fitInspectionBelowPlayerHud(transform2, position);
+  }
+  /** Lifts small-screen cards by their enlargement so their bottom edge stays in the hand. */
+  getHandInspectionLift(position, scale, portrait) {
+    return this.viewport && (isShortEncounter(this.viewport) || portrait) ? handCardVisualSize.height * (scale - 1) * (position.scale ?? 1) / 2 : focusedHandLift * (position.scale ?? 1);
+  }
+  /** Keeps desktop hover and keyboard inspection between the player's HUD and the canvas bottom. */
+  fitInspectionBelowPlayerHud(transform2, position) {
+    if (!this.viewport || position.rotation === void 0) return transform2;
+    const bottom = getPlayerHudBottom(this.viewport);
+    const scale = Math.min(transform2.scale, Math.max(0, (this.viewport.height - bottom - 4) / handCardVisualSize.height));
+    const halfHeight = handCardVisualSize.height * scale / 2;
+    const y2 = Math.min(this.viewport.height - 4 - halfHeight, Math.max(transform2.y, bottom + halfHeight));
+    return { ...transform2, scale, y: y2 };
   }
   /** Scales constrained layouts modestly so inspection remains readable without crowding combat space. */
   getHandInspectionScale(position, isMobilePortrait) {
@@ -84764,7 +84812,6 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   try {
     const coreAssets = requireLoadedResult(assetLoader.preloadRunAssets([getRunAssetBundle("core-ui")]), "core UI");
     const sceneAssets = requireLoadedSceneAssets(assetLoader.preloadSceneAssets([
-      getRunAssetBundle("cards"),
       getRunAssetBundle("effects"),
       getRunAssetBundle("encounter")
     ]), "encounter");
@@ -84973,7 +85020,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
       appliedSequence = snapshot.sequence;
       latestSnapshot = snapshot;
       animationDirector.cancelAll();
-      await assetLoader.preload(snapshot);
+      void assetLoader.preload(snapshot).catch(() => void 0);
       if (disposed || appliedSequence !== snapshot.sequence) {
         return false;
       }
@@ -84986,6 +85033,10 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     runAnimation(request) {
       if (!isVisualAnimationRequest(request)) {
         return Promise.resolve({ id: "", state: "failed", message: "The animation request is invalid." });
+      }
+      const commands = "commands" in request ? request.commands : [request];
+      if (commands.some((command) => ["prepare-attack", "card-play-to-target", "card-play-to-corner", "draw-to-hand"].includes(command.name))) {
+        particleEffects.clearResourceFeedback();
       }
       return areAnimationObjectsAvailable(request) ? scheduleAnimation(request) : deferAnimationUntilReconciled(request);
     },
