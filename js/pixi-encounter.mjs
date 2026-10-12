@@ -71425,6 +71425,7 @@ function createTextStyle(options) {
   const font = parseFont(options.font);
   const baseStyle = {
     fill: 16777215,
+    align: "center",
     fontFamily: font.family,
     fontSize: font.size,
     fontStyle: font.style,
@@ -73027,8 +73028,8 @@ var GameButton = class extends GamePanel {
     this.navigationIcon = options.menuIcon ? createMenuIcon(options.menuIcon) : void 0;
     if (this.navigationIcon) this.content.addChild(this.navigationIcon);
     this.fullLabel = options.label;
-    this.labelText = new Text({ text: options.label, style: new TextStyle(uiTokens.typography.button) });
-    this.labelText.resolution = 2;
+    this.labelText = new Text({ text: options.label, style: new TextStyle(getTextStyleOptions(options.labelStyle ?? "Button")) });
+    this.labelText.resolution = Math.max(2, typeof window === "undefined" ? 2 : window.devicePixelRatio || 1);
     this.labelText.anchor.set(0.5);
     this.labelText.position.set(this.panelSize.width / 2, this.panelSize.height / 2);
     this.content.addChild(this.labelText, this.stateOutline);
@@ -73156,8 +73157,9 @@ var GameButton = class extends GamePanel {
   }
 };
 function drawButtonSurface(graphics, width, height, fill = 1058092, stroke2 = 5467506) {
-  graphics.clear().roundRect(0, 0, width, height, 3).fill({ color: fill }).stroke({ color: stroke2, width: 1 });
-  graphics.rect(4, 3, Math.max(0, width - 8), 1).fill({ color: 15920868, alpha: 0.14 });
+  graphics.clear().roundRect(0, 0, width, height, 8).fill({ color: fill }).stroke({ color: stroke2, width: 1 });
+  graphics.roundRect(3, 3, Math.max(0, width - 6), Math.max(0, height / 2 - 3), 5).fill({ color: 15920868, alpha: 0.035 });
+  graphics.rect(8, 3, Math.max(0, width - 16), 1).fill({ color: 15920868, alpha: 0.14 });
   graphics.rect(4, Math.max(0, height - 3), Math.max(0, width - 8), 1).fill({ color: 133646, alpha: 0.36 });
 }
 var SceneTitle = class extends Container {
@@ -73226,16 +73228,20 @@ var ResourceCounter = class extends Container {
   constructor(options) {
     super();
     this.resourceValue = options.value;
+    const resolution = Math.max(2, typeof window === "undefined" ? 2 : window.devicePixelRatio || 1);
     let offsetX = 0;
     if (options.icon !== void 0) {
       const icon = typeof options.icon === "string" ? new Text({ text: options.icon, style: getUiTextStyle("Button") }) : options.icon;
+      if (icon instanceof Text) icon.resolution = resolution;
       icon.position.set(0, 2);
       this.addChild(icon);
       offsetX = 26;
     }
     const labelText = new Text({ text: options.label, style: getUiTextStyle("Body") });
+    labelText.resolution = resolution;
     labelText.position.set(offsetX, 0);
     this.valueText = new Text({ text: String(options.value), style: getUiTextStyle("NumericResource") });
+    this.valueText.resolution = resolution;
     const valueX = offsetX + (options.label && options.valueLayout === "inline" ? labelText.width + 8 : 0);
     this.valueText.position.set(options.valueOffsetX ?? valueX, options.valueLayout === "inline" ? 0 : 18);
     if (options.valueLayout === "inline") {
@@ -73764,7 +73770,7 @@ function layoutPlayer(viewport) {
 }
 function getPlayerHudBottom(viewport) {
   const player = layoutPlayer(viewport);
-  const bottom = isShortEncounter(viewport) ? 78 : viewport.height >= 650 ? 118 : 98;
+  const bottom = isShortEncounter(viewport) ? 78 : 138;
   return player.y + bottom * (player.scale ?? 1);
 }
 function layoutHand(count2, viewport) {
@@ -73851,7 +73857,7 @@ function layoutShortHand(count2, viewport) {
   const player = layoutShortPlayer(viewport);
   const playerBottom = player.y + 58 * (player.scale ?? 1);
   const verticalScale = (viewport.height - 22 - playerBottom) / handCardVisualSize.height;
-  const scale = Math.max(0.4, Math.min(0.62, verticalScale));
+  const scale = Math.max(44 / handCardVisualSize.width, Math.min(0.62, verticalScale));
   const tileWidth = handCardVisualSize.width * scale;
   const availableWidth = Math.max(tileWidth, viewport.width - 32);
   const step = count2 === 1 ? 0 : Math.min(tileWidth + 4, (availableWidth - tileWidth) / (count2 - 1));
@@ -75023,6 +75029,7 @@ var RunHud = class extends Container {
     this.requestRelicCollection = requestRelicCollection;
     this.requestDeckCollection = requestDeckCollection;
     this.showRail = showRail;
+    this.sceneTitle.resolution = Math.max(2, typeof window === "undefined" ? 2 : window.devicePixelRatio || 1);
     this.addChild(this.health, this.healthBar, this.currency, this.deck, this.relics, this.stamina, this.mana, this.sceneTitle, this.frame);
     this.relics.on("pointertap", () => {
       if (this.relicCollectionAvailable) {
@@ -76225,8 +76232,9 @@ var EncounterScene = class {
     tile.hasGroundShadow = true;
     tile.container.hitArea = new Rectangle(-94, -64, 188, 138);
     tile.accent.clear();
-    const artHeight = entity.isPlayer ? 76 : 42;
-    const artY = entity.isPlayer ? 20 : 27;
+    const shortPlayer = entity.isPlayer && this.viewport !== void 0 && isShortEncounter(this.viewport);
+    const artHeight = entity.isPlayer ? shortPlayer ? 48 : 76 : 26;
+    const artY = entity.isPlayer ? shortPlayer ? -26 : 20 : 38;
     this.updateArtwork(tile, entity.image || (entity.isPlayer ? "/img/Player/HoodedTraveler.svg" : ""), 164, artHeight);
     tile.artwork.position.set(0, artY);
     this.drawGroundShadow(tile);
@@ -76235,21 +76243,18 @@ var EncounterScene = class {
   }
   /** Fits every combat row inside a dense formation's tile without overlapping the next enemy. */
   fitCompactBattlefieldLabels(tile) {
-    tile.title.position.set(0, -53);
-    tile.detail.position.set(10, -35);
-    this.positionDefenseIndicators(tile, -16, 56);
-    tile.blockIcon.position.set(48, -49);
-    tile.blockValue.position.set(80, -35);
-    tile.effects.position.set(0, 1);
-    tile.statusIcons.position.set(0, -10);
-    tile.description.position.set(0, 56);
-    tile.healthBar.position.set(0, 21);
-    tile.postureBar.position.set(0, 18);
+    tile.title.position.set(0, -48);
+    this.layoutEntityMeters(tile, -42);
+    tile.effects.position.set(0, 16);
+    tile.description.position.set(0, 64);
+    tile.statusIcons.position.set(0, 12);
+    tile.blockIcon.position.set(-76, 54);
+    tile.blockValue.position.set(-44, 64);
     tile.title.style.stroke = { color: uiTokens.color.panelShadow, width: 1 };
     tile.description.style.stroke = { color: uiTokens.color.panelShadow, width: 1 };
     fitTextToBox(tile.title, 176, 22, 16, 14);
-    fitTextToBox(tile.detail, 70, 16, 13, 11);
-    fitTextToBox(tile.defenses, 176, 16, 12, 10);
+    fitTextToBox(tile.detail, 128, 20, 17, 14);
+    fitTextToBox(tile.defenses, 128, 18, 15, 13);
     fitTextToBox(tile.effects, 176, 16, 12, 10);
     fitTextToBox(tile.description, 176, 16, 13, 11);
   }
@@ -76276,55 +76281,38 @@ var EncounterScene = class {
       this.inspectEntity(tile, telegraph, tile.description.y, true);
     });
     tile.detail.text = `${entity.health} / ${entity.maxHealth}`;
-    tile.defenses.text = !entity.isPlayer && entity.maxPosture > 0 ? `${entity.posture}/${entity.maxPosture}` : "";
+    tile.defenses.text = entity.maxPosture > 0 ? `${entity.posture} / ${entity.maxPosture}` : "";
+    tile.defenses.visible = entity.maxPosture > 0;
     tile.blockIcon.visible = entity.block > 0;
     tile.blockValue.visible = tile.blockIcon.visible;
     tile.blockValue.text = String(entity.block);
     tile.effects.visible = false;
     tile.statusIcons.update(entity);
-    tile.title.position.set(0, -80);
-    tile.detail.position.set(10, -56);
-    this.positionDefenseIndicators(tile, -34, artY + artHeight / 2 + 14);
-    if (entity.isPlayer) {
-      const compact = this.useCompactEntityPresentation();
-      const healthY = artY + artHeight / 2 + (compact ? 10 : 18);
-      tile.healthBar.position.set(0, healthY + 60);
-      tile.detail.position.set(compact ? 10 : 0, healthY + (compact ? 0 : 17));
-      tile.blockIcon.position.set(48, healthY - 10);
-      tile.blockValue.position.set(80, healthY);
-    } else {
-      tile.blockIcon.position.set(48, -70);
-      tile.blockValue.position.set(80, -56);
-    }
-    tile.description.position.set(0, artY + artHeight / 2 + 14);
-    tile.effects.position.set(0, entity.isPlayer ? artY + artHeight / 2 + 10 : -14);
-    tile.statusIcons.position.set(0, entity.isPlayer ? artY + artHeight / 2 + 56 : -24);
-    if (!entity.isPlayer) tile.healthBar.position.set(0, 0);
-    tile.postureBar.position.set(0, 0);
-    const wideHealthBar = entity.isPlayer && !this.useCompactEntityPresentation();
-    this.drawMeter(
-      tile.healthBar,
-      entity.health,
-      entity.maxHealth,
-      wideHealthBar ? -78 : -88,
-      -60,
-      wideHealthBar ? 112 : 64,
-      8,
-      entity.block > 0 ? uiTokens.color.textMuted : uiTokens.color.health
-    );
+    tile.title.anchor.set(0.5, 1);
+    tile.title.position.set(0, -78);
+    tile.description.position.set(0, artY + artHeight / 2 + 18);
+    const meterY = entity.isPlayer ? artY + artHeight / 2 + 14 : -70;
+    this.drawMeter(tile.healthBar, entity.health, entity.maxHealth, -70, 0, 140, 22, uiTokens.color.health);
+    this.drawMeter(tile.postureBar, entity.posture, entity.maxPosture, -70, 0, 140, 20, uiTokens.color.block);
     tile.healthBar.visible = entity.maxHealth > 0;
-    this.drawMeter(tile.postureBar, entity.posture, entity.maxPosture, -78, -36, 84, 4, uiTokens.color.block);
-    tile.postureBar.visible = !entity.isPlayer && entity.maxPosture > 0;
-    fitTextToBox(tile.defenses, 70, 18, 14, 12);
-    fitTextToBox(tile.detail, 70, 18, 14, 12);
+    tile.postureBar.visible = entity.maxPosture > 0;
+    this.layoutEntityMeters(tile, meterY);
+    tile.effects.position.set(0, entity.isPlayer ? meterY + (entity.maxPosture > 0 ? 58 : 36) : -10);
+    fitTextToBox(tile.defenses, 128, 18, 15, 13);
+    fitTextToBox(tile.detail, 128, 20, 17, 14);
+    const shortPlayer = entity.isPlayer && this.viewport !== void 0 && isShortEncounter(this.viewport);
+    tile.statusIcons.position.set(entity.isPlayer ? -132 : 0, entity.isPlayer ? shortPlayer ? -24 : artY : -10);
+    tile.blockIcon.position.set(entity.isPlayer ? 80 : -76, entity.isPlayer ? meterY + 1 : tile.description.y - 10);
+    tile.blockValue.position.set(entity.isPlayer ? 112 : -44, entity.isPlayer ? meterY + 11 : tile.description.y);
     fitTextToBox(tile.effects, 176, 22, 14, 12);
     fitTextToBox(tile.description, 176, 26, 15, 13);
   }
-  /** Aligns posture with the health value and keeps the shield beside the intent row. */
-  positionDefenseIndicators(tile, y2, blockY) {
-    tile.defenses.position.set(48, y2);
-    tile.blockIcon.position.set(-76, blockY - 10);
-    tile.blockValue.position.set(-44, blockY);
+  /** Aligns both combatants' numeric values inside identical framed meter rows. */
+  layoutEntityMeters(tile, y2) {
+    tile.healthBar.position.set(0, y2);
+    tile.detail.position.set(0, y2 + 11);
+    tile.postureBar.position.set(0, y2 + 26);
+    tile.defenses.position.set(0, y2 + 36);
   }
   updateHandTile(id, entry, position) {
     const isCard = isCardPresentationState2(entry);
@@ -76400,13 +76388,18 @@ var EncounterScene = class {
     detail.anchor.set(0.5, 0.5);
     effects.anchor.set(0.5, 0.5);
     for (const label of [title, description, detail, effects, defenses, blockValue]) {
-      label.resolution = 2;
+      label.resolution = Math.max(2, typeof window === "undefined" ? 2 : window.devicePixelRatio || 1);
     }
     title.position.set(0, -42);
     description.position.set(0, -23);
     detail.position.set(0, 7);
     effects.position.set(0, 38);
-    container.addChild(background, targetHighlight, artwork, accent, title, description, detail, healthBar, postureBar, effects, defenses);
+    container.addChild(background, targetHighlight, artwork, accent, healthBar, postureBar, title, description, detail, effects, defenses);
+    description.label = "combat-intent";
+    artwork.label = "combat-artwork";
+    detail.style.stroke = defenses.style.stroke = { color: uiTokens.color.panelShadow, width: 1.5 };
+    detail.style.fontWeight = defenses.style.fontWeight = "600";
+    defenses.style.fill = uiTokens.color.text;
     layer.addChild(container);
     const statusIcons = new StatusEffectsView((text, pinned) => this.inspectEntity(tile, text, statusIcons.y, pinned), () => this.dismissInspection());
     container.addChild(statusIcons, impactHighlight, blockIcon, blockValue);
@@ -76488,9 +76481,9 @@ var EncounterScene = class {
   /** Draws a compact clamped status meter below an entity's numeric status. */
   drawMeter(graphic, value, maximum, x2, y2, width, height, fill) {
     const ratio = maximum > 0 ? Math.max(0, Math.min(1, value / maximum)) : 0;
-    graphic.clear().roundRect(x2, y2, width, height, height / 2).fill({ color: uiTokens.color.surfaceRaised, alpha: 0.94 });
+    graphic.clear().roundRect(x2, y2, width, height, 4).fill({ color: uiTokens.color.panelShadow, alpha: 0.96 }).stroke({ color: uiTokens.color.panelStroke, width: 1 });
     if (ratio > 0) {
-      graphic.roundRect(x2, y2, width * ratio, height, height / 2).fill(fill);
+      graphic.roundRect(x2 + 2, y2 + 2, (width - 4) * ratio, height - 4, 3).fill({ color: fill, alpha: 0.82 });
     }
   }
   /** Enlarges an entry while a pointer is over it without changing semantic selection. */
@@ -83094,8 +83087,8 @@ function planCollectionLayout(width, height) {
     closeY: short ? 8 : height - 54
   };
 }
-function planCollectionContentBounds(width, height, safeArea = emptySafeAreaInsets) {
-  return describeViewport({ width, height }, { safeArea }).contentBounds;
+function planCollectionContentBounds(width, height, safeArea = emptySafeAreaInsets, headerInset = 0) {
+  return describeViewport({ width, height }, { safeArea: { ...safeArea, top: Math.max(safeArea.top, headerInset) } }).contentBounds;
 }
 function planCollectionDetailVisibility(plan, kind) {
   if (plan.short) return { compactDetail: false, details: false };
@@ -83140,7 +83133,7 @@ async function acquireFallbackRenderer() {
     document.body.appendChild(fallbackCanvas);
     const application = new Application();
     try {
-      await application.init({ antialias: true, autoDensity: true, background: 529183, canvas: fallbackCanvas, preference: "canvas" });
+      await application.init({ antialias: true, autoDensity: true, resolution: Math.max(1, window.devicePixelRatio || 1), background: 529183, canvas: fallbackCanvas, preference: "canvas" });
       installCanvasPresentationRecovery(application, fallbackCanvas);
       return { application, canvas: fallbackCanvas };
     } catch (error) {
@@ -83811,7 +83804,7 @@ function isMenuOverlayState(value) {
   const settings = candidate.settings;
   if (typeof settings !== "object" || settings === null) return false;
   const item = settings;
-  return Number.isInteger(item.tabIndex) && Number.isFinite(item.masterVolume) && Number.isFinite(item.sfxVolume) && Number.isFinite(item.musicVolume) && Number.isFinite(item.ambientVolume) && Number.isFinite(item.speed) && typeof item.cardTiltEnabled === "boolean" && typeof item.particleLevel === "string" && (item.showResourceGainText === void 0 || typeof item.showResourceGainText === "boolean") && (item.showEffectSources === void 0 || typeof item.showEffectSources === "boolean") && typeof item.debugProgressionEnabled === "boolean" && Number.isInteger(item.metaExperience) && Number.isInteger(item.unlockedMetaRewards) && (item.sharedRemembrancePoints === void 0 || Number.isInteger(item.sharedRemembrancePoints));
+  return Number.isInteger(item.tabIndex) && Number.isFinite(item.masterVolume) && Number.isFinite(item.sfxVolume) && Number.isFinite(item.musicVolume) && Number.isFinite(item.ambientVolume) && Number.isFinite(item.speed) && [item.damageTextEnabled, item.damageTextCardSources, item.damageTextRelicSources, item.damageTextItemSources].every((value2) => value2 === void 0 || typeof value2 === "boolean") && typeof item.cardTiltEnabled === "boolean" && typeof item.particleLevel === "string" && (item.showResourceGainText === void 0 || typeof item.showResourceGainText === "boolean") && (item.showEffectSources === void 0 || typeof item.showEffectSources === "boolean") && typeof item.debugProgressionEnabled === "boolean" && Number.isInteger(item.metaExperience) && Number.isInteger(item.unlockedMetaRewards) && (item.sharedRemembrancePoints === void 0 || Number.isInteger(item.sharedRemembrancePoints));
 }
 function isProgressionNode(value) {
   if (typeof value !== "object" || value === null) return false;
@@ -83840,7 +83833,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
   const host = getCollectionOverlayHost();
   const application = host ? void 0 : new Application();
   if (application) {
-    await application.init({ antialias: true, autoDensity: true, background: 529183, canvas, preference: "canvas" });
+    await application.init({ antialias: true, autoDensity: true, resolution: Math.max(1, window.devicePixelRatio || 1), background: 529183, canvas, preference: "canvas" });
     canvas.style.width = "100%";
     canvas.style.height = "100%";
   }
@@ -83897,6 +83890,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
   };
   const addText = (value, x2, y2, fontSize = 18, wrap = width - 40) => {
     const label = new Text({ text: value, style: { ...uiTokens.typography.body, fill: 15856888, fontSize, wordWrap: true, wordWrapWidth: Math.max(1, wrap) } });
+    label.resolution = Math.max(2, window.devicePixelRatio || 1);
     label.position.set(x2, y2);
     content.addChild(label);
     return label;
@@ -83954,9 +83948,10 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const rowHeight = settings.tabIndex === 0 ? short ? 42 : 54 : Math.max(28, Math.min(short ? 42 : 54, (footerY - top - 8) / gameplayRows));
     const controlHeight = Math.min(40, rowHeight - 4);
     addText("Settings", 24, 15, short ? 24 : 30);
-    const tabWidth = Math.min(180, (width - 56) / 2);
+    const tabWidth = Math.min(180, (width - 64) / 3);
     addButton("Audio", "tab:0", 24, short ? 48 : 60, tabWidth, 38);
     addButton("Gameplay", "tab:1", 32 + tabWidth, short ? 48 : 60, tabWidth, 38);
+    addButton("Damage text", "tab:2", 40 + tabWidth * 2, short ? 48 : 60, tabWidth, 38);
     if (settings.tabIndex === 0) {
       const sliders = [
         { key: "master", label: "Master", value: settings.masterVolume, min: 0, max: 1, step: 0.05 },
@@ -83965,12 +83960,22 @@ async function createMenuOverlayRenderer(canvas, sink) {
         { key: "ambient", label: "Ambient", value: settings.ambientVolume, min: 0, max: 1, step: 0.05 }
       ];
       sliders.forEach((slider, index) => addSlider(slider, top + index * rowHeight));
+    } else if (settings.tabIndex === 2) {
+      const toggles = [
+        ["Show values", "damage", settings.damageTextEnabled !== false],
+        ["Card source", "cards", settings.damageTextCardSources === true],
+        ["Relic source", "relics", settings.damageTextRelicSources === true],
+        ["Item source", "items", settings.damageTextItemSources === true]
+      ];
+      const columns = short ? 2 : 1;
+      const toggleHeight = short ? 38 : 44;
+      const toggleWidth = (width - 48 - (columns - 1) * 8) / columns;
+      toggles.forEach(([label, key, enabled], index) => addButton(`${label}: ${enabled ? "On" : "Off"}`, `toggle:${key}`, 24 + index % columns * (toggleWidth + 8), top + Math.floor(index / columns) * (toggleHeight + 4), toggleWidth, toggleHeight));
     } else {
       addSlider({ key: "speed", label: "Speed", value: settings.speed, min: 0.5, max: 2, step: 0.1 }, top);
-      addButton(`Card tilt: ${settings.cardTiltEnabled ? "On" : "Off"}`, "toggle:tilt", 24, top + rowHeight, Math.min(240, width - 48), controlHeight);
       const levels = ["Low", "Medium", "High", "Maximum"];
       const next = levels[(levels.indexOf(settings.particleLevel) + 1) % levels.length] ?? "High";
-      addButton(`Particles: ${settings.particleLevel}`, `particle:${next}`, 24, top + rowHeight * 2, Math.min(240, width - 48), controlHeight);
+      addButton(`Particles: ${settings.particleLevel}`, `particle:${next}`, 24, top + rowHeight, Math.min(240, width - 48), controlHeight);
       const feedbackWidth = Math.min(240, (width - 56) / 2);
       addButton(`Resource gains: ${settings.showResourceGainText === false ? "Off" : "On"}`, "toggle:resource-gains", 24, top + rowHeight * 3, feedbackWidth, controlHeight);
       addButton(`Effect names: ${settings.showEffectSources === false ? "Off" : "On"}`, "toggle:effect-sources", 32 + feedbackWidth, top + rowHeight * 3, feedbackWidth, controlHeight);
@@ -84518,7 +84523,7 @@ var actionIds = /* @__PURE__ */ new Set(["encounterCards", "deck", "relics", "di
 var toolbarPriority = ["endTurn", "map", "inventory", "encounterCards", "backpack", "discard", "fullscreen", "rewards", "history", "settings"];
 async function createRunControlsRenderer(canvas, sink, initialState) {
   const application = new Application();
-  await application.init({ antialias: true, autoDensity: true, backgroundAlpha: 0, canvas, preference: "canvas" });
+  await application.init({ antialias: true, autoDensity: true, resolution: Math.max(1, window.devicePixelRatio || 1), backgroundAlpha: 0, canvas, preference: "canvas" });
   const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
   canvas.tabIndex = 0;
   const root = new Container();
@@ -84568,7 +84573,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
   const createButton = (action, label, enabled, width, height, x2, y2) => {
     let button = retainedButtons.get(action);
     if (!button) {
-      const created = new GameButton({ menuIcon: width >= 110 ? controlIcon(action) : void 0, width, height, label, onPress: () => void submit(action) });
+      const created = new GameButton({ menuIcon: width >= 110 ? controlIcon(action) : void 0, width, height, label, labelStyle: "NumericResource", onPress: () => void submit(action) });
       created.on("pointerover", () => created.setFocused(true));
       created.on("pointerout", () => created.setFocused(action === focusedAction));
       created.on("pointerdown", () => created.setSelected(true));
