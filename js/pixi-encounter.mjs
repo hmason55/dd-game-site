@@ -83809,7 +83809,7 @@ function isMenuOverlayState(value) {
 function isProgressionNode(value) {
   if (typeof value !== "object" || value === null) return false;
   const item = value;
-  return typeof item.id === "string" && typeof item.name === "string" && typeof item.description === "string" && typeof item.stat === "string" && Number.isInteger(item.cost) && typeof item.isUnlocked === "boolean" && typeof item.isAvailable === "boolean" && typeof item.isAffordable === "boolean" && Array.isArray(item.prerequisites) && item.prerequisites.every((label) => typeof label === "string") && typeof item.status === "string";
+  return typeof item.id === "string" && typeof item.name === "string" && typeof item.description === "string" && typeof item.stat === "string" && Number.isInteger(item.cost) && typeof item.isUnlocked === "boolean" && typeof item.isAvailable === "boolean" && typeof item.isAffordable === "boolean" && Array.isArray(item.prerequisites) && item.prerequisites.every((label) => typeof label === "string") && typeof item.status === "string" && (item.x === void 0 || Number.isInteger(item.x)) && (item.y === void 0 || Number.isInteger(item.y)) && (item.prerequisiteIds === void 0 || Array.isArray(item.prerequisiteIds) && item.prerequisiteIds.every((id) => typeof id === "string")) && (item.requireAllPrerequisites === void 0 || typeof item.requireAllPrerequisites === "boolean");
 }
 function isHistoryEntry(value) {
   if (typeof value !== "object" || value === null) return false;
@@ -83899,10 +83899,16 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const index = controls.length;
     const activeSection = action === `history:section:${state?.history?.selectedSectionIndex}` || action === `history:run:${state?.history?.selectedRunId}`;
     const activeTab = action.startsWith("tab:") && state?.settings?.tabIndex === Number(action.slice(4));
-    const button = new GameButton({ ...settingsActionColors(action), menuIcon: icon, width: buttonWidth, height: buttonHeight2, label, enabled, selected: index === selectedIndex || activeTab || activeSection, onPress: () => {
+    const node = state?.progression?.nodes.find((candidate) => action === `progression:unlock:${candidate.id}`);
+    const nodeColors = node ? {
+      fill: node.isUnlocked ? 3430214 : enabled ? 5719849 : 2240573,
+      stroke: node.isUnlocked ? 8570268 : enabled ? 14989928 : 5465721
+    } : {};
+    const button = new GameButton({ ...settingsActionColors(action), ...nodeColors, menuIcon: icon, width: buttonWidth, height: buttonHeight2, label, enabled, selected: index === selectedIndex || activeTab || activeSection, onPress: () => {
       selectedIndex = index;
       void submit(action);
     } });
+    if (node?.isUnlocked) button.alpha = 1;
     button.position.set(x2, y2);
     content.addChild(button);
     controls.push({ action, label, enabled });
@@ -84116,44 +84122,60 @@ Shared Remembrance ${settings.sharedRemembrancePoints ?? 0}`, 24, top + rowHeigh
     addButton("Older", "history:list:next", 134, footerY, 102, 38, runListPage < totalPages - 1, "next");
   };
   const layoutProgression = (progression) => {
-    addText("Training", 24, 16, 27);
-    addText(`Experience: ${progression.experience} XP \xB7 resets each run`, 24, 52, 16);
-    const compact = width < 520;
-    const short = height < 440;
-    const columns = compact && !short ? 1 : 2;
-    const itemHeight = short ? 62 : 88;
-    const rows = Math.max(1, Math.floor((height - 240) / itemHeight));
-    const pageSize = columns * rows;
-    const pageCount = Math.max(1, Math.ceil(progression.nodes.length / pageSize));
+    addText("Skill Tree", 24, 14, 27);
+    addText(`${progression.experience} XP \xB7 Small steps, diminishing returns`, 24, 50, width < 520 ? 13 : 16);
+    const columns = width >= 620 ? 3 : 1;
+    const rowHeight = Math.max(54, Math.min(84, (height - 214) / 6));
+    const visibleRows = Math.max(1, Math.min(6, Math.floor((height - 210) / rowHeight)));
+    const rowPages = Math.ceil(6 / visibleRows);
+    const branchPages = 3 / columns;
+    const pageCount = rowPages * branchPages;
     const page = Math.max(0, Math.min(pageCount - 1, progression.selectedPageIndex));
     if (page !== progression.selectedPageIndex) void submit(`progression:page:${page}`);
-    const pageNodes = progression.nodes.slice(page * pageSize, (page + 1) * pageSize);
-    const itemWidth = (width - 56 - 8 * (columns - 1)) / columns;
-    const top = short ? 88 : 104;
-    pageNodes.forEach((node, index) => {
-      const column = index % columns;
-      const row = Math.floor(index / columns);
-      const x2 = 24 + column * (itemWidth + 8);
-      const y2 = top + row * itemHeight;
+    const firstColumn = Math.floor(page / rowPages) * columns;
+    const firstRow = page % rowPages * visibleRows;
+    const itemWidth = (width - 72) / columns;
+    const nodeWidth = itemWidth - 16;
+    const top = 112;
+    const paths = ["Vitality \xB7 endurance", "Might \xB7 strength", "Focus \xB7 mana"];
+    for (let column = 0; column < columns; column++) {
+      addText((paths[firstColumn + column] ?? "") + (columns === 1 ? ` \xB7 ${firstColumn + 1}/3` : ""), 36 + column * itemWidth, 82, 15, nodeWidth);
+    }
+    const visible = progression.nodes.filter((node) => (node.x ?? 0) >= firstColumn && (node.x ?? 0) < firstColumn + columns && (node.y ?? 0) >= firstRow && (node.y ?? 0) < firstRow + visibleRows);
+    const positions = new Map(visible.map((node) => [node.id, {
+      x: 36 + ((node.x ?? 0) - firstColumn) * itemWidth,
+      y: top + ((node.y ?? 0) - firstRow) * rowHeight
+    }]));
+    const connections = new Graphics();
+    content.addChild(connections);
+    for (const node of visible) {
+      const target = positions.get(node.id);
+      if (!target) continue;
+      for (const id of node.prerequisiteIds ?? []) {
+        const source8 = positions.get(id);
+        const allocated = progression.nodes.find((candidate) => candidate.id === id)?.isUnlocked === true;
+        if (source8) {
+          connections.moveTo(source8.x + nodeWidth / 2, source8.y + rowHeight - 14).lineTo(target.x + nodeWidth / 2, target.y).stroke({ color: allocated ? 14071660 : 5465721, width: allocated ? 3 : 2 });
+        } else {
+          connections.moveTo(target.x + nodeWidth / 2, target.y - 10).lineTo(target.x + nodeWidth / 2, target.y).stroke({ color: 5465721, width: 2 });
+        }
+      }
+    }
+    for (const node of visible) {
+      const position = positions.get(node.id);
+      if (!position) continue;
       const enabled = !node.isUnlocked && node.isAvailable && node.isAffordable;
-      const label = `${node.name}
-${node.cost} XP \xB7 ${node.stat}`;
-      addButton(label, `progression:unlock:${node.id}`, x2, y2, itemWidth, itemHeight - 20, enabled);
-      addText(
-        `${node.isUnlocked ? "Unlocked" : node.status}${node.prerequisites.length > 0 ? ` \xB7 Requires ${node.prerequisites.join(", ")}` : ""}`,
-        x2 + 4,
-        y2 + itemHeight - 20,
-        itemWidth - 8 < 80 ? 12 : 13,
-        itemWidth - 8
-      );
-    });
-    addText(`Page ${page + 1} of ${pageCount}`, 24, height - 112, 14);
-    const stacked = compact || short;
-    const buttonWidth = stacked ? (width - 56) / 2 : Math.min(180, (width - 80) / 4);
-    const buttonY = height - (stacked ? 100 : 66);
-    addButton("Previous", `progression:page:${page - 1}`, 24, buttonY, buttonWidth, 40, page > 0);
-    addButton("Next", `progression:page:${page + 1}`, stacked ? 32 + buttonWidth : 40 + buttonWidth, buttonY, buttonWidth, 40, page < pageCount - 1);
-    addButton("Close", "progression:close", stacked ? (width - buttonWidth) / 2 : width - 24 - buttonWidth, buttonY + (stacked ? 44 : 0), buttonWidth, 40);
+      const bonus = node.description.replace(" (casters only)", "").replace("Max Health", "HP").replace("Energy / turn, -1 Max Mana", "Energy / -1 Mana");
+      const label = `${node.name} \xB7 ${bonus}
+${node.isUnlocked ? "\u2713 Allocated" : node.cost + " XP \xB7 " + node.status}`;
+      addButton(label, `progression:unlock:${node.id}`, position.x, position.y, nodeWidth, rowHeight - 14, enabled);
+    }
+    addText(`Follow connected nodes downward \xB7 Levels ${firstRow + 1}\u2013${Math.min(6, firstRow + visibleRows)} / 6`, 24, height - 98, 13);
+    addText("Energy: Vitality 5 + Might 5 \xB7 Mana regen: casters only", 24, height - 80, width < 520 ? 10 : 12);
+    const buttonWidth = Math.min(160, (width - 64) / 3);
+    addButton("Previous", `progression:page:${page - 1}`, 24, height - 54, buttonWidth, 38, page > 0);
+    addButton("Next", `progression:page:${page + 1}`, 32 + buttonWidth, height - 54, buttonWidth, 38, page < pageCount - 1);
+    addButton("Close", "progression:close", width - 24 - buttonWidth, height - 54, buttonWidth, 38);
   };
   const keydown = (event) => {
     if (!state) return;
@@ -84519,8 +84541,8 @@ var toolbarHeight = 64;
 var buttonHeight = 48;
 var menuButtonHeight = 44;
 var buttonGap = 6;
-var actionIds = /* @__PURE__ */ new Set(["encounterCards", "deck", "relics", "discard", "inventory", "endTurn", "map", "backpack", "rewards", "history", "settings", "fullscreen", "title", "restart", "debug", "copySeed"]);
-var toolbarPriority = ["endTurn", "map", "inventory", "encounterCards", "backpack", "discard", "fullscreen", "rewards", "history", "settings"];
+var actionIds = /* @__PURE__ */ new Set(["encounterCards", "deck", "relics", "discard", "inventory", "endTurn", "map", "backpack", "training", "rewards", "history", "settings", "fullscreen", "title", "restart", "debug", "copySeed"]);
+var toolbarPriority = ["endTurn", "training", "map", "inventory", "encounterCards", "backpack", "discard", "fullscreen", "rewards", "history", "settings"];
 async function createRunControlsRenderer(canvas, sink, initialState) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, resolution: Math.max(1, window.devicePixelRatio || 1), backgroundAlpha: 0, canvas, preference: "canvas" });
