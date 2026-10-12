@@ -1,6 +1,7 @@
 /* /Components/Dialogs/PixiCardChoiceOverlay.razor.rz.scp.css */
-.pixi-card-choice-overlay[b-kqbmtuwmtl] { background: rgba(3, 10, 18, .8); inset: 0; padding: clamp(1rem, 5vh, 4rem); position: fixed; z-index: 1500; }
-.pixi-card-choice-overlay canvas[b-kqbmtuwmtl] { display: block; height: 100%; margin: auto; max-height: 48rem; max-width: 72rem; touch-action: none; width: 100%; }
+.pixi-card-choice-overlay[b-kqbmtuwmtl] { align-items: center; background: rgba(3, 10, 18, .8); display: flex; inset: 0; justify-content: center; padding: clamp(.5rem, 2vmin, 2rem); position: fixed; z-index: 1500; }
+.pixi-card-choice-overlay[hidden][b-kqbmtuwmtl] { display: none; }
+.pixi-card-choice-overlay canvas[b-kqbmtuwmtl] { display: block; height: 100% !important; max-height: 48rem; max-width: 72rem; touch-action: none; width: 100% !important; }
 .pixi-card-choice-accessibility[b-kqbmtuwmtl] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
 .pixi-card-choice-overlay.renderer-unavailable .pixi-card-choice-accessibility[b-kqbmtuwmtl] { height: auto; left: 1rem; overflow: visible; top: 1rem; width: calc(100% - 2rem); }
 .pixi-card-choice-overlay.renderer-unavailable canvas[b-kqbmtuwmtl] { display: none; }

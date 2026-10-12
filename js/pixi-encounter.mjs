@@ -84339,9 +84339,32 @@ function historyCategoryIcon(title) {
 
 // src/pixi-card-choice.ts
 init_lib();
+function planCardChoiceLayout(width, height, count2) {
+  const detailHeight = height < 420 ? 0 : 32;
+  const controlsY = height - 64;
+  const listTop = height < 420 ? 72 : 96;
+  const viewportHeight = Math.max(1, controlsY - detailHeight - 14 - listTop);
+  const grid = planCollectionCardGrid(width - 64, count2);
+  const cardWidth = Math.min(grid.width, viewportHeight * 180 / 252);
+  const cardHeight = cardWidth * 252 / 180;
+  const rowHeight = cardHeight + 12;
+  const contentHeight = Math.max(0, Math.ceil(count2 / grid.columns) * rowHeight - 12);
+  return {
+    columns: grid.columns,
+    cardWidth,
+    cardHeight,
+    rowHeight,
+    listTop,
+    viewportHeight,
+    controlsY,
+    detailHeight,
+    left: (width - (grid.columns * cardWidth + (grid.columns - 1) * 12)) / 2,
+    maximumScroll: Math.max(0, contentHeight - viewportHeight)
+  };
+}
 async function createCardChoiceRenderer(canvas, sink) {
   const application = new Application();
-  await application.init({ antialias: true, autoDensity: true, background: 529183, canvas, preference: "canvas" });
+  await application.init({ antialias: true, autoDensity: true, resolution: Math.max(1, window.devicePixelRatio || 1), background: 529183, canvas, preference: "canvas" });
   const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
   canvas.tabIndex = 0;
   const root = new Container();
@@ -84391,34 +84414,24 @@ async function createCardChoiceRenderer(canvas, sink) {
   };
   const layout = () => {
     if (disposed) return;
-    const width = Math.max(1, canvas.parentElement?.clientWidth || canvas.clientWidth || 900);
-    const height = Math.max(1, canvas.parentElement?.clientHeight || canvas.clientHeight || 640);
+    const width = Math.max(1, canvas.clientWidth || canvas.parentElement?.clientWidth || 900);
+    const height = Math.max(1, canvas.clientHeight || canvas.parentElement?.clientHeight || 640);
     application.renderer.resize(width, height);
     panel.resize(width - 24, height - 24);
     panel.position.set(12, 12);
     title.title = state?.title ?? "Choose a card";
     title.resize(width - 64);
     title.position.set(32, 36);
-    const detailHeight = height < 420 ? 0 : 32;
-    const controlsY = height - 64;
-    const listTop = height < 420 ? 72 : 96;
-    const listBottom = Math.max(listTop, controlsY - detailHeight - 14);
     const entries = cardLayer.children.filter((child) => child instanceof CardChoiceButton);
-    const grid = planCollectionCardGrid(width - 64, entries.length);
-    const buttonWidth = Math.min(grid.width, Math.max(104, (listBottom - listTop) * 180 / 252));
-    const buttonHeight2 = buttonWidth * 252 / 180;
-    const columns = grid.columns;
-    const rowHeight = buttonHeight2 + 12;
-    const contentHeight = Math.max(0, Math.ceil(entries.length / columns) * rowHeight - 12);
-    const viewportHeight = Math.max(0, listBottom - listTop);
-    scrollOffset = Math.max(0, Math.min(Math.max(0, contentHeight - viewportHeight), scrollOffset));
+    const plan = planCardChoiceLayout(width, height, entries.length);
+    const { columns, cardWidth, cardHeight, rowHeight, listTop, viewportHeight, controlsY, detailHeight } = plan;
+    scrollOffset = Math.max(0, Math.min(plan.maximumScroll, scrollOffset));
     cardMask.clear().rect(32, listTop, width - 64, viewportHeight).fill(16777215);
-    const startX = (width - (columns * buttonWidth + (columns - 1) * 12)) / 2;
     entries.forEach((button, index) => {
       const y2 = listTop + Math.floor(index / columns) * rowHeight - scrollOffset;
-      button.resize(buttonWidth, buttonHeight2);
-      button.position.set(startX + index % columns * (buttonWidth + 12), y2);
-      button.visible = y2 + buttonHeight2 >= listTop && y2 <= listBottom;
+      button.resize(cardWidth, cardHeight);
+      button.position.set(plan.left + index % columns * (cardWidth + 12), y2);
+      button.visible = y2 + cardHeight >= listTop && y2 <= listTop + viewportHeight;
     });
     selection.visible = detailHeight > 0;
     selection.style.wordWrapWidth = Math.max(1, width - 64);
@@ -84440,13 +84453,10 @@ async function createCardChoiceRenderer(canvas, sink) {
   const ensureFocusedCardVisible = (index) => {
     const width = application.renderer.width;
     const height = application.renderer.height;
-    const listTop = height < 420 ? 72 : 96;
-    const listBottom = Math.max(listTop, height - 64 - (height < 420 ? 0 : 32) - 14);
-    const grid = planCollectionCardGrid(width - 64, state?.cards.length ?? 0);
-    const cardHeight = Math.min(grid.width, Math.max(104, (listBottom - listTop) * 180 / 252)) * 252 / 180;
-    const cardTop = Math.floor(index / grid.columns) * (cardHeight + 12);
+    const { columns, cardHeight, rowHeight, viewportHeight } = planCardChoiceLayout(width, height, state?.cards.length ?? 0);
+    const cardTop = Math.floor(index / columns) * rowHeight;
     if (cardTop < scrollOffset) scrollOffset = cardTop;
-    else if (cardTop + cardHeight > scrollOffset + listBottom - listTop) scrollOffset = cardTop + cardHeight - (listBottom - listTop);
+    else if (cardTop + cardHeight > scrollOffset + viewportHeight) scrollOffset = cardTop + cardHeight - viewportHeight;
   };
   const moveFocus = (direction) => {
     const cards = state?.cards ?? [];
@@ -84509,6 +84519,7 @@ async function createCardChoiceRenderer(canvas, sink) {
     }
   };
   const pointerdown = (event) => {
+    canvas.focus({ preventScroll: true });
     suppressedTap = false;
     scrollMotion.stop();
     if (event.pointerType !== "mouse") {
@@ -84546,9 +84557,11 @@ async function createCardChoiceRenderer(canvas, sink) {
   canvas.addEventListener("pointerup", pointerend);
   canvas.addEventListener("pointercancel", pointerend);
   window.addEventListener("resize", layout);
+  const resizeObserver = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(layout);
+  resizeObserver?.observe(canvas);
   return {
     reconcile(candidate) {
-      if (!isCardChoiceState(candidate)) return false;
+      if (disposed || !isCardChoiceState(candidate)) return false;
       scrollMotion.stop();
       state = candidate;
       selectedCardId = void 0;
@@ -84562,12 +84575,14 @@ async function createCardChoiceRenderer(canvas, sink) {
         if (!suppressedTap) select(card, index);
       })));
       layout();
+      canvas.focus({ preventScroll: true });
       return true;
     },
     dispose() {
       if (disposed) return;
       disposed = true;
       scrollMotion.stop();
+      resizeObserver?.disconnect();
       window.removeEventListener("resize", layout);
       canvas.removeEventListener("wheel", wheel);
       canvas.removeEventListener("keydown", keydown);
@@ -84604,10 +84619,11 @@ var CardChoiceButton = class extends Container {
   /** Fits the complete face to its grid cell. */
   resize(width, height) {
     this.face.resize({ width, height });
+    this.hitArea = new Rectangle(0, 0, width, height);
   }
   /** Uses the shared selected border without moving the card. */
   setSelected(selected) {
-    this.face.setMotionState(selected ? "hovered" : "idle");
+    this.face.setInteractionState({ enabled: true, focused: selected, selected });
   }
 };
 var selectionStyle = new TextStyle({ fill: 13358561, fontFamily: "Arial", fontSize: 14, lineHeight: 19, wordWrap: true, breakWords: true });
