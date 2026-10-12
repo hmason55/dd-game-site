@@ -73693,6 +73693,19 @@ function calculateCombatLayout(viewport) {
     hitRegions: Object.freeze({ endTurn: regions.endTurn })
   });
 }
+function layoutPlayedCardPreview(viewport) {
+  const layout = calculateCombatLayout(viewport);
+  const top = layout.regions.header.height;
+  const bottom = Math.min(layout.regions.hand.y, layout.regions.endTurn.y);
+  const availableHeight = Math.max(0, bottom - top);
+  const scale = Math.min(
+    1.25,
+    layout.viewport.width * 0.36 / handCardVisualSize.width,
+    Math.max(0, availableHeight - 24) / handCardVisualSize.height
+  );
+  const halfWidth = handCardVisualSize.width * scale / 2;
+  return { x: Math.max(halfWidth, layout.viewport.width - 16 - halfWidth), y: top + availableHeight / 2, scale };
+}
 function getShortEncounterPageSize(kind, viewport) {
   const width = normalizeLayoutDimension(viewport.width);
   const pageControlInset2 = 52;
@@ -75635,7 +75648,6 @@ var constrainedHandInspectionScale = 1.28;
 var focusedHandLift = 34;
 var draggedCardLift = 48;
 var draggedCardScale = 1.32;
-var playedCardScale = 1.48;
 var entityHitHalfWidth = 94;
 var entityHitHalfHeight = 64;
 var pageControlInset = 52;
@@ -75715,6 +75727,7 @@ var EncounterScene = class {
   entities = /* @__PURE__ */ new Map();
   queuedEntryIds = /* @__PURE__ */ new Set();
   committedCardSequences = /* @__PURE__ */ new Map();
+  playedCardPreviewSequences = /* @__PURE__ */ new Map();
   entryInteractionStates = /* @__PURE__ */ new Map();
   currentSequence = -1;
   selectedEntryId;
@@ -75756,8 +75769,8 @@ var EncounterScene = class {
     ["stagger", (_source, _target, tile, start, progress) => this.stagger(tile, start, progress)],
     ["death", (_source, _target, tile, start, progress) => this.exit(tile, start, progress)],
     ["exit", (_source, _target, tile, start, progress) => this.exit(tile, start, progress)],
-    ["card-play-to-target", (_source, _target, tile, start, progress) => this.movePlayedCardToCenter(tile, start, progress)],
-    ["card-play-to-corner", (_source, _target, tile, start, progress) => this.movePlayedCardToCenter(tile, start, progress)],
+    ["card-play-to-target", (_source, _target, tile, start, progress) => this.previewPlayedCard(tile, start, progress)],
+    ["card-play-to-corner", (_source, _target, tile, start, progress) => this.previewPlayedCard(tile, start, progress)],
     ["draw-to-hand", (_source, _target, tile, start, progress) => {
       const anchors = this.getCardAnimationAnchors();
       const easedProgress = easeMotion(progress, "outCubic");
@@ -75954,6 +75967,7 @@ var EncounterScene = class {
     }, viewport);
     this.updateFeedbackVisibility();
     this.reconcileQueuedEntries(snapshot);
+    this.restoreResolvedCardPreviews(snapshot);
     this.reconcileEntities(snapshot.player, snapshot.enemies, viewport);
     this.reconcileHand(snapshot, viewport);
     this.layoutPageControls(snapshot, viewport);
@@ -76004,6 +76018,7 @@ var EncounterScene = class {
     this.entities.clear();
     this.queuedEntryIds.clear();
     this.committedCardSequences.clear();
+    this.playedCardPreviewSequences.clear();
   }
   repaintBackground(viewport) {
     this.background.clear().rect(0, 0, viewport.width, viewport.height).fill({ color: uiTokens.color.canvas });
@@ -76281,8 +76296,9 @@ var EncounterScene = class {
       this.inspectEntity(tile, telegraph, tile.description.y, true);
     });
     tile.detail.text = `${entity.health} / ${entity.maxHealth}`;
-    tile.defenses.text = entity.maxPosture > 0 ? `${entity.posture} / ${entity.maxPosture}` : "";
-    tile.defenses.visible = entity.maxPosture > 0;
+    const showPosture = !entity.isPlayer && entity.maxPosture > 0;
+    tile.defenses.text = showPosture ? `${entity.posture} / ${entity.maxPosture}` : "";
+    tile.defenses.visible = showPosture;
     tile.blockIcon.visible = entity.block > 0;
     tile.blockValue.visible = tile.blockIcon.visible;
     tile.blockValue.text = String(entity.block);
@@ -76292,12 +76308,13 @@ var EncounterScene = class {
     tile.title.position.set(0, -78);
     tile.description.position.set(0, artY + artHeight / 2 + 18);
     const meterY = entity.isPlayer ? artY + artHeight / 2 + 14 : -70;
-    this.drawMeter(tile.healthBar, entity.health, entity.maxHealth, -70, 0, 140, 22, uiTokens.color.health);
+    const healthFill = entity.block > 0 ? uiTokens.color.textMuted : uiTokens.color.health;
+    this.drawMeter(tile.healthBar, entity.health, entity.maxHealth, -70, 0, 140, 22, healthFill);
     this.drawMeter(tile.postureBar, entity.posture, entity.maxPosture, -70, 0, 140, 20, uiTokens.color.block);
     tile.healthBar.visible = entity.maxHealth > 0;
-    tile.postureBar.visible = entity.maxPosture > 0;
+    tile.postureBar.visible = showPosture;
     this.layoutEntityMeters(tile, meterY);
-    tile.effects.position.set(0, entity.isPlayer ? meterY + (entity.maxPosture > 0 ? 58 : 36) : -10);
+    tile.effects.position.set(0, entity.isPlayer ? meterY + 36 : -10);
     fitTextToBox(tile.defenses, 128, 18, 15, 13);
     fitTextToBox(tile.detail, 128, 20, 17, 14);
     const shortPlayer = entity.isPlayer && this.viewport !== void 0 && isShortEncounter(this.viewport);
@@ -76329,7 +76346,7 @@ var EncounterScene = class {
       tile.cardView.setMotionState(this.getCardMotionState(id, entry.id));
       this.updateCardArtwork(tile, itemArtwork(entry.name, entry.image));
     }
-    tile.container.alpha = entry.isDraggable ? 1 : isQueued ? 0.72 : 0.52;
+    if (!this.playedCardPreviewSequences.has(id)) tile.container.alpha = entry.isDraggable ? 1 : isQueued ? 0.72 : 0.52;
     if (!this.isEntryInteractionOwned(id, entry.id) && !this.isAnimationLocked(id) && !this.handLayoutTransitions.has(id)) {
       this.applyHandLayoutTransform(id, tile, position);
     }
@@ -76433,6 +76450,7 @@ var EncounterScene = class {
       tile.container.destroy({ children: true });
       this.clearDragMotion(id);
       this.pendingEntityLayouts.delete(id);
+      this.playedCardPreviewSequences.delete(id);
       tiles.delete(id);
     }
   }
@@ -77165,10 +77183,17 @@ ${entry.unavailableReason}` : ""),
       animatedTile.container.alpha = 1;
     }
     const start = this.getAnimationStart(command.id, animatedTile);
+    this.capturePlayedCardPreviewSequence(command);
     if (command.sourceId) {
       this.clearDragMotion(command.sourceId);
     }
     this.animationCommandHandlers.get(command.name)?.(source8, target, animatedTile, start, progress);
+  }
+  /** Records the first authoritative revision for a preview without advancing it on later animation frames. */
+  capturePlayedCardPreviewSequence(command) {
+    const sourceId = command.sourceId;
+    if (!sourceId || command.name !== "card-play-to-target" && command.name !== "card-play-to-corner" || this.playedCardPreviewSequences.has(sourceId)) return;
+    this.playedCardPreviewSequences.set(sourceId, this.currentSequence);
   }
   /** Reveals an action's enemy without compacting the formation or resetting other animation transforms. */
   showAnimationEnemy(command) {
@@ -77203,16 +77228,20 @@ ${entry.unavailableReason}` : ""),
     if (command.name === "attack") {
       this.attackTrail.clear();
     }
+    if (command.sourceId && (command.name === "card-play-to-target" || command.name === "card-play-to-corner")) {
+      this.playedCardPreviewSequences.delete(command.sourceId);
+    }
     this.animationStarts.delete(command.id);
   }
-  /** Moves a committed card to a readable, upright center stage before its zone transition. */
-  movePlayedCardToCenter(tile, start, progress) {
-    const destination = this.getCardAnimationAnchors().center;
-    const easedProgress = easeMotion(progress, "inOutCubic");
+  /** Grows a card into a brief right-side preview and fades it before combat effects begin. */
+  previewPlayedCard(tile, start, progress) {
+    const destination = layoutPlayedCardPreview(this.viewport ?? { width: 960, height: 540 });
+    const easedProgress = easeMotion(Math.min(1, progress / 0.25), "outCubic");
     this.dragLayer.addChild(tile.container);
     tile.container.position.set(interpolate(start.x, destination.x, easedProgress), interpolate(start.y, destination.y, easedProgress));
     tile.container.rotation = interpolate(start.rotation, 0, easedProgress);
-    tile.container.scale.set(interpolate(start.scale, playedCardScale, easedProgress));
+    tile.container.scale.set(interpolate(start.scale, destination.scale, easedProgress));
+    tile.container.alpha = start.alpha * (1 - easeMotion(Math.max(0, (progress - 0.75) / 0.25), "inCubic"));
   }
   /** Gets the card or item whose target options should be visible to the player. */
   getTargetingEntry() {
@@ -77247,7 +77276,6 @@ ${entry.unavailableReason}` : ""),
   getCardAnimationAnchors() {
     const viewport = this.viewport ?? { width: 960, height: 540 };
     return {
-      center: { x: viewport.width / 2, y: viewport.height / 2 },
       draw: { x: Math.max(0, viewport.width - 80), y: Math.max(0, viewport.height - 40) },
       discard: { x: Math.max(0, viewport.width - 100), y: viewport.height + 30 }
     };
@@ -77849,6 +77877,16 @@ ${entry.unavailableReason}` : ""),
     this.intentStatusLabel.visible = visible;
     if (this.viewport) {
       this.runHud.setFeedbackVisible(visible, this.viewport);
+    }
+  }
+  /** Releases preview ownership once a newer snapshot confirms a retained card has finished resolving. */
+  restoreResolvedCardPreviews(snapshot) {
+    for (const card of snapshot.hand) {
+      const id = `card:${card.id}`;
+      const previewSequence = this.playedCardPreviewSequences.get(id);
+      if (previewSequence === void 0 || snapshot.sequence <= previewSequence || card.isQueued || card.isInteractionLocked || this.isAnimationLocked(id)) continue;
+      this.playedCardPreviewSequences.delete(id);
+      this.entryInteractionStates.delete(id);
     }
   }
   reconcileQueuedEntries(snapshot) {
