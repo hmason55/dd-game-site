@@ -70557,7 +70557,7 @@ function isOptionalBoolean(value) {
   return value === void 0 || typeof value === "boolean";
 }
 function isOptionalNonNegativeFiniteNumber(value) {
-  return value === void 0 || isFiniteNumber2(value) && value >= 0;
+  return value === void 0 || value === null || isFiniteNumber2(value) && value >= 0;
 }
 
 // src/canvas-focus.ts
@@ -70915,7 +70915,6 @@ var ParticleEffectManager = class {
       return false;
     }
     const textAnchorKey = options.renderMode === "text" ? (options.anchorId ?? "scene").replace(/^(feedback:block:|player:|enemy:)/, "") : void 0;
-    if (textAnchorKey) this.makeRoomForFeedback(textAnchorKey);
     const emitter = {
       options,
       particles: [],
@@ -71108,14 +71107,6 @@ var ParticleEffectManager = class {
       this.liveParticleCount++;
     }
   }
-  /** Keeps a burst of rapid feedback close to its receiving entity. */
-  makeRoomForFeedback(key) {
-    const labels = [...this.emitters.values()].filter((emitter) => emitter.textAnchorKey === key);
-    while (labels.length >= 4) {
-      const oldest = labels.shift();
-      if (oldest) this.destroy(oldest.options.id);
-    }
-  }
   /** Places only the new label in a nearby lane; existing hits keep their own drift and lifetime. */
   separateTextParticle(emitter, particle) {
     if (!(particle.display instanceof Text)) return;
@@ -71144,6 +71135,7 @@ var ParticleEffectManager = class {
     const particle = {
       display,
       mode: options.renderMode,
+      poolKey: getParticlePoolKey(options),
       x: position.x,
       y: position.y,
       velocityX: velocity.x,
@@ -71188,7 +71180,7 @@ var ParticleEffectManager = class {
     }
   }
   acquire(options) {
-    const pool = this.getPool(options.renderMode);
+    const pool = this.getPool(getParticlePoolKey(options));
     const pooled = pool.pop();
     if (pooled) {
       this.pooledParticleCount--;
@@ -71235,6 +71227,7 @@ var ParticleEffectManager = class {
   }
   configureDisplay(display, options) {
     if (display instanceof Text) {
+      display.scale.set(1);
       display.unload();
       display.text = options.text;
       display.style = createTextStyle(options);
@@ -71267,6 +71260,10 @@ var ParticleEffectManager = class {
       particle.display.position.set(x2, y2);
       particle.display.rotation = particle.rotation;
       particle.display.alpha = alpha * color.a;
+      if (particle.display instanceof Text) {
+        const pop = this.reducedMotion || options.effectDefinition === "resource-gain" ? 1 : 1 + 0.25 * (1 - clampUnit(particle.ageMs / 500));
+        particle.display.scale.set(pop);
+      }
       if (particle.display instanceof CircleParticleDisplay) particle.display.update(toHexColor(color), progress);
       else particle.display.tint = toHexColor(color);
     }
@@ -71294,7 +71291,7 @@ var ParticleEffectManager = class {
       particle.display.destroy({ children: true });
       return;
     }
-    this.getPool(particle.mode).push(particle.display);
+    this.getPool(particle.poolKey).push(particle.display);
     this.pooledParticleCount++;
   }
   getPool(mode) {
@@ -71307,6 +71304,9 @@ var ParticleEffectManager = class {
     return pool;
   }
 };
+function getParticlePoolKey(options) {
+  return options.renderMode === "text" && options.effectDefinition === "resource-gain" ? "resource-text" : options.renderMode;
+}
 function getTextureByteEstimate(textures) {
   let bytes = 0;
   for (const texture of textures) {
@@ -72815,7 +72815,7 @@ var uiTokens = {
     block: 13678460,
     dangerIntent: 14844014,
     focus: 15920868,
-    selected: 13678460,
+    selected: 6543598,
     valid: 9488295,
     invalid: 14844014,
     disabled: 12897224,
@@ -74848,12 +74848,15 @@ var CardView = class extends Container {
     this.stateOutline.clear();
     const selected = this.componentState.interaction.selected === true;
     const bonus = this.cardContent.conditionalEffectActive === true;
-    this.stateBadge.text = selected ? "SELECTED" : bonus ? "BONUS ACTIVE" : "";
-    this.stateBadge.visible = selected || bonus;
+    this.stateBadge.text = bonus ? "BONUS ACTIVE" : "";
+    this.stateBadge.visible = bonus;
     this.stateBadge.anchor.set(0.5);
     this.stateBadge.position.set(this.cardWidth / 2, this.cardHeight * 0.43);
-    if (selected || bonus) {
-      this.stateOutline.roundRect(this.cardWidth / 2 - 52, this.cardHeight * 0.43 - 11, 104, 22, 5).fill({ color: selected ? uiTokens.color.selected : 16766826 });
+    if (bonus) {
+      this.stateOutline.roundRect(this.cardWidth / 2 - 52, this.cardHeight * 0.43 - 11, 104, 22, 5).fill({ color: 16766826 });
+    }
+    if (selected) {
+      this.stateOverlay.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiTokens.color.selected, alpha: 0.18 });
     }
     if (statePresentation.overlayAlpha > 0) {
       this.stateOverlay.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: statePresentation.overlayColor, alpha: statePresentation.overlayAlpha });
@@ -74921,7 +74924,7 @@ function getPalette(rarity) {
 function getStatePresentation(motionState, playability, interaction) {
   const basePresentation = !interaction.enabled ? { alpha: uiTokens.interaction.disabledAlpha, overlayAlpha: 0.35, overlayColor: uiTokens.color.canvas } : playability === "unplayable" ? { alpha: 0.65, overlayAlpha: 0.3, overlayColor: uiTokens.color.surfaceRaised } : { alpha: 1, overlayAlpha: 0, overlayColor: 0 };
   const dropOutlineColor = motionState === "valid-drop" || motionState === "invalid-drop" ? getMotionOutlineColor(motionState) : void 0;
-  const outlineColor = dropOutlineColor ?? (interaction.focused ? uiTokens.color.focus : interaction.selected ? uiTokens.color.selected : getMotionOutlineColor(motionState));
+  const outlineColor = dropOutlineColor ?? (interaction.selected ? uiTokens.color.selected : interaction.focused ? uiTokens.color.focus : getMotionOutlineColor(motionState));
   return { ...basePresentation, outlineColor };
 }
 function getMotionOutlineColor(state) {
