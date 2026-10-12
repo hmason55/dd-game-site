@@ -76096,7 +76096,7 @@ var EncounterScene = class {
     const playerId = `player:${player.id}`;
     expectedIds.add(playerId);
     this.entities.set(player.id, player);
-    this.updateEntityTile(playerId, player, this.playerLayer, layoutPlayer(viewport));
+    this.updateEntityTile(playerId, player, this.playerLayer, this.getPlayerPresentationPosition(viewport));
     const formation = this.getLayoutEnemies(enemies);
     const visibleEnemies = this.visiblePage(formation, viewport, "enemy");
     const paged = isShortEncounter(viewport) && formation.length > getShortEncounterPageSize("enemy", viewport);
@@ -76230,11 +76230,24 @@ var EncounterScene = class {
     const roomy = viewport.height >= 650;
     const playerHeight = roomy ? 144 : 104;
     if (entity.isPlayer) return { height: playerHeight, y: 0 };
-    const player = layoutPlayer(viewport);
+    const player = this.getPlayerPresentationPosition(viewport);
     const playerTop = player.y - playerHeight * (player.scale ?? 1) / 2;
-    const availableHeight = (playerTop - position.y - 16) / Math.max(0.01, position.scale ?? 1);
+    const statusClearance = entity.maxPosture > 0 && entity.statuses.length > 0 ? 16 : 0;
+    const availableHeight = (playerTop - position.y - 16) / Math.max(0.01, position.scale ?? 1) - statusClearance;
     const height = Math.max(32, Math.min(roomy ? 160 : 104, availableHeight));
-    return { height, y: height / 2 };
+    return { height, y: height / 2 + statusClearance };
+  }
+  /** Reserves the player health and status rows above a full hand at every canvas size. */
+  getPlayerPresentationPosition(viewport) {
+    const position = layoutPlayer(viewport);
+    const snapshot = this.latestSnapshot;
+    if (!snapshot || !formatEntityEffects(snapshot.player)) return position;
+    const count2 = snapshot.inventoryMode ? snapshot.items.length : snapshot.hand.length;
+    const visibleCount = isShortEncounter(viewport) ? Math.min(count2, getShortEncounterPageSize("hand", viewport)) : count2;
+    const handTop = Math.min(...layoutHand(visibleCount, viewport).map((card) => card.y - handCardVisualSize.height * (card.scale ?? 1) / 2));
+    const artworkBottom = this.useCompactEntityPresentation() ? isShortEncounter(viewport) ? -2 : 58 : viewport.height >= 650 ? 72 : 52;
+    const presentationBottom = artworkBottom + 14 + 22 + 6 + 28;
+    return { ...position, y: Math.min(position.y, handTop - 8 - presentationBottom * (position.scale ?? 1)) };
   }
   /** Keeps dense formations and short windows within the established compact tile bounds. */
   useCompactEntityPresentation() {
@@ -76262,7 +76275,7 @@ var EncounterScene = class {
     this.layoutEntityMeters(tile, -42);
     tile.effects.position.set(0, 16);
     tile.description.position.set(0, 64);
-    tile.statusIcons.position.set(0, 12);
+    this.layoutEntityStatuses(tile);
     tile.blockIcon.position.set(-76, 54);
     tile.blockValue.position.set(-44, 64);
     tile.title.style.stroke = { color: uiTokens.color.panelShadow, width: 1 };
@@ -76317,8 +76330,7 @@ var EncounterScene = class {
     tile.effects.position.set(0, entity.isPlayer ? meterY + 36 : -10);
     fitTextToBox(tile.defenses, 128, 18, 15, 13);
     fitTextToBox(tile.detail, 128, 20, 17, 14);
-    const shortPlayer = entity.isPlayer && this.viewport !== void 0 && isShortEncounter(this.viewport);
-    tile.statusIcons.position.set(entity.isPlayer ? -132 : 0, entity.isPlayer ? shortPlayer ? -24 : artY : -10);
+    this.layoutEntityStatuses(tile);
     tile.blockIcon.position.set(entity.isPlayer ? 80 : -76, entity.isPlayer ? meterY + 1 : tile.description.y - 10);
     tile.blockValue.position.set(entity.isPlayer ? 112 : -44, entity.isPlayer ? meterY + 11 : tile.description.y);
     fitTextToBox(tile.effects, 176, 22, 14, 12);
@@ -76330,6 +76342,11 @@ var EncounterScene = class {
     tile.detail.position.set(0, y2 + 11);
     tile.postureBar.position.set(0, y2 + 26);
     tile.defenses.position.set(0, y2 + 36);
+  }
+  /** Centers effects beneath the visible health or posture meter for either combatant. */
+  layoutEntityStatuses(tile) {
+    const meterBottom = tile.postureBar.visible ? tile.postureBar.y + 20 : tile.healthBar.y + 22;
+    tile.statusIcons.position.set(0, meterBottom + 6);
   }
   updateHandTile(id, entry, position) {
     const isCard = isCardPresentationState2(entry);
@@ -76419,6 +76436,7 @@ var EncounterScene = class {
     defenses.style.fill = uiTokens.color.text;
     layer.addChild(container);
     const statusIcons = new StatusEffectsView((text, pinned) => this.inspectEntity(tile, text, statusIcons.y, pinned), () => this.dismissInspection());
+    statusIcons.label = "combat-statuses";
     container.addChild(statusIcons, impactHighlight, blockIcon, blockValue);
     const tile = { container, background, accent, targetHighlight, impactHighlight, artwork, title, description, detail, effects, statusIcons, healthBar, postureBar, defenses, blockIcon, blockValue };
     tiles.set(id, tile);
@@ -77964,6 +77982,15 @@ function getDirection(fromX, fromY, toX, toY) {
   const y2 = toY - fromY;
   const length2 = Math.hypot(x2, y2);
   return length2 === 0 ? { x: 0, y: 0 } : { x: x2 / length2, y: y2 / length2 };
+}
+function formatEntityEffects(entity) {
+  const visibleStatuses = entity.statuses.slice(0, 3);
+  const statuses = visibleStatuses.map((status) => `${status.name} ${status.stacks}`);
+  if (entity.statuses.length > visibleStatuses.length) {
+    statuses.push(`+${entity.statuses.length - visibleStatuses.length} statuses`);
+  }
+  const rituals = entity.rituals.map((ritual) => `Ritual: ${ritual.name}`);
+  return [...statuses, ...rituals].join(" \xB7 ");
 }
 function toCardViewRarity(rarity) {
   return rarity === "Uncommon" || rarity === "Rare" || rarity === "Special" ? rarity : "Common";
@@ -80996,6 +81023,7 @@ async function createShopRenderer(canvas, sink) {
   let state;
   let selectedIndex = 0;
   let selectedMerchandiseId;
+  let showSelectedTooltip = false;
   let pending = false;
   let disposed = false;
   let acceptedActionAwaitingReconcile = false;
@@ -81061,6 +81089,7 @@ async function createShopRenderer(canvas, sink) {
     if (pending || merchandise.isSold) return;
     scrollMotion.stop();
     selectedMerchandiseId = merchandise.id;
+    showSelectedTooltip = true;
     selectedIndex = selectableMerchandise().findIndex((entry) => entry.id === merchandise.id);
     announce(`Selected ${merchandise.name}. ${getMerchandiseSummary(merchandise)} Confirm to buy, or choose another item.`);
     layout();
@@ -81072,6 +81101,7 @@ async function createShopRenderer(canvas, sink) {
   const cancelSelection = () => {
     if (pending) return;
     selectedMerchandiseId = void 0;
+    showSelectedTooltip = false;
     announce("Merchandise selection cancelled.");
     layout();
   };
@@ -81238,14 +81268,32 @@ async function createShopRenderer(canvas, sink) {
         } else inspect(entry);
       }, (event) => {
         if (event?.pointerType === "touch" || pending) return;
-        tooltip.show(`${entry.name}
-${getMerchandiseSummary(entry)}`, { x: 24 + placement.x, y: merchandiseLayout.gridTop + placement.y - merchandiseScroll.scrollOffset, width: placement.width, height: placement.height }, { width, height });
-      }, () => tooltip.hide());
+        showMerchandiseTooltip(entry);
+      }, (event) => {
+        if (event?.pointerType !== "touch") {
+          showSelectedTooltip = false;
+          tooltip.hide();
+        }
+      });
       card.resize(placement.width, placement.height);
       card.position.set(placement.x, placement.y);
       return card;
     });
     reconcileMerchandiseCards(cards);
+    if (selected && showSelectedTooltip && !pending) showMerchandiseTooltip(selected);
+  }
+  function showMerchandiseTooltip(entry) {
+    const { width, height } = application.renderer;
+    const merchandiseLayout = createMerchandiseLayout(width, height, state?.merchandise ?? []);
+    const placement = merchandiseLayout.placements.get(entry.id);
+    if (!placement) return;
+    tooltip.show(`${entry.name}
+${getMerchandiseSummary(entry)}`, {
+      x: 24 + placement.x,
+      y: merchandiseLayout.gridTop + placement.y - merchandiseScroll.scrollOffset,
+      width: placement.width,
+      height: placement.height
+    }, { width, height: merchandiseLayout.trayY });
   }
   function layoutHeader(merchandiseLayout, resolutionGlow) {
     const { width, height } = application.renderer;
@@ -81287,6 +81335,7 @@ ${getMerchandiseSummary(entry)}`, { x: 24 + placement.x, y: merchandiseLayout.gr
     }
   }
   function scrollInventory(amount) {
+    showSelectedTooltip = false;
     tooltip.hide();
     merchandiseScroll.scrollBy(amount);
     updateSectionHeadings();
@@ -81324,6 +81373,7 @@ ${getMerchandiseSummary(entry)}`, { x: 24 + placement.x, y: merchandiseLayout.gr
     if (top < viewportTop) merchandiseScroll.setScrollOffset(top);
     else if (bottom > viewportBottom) merchandiseScroll.setScrollOffset(bottom - merchandiseScroll.viewportSize.height);
     updateSectionHeadings();
+    if (showSelectedTooltip && selected) showMerchandiseTooltip(selected);
   }
   function addControl(label, hint, enabled, x2, y2, width, onPress) {
     const controlState = { id: label, kind: "control", name: label, description: hint, image: "", price: 0, isOnSale: false, isSold: false, isAffordable: enabled, disabledReason: null };
