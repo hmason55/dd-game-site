@@ -70298,6 +70298,7 @@ var AnimationDirector = class {
   executor;
   activeTimelines = /* @__PURE__ */ new Map();
   speedPolicy = new VisualAnimationSpeedPolicy();
+  nextTimelineKey = 0;
   disposed = false;
   /**
    * Schedules a command or group and always resolves to a terminal result.
@@ -70306,17 +70307,19 @@ var AnimationDirector = class {
     if (this.disposed) {
       return Promise.resolve(this.createResult(request.id, "cancelled", "The encounter scene has been disposed."));
     }
-    if (this.activeTimelines.has(request.id)) {
-      return Promise.resolve(this.createResult(request.id, "failed", "An animation with this identifier is already active."));
-    }
     const commands = isVisualAnimationGroup(request) ? request.commands : [request];
     const invalidResult = this.validateRequest(request.id, commands, resolveObject);
     if (invalidResult) {
       return Promise.resolve(invalidResult);
     }
-    const scheduledCommands = this.createSchedule(request, commands);
+    const motionChannels = new Set(commands.map(getMotionChannel).filter((channel) => channel !== void 0));
+    const interruptible = isVisualAnimationGroup(request) ? request.interruptible ?? true : true;
+    const delayMs = this.prepareFeedback(request.id, motionChannels, interruptible);
+    const key = this.nextTimelineKey++;
+    const timelineCommands = delayMs > 0 ? commands.map((command) => ({ ...command, id: `${command.id}:timeline:${key}` })) : commands;
+    const scheduledCommands = this.createSchedule(request, timelineCommands);
     const completionMs = Math.max(...scheduledCommands.map((command) => command.startMs + command.durationMs));
-    if (completionMs === 0) {
+    if (completionMs === 0 && delayMs === 0) {
       try {
         for (const command of scheduledCommands) this.executor.execute(command.command, 1);
         this.completeCommands(scheduledCommands);
@@ -70336,14 +70339,16 @@ var AnimationDirector = class {
           lockedObjectIds.add(command.targetId);
         }
       }
-      this.activeTimelines.set(request.id, {
+      this.activeTimelines.set(key, {
+        key,
         id: request.id,
-        interruptible: isVisualAnimationGroup(request) ? request.interruptible ?? true : true,
+        interruptible,
         commands: scheduledCommands,
         completionMs,
         lockedObjectIds,
+        motionChannels,
         resolve,
-        elapsedMs: 0
+        elapsedMs: -delayMs
       });
     });
   }
@@ -70360,7 +70365,7 @@ var AnimationDirector = class {
    * Cancels a timeline when it is marked interruptible.
    */
   cancel(id, message = "The animation was cancelled.") {
-    const timeline = this.activeTimelines.get(id);
+    const timeline = [...this.activeTimelines.values()].find((candidate) => candidate.id === id);
     if (!timeline || !timeline.interruptible) {
       return false;
     }
@@ -70368,13 +70373,17 @@ var AnimationDirector = class {
     return true;
   }
   /**
-   * Cancels all interruptible timelines before authoritative scene reconciliation.
+   * Releases all timelines when the scene exits or presentation is interrupted.
    */
   cancelAll(message = "The animation was superseded by an authoritative snapshot.") {
     for (const timeline of [...this.activeTimelines.values()]) {
-      if (timeline.interruptible) {
-        this.complete(timeline, "cancelled", message);
-      }
+      this.complete(timeline, "cancelled", message);
+    }
+  }
+  /** Gives pointer input ownership of an object immediately, including protected visual groups. */
+  cancelForObject(id) {
+    for (const timeline of [...this.activeTimelines.values()]) {
+      if (timeline.lockedObjectIds.has(id)) this.complete(timeline, "cancelled", "The visual effect yielded to player input.");
     }
   }
   /**
@@ -70455,6 +70464,20 @@ var AnimationDirector = class {
       return { command, startMs, durationMs, finished: false };
     });
   }
+  /** Sequences protected combat beats visually while replacing transient motion without holding gameplay input. */
+  prepareFeedback(id, channels, interruptible) {
+    let delayMs = 0;
+    for (const timeline of [...this.activeTimelines.values()]) {
+      const sharesMotion = [...channels].some((channel) => timeline.motionChannels.has(channel));
+      if (timeline.id !== id && !sharesMotion) continue;
+      if (!interruptible && !timeline.interruptible) {
+        delayMs = Math.max(delayMs, timeline.completionMs - timeline.elapsedMs);
+      } else {
+        this.complete(timeline, "cancelled", "The visual effect was replaced by newer feedback.");
+      }
+    }
+    return delayMs;
+  }
   validateRequest(id, commands, resolveObject) {
     if (!id || commands.length === 0) {
       return this.createResult(id, "failed", "An animation must have an identifier and at least one command.");
@@ -70476,7 +70499,7 @@ var AnimationDirector = class {
     return void 0;
   }
   complete(timeline, state, message) {
-    if (!this.activeTimelines.delete(timeline.id)) {
+    if (!this.activeTimelines.delete(timeline.key)) {
       return;
     }
     if (state === "completed") this.completeCommands(timeline.commands);
@@ -70505,6 +70528,12 @@ var AnimationDirector = class {
     return { id, state, message };
   }
 };
+function getMotionChannel(command) {
+  const id = command.name === "nudge" ? command.targetId : command.sourceId;
+  if (!id || command.name === "wait") return void 0;
+  const channel = command.name === "hit-flash" ? "flash" : command.name === "buff" || command.name === "status-change" ? "accent" : command.name === "resource-change" ? "resource" : "transform";
+  return `${id}:${channel}`;
+}
 var waitCommandExecutor = {
   supports(command) {
     return command.name === "wait";
@@ -73693,19 +73722,6 @@ function calculateCombatLayout(viewport) {
     hitRegions: Object.freeze({ endTurn: regions.endTurn })
   });
 }
-function layoutPlayedCardPreview(viewport) {
-  const layout = calculateCombatLayout(viewport);
-  const top = layout.regions.header.height;
-  const bottom = Math.min(layout.regions.hand.y, layout.regions.endTurn.y);
-  const availableHeight = Math.max(0, bottom - top);
-  const scale = Math.min(
-    1.25,
-    layout.viewport.width * 0.36 / handCardVisualSize.width,
-    Math.max(0, availableHeight - 24) / handCardVisualSize.height
-  );
-  const halfWidth = handCardVisualSize.width * scale / 2;
-  return { x: Math.max(halfWidth, layout.viewport.width - 16 - halfWidth), y: top + availableHeight / 2, scale };
-}
 function getShortEncounterPageSize(kind, viewport) {
   const width = normalizeLayoutDimension(viewport.width);
   const pageControlInset2 = 52;
@@ -74985,7 +75001,7 @@ function hasStartedCardDrag(start, event) {
   if (event.pointerType !== "touch") {
     return Math.hypot(horizontalMovement, verticalMovement) >= pointerDragSlopPixels;
   }
-  return verticalMovement <= -pointerDragSlopPixels && Math.abs(verticalMovement) >= Math.abs(horizontalMovement);
+  return verticalMovement <= -pointerDragSlopPixels && Math.abs(verticalMovement) >= Math.abs(horizontalMovement) * 0.5;
 }
 
 // src/motion-policy.ts
@@ -75648,6 +75664,7 @@ var constrainedHandInspectionScale = 1.28;
 var focusedHandLift = 34;
 var draggedCardLift = 48;
 var draggedCardScale = 1.32;
+var playedCardScale = 0.38;
 var entityHitHalfWidth = 94;
 var entityHitHalfHeight = 64;
 var pageControlInset = 52;
@@ -75727,7 +75744,9 @@ var EncounterScene = class {
   entities = /* @__PURE__ */ new Map();
   queuedEntryIds = /* @__PURE__ */ new Set();
   committedCardSequences = /* @__PURE__ */ new Map();
-  playedCardPreviewSequences = /* @__PURE__ */ new Map();
+  cardIntentsAwaitingResponse = /* @__PURE__ */ new Set();
+  authoritativeQueuedCardSequences = /* @__PURE__ */ new Map();
+  committedCardMotion = /* @__PURE__ */ new Map();
   entryInteractionStates = /* @__PURE__ */ new Map();
   currentSequence = -1;
   selectedEntryId;
@@ -75741,6 +75760,9 @@ var EncounterScene = class {
   dragReturns = /* @__PURE__ */ new Map();
   handLayoutTransitions = /* @__PURE__ */ new Map();
   animationLockResolver = () => false;
+  cancelObjectAnimations = () => {
+  };
+  retiredTileIds = /* @__PURE__ */ new Set();
   intentPending = false;
   endingTurnPending = false;
   inputReleased = false;
@@ -75769,8 +75791,8 @@ var EncounterScene = class {
     ["stagger", (_source, _target, tile, start, progress) => this.stagger(tile, start, progress)],
     ["death", (_source, _target, tile, start, progress) => this.exit(tile, start, progress)],
     ["exit", (_source, _target, tile, start, progress) => this.exit(tile, start, progress)],
-    ["card-play-to-target", (_source, _target, tile, start, progress) => this.previewPlayedCard(tile, start, progress)],
-    ["card-play-to-corner", (_source, _target, tile, start, progress) => this.previewPlayedCard(tile, start, progress)],
+    ["card-play-to-target", (_source, _target, tile, start, progress) => this.movePlayedCardAside(tile, start, progress)],
+    ["card-play-to-corner", (_source, _target, tile, start, progress) => this.movePlayedCardAside(tile, start, progress)],
     ["draw-to-hand", (_source, _target, tile, start, progress) => {
       const anchors = this.getCardAnimationAnchors();
       const easedProgress = easeMotion(progress, "outCubic");
@@ -75861,19 +75883,22 @@ var EncounterScene = class {
     };
   }
   /**
-   * Updates the source used to lock scene objects during renderer-owned motion.
+   * Tracks visual ownership so snapshots retain objects until optional motion finishes.
    */
   setAnimationLockResolver(resolver) {
     this.animationLockResolver = resolver;
     this.refreshAnimationLocks();
   }
+  /** Lets user input immediately replace renderer-owned motion on the selected object. */
+  setAnimationCanceller(cancel) {
+    this.cancelObjectAnimations = cancel;
+  }
   /**
    * Re-evaluates interaction state after an active visual command changes.
    */
   refreshAnimationLocks() {
-    if (this.activeDrag && this.isAnimationLockedForEntry(this.activeDrag.entry)) {
-      this.returnActiveDrag();
-    }
+    this.pruneRetiredTiles();
+    this.refreshHandLayoutTransforms();
     this.restorePendingEntityLayouts();
     if (this.latestSnapshot && this.viewport && this.latestSnapshot.enemies.some((enemy) => enemy.health <= 0)) {
       this.reconcileEntities(this.latestSnapshot.player, this.latestSnapshot.enemies, this.viewport);
@@ -75967,7 +75992,6 @@ var EncounterScene = class {
     }, viewport);
     this.updateFeedbackVisibility();
     this.reconcileQueuedEntries(snapshot);
-    this.restoreResolvedCardPreviews(snapshot);
     this.reconcileEntities(snapshot.player, snapshot.enemies, viewport);
     this.reconcileHand(snapshot, viewport);
     this.layoutPageControls(snapshot, viewport);
@@ -76018,7 +76042,10 @@ var EncounterScene = class {
     this.entities.clear();
     this.queuedEntryIds.clear();
     this.committedCardSequences.clear();
-    this.playedCardPreviewSequences.clear();
+    this.cardIntentsAwaitingResponse.clear();
+    this.authoritativeQueuedCardSequences.clear();
+    this.committedCardMotion.clear();
+    this.retiredTileIds.clear();
   }
   repaintBackground(viewport) {
     this.background.clear().rect(0, 0, viewport.width, viewport.height).fill({ color: uiTokens.color.canvas });
@@ -76038,7 +76065,7 @@ var EncounterScene = class {
   /** Keeps the currently inspected object visible when a resize introduces paging. */
   alignPagesToFocusedObjects(snapshot, viewport) {
     if (!isShortEncounter(viewport)) return;
-    const entries = snapshot.inventoryMode ? snapshot.items : snapshot.hand;
+    const entries = this.getHandEntries(snapshot);
     const handIndex = entries.findIndex((entry) => entry.id === (this.selectedEntryId ?? this.focusedEntryId));
     const enemyIndex = this.getLayoutEnemies(snapshot.enemies).findIndex((enemy) => enemy.id === this.focusedEntityId);
     if (handIndex >= 0) this.handPage = Math.floor(handIndex / getShortEncounterPageSize("hand", viewport));
@@ -76057,7 +76084,7 @@ var EncounterScene = class {
   /** Pages locally without changing the authoritative gameplay snapshot or scene IDs. */
   changePage(kind, direction) {
     if (!this.latestSnapshot || !this.viewport || !isShortEncounter(this.viewport) || this.activeDrag || this.intentPending) return false;
-    const count2 = kind === "enemy" ? this.getLayoutEnemies(this.latestSnapshot.enemies).length : (this.latestSnapshot.inventoryMode ? this.latestSnapshot.items : this.latestSnapshot.hand).length;
+    const count2 = kind === "enemy" ? this.getLayoutEnemies(this.latestSnapshot.enemies).length : this.getHandEntries(this.latestSnapshot).length;
     const pageSize = getShortEncounterPageSize(kind, this.viewport);
     const pageCount = Math.ceil(count2 / pageSize);
     if (pageCount <= 1) return false;
@@ -76071,7 +76098,7 @@ var EncounterScene = class {
   }
   /** Positions 44-pixel page controls beside compact target and hand bands. */
   layoutPageControls(snapshot, viewport) {
-    const entryCount = snapshot.inventoryMode ? snapshot.items.length : snapshot.hand.length;
+    const entryCount = this.getHandEntries(snapshot).length;
     const showEnemies = isShortEncounter(viewport) && this.getLayoutEnemies(snapshot.enemies).length > getShortEncounterPageSize("enemy", viewport);
     const showHand = isShortEncounter(viewport) && entryCount > getShortEncounterPageSize("hand", viewport);
     this.previousEnemyPage.visible = this.nextEnemyPage.visible = showEnemies;
@@ -76131,7 +76158,7 @@ var EncounterScene = class {
     this.removeMissingEntities(expectedIds);
   }
   reconcileHand(snapshot, viewport) {
-    const allEntries = snapshot.inventoryMode ? snapshot.items : snapshot.hand;
+    const allEntries = this.getHandEntries(snapshot);
     const entries = this.visiblePage(allEntries, viewport, "hand");
     const expectedIds = /* @__PURE__ */ new Set();
     const paged = isShortEncounter(viewport) && allEntries.length > getShortEncounterPageSize("hand", viewport);
@@ -76153,13 +76180,23 @@ var EncounterScene = class {
       const previousPosition = previousPositions.get(id);
       const actualPosition = layoutIndex < 0 && previousPosition ? previousPosition : paged ? { ...position, x: position.x + pageControlInset } : position;
       this.handLayoutPositions.set(id, actualPosition);
-      if (previousPosition && !this.isEntryInteractionOwned(id, entry.id) && !this.isAnimationLocked(id) && (previousPosition.x !== actualPosition.x || previousPosition.y !== actualPosition.y || previousPosition.scale !== actualPosition.scale || previousPosition.rotation !== actualPosition.rotation)) {
+      if (previousPosition && !this.isDragPositionManaged(id) && (previousPosition.x !== actualPosition.x || previousPosition.y !== actualPosition.y || previousPosition.scale !== actualPosition.scale || previousPosition.rotation !== actualPosition.rotation)) {
         this.startHandLayoutTransition(id);
       }
       this.updateHandTile(id, entry, actualPosition);
       this.selectableEntries.set(entry.id, entry);
     });
+    for (const entry of snapshot.hand.filter((card) => this.queuedEntryIds.has(card.id))) {
+      const id = `card:${entry.id}`;
+      expectedIds.add(id);
+      this.selectableEntries.set(entry.id, entry);
+      this.updateHandTile(id, entry, this.getCardAnimationAnchors().played);
+      if (!this.releasedDragPositions.has(id) && !this.isAnimationLocked(id)) {
+        this.stageCommittedCard(entry.id);
+      }
+    }
     this.retargetDragReturns();
+    this.retargetHandLayoutTransitions();
     this.removeMissingTiles(this.handTiles, expectedIds);
     this.restoreHandLayerOrder();
     if (this.selectedEntryId && !this.selectableEntries.has(this.selectedEntryId)) {
@@ -76174,6 +76211,7 @@ var EncounterScene = class {
     this.prioritizeInspectedHandTile();
   }
   updateEntityTile(id, entity, layer, position) {
+    this.restoreRetiredTile(id);
     const tile = this.getOrCreateTile(this.entityTiles, id, layer);
     this.drawEntityPresentation(tile, entity, position);
     delete tile.targetPresentationKey;
@@ -76349,6 +76387,7 @@ var EncounterScene = class {
     tile.statusIcons.position.set(0, meterBottom + 6);
   }
   updateHandTile(id, entry, position) {
+    this.restoreRetiredTile(id);
     const isCard = isCardPresentationState2(entry);
     const tile = this.getOrCreateCardTile(id, entry);
     const isQueued = isCard && (entry.isQueued || this.queuedEntryIds.has(entry.id));
@@ -76363,8 +76402,10 @@ var EncounterScene = class {
       tile.cardView.setMotionState(this.getCardMotionState(id, entry.id));
       this.updateCardArtwork(tile, itemArtwork(entry.name, entry.image));
     }
-    if (!this.playedCardPreviewSequences.has(id)) tile.container.alpha = entry.isDraggable ? 1 : isQueued ? 0.72 : 0.52;
-    if (!this.isEntryInteractionOwned(id, entry.id) && !this.isAnimationLocked(id) && !this.handLayoutTransitions.has(id)) {
+    if (!isQueued && !this.isAnimationLocked(id)) {
+      tile.container.alpha = entry.isDraggable ? 1 : 0.52;
+    }
+    if (!this.isDragPositionManaged(id) && !this.handLayoutTransitions.has(id)) {
       this.applyHandLayoutTransform(id, tile, position);
     }
     const isInteractive = this.isEntryInteractive(id, entry);
@@ -76463,13 +76504,19 @@ var EncounterScene = class {
   removeMissingTiles(tiles, expectedIds) {
     for (const [id, tile] of tiles) {
       if (expectedIds.has(id)) {
+        if (this.retiredTileIds.delete(id)) this.cancelObjectAnimations(id);
+        continue;
+      }
+      if (this.isAnimationLocked(id) || this.committedCardMotion.has(id)) {
+        this.retiredTileIds.add(id);
+        tile.container.eventMode = "none";
         continue;
       }
       tile.container.destroy({ children: true });
       this.clearDragMotion(id);
       this.pendingEntityLayouts.delete(id);
-      this.playedCardPreviewSequences.delete(id);
       tiles.delete(id);
+      this.retiredTileIds.delete(id);
     }
   }
   removeMissingEntities(expectedIds) {
@@ -76488,6 +76535,8 @@ var EncounterScene = class {
       return;
     }
     const previousSelectedTileId = this.getSelectedHandTileId();
+    this.cancelObjectAnimations(getEntrySceneId(entry));
+    this.cancelDragReturn(getEntrySceneId(entry));
     if (this.activateSelectedUntargetedEntry(entry)) return;
     this.selectedEntryId = this.selectedEntryId === entry.id ? void 0 : entry.id;
     if (entry.targetMode === "none" && this.selectedEntryId === entry.id) {
@@ -76540,10 +76589,11 @@ var EncounterScene = class {
     this.refreshSelectionHighlights();
   }
   beginDrag(entry, tile, event) {
-    if (this.inputReleased || !isPrimaryPointer({ isPrimary: event.isPrimary ?? true }) || !entry.isDraggable || this.intentPending || this.activeDrag || this.isEntryInputLocked(getEntrySceneId(entry), entry.id) || isCardPresentationState2(entry) && entry.isInteractionLocked || this.isAnimationLockedForEntry(entry)) {
+    if (this.inputReleased || !isPrimaryPointer({ isPrimary: event.isPrimary ?? true }) || !entry.isDraggable || this.intentPending || this.activeDrag || this.isEntryInputLocked(getEntrySceneId(entry), entry.id) || isCardPresentationState2(entry) && entry.isInteractionLocked) {
       return;
     }
     const tileId = getEntrySceneId(entry);
+    this.cancelObjectAnimations(tileId);
     const returningDrag = this.dragReturns.get(tileId);
     this.ignoredPointerTapEntryId = void 0;
     this.cancelDragReturn(tileId);
@@ -76608,6 +76658,8 @@ var EncounterScene = class {
     this.inputReleased = true;
     this.root.eventMode = "none";
     this.settleTransientDragOwnership();
+    this.committedCardMotion.clear();
+    this.cardIntentsAwaitingResponse.clear();
     this.ignoredPointerTapEntryId = void 0;
     this.hoveredEntryId = void 0;
     this.focusedEntryId = void 0;
@@ -76638,6 +76690,7 @@ var EncounterScene = class {
     }
     this.activeDrag = void 0;
     this.releasedDragPositions.clear();
+    this.committedCardMotion.clear();
     this.cancelDragReturns();
     this.handLayoutTransitions.clear();
     this.hideDragAimArrow();
@@ -76655,6 +76708,8 @@ var EncounterScene = class {
    * @param deltaMs - Elapsed time supplied by the renderer ticker.
    */
   tick(deltaMs) {
+    this.tickCommittedCards(deltaMs);
+    this.pruneRetiredTiles();
     if (this.rejectionFeedbackRemainingMs > 0) {
       this.rejectionFeedbackRemainingMs = Math.max(0, this.rejectionFeedbackRemainingMs - Math.max(0, deltaMs));
       if (this.rejectionFeedbackRemainingMs === 0) {
@@ -76684,8 +76739,9 @@ var EncounterScene = class {
         this.handLayoutTransitions.delete(tileId);
         continue;
       }
+      if (tileId === this.getHoveredHandTileId() && !this.activeDrag) continue;
       transition.elapsedMs += Math.max(0, deltaMs);
-      const progress = getMotionProgress(transition.elapsedMs, getMotionDuration("quick", this.reducedMotion));
+      const progress = getMotionProgress(Math.max(0, transition.elapsedMs - (transition.delayMs ?? 0)), getMotionDuration("quick", this.reducedMotion));
       const easedProgress = easeMotion(progress, "outCubic");
       applyTransform(transition.tile.container, {
         x: interpolate(transition.start.x, transition.destination.x, easedProgress),
@@ -76828,7 +76884,7 @@ ${entry.unavailableReason}` : ""),
     const drag = this.activeDrag;
     this.moveDrag(event);
     const entity = drag ? this.findDropTarget(event.getLocalPosition(this.root), drag.entry) : void 0;
-    if (!drag || drag.pointerId !== event.pointerId || drag.state !== "dragging" || this.isAnimationLockedForEntry(drag.entry) || !this.isValidDrop(drag.entry, entity)) {
+    if (!drag || drag.pointerId !== event.pointerId || drag.state !== "dragging" || !this.isValidDrop(drag.entry, entity)) {
       return false;
     }
     this.releasedDragPositions.set(getEntrySceneId(drag.entry), {
@@ -76915,13 +76971,7 @@ ${entry.unavailableReason}` : ""),
     this.handLayer.addChild(tile.container);
   }
   isDragPositionManaged(tileId) {
-    return this.activeDrag !== void 0 && getEntrySceneId(this.activeDrag.entry) === tileId || this.releasedDragPositions.has(tileId) || this.dragReturns.has(tileId);
-  }
-  /**
-   * Determines whether a hand entry is controlled by an in-progress interaction instead of layout.
-   */
-  isEntryInteractionOwned(tileId, entryId) {
-    return this.isDragPositionManaged(tileId) || this.committedCardSequences.has(entryId);
+    return this.activeDrag !== void 0 && getEntrySceneId(this.activeDrag.entry) === tileId || this.isAnimationLocked(tileId) || this.committedCardMotion.has(tileId) || tileId.startsWith("card:") && this.queuedEntryIds.has(tileId.slice(5)) || this.releasedDragPositions.has(tileId) || this.dragReturns.has(tileId);
   }
   /**
    * Determines whether an entry must reject a new pointer press until its pending ownership ends.
@@ -76933,13 +76983,14 @@ ${entry.unavailableReason}` : ""),
    * Determines whether an entry can accept input and should be presented as enabled.
    */
   isEntryInteractive(tileId, entry) {
-    return !this.inputReleased && entry.isDraggable && !(isCardPresentationState2(entry) && entry.isInteractionLocked) && !this.intentPending && !this.queuedEntryIds.has(entry.id) && !this.isEntryInteractionOwned(tileId, entry.id) && !this.isAnimationLocked(tileId);
+    return !this.inputReleased && entry.isDraggable && !(isCardPresentationState2(entry) && entry.isInteractionLocked) && !this.intentPending && !this.queuedEntryIds.has(entry.id) && !this.isEntryInputLocked(tileId, entry.id);
   }
   /** Determines whether a hand entry may be visually inspected without accepting gameplay input. */
   isEntryHoverable(tileId, entry) {
-    return !this.inputReleased && !this.isEntryInteractionOwned(tileId, entry.id) && !this.isAnimationLocked(tileId);
+    return !this.inputReleased && !this.queuedEntryIds.has(entry.id) && !this.isEntryInputLocked(tileId, entry.id);
   }
   clearDragMotion(tileId) {
+    this.committedCardMotion.delete(tileId);
     this.releasedDragPositions.delete(tileId);
     this.cancelDragReturn(tileId);
     this.handLayoutTransitions.delete(tileId);
@@ -77030,7 +77081,7 @@ ${entry.unavailableReason}` : ""),
     for (const entity of this.entities.values()) {
       const tile = this.entityTiles.get(`${entity.isPlayer ? "player" : "enemy"}:${entity.id}`);
       const scale = tile?.container.scale.x ?? 1;
-      if (tile && this.isPointOverEntity(position, tile, scale)) {
+      if (tile && this.isValidTarget(entry.targetMode, entity) && this.isPointOverEntity(position, tile, scale)) {
         return entity;
       }
     }
@@ -77177,10 +77228,7 @@ ${entry.unavailableReason}` : ""),
   }
   canSelectEntity(entity) {
     const entry = this.selectedEntryId ? this.selectableEntries.get(this.selectedEntryId) : void 0;
-    return this.latestSnapshot?.phase === "WaitingForInput" && !this.intentPending && entry !== void 0 && !this.isAnimationLockedForEntry(entry) && this.isValidTarget(entry.targetMode, entity);
-  }
-  isAnimationLockedForEntry(entry) {
-    return this.isAnimationLocked(`${isCardPresentationState2(entry) ? "card" : "item"}:${entry.id}`);
+    return this.latestSnapshot?.phase === "WaitingForInput" && !this.intentPending && entry !== void 0 && this.isValidTarget(entry.targetMode, entity);
   }
   isAnimationLocked(id) {
     return this.animationLockResolver(id);
@@ -77201,17 +77249,10 @@ ${entry.unavailableReason}` : ""),
       animatedTile.container.alpha = 1;
     }
     const start = this.getAnimationStart(command.id, animatedTile);
-    this.capturePlayedCardPreviewSequence(command);
     if (command.sourceId) {
       this.clearDragMotion(command.sourceId);
     }
     this.animationCommandHandlers.get(command.name)?.(source8, target, animatedTile, start, progress);
-  }
-  /** Records the first authoritative revision for a preview without advancing it on later animation frames. */
-  capturePlayedCardPreviewSequence(command) {
-    const sourceId = command.sourceId;
-    if (!sourceId || command.name !== "card-play-to-target" && command.name !== "card-play-to-corner" || this.playedCardPreviewSequences.has(sourceId)) return;
-    this.playedCardPreviewSequences.set(sourceId, this.currentSequence);
   }
   /** Reveals an action's enemy without compacting the formation or resetting other animation transforms. */
   showAnimationEnemy(command) {
@@ -77246,20 +77287,18 @@ ${entry.unavailableReason}` : ""),
     if (command.name === "attack") {
       this.attackTrail.clear();
     }
-    if (command.sourceId && (command.name === "card-play-to-target" || command.name === "card-play-to-corner")) {
-      this.playedCardPreviewSequences.delete(command.sourceId);
-    }
     this.animationStarts.delete(command.id);
   }
-  /** Grows a card into a brief right-side preview and fades it before combat effects begin. */
-  previewPlayedCard(tile, start, progress) {
-    const destination = layoutPlayedCardPreview(this.viewport ?? { width: 960, height: 540 });
-    const easedProgress = easeMotion(Math.min(1, progress / 0.25), "outCubic");
-    this.dragLayer.addChild(tile.container);
+  /** Quickly clears a played card from the hand and battlefield while its effect resolves. */
+  movePlayedCardAside(tile, start, progress) {
+    const destination = this.getCardAnimationAnchors().played;
+    const easedProgress = easeMotion(progress, "outCubic");
+    this.effectsLayer.addChild(tile.container);
+    tile.container.eventMode = "none";
     tile.container.position.set(interpolate(start.x, destination.x, easedProgress), interpolate(start.y, destination.y, easedProgress));
     tile.container.rotation = interpolate(start.rotation, 0, easedProgress);
-    tile.container.scale.set(interpolate(start.scale, destination.scale, easedProgress));
-    tile.container.alpha = start.alpha * (1 - easeMotion(Math.max(0, (progress - 0.75) / 0.25), "inCubic"));
+    tile.container.scale.set(interpolate(start.scale, playedCardScale, easedProgress));
+    tile.container.alpha = interpolate(start.alpha ?? 1, 0.55, easedProgress);
   }
   /** Gets the card or item whose target options should be visible to the player. */
   getTargetingEntry() {
@@ -77294,6 +77333,7 @@ ${entry.unavailableReason}` : ""),
   getCardAnimationAnchors() {
     const viewport = this.viewport ?? { width: 960, height: 540 };
     return {
+      played: { x: viewport.width - 38, y: viewport.height * 0.45 },
       draw: { x: Math.max(0, viewport.width - 80), y: Math.max(0, viewport.height - 40) },
       discard: { x: Math.max(0, viewport.width - 100), y: viewport.height + 30 }
     };
@@ -77460,7 +77500,7 @@ ${entry.unavailableReason}` : ""),
   refreshTargetPresentation(tile, entity) {
     const targetingEntry = this.getTargetingEntry();
     const isTargeting = targetingEntry !== void 0 && targetingEntry.targetMode !== "none";
-    const isValidTarget = this.latestSnapshot?.phase === "WaitingForInput" && !this.inputReleased && entity !== void 0 && targetingEntry !== void 0 && !this.intentPending && !this.isAnimationLockedForEntry(targetingEntry) && this.isValidTarget(targetingEntry.targetMode, entity);
+    const isValidTarget = this.latestSnapshot?.phase === "WaitingForInput" && !this.inputReleased && entity !== void 0 && targetingEntry !== void 0 && !this.intentPending && this.isValidTarget(targetingEntry.targetMode, entity);
     const artwork = tile.artwork;
     const presentationKey = `${isTargeting}:${isValidTarget}:${artwork.visible}:${tile.artworkImage}:${artwork.x}:${artwork.y}:${artwork.width}:${artwork.height}`;
     if (tile.targetPresentationKey === presentationKey) {
@@ -77489,7 +77529,7 @@ ${entry.unavailableReason}` : ""),
     for (const [tileId, tile] of this.entityTiles) {
       const entityId = tileId.substring(tileId.indexOf(":") + 1);
       const entity = this.entities.get(entityId);
-      const isInteractive = !this.inputReleased && entity !== void 0 && !this.isAnimationLocked(tileId) && this.canSelectEntity(entity);
+      const isInteractive = !this.inputReleased && entity !== void 0 && this.canSelectEntity(entity);
       tile.container.eventMode = this.inputReleased || !tile.container.visible ? "none" : isInteractive ? "static" : "passive";
       tile.container.cursor = isInteractive ? "pointer" : "default";
     }
@@ -77603,6 +77643,7 @@ ${entry.unavailableReason}` : ""),
       if (!tileId) {
         continue;
       }
+      if (tileId === this.getHoveredHandTileId() && tileId !== this.getSelectedHandTileId() && tileId !== this.getFocusedHandTileId()) continue;
       this.handLayoutTransitions.delete(tileId);
     }
     this.refreshHandLayoutTransforms();
@@ -77614,8 +77655,7 @@ ${entry.unavailableReason}` : ""),
   refreshHandLayoutTransforms() {
     for (const [tileId, position] of this.handLayoutPositions) {
       const tile = this.handTiles.get(tileId);
-      const entryId = tileId.substring(tileId.indexOf(":") + 1);
-      if (tile && !this.isEntryInteractionOwned(tileId, entryId) && !this.isAnimationLocked(tileId) && !this.handLayoutTransitions.has(tileId)) {
+      if (tile && !this.isDragPositionManaged(tileId) && !this.handLayoutTransitions.has(tileId)) {
         this.applyHandLayoutTransform(tileId, tile, position);
       }
     }
@@ -77671,7 +77711,7 @@ ${entry.unavailableReason}` : ""),
     }
   }
   focusEntry(direction) {
-    const entryIds = [...this.selectableEntries.values()].filter((entry2) => entry2.isDraggable && !this.queuedEntryIds.has(entry2.id) && !this.isEntryInteractionOwned(getEntrySceneId(entry2), entry2.id) && !this.isAnimationLockedForEntry(entry2)).map((entry2) => entry2.id);
+    const entryIds = [...this.selectableEntries.values()].filter((entry2) => entry2.isDraggable && !this.queuedEntryIds.has(entry2.id) && !this.isEntryInputLocked(getEntrySceneId(entry2), entry2.id)).map((entry2) => entry2.id);
     if (entryIds.length === 0) {
       return;
     }
@@ -77806,20 +77846,32 @@ ${entry.unavailableReason}` : ""),
     }
     this.queuedEntryIds.add(sourceId);
     this.committedCardSequences.set(sourceId, intent.sequence);
+    this.cardIntentsAwaitingResponse.add(sourceId);
+    this.stageCommittedCard(sourceId);
     const previousSelectedTileId = this.getSelectedHandTileId();
     this.selectedEntryId = void 0;
+    if (this.hoveredEntryId === sourceId) this.hoveredEntryId = void 0;
+    if (this.focusedEntryId === sourceId) this.focusedEntryId = void 0;
     this.refreshHandInspection(previousSelectedTileId);
     this.focusedEntityId = void 0;
     this.hoveredEntryId = void 0;
-    if (this.latestSnapshot && this.viewport) this.reconcileHand(this.latestSnapshot, this.viewport);
+    if (this.latestSnapshot && this.viewport) {
+      this.reflowHandAfterCommit();
+    }
     this.refreshInteractionState();
     this.refreshSelectionHighlights();
     void this.emitIntent(intent).then((result) => {
-      if (this.inputReleased) {
+      if (this.inputReleased || this.committedCardSequences.get(sourceId) !== intent.sequence) {
         return;
       }
+      this.cardIntentsAwaitingResponse.delete(sourceId);
       if (!result.accepted) {
         this.rejectQueuedEntry(sourceId, intent.sequence);
+      } else if (result.isQueued === false && this.latestSnapshot) {
+        this.reconcileQueuedEntries(this.latestSnapshot);
+        if (this.viewport) this.reconcileHand(this.latestSnapshot, this.viewport);
+        this.refreshInteractionState();
+        this.refreshSelectionHighlights();
       }
     }).catch(() => {
       if (this.inputReleased) {
@@ -77833,7 +77885,12 @@ ${entry.unavailableReason}` : ""),
       return;
     }
     this.queuedEntryIds.delete(sourceId);
+    this.authoritativeQueuedCardSequences.delete(sourceId);
     this.committedCardSequences.delete(sourceId);
+    this.cardIntentsAwaitingResponse.delete(sourceId);
+    if (this.latestSnapshot && this.viewport) {
+      this.reconcileHand(this.latestSnapshot, this.viewport);
+    }
     this.returnReleasedEntry("playCard", sourceId);
     if (this.latestSnapshot && this.viewport) this.reconcileHand(this.latestSnapshot, this.viewport);
     this.showRejectedIntent();
@@ -77847,11 +77904,12 @@ ${entry.unavailableReason}` : ""),
     const tileId = `${kind === "playCard" ? "card" : "item"}:${sourceId}`;
     const releasedDrag = this.releasedDragPositions.get(tileId);
     const tile = this.handTiles.get(tileId);
-    if (releasedDrag && tile) {
+    this.committedCardMotion.delete(tileId);
+    if (tile && (releasedDrag || kind === "playCard")) {
       this.releasedDragPositions.delete(tileId);
       this.dragReturns.set(tileId, {
-        destination: this.getCurrentHandDestination(tileId, releasedDrag.origin),
-        start: releasedDrag.position,
+        destination: this.getCurrentHandDestination(tileId, releasedDrag?.origin ?? captureTransform(tile.container)),
+        start: captureTransform(tile.container),
         tile,
         elapsedMs: 0
       });
@@ -77897,32 +77955,29 @@ ${entry.unavailableReason}` : ""),
       this.runHud.setFeedbackVisible(visible, this.viewport);
     }
   }
-  /** Releases preview ownership once a newer snapshot confirms a retained card has finished resolving. */
-  restoreResolvedCardPreviews(snapshot) {
-    for (const card of snapshot.hand) {
-      const id = `card:${card.id}`;
-      const previewSequence = this.playedCardPreviewSequences.get(id);
-      if (previewSequence === void 0 || snapshot.sequence <= previewSequence || card.isQueued || card.isInteractionLocked || this.isAnimationLocked(id)) continue;
-      this.playedCardPreviewSequences.delete(id);
-      this.entryInteractionStates.delete(id);
-    }
-  }
   reconcileQueuedEntries(snapshot) {
-    const authoritativeQueuedEntryIds = new Set(snapshot.hand.filter((card) => card.isQueued).map((card) => card.id));
+    const authoritativeQueuedEntryIds = new Set(snapshot.hand.filter((card) => card.isQueued || card.isInteractionLocked && this.queuedEntryIds.has(card.id)).map((card) => card.id));
     const visibleHandEntryIds = new Set(snapshot.hand.map((card) => card.id));
     for (const entryId of this.queuedEntryIds) {
-      if (!authoritativeQueuedEntryIds.has(entryId)) {
+      const committedSequence = this.committedCardSequences.get(entryId);
+      if (committedSequence !== void 0 && snapshot.sequence <= committedSequence) continue;
+      const queuedSequence = this.authoritativeQueuedCardSequences.get(entryId);
+      if (queuedSequence !== void 0 && snapshot.sequence <= queuedSequence) continue;
+      if (!authoritativeQueuedEntryIds.has(entryId) && (!this.cardIntentsAwaitingResponse.has(entryId) || !visibleHandEntryIds.has(entryId))) {
         this.queuedEntryIds.delete(entryId);
+        this.authoritativeQueuedCardSequences.delete(entryId);
       }
     }
     for (const entryId of authoritativeQueuedEntryIds) {
       this.queuedEntryIds.add(entryId);
+      this.authoritativeQueuedCardSequences.set(entryId, snapshot.sequence);
     }
     for (const [entryId, sequence] of this.committedCardSequences) {
-      if (snapshot.sequence <= sequence) {
+      if (snapshot.sequence <= sequence || this.cardIntentsAwaitingResponse.has(entryId) && visibleHandEntryIds.has(entryId)) {
         continue;
       }
       this.committedCardSequences.delete(entryId);
+      this.cardIntentsAwaitingResponse.delete(entryId);
       if (visibleHandEntryIds.has(entryId) && !authoritativeQueuedEntryIds.has(entryId)) {
         this.returnReleasedEntry("playCard", entryId);
       }
@@ -77932,10 +77987,109 @@ ${entry.unavailableReason}` : ""),
       const entryId = separator < 0 ? tileId : tileId.slice(separator + 1);
       if (tileId.startsWith("item:") && snapshot.items.some((item) => item.id === entryId)) {
         this.returnReleasedEntry("useItem", entryId);
-      } else if (visibleHandEntryIds.has(entryId) && !authoritativeQueuedEntryIds.has(entryId)) {
+      } else if (visibleHandEntryIds.has(entryId) && !this.queuedEntryIds.has(entryId)) {
         this.returnReleasedEntry("playCard", entryId);
       }
     }
+  }
+  /** Hands a committed card to local motion immediately, before the queue round trip. */
+  stageCommittedCard(sourceId) {
+    const tileId = `card:${sourceId}`;
+    const tile = this.handTiles.get(tileId);
+    if (!tile || this.committedCardMotion.has(tileId)) return;
+    const start = captureTransform(tile.container);
+    if (!this.releasedDragPositions.has(tileId)) {
+      this.releasedDragPositions.set(tileId, {
+        origin: this.getCurrentHandDestination(tileId, start),
+        position: start
+      });
+    }
+    this.handLayoutTransitions.delete(tileId);
+    this.effectsLayer.addChild(tile.container);
+    tile.container.eventMode = "none";
+    this.committedCardMotion.set(tileId, {
+      start,
+      destination: { ...this.getCardAnimationAnchors().played, rotation: 0, scale: playedCardScale },
+      tile,
+      elapsedMs: 0
+    });
+  }
+  /** Clears queued cards from the input area on the shared ticker without waiting for earlier effects. */
+  tickCommittedCards(deltaMs) {
+    for (const [tileId, motion] of this.committedCardMotion) {
+      if (motion.tile.container.destroyed) {
+        this.committedCardMotion.delete(tileId);
+        continue;
+      }
+      if (motion.elapsedMs >= 120) {
+        if (this.retiredTileIds.has(tileId)) this.clearDragMotion(tileId);
+        continue;
+      }
+      motion.elapsedMs += Math.max(0, deltaMs);
+      this.movePlayedCardAside(
+        motion.tile,
+        motion.start,
+        getMotionProgress(motion.elapsedMs, this.reducedMotion ? 0 : 120)
+      );
+      if (motion.elapsedMs >= 120 && this.retiredTileIds.has(tileId)) this.clearDragMotion(tileId);
+    }
+  }
+  /** Releases retired visual objects once feedback no longer owns their transforms. */
+  pruneRetiredTiles() {
+    for (const id of this.retiredTileIds) {
+      if (this.isAnimationLocked(id) || this.committedCardMotion.has(id)) continue;
+      const tiles = id.startsWith("card:") || id.startsWith("item:") ? this.handTiles : this.entityTiles;
+      tiles.get(id)?.container.destroy({ children: true });
+      tiles.delete(id);
+      this.clearDragMotion(id);
+      this.retiredTileIds.delete(id);
+    }
+  }
+  /** Returns a reintroduced card or entity to authoritative presentation instead of its old visual lifetime. */
+  restoreRetiredTile(id) {
+    if (!this.retiredTileIds.delete(id)) return;
+    this.cancelObjectAnimations(id);
+    this.clearDragMotion(id);
+    this.entryInteractionStates.delete(id);
+    const card = this.handTiles.get(id);
+    if (card) this.handLayer.addChild(card.container);
+  }
+  /** Smoothly closes the hand gap while the played card leaves it. */
+  reflowHandAfterCommit() {
+    if (!this.latestSnapshot || !this.viewport) return;
+    const starts = new Map([...this.handTiles].map(([id, tile]) => [id, captureTransform(tile.container)]));
+    this.reconcileHand(this.latestSnapshot, this.viewport);
+    this.layoutPageControls(this.latestSnapshot, this.viewport);
+    for (const [tileId, position] of this.handLayoutPositions) {
+      const tile = this.handTiles.get(tileId);
+      const start = starts.get(tileId);
+      if (!tile || !start || this.isDragPositionManaged(tileId)) continue;
+      const destination = this.getHandLayoutTransform(tileId, position);
+      if (areTransformsEqual(start, destination)) continue;
+      applyTransform(tile.container, start);
+      this.handLayoutTransitions.set(tileId, { start, destination, tile, elapsedMs: 0, delayMs: this.reducedMotion ? 0 : 160 });
+    }
+  }
+  /** Rebases hand settling to new slots without snapping on intermediate combat snapshots. */
+  retargetHandLayoutTransitions() {
+    for (const [tileId, motion] of this.handLayoutTransitions) {
+      const position = this.handLayoutPositions.get(tileId);
+      if (!position || this.isDragPositionManaged(tileId)) continue;
+      const destination = this.getHandLayoutTransform(tileId, position);
+      if (!areTransformsEqual(destination, motion.destination)) {
+        this.handLayoutTransitions.set(tileId, {
+          start: captureTransform(motion.tile.container),
+          destination,
+          tile: motion.tile,
+          elapsedMs: 0,
+          ...motion.delayMs === void 0 ? {} : { delayMs: motion.delayMs }
+        });
+      }
+    }
+  }
+  /** Uses the same available entries for layout, paging, and the hand's input band. */
+  getHandEntries(snapshot) {
+    return snapshot.inventoryMode ? snapshot.items : snapshot.hand.filter((card) => !card.isQueued && !this.queuedEntryIds.has(card.id));
   }
 };
 function isCardPresentationState2(entry) {
@@ -85275,6 +85429,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   runtime.addSystem(animationDirector);
   runtime.addSystem(particleEffects);
   scene.setAnimationLockResolver((id) => animationDirector.isObjectLocked(id));
+  scene.setAnimationCanceller((id) => animationDirector.cancelForObject(id));
   let appliedSequence = -1;
   let latestSnapshot;
   let disposed = false;
@@ -85301,7 +85456,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     const queuedAnimations = pendingAnimations.splice(0, pendingAnimations.length);
     for (const pendingAnimation of queuedAnimations) {
       if (!areAnimationObjectsAvailable(pendingAnimation.request)) {
-        pendingAnimations.push(pendingAnimation);
+        pendingAnimation.resolve({ id: pendingAnimation.request.id, state: "cancelled", message: "The visual objects are no longer present in the authoritative snapshot." });
         continue;
       }
       void scheduleAnimation(pendingAnimation.request).then(pendingAnimation.resolve);
@@ -85428,7 +85583,6 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
       }
       appliedSequence = snapshot.sequence;
       latestSnapshot = snapshot;
-      animationDirector.cancelAll();
       void assetLoader.preload(snapshot).catch(() => void 0);
       if (disposed || appliedSequence !== snapshot.sequence) {
         return false;
