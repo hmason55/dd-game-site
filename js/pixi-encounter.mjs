@@ -83453,15 +83453,15 @@ async function createCollectionRenderer(canvas, sink) {
       return;
     }
     const columns = isDashboard() ? planCollectionDashboard(listWidth).columns : 1;
-    let rowHeight = 0;
+    let rowHeight2 = 0;
     entriesLayer.children.forEach((child, index) => {
       rowOffsets[index] = totalRowHeight;
       if (child instanceof Graphics) layoutEntry(child, index, plan, listWidth);
       if (child instanceof CardView) rowHeights[index] = planCollectionCardGrid(Math.min(220, listWidth), 1).height;
-      rowHeight = Math.max(rowHeight, rowHeights[index] ?? 76);
+      rowHeight2 = Math.max(rowHeight2, rowHeights[index] ?? 76);
       if (index % columns === columns - 1 || index === entriesLayer.children.length - 1) {
-        totalRowHeight += rowHeight + 12;
-        rowHeight = 0;
+        totalRowHeight += rowHeight2 + 12;
+        rowHeight2 = 0;
       }
     });
     totalRowHeight = Math.max(0, totalRowHeight - 12);
@@ -83857,6 +83857,209 @@ function installSettingsSliderInput(canvas, geometry, initial, min, max, step, p
   };
 }
 
+// src/progression-graph.ts
+init_lib();
+var branchColors = [uiTokens.color.health, uiTokens.color.stamina, uiTokens.color.mana];
+var rowHeight = 168;
+var firstNodeY = 88;
+function progressionNodeDetail(node) {
+  const requirement = node.prerequisites.length > 0 ? `Requires ${node.prerequisites.join(node.requireAllPrerequisites ? " and " : " or ")}.` : "Start of this path.";
+  return `${node.name}: ${node.description}
+${node.isUnlocked ? "Allocated" : `${node.cost} XP \xB7 ${node.status}`} \xB7 ${requirement}`;
+}
+var ProgressionGraph = class extends Container {
+  scroll;
+  views = /* @__PURE__ */ new Map();
+  scrollbar = new Graphics();
+  input;
+  graphWidth;
+  onInspect;
+  /** Builds all nodes and connectors so scrolling never drops prerequisite context. */
+  constructor(canvas, nodes, width, height, offset, blocked, onInspect, onActivate) {
+    super();
+    this.graphWidth = width - 14;
+    this.onInspect = onInspect;
+    const rows = Math.max(1, ...nodes.map((node) => (node.y ?? 0) + 1));
+    this.scroll = new ScrollContainer({ width: this.graphWidth, height, contentHeight: firstNodeY + rows * rowHeight });
+    this.addChild(this.scroll, this.scrollbar);
+    this.input = installChoiceScrollInput(canvas, this.scroll, blocked, () => this.drawScrollbar());
+    this.drawBranches();
+    this.drawConnections(nodes);
+    for (const node of nodes) this.addNode(node, onActivate);
+    this.scroll.setScrollOffset(offset);
+    this.drawScrollbar();
+    this.scrollbar.eventMode = "static";
+    this.scrollbar.cursor = "pointer";
+    this.scrollbar.hitArea = new Rectangle(this.graphWidth, 0, 14, height);
+    this.scrollbar.on("pointertap", (event) => {
+      const local = this.toLocal(event.global);
+      this.scroll.setScrollOffset(local.y / height * this.scroll.maximumScrollOffset);
+      this.drawScrollbar();
+    });
+  }
+  /** Highlights an inspected node, scrolling it into view for keyboard navigation when requested. */
+  focusNode(id, reveal = false) {
+    for (const [nodeId, view2] of this.views) {
+      view2.ring.clear();
+      if (nodeId === id) view2.ring.circle(0, 0, 32).stroke({ color: uiTokens.color.focus, width: 2 });
+    }
+    const view = this.views.get(id);
+    if (!view) return;
+    this.onInspect(view.node);
+    if (reveal) {
+      this.revealNode(view);
+      this.drawScrollbar();
+    }
+  }
+  /** Keeps the badge visible when a short viewport cannot fit the complete node and its labels. */
+  revealNode(view) {
+    const height = this.scroll.viewportSize.height;
+    const bottom = view.top + 162;
+    if (height < 162 || view.top < this.scroll.scrollOffset) this.scroll.setScrollOffset(view.top);
+    else if (bottom > this.scroll.scrollOffset + height) this.scroll.setScrollOffset(bottom - height);
+  }
+  /** Moves the graph without changing the authoritative snapshot or sending a game action. */
+  scrollBy(amount) {
+    this.input.stop();
+    this.scroll.scrollBy(amount);
+    this.drawScrollbar();
+  }
+  /** Advances the shared touch inertia while this graph is mounted. */
+  advance(elapsedMs) {
+    this.input.advance(elapsedMs);
+  }
+  /** Releases native gesture listeners before the scene destroys the graph. */
+  disposeInput() {
+    this.input.dispose();
+  }
+  /** Adds branch identity and a faint vertical guide behind the dependency edges. */
+  drawBranches() {
+    const names = ["Vitality", "Might", "Focus"];
+    const subtitles = ["Endurance", "Strength", "Mana"];
+    for (let column = 0; column < 3; column++) {
+      const x2 = this.columnX(column);
+      const color = branchColors[column] ?? uiTokens.color.text;
+      const lane = new Graphics().roundRect(
+        column * this.graphWidth / 3 + 4,
+        4,
+        this.graphWidth / 3 - 8,
+        this.scroll.contentHeight - 8,
+        12
+      ).fill({ color, alpha: 0.025 });
+      lane.moveTo(x2 - 20, 55).lineTo(x2 + 20, 55).stroke({ color, width: 2, alpha: 0.65 });
+      this.scroll.content.addChild(lane);
+      this.addLabel(names[column] ?? "", x2, 13, this.graphWidth < 480 ? 17 : 22, color, true);
+      this.addLabel(subtitles[column] ?? "", x2, 37, 11, uiTokens.color.textMuted);
+    }
+  }
+  /** Connects actual prerequisite IDs, routing shared requirements between rows. */
+  drawConnections(nodes) {
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const lines = new Graphics();
+    this.scroll.content.addChild(lines);
+    for (const node of nodes) {
+      for (const id of node.prerequisiteIds ?? []) {
+        const source8 = byId.get(id);
+        if (source8) this.drawConnection(lines, source8, node);
+      }
+    }
+  }
+  /** Uses lit edges for satisfied requirements and an elbow for cross-path dependencies. */
+  drawConnection(lines, source8, target) {
+    const x1 = this.columnX(source8.x ?? 0);
+    const x2 = this.columnX(target.x ?? 0);
+    const y1 = firstNodeY + (source8.y ?? 0) * rowHeight + 128;
+    const y2 = firstNodeY + (target.y ?? 0) * rowHeight - 30;
+    const color = source8.isUnlocked ? uiTokens.color.stamina : 5399916;
+    lines.moveTo(x1, y1).lineTo(x1, y2 - 12).lineTo(x2, y2 - 12).lineTo(x2, y2).stroke({ color, width: source8.isUnlocked ? 3 : 1.5, alpha: source8.isUnlocked ? 0.95 : 0.65 });
+    lines.moveTo(x2 - 3, y2 - 5).lineTo(x2, y2).lineTo(x2 + 3, y2 - 5).stroke({ color, width: 1.5 });
+  }
+  /** Creates an inspectable badge with a readable bonus and explicit purchase state. */
+  addNode(node, onActivate) {
+    const x2 = this.columnX(node.x ?? 0);
+    const y2 = firstNodeY + (node.y ?? 0) * rowHeight;
+    const ready = !node.isUnlocked && node.isAvailable && node.isAffordable;
+    const color = node.isUnlocked ? uiTokens.color.stamina : ready ? uiTokens.color.block : node.isAvailable ? uiTokens.color.mana : 7439754;
+    const badge = new Container();
+    badge.position.set(x2, y2);
+    const shape = new Graphics();
+    if (ready) shape.circle(0, 0, 34).fill({ color, alpha: 0.08 });
+    shape.circle(0, 0, 27).fill({ color: node.isUnlocked ? 2639416 : 1450793 }).stroke({ color, width: ready || node.isUnlocked ? 2.5 : 1.5 });
+    shape.circle(0, 0, 22).stroke({ color, width: 1, alpha: 0.25 });
+    drawStatIcon(shape, node.stat, color);
+    const ring = new Graphics();
+    badge.addChild(shape, ring);
+    badge.eventMode = "static";
+    badge.cursor = ready ? "pointer" : "help";
+    badge.hitArea = new Rectangle(-this.graphWidth / 6 + 4, -34, this.graphWidth / 3 - 8, 162);
+    badge.on("pointerover", () => this.focusNode(node.id));
+    badge.on("pointertap", (event) => {
+      if (this.input.suppressesTap(event.pointerId)) return;
+      this.focusNode(node.id);
+      onActivate(node);
+    });
+    this.scroll.content.addChild(badge);
+    this.views.set(node.id, { node, ring, top: y2 - 34 });
+    this.addLabel(node.name, x2, y2 + 38, this.graphWidth < 480 ? 12 : 16, uiTokens.color.text, true);
+    this.addLabel(
+      node.description.replace("Max Health", "HP").replace(" (casters only)", "").replace("Energy / turn, -1 Max Mana", "Energy / -1 Mana"),
+      x2,
+      y2 + 62,
+      this.graphWidth < 480 ? 11 : 13,
+      uiTokens.color.textMuted
+    );
+    this.addLabel(
+      node.isUnlocked ? "\u2713 Allocated" : `${node.cost} XP \xB7 ${node.status}`,
+      x2,
+      y2 + 103,
+      this.graphWidth < 480 ? 10 : 12,
+      color
+    );
+  }
+  /** Centers labels within their lane, keeping narrow viewports readable through wrapping. */
+  addLabel(value, x2, y2, fontSize, color, title = false) {
+    const label = new Text({ text: value, style: {
+      ...title ? uiTokens.typography.panelTitle : uiTokens.typography.body,
+      fill: color,
+      fontSize,
+      align: "center",
+      wordWrap: true,
+      wordWrapWidth: this.graphWidth / 3 - 16
+    } });
+    label.resolution = Math.max(2, window.devicePixelRatio || 1);
+    label.anchor.set(0.5, 0);
+    label.position.set(x2, y2);
+    label.eventMode = "none";
+    this.scroll.content.addChild(label);
+  }
+  /** Positions each of the three paths within the same viewport at every screen size. */
+  columnX(column) {
+    return (column + 0.5) * this.graphWidth / 3;
+  }
+  /** Shows position and remaining scroll range without covering any graph content. */
+  drawScrollbar() {
+    const height = this.scroll.viewportSize.height;
+    const maximum = this.scroll.maximumScrollOffset;
+    this.scrollbar.clear();
+    if (maximum === 0) return;
+    const thumbHeight = Math.max(28, height * height / this.scroll.contentHeight);
+    const y2 = this.scroll.scrollOffset / maximum * (height - thumbHeight);
+    this.scrollbar.roundRect(this.graphWidth + 5, 0, 4, height, 2).fill({ color: 3425612 }).roundRect(this.graphWidth + 4, y2, 6, thumbHeight, 3).fill({ color: uiTokens.color.block });
+  }
+};
+function drawStatIcon(g2, stat, color) {
+  const stroke2 = { color, width: 2 };
+  if (stat === "MaxHealth") {
+    g2.moveTo(0, 10).bezierCurveTo(-24, -5, -5, -18, 0, -7).bezierCurveTo(5, -18, 24, -5, 0, 10).closePath().stroke(stroke2);
+  } else if (stat === "Attack") {
+    g2.moveTo(-7, 9).lineTo(10, -11).lineTo(9, -3).lineTo(-5, 11).closePath().stroke(stroke2).moveTo(-9, 2).lineTo(1, 12).moveTo(-5, 8).lineTo(-11, 14).stroke(stroke2);
+  } else if (stat === "MaxEnergy") {
+    g2.poly([3, -13, -8, 2, 0, 2, -3, 13, 9, -3, 1, -3]).stroke(stroke2);
+  } else {
+    g2.moveTo(0, -13).lineTo(5, -4).lineTo(13, 0).lineTo(5, 4).lineTo(0, 13).lineTo(-5, 4).lineTo(-13, 0).lineTo(-5, -4).closePath().stroke(stroke2);
+  }
+}
+
 // src/pixi-menu-overlay.ts
 function nextEnabledControlIndex(controls, current, direction, includeCurrent = true) {
   for (let step = 0; step < controls.length; step++) {
@@ -83872,7 +84075,7 @@ function isMenuOverlayState(value) {
   const progression = value.progression;
   if (typeof progression === "object" && progression !== null) {
     const item2 = progression;
-    return Number.isInteger(item2.experience) && Number.isInteger(item2.selectedPageIndex) && Array.isArray(item2.nodes) && item2.nodes.every(isProgressionNode);
+    return Number.isInteger(item2.experience) && Array.isArray(item2.nodes) && item2.nodes.every(isProgressionNode);
   }
   const history = value.history;
   if (typeof history === "object" && history !== null) {
@@ -83951,6 +84154,8 @@ async function createMenuOverlayRenderer(canvas, sink) {
   let historySelection = "";
   let width = 1;
   let height = 1;
+  let progressionGraph;
+  let progressionOffset = 0;
   const sliderDisposers = [];
   const submit = async (action) => {
     if (pending || disposed) return;
@@ -83972,6 +84177,11 @@ async function createMenuOverlayRenderer(canvas, sink) {
     }
   };
   const clearContent = () => {
+    if (progressionGraph) {
+      progressionOffset = progressionGraph.scroll.scrollOffset;
+      progressionGraph.disposeInput();
+      progressionGraph = void 0;
+    }
     for (const dispose of sliderDisposers.splice(0)) dispose();
     for (const child of content.removeChildren()) child.destroy({ children: true });
     controls = [];
@@ -83987,16 +84197,10 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const index = controls.length;
     const activeSection = action === `history:section:${state?.history?.selectedSectionIndex}` || action === `history:run:${state?.history?.selectedRunId}`;
     const activeTab = action.startsWith("tab:") && state?.settings?.tabIndex === Number(action.slice(4));
-    const node = state?.progression?.nodes.find((candidate) => action === `progression:unlock:${candidate.id}`);
-    const nodeColors = node ? {
-      fill: node.isUnlocked ? 3430214 : enabled ? 5719849 : 2240573,
-      stroke: node.isUnlocked ? 8570268 : enabled ? 14989928 : 5465721
-    } : {};
-    const button = new GameButton({ ...settingsActionColors(action), ...nodeColors, menuIcon: icon, width: buttonWidth, height: buttonHeight2, label, enabled, selected: index === selectedIndex || activeTab || activeSection, onPress: () => {
+    const button = new GameButton({ ...settingsActionColors(action), menuIcon: icon, width: buttonWidth, height: buttonHeight2, label, enabled, selected: index === selectedIndex || activeTab || activeSection, onPress: () => {
       selectedIndex = index;
       void submit(action);
     } });
-    if (node?.isUnlocked) button.alpha = 1;
     button.position.set(x2, y2);
     content.addChild(button);
     controls.push({ action, label, enabled });
@@ -84039,8 +84243,8 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const top = short ? 98 : 116;
     const footerY = height - (width < 520 && !short ? 102 : 50);
     const gameplayRows = settings.debugProgressionEnabled ? 7 : 4;
-    const rowHeight = settings.tabIndex === 0 ? short ? 42 : 54 : Math.max(28, Math.min(short ? 42 : 54, (footerY - top - 8) / gameplayRows));
-    const controlHeight = Math.min(40, rowHeight - 4);
+    const rowHeight2 = settings.tabIndex === 0 ? short ? 42 : 54 : Math.max(28, Math.min(short ? 42 : 54, (footerY - top - 8) / gameplayRows));
+    const controlHeight = Math.min(40, rowHeight2 - 4);
     addText("Settings", 24, 15, short ? 24 : 30);
     const tabWidth = Math.min(180, (width - 64) / 3);
     addButton("Audio", "tab:0", 24, short ? 48 : 60, tabWidth, 38);
@@ -84053,7 +84257,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
         { key: "music", label: "Music", value: settings.musicVolume, min: 0, max: 1, step: 0.05 },
         { key: "ambient", label: "Ambient", value: settings.ambientVolume, min: 0, max: 1, step: 0.05 }
       ];
-      sliders.forEach((slider, index) => addSlider(slider, top + index * rowHeight));
+      sliders.forEach((slider, index) => addSlider(slider, top + index * rowHeight2));
     } else if (settings.tabIndex === 2) {
       const toggles = [
         ["Show values", "damage", settings.damageTextEnabled !== false],
@@ -84069,16 +84273,16 @@ async function createMenuOverlayRenderer(canvas, sink) {
       addSlider({ key: "speed", label: "Speed", value: settings.speed, min: 0.5, max: 2, step: 0.1 }, top);
       const levels = ["Low", "Medium", "High", "Maximum"];
       const next = levels[(levels.indexOf(settings.particleLevel) + 1) % levels.length] ?? "High";
-      addButton(`Particles: ${settings.particleLevel}`, `particle:${next}`, 24, top + rowHeight, Math.min(240, width - 48), controlHeight);
+      addButton(`Particles: ${settings.particleLevel}`, `particle:${next}`, 24, top + rowHeight2, Math.min(240, width - 48), controlHeight);
       const feedbackWidth = Math.min(240, (width - 56) / 2);
-      addButton(`Resource gains: ${settings.showResourceGainText === false ? "Off" : "On"}`, "toggle:resource-gains", 24, top + rowHeight * 3, feedbackWidth, controlHeight);
-      addButton(`Effect names: ${settings.showEffectSources === false ? "Off" : "On"}`, "toggle:effect-sources", 32 + feedbackWidth, top + rowHeight * 3, feedbackWidth, controlHeight);
+      addButton(`Resource gains: ${settings.showResourceGainText === false ? "Off" : "On"}`, "toggle:resource-gains", 24, top + rowHeight2 * 3, feedbackWidth, controlHeight);
+      addButton(`Effect names: ${settings.showEffectSources === false ? "Off" : "On"}`, "toggle:effect-sources", 32 + feedbackWidth, top + rowHeight2 * 3, feedbackWidth, controlHeight);
       if (settings.debugProgressionEnabled) {
         addText(`Character Remembrance ${settings.metaExperience} \xB7 ${settings.unlockedMetaRewards} milestones
-Shared Remembrance ${settings.sharedRemembrancePoints ?? 0}`, 24, top + rowHeight * 4, rowHeight < 40 ? 12 : 14, width - 48);
+Shared Remembrance ${settings.sharedRemembrancePoints ?? 0}`, 24, top + rowHeight2 * 4, rowHeight2 < 40 ? 12 : 14, width - 48);
         const debugWidth = Math.min(210, (width - 64) / 3);
-        [["Character +25", "debug:xp:25"], ["Character +100", "debug:xp:100"], ["Reset character", "debug:reset"]].forEach(([label, action], index) => addButton(label, action, 24 + index * (debugWidth + 8), top + rowHeight * 5, debugWidth, controlHeight));
-        [["Shared +25", "debug:shared:25"], ["Reset shared", "debug:shared:reset"]].forEach(([label, action], index) => addButton(label, action, 24 + index * (debugWidth + 8), top + rowHeight * 6, debugWidth, controlHeight));
+        [["Character +25", "debug:xp:25"], ["Character +100", "debug:xp:100"], ["Reset character", "debug:reset"]].forEach(([label, action], index) => addButton(label, action, 24 + index * (debugWidth + 8), top + rowHeight2 * 5, debugWidth, controlHeight));
+        [["Shared +25", "debug:shared:25"], ["Reset shared", "debug:shared:reset"]].forEach(([label, action], index) => addButton(label, action, 24 + index * (debugWidth + 8), top + rowHeight2 * 6, debugWidth, controlHeight));
       }
     }
     const twoRows = width < 520 && !short;
@@ -84210,60 +84414,59 @@ Shared Remembrance ${settings.sharedRemembrancePoints ?? 0}`, 24, top + rowHeigh
     addButton("Older", "history:list:next", 134, footerY, 102, 38, runListPage < totalPages - 1, "next");
   };
   const layoutProgression = (progression) => {
-    addText("Skill Tree", 24, 14, 27);
-    addText(`${progression.experience} XP \xB7 Small steps, diminishing returns`, 24, 50, width < 520 ? 13 : 16);
-    const columns = width >= 620 ? 3 : 1;
-    const rowHeight = Math.max(54, Math.min(84, (height - 214) / 6));
-    const visibleRows = Math.max(1, Math.min(6, Math.floor((height - 210) / rowHeight)));
-    const rowPages = Math.ceil(6 / visibleRows);
-    const branchPages = 3 / columns;
-    const pageCount = rowPages * branchPages;
-    const page = Math.max(0, Math.min(pageCount - 1, progression.selectedPageIndex));
-    if (page !== progression.selectedPageIndex) void submit(`progression:page:${page}`);
-    const firstColumn = Math.floor(page / rowPages) * columns;
-    const firstRow = page % rowPages * visibleRows;
-    const itemWidth = (width - 72) / columns;
-    const nodeWidth = itemWidth - 16;
-    const top = 112;
-    const paths = ["Vitality \xB7 endurance", "Might \xB7 strength", "Focus \xB7 mana"];
-    for (let column = 0; column < columns; column++) {
-      addText((paths[firstColumn + column] ?? "") + (columns === 1 ? ` \xB7 ${firstColumn + 1}/3` : ""), 36 + column * itemWidth, 82, 15, nodeWidth);
+    const compact = width < 520;
+    const margin = compact ? 12 : 24;
+    const top = compact ? 108 : 114;
+    const footerHeight = compact ? 148 : 124;
+    const viewportHeight = Math.max(56, height - top - footerHeight);
+    const graphWidth = Math.max(180, width - margin * 2);
+    addText("Skill Tree", margin, 14, compact ? 25 : 30);
+    addText(`${progression.experience} XP available \xB7 ${progression.nodes.filter((node) => node.isUnlocked).length}/${progression.nodes.length} allocated`, margin, 51, compact ? 13 : 16);
+    const legend = new Graphics();
+    content.addChild(legend);
+    const labels = ["Allocated", "Ready", "Need XP", "Locked"];
+    const colors2 = [uiTokens.color.stamina, uiTokens.color.block, uiTokens.color.mana, 7439754];
+    labels.forEach((label, index) => {
+      const x2 = margin + index * Math.min(126, graphWidth / 4);
+      legend.circle(x2 + 5, 86, 4).fill({ color: colors2[index] ?? uiTokens.color.text });
+      addText(label, x2 + 15, 78, compact ? 10 : 12, graphWidth / 4 - 16);
+    });
+    const panel = new Graphics().roundRect(margin, top, graphWidth, viewportHeight, 12).fill({ color: uiTokens.color.panelInset }).stroke({ color: 3425612, width: 1 });
+    content.addChild(panel);
+    const details = addText("Inspect a node to see its bonus and requirements.", margin, top + viewportHeight + 10, compact ? 11 : 13, graphWidth);
+    details.style.fill = uiTokens.color.textMuted;
+    const activate = (node) => {
+      selectedIndex = controls.findIndex((control) => control.action === `progression:unlock:${node.id}`);
+      if (!node.isUnlocked && node.isAvailable && node.isAffordable) void submit(`progression:unlock:${node.id}`);
+    };
+    const graph = new ProgressionGraph(
+      host?.canvas ?? canvas,
+      progression.nodes,
+      graphWidth,
+      viewportHeight,
+      progressionOffset,
+      () => disposed || pending,
+      (node) => {
+        details.text = progressionNodeDetail(node);
+      },
+      activate
+    );
+    progressionGraph = graph;
+    graph.position.set(margin, top);
+    content.addChild(graph);
+    const nodes = [...progression.nodes].sort((a2, b2) => (a2.y ?? 0) - (b2.y ?? 0) || (a2.x ?? 0) - (b2.x ?? 0));
+    for (const node of nodes) {
+      controls.push({
+        action: `progression:unlock:${node.id}`,
+        label: node.name,
+        focus: () => graph.focusNode(node.id, true),
+        activate: () => activate(node)
+      });
     }
-    const visible = progression.nodes.filter((node) => (node.x ?? 0) >= firstColumn && (node.x ?? 0) < firstColumn + columns && (node.y ?? 0) >= firstRow && (node.y ?? 0) < firstRow + visibleRows);
-    const positions = new Map(visible.map((node) => [node.id, {
-      x: 36 + ((node.x ?? 0) - firstColumn) * itemWidth,
-      y: top + ((node.y ?? 0) - firstRow) * rowHeight
-    }]));
-    const connections = new Graphics();
-    content.addChild(connections);
-    for (const node of visible) {
-      const target = positions.get(node.id);
-      if (!target) continue;
-      for (const id of node.prerequisiteIds ?? []) {
-        const source8 = positions.get(id);
-        const allocated = progression.nodes.find((candidate) => candidate.id === id)?.isUnlocked === true;
-        if (source8) {
-          connections.moveTo(source8.x + nodeWidth / 2, source8.y + rowHeight - 14).lineTo(target.x + nodeWidth / 2, target.y).stroke({ color: allocated ? 14071660 : 5465721, width: allocated ? 3 : 2 });
-        } else {
-          connections.moveTo(target.x + nodeWidth / 2, target.y - 10).lineTo(target.x + nodeWidth / 2, target.y).stroke({ color: 5465721, width: 2 });
-        }
-      }
-    }
-    for (const node of visible) {
-      const position = positions.get(node.id);
-      if (!position) continue;
-      const enabled = !node.isUnlocked && node.isAvailable && node.isAffordable;
-      const bonus = node.description.replace(" (casters only)", "").replace("Max Health", "HP").replace("Energy / turn, -1 Max Mana", "Energy / -1 Mana");
-      const label = `${node.name} \xB7 ${bonus}
-${node.isUnlocked ? "\u2713 Allocated" : node.cost + " XP \xB7 " + node.status}`;
-      addButton(label, `progression:unlock:${node.id}`, position.x, position.y, nodeWidth, rowHeight - 14, enabled);
-    }
-    addText(`Follow connected nodes downward \xB7 Levels ${firstRow + 1}\u2013${Math.min(6, firstRow + visibleRows)} / 6`, 24, height - 98, 13);
-    addText("Energy: Vitality 5 + Might 5 \xB7 Mana regen: casters only", 24, height - 80, width < 520 ? 10 : 12);
-    const buttonWidth = Math.min(160, (width - 64) / 3);
-    addButton("Previous", `progression:page:${page - 1}`, 24, height - 54, buttonWidth, 38, page > 0);
-    addButton("Next", `progression:page:${page + 1}`, 32 + buttonWidth, height - 54, buttonWidth, 38, page < pageCount - 1);
-    addButton("Close", "progression:close", width - 24 - buttonWidth, height - 54, buttonWidth, 38);
+    const selected = nodes[selectedIndex];
+    if (selected) graph.focusNode(selected.id);
+    addText(compact ? "Swipe to explore \xB7 \u2191\u2193 inspect \xB7 Enter train" : "Scroll or swipe to explore \xB7 \u2191\u2193 inspect \xB7 Enter to train \xB7 Page Up/Down to scroll", margin, height - 64, compact ? 10 : 12, graphWidth);
+    addButton("Close", "progression:close", width - margin - 104, height - 46, 104, 36, true, "close");
   };
   const keydown = (event) => {
     if (!state) return;
@@ -84284,9 +84487,17 @@ ${node.isUnlocked ? "\u2713 Allocated" : node.cost + " XP \xB7 " + node.status}`
     }
     if (document.activeElement !== keyboardTarget) return;
     event.stopImmediatePropagation();
+    if (progressionGraph && ["PageUp", "PageDown", "Home", "End"].includes(event.key)) {
+      const graph = progressionGraph;
+      const amount = event.key === "Home" ? -graph.scroll.contentHeight : event.key === "End" ? graph.scroll.contentHeight : graph.scroll.viewportSize.height * 0.8 * (event.key === "PageUp" ? -1 : 1);
+      graph.scrollBy(amount);
+      event.preventDefault();
+      return;
+    }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       selectedIndex = nextEnabledControlIndex(controls, selectedIndex, event.key === "ArrowDown" ? 1 : -1, false);
       layout();
+      controls[selectedIndex]?.focus?.();
       event.preventDefault();
     }
     const control = controls[selectedIndex];
@@ -84295,7 +84506,8 @@ ${node.isUnlocked ? "\u2713 Allocated" : node.cost + " XP \xB7 " + node.status}`
       void submit(sliderAction(control.slider, control.slider.value + (event.key === "ArrowRight" ? 1 : -1) * control.slider.step));
       event.preventDefault();
     } else if (event.key === "Enter" || event.key === " ") {
-      void submit(control.action);
+      if (control.activate) control.activate();
+      else void submit(control.action);
       event.preventDefault();
     }
   };
@@ -84307,6 +84519,9 @@ ${node.isUnlocked ? "\u2713 Allocated" : node.cost + " XP \xB7 " + node.status}`
   document.addEventListener("keydown", keydown, true);
   document.addEventListener("focusin", focusin, true);
   window.addEventListener("resize", layout);
+  const advanceGraph = (ticker2) => progressionGraph?.advance(ticker2.deltaMS);
+  const ticker = application?.ticker ?? Ticker.shared;
+  ticker.add(advanceGraph);
   const observer = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(layout);
   observer?.observe(canvas.parentElement ?? canvas);
   return {
@@ -84321,6 +84536,8 @@ ${node.isUnlocked ? "\u2713 Allocated" : node.cost + " XP \xB7 " + node.status}`
       disposed = true;
       observer?.disconnect();
       window.removeEventListener("resize", layout);
+      ticker.remove(advanceGraph);
+      progressionGraph?.disposeInput();
       document.removeEventListener("keydown", keydown, true);
       document.removeEventListener("focusin", focusin, true);
       restoreRunControls();
@@ -84347,13 +84564,13 @@ function planCardChoiceLayout(width, height, count2) {
   const grid = planCollectionCardGrid(width - 64, count2);
   const cardWidth = Math.min(grid.width, viewportHeight * 180 / 252);
   const cardHeight = cardWidth * 252 / 180;
-  const rowHeight = cardHeight + 12;
-  const contentHeight = Math.max(0, Math.ceil(count2 / grid.columns) * rowHeight - 12);
+  const rowHeight2 = cardHeight + 12;
+  const contentHeight = Math.max(0, Math.ceil(count2 / grid.columns) * rowHeight2 - 12);
   return {
     columns: grid.columns,
     cardWidth,
     cardHeight,
-    rowHeight,
+    rowHeight: rowHeight2,
     listTop,
     viewportHeight,
     controlsY,
@@ -84424,11 +84641,11 @@ async function createCardChoiceRenderer(canvas, sink) {
     title.position.set(32, 36);
     const entries = cardLayer.children.filter((child) => child instanceof CardChoiceButton);
     const plan = planCardChoiceLayout(width, height, entries.length);
-    const { columns, cardWidth, cardHeight, rowHeight, listTop, viewportHeight, controlsY, detailHeight } = plan;
+    const { columns, cardWidth, cardHeight, rowHeight: rowHeight2, listTop, viewportHeight, controlsY, detailHeight } = plan;
     scrollOffset = Math.max(0, Math.min(plan.maximumScroll, scrollOffset));
     cardMask.clear().rect(32, listTop, width - 64, viewportHeight).fill(16777215);
     entries.forEach((button, index) => {
-      const y2 = listTop + Math.floor(index / columns) * rowHeight - scrollOffset;
+      const y2 = listTop + Math.floor(index / columns) * rowHeight2 - scrollOffset;
       button.resize(cardWidth, cardHeight);
       button.position.set(plan.left + index % columns * (cardWidth + 12), y2);
       button.visible = y2 + cardHeight >= listTop && y2 <= listTop + viewportHeight;
@@ -84453,8 +84670,8 @@ async function createCardChoiceRenderer(canvas, sink) {
   const ensureFocusedCardVisible = (index) => {
     const width = application.renderer.width;
     const height = application.renderer.height;
-    const { columns, cardHeight, rowHeight, viewportHeight } = planCardChoiceLayout(width, height, state?.cards.length ?? 0);
-    const cardTop = Math.floor(index / columns) * rowHeight;
+    const { columns, cardHeight, rowHeight: rowHeight2, viewportHeight } = planCardChoiceLayout(width, height, state?.cards.length ?? 0);
+    const cardTop = Math.floor(index / columns) * rowHeight2;
     if (cardTop < scrollOffset) scrollOffset = cardTop;
     else if (cardTop + cardHeight > scrollOffset + viewportHeight) scrollOffset = cardTop + cardHeight - viewportHeight;
   };
@@ -84759,8 +84976,8 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     const panelX = (width - panelWidth) / 2;
     panel.roundRect(panelX, 8, panelWidth, Math.max(1, barY - 14), uiTokens.frame.panelCornerRadius).fill(uiColors.panelFill).stroke({ color: uiColors.panelStroke, width: 2 });
     const columns = panelWidth >= 520 ? 2 : 1;
-    const rowHeight = menuButtonHeight + buttonGap;
-    const rows = Math.max(1, Math.floor((barY - 86) / rowHeight));
+    const rowHeight2 = menuButtonHeight + buttonGap;
+    const rows = Math.max(1, Math.floor((barY - 86) / rowHeight2));
     const pageSize = rows * columns;
     const totalPages = Math.max(1, Math.ceil(menuActions.length / pageSize));
     page = Math.max(0, Math.min(page, totalPages - 1));
@@ -84769,7 +84986,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     visibleActions.forEach((entry, index) => {
       const column = index % columns;
       const row = Math.floor(index / columns);
-      createButton(entry.id, entry.label, entry.enabled, entryWidth, menuButtonHeight, panelX + 12 + column * (entryWidth + buttonGap), 20 + row * rowHeight);
+      createButton(entry.id, entry.label, entry.enabled, entryWidth, menuButtonHeight, panelX + 12 + column * (entryWidth + buttonGap), 20 + row * rowHeight2);
     });
     if (totalPages > 1) {
       createButton("previous", "Previous", page > 0, 96, menuButtonHeight, panelX + 12, barY - 56);
