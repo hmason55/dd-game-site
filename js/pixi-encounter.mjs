@@ -74957,7 +74957,7 @@ function getPalette(rarity) {
   }
 }
 function getStatePresentation(motionState, playability, interaction) {
-  const basePresentation = !interaction.enabled ? { alpha: uiTokens.interaction.disabledAlpha, overlayAlpha: 0.35, overlayColor: uiTokens.color.canvas } : playability === "unplayable" ? { alpha: 0.65, overlayAlpha: 0.3, overlayColor: uiTokens.color.surfaceRaised } : { alpha: 1, overlayAlpha: 0, overlayColor: 0 };
+  const basePresentation = motionState === "resolving" ? { alpha: 1, overlayAlpha: 0, overlayColor: 0 } : !interaction.enabled ? { alpha: uiTokens.interaction.disabledAlpha, overlayAlpha: 0.35, overlayColor: uiTokens.color.canvas } : playability === "unplayable" ? { alpha: 0.65, overlayAlpha: 0.3, overlayColor: uiTokens.color.surfaceRaised } : { alpha: 1, overlayAlpha: 0, overlayColor: 0 };
   const dropOutlineColor = motionState === "valid-drop" || motionState === "invalid-drop" ? getMotionOutlineColor(motionState) : void 0;
   const outlineColor = dropOutlineColor ?? (interaction.selected ? uiTokens.color.selected : interaction.focused ? uiTokens.color.focus : getMotionOutlineColor(motionState));
   return { ...basePresentation, outlineColor };
@@ -75665,6 +75665,7 @@ var focusedHandLift = 34;
 var draggedCardLift = 48;
 var draggedCardScale = 1.32;
 var playedCardScale = 0.38;
+var playedCardDurationMs = 240;
 var entityHitHalfWidth = 94;
 var entityHitHalfHeight = 64;
 var pageControlInset = 52;
@@ -75747,6 +75748,7 @@ var EncounterScene = class {
   cardIntentsAwaitingResponse = /* @__PURE__ */ new Set();
   authoritativeQueuedCardSequences = /* @__PURE__ */ new Map();
   committedCardMotion = /* @__PURE__ */ new Map();
+  playedCardMotions = /* @__PURE__ */ new Map();
   entryInteractionStates = /* @__PURE__ */ new Map();
   currentSequence = -1;
   selectedEntryId;
@@ -76513,6 +76515,7 @@ var EncounterScene = class {
         continue;
       }
       tile.container.destroy({ children: true });
+      this.removePlayedCardPreview(tile);
       this.clearDragMotion(id);
       this.pendingEntityLayouts.delete(id);
       tiles.delete(id);
@@ -76659,6 +76662,7 @@ var EncounterScene = class {
     this.root.eventMode = "none";
     this.settleTransientDragOwnership();
     this.committedCardMotion.clear();
+    this.playedCardMotions.clear();
     this.cardIntentsAwaitingResponse.clear();
     this.ignoredPointerTapEntryId = void 0;
     this.hoveredEntryId = void 0;
@@ -76691,6 +76695,7 @@ var EncounterScene = class {
     this.activeDrag = void 0;
     this.releasedDragPositions.clear();
     this.committedCardMotion.clear();
+    this.playedCardMotions.clear();
     this.cancelDragReturns();
     this.handLayoutTransitions.clear();
     this.hideDragAimArrow();
@@ -76819,8 +76824,8 @@ ${entry.unavailableReason}` : ""),
       conditionalEffectActive: entry.isConditionalEffectActive === true,
       ...tile.cardArtwork === void 0 ? {} : { artTexture: tile.cardArtwork }
     });
-    cardView.setPlayability(this.isEntryInteractive(getEntrySceneId(entry), entry) && !isQueued ? "playable" : "unplayable");
-    cardView.setMotionState(this.getCardMotionState(getEntrySceneId(entry), entry.id));
+    cardView.setPlayability(isQueued || entry.isDraggable ? "playable" : "unplayable");
+    cardView.setMotionState(isQueued ? "resolving" : this.getCardMotionState(getEntrySceneId(entry), entry.id));
     cardView.setInteractionState({
       enabled: this.isEntryInteractive(getEntrySceneId(entry), entry),
       focused: entry.id === this.focusedEntryId,
@@ -77249,6 +77254,9 @@ ${entry.unavailableReason}` : ""),
       animatedTile.container.alpha = 1;
     }
     const start = this.getAnimationStart(command.id, animatedTile);
+    if (command.name !== "card-play-to-target" && command.name !== "card-play-to-corner") {
+      this.removePlayedCardPreview(animatedTile);
+    }
     if (command.sourceId) {
       this.clearDragMotion(command.sourceId);
     }
@@ -77274,6 +77282,7 @@ ${entry.unavailableReason}` : ""),
     const source8 = command.sourceId ? this.getSceneTile(command.sourceId) : void 0;
     const target = command.targetId ? this.getSceneTile(command.targetId) : void 0;
     const tile = command.name === "nudge" ? target : source8;
+    if (tile) this.removePlayedCardPreview(tile);
     const start = this.animationStarts.get(command.id);
     if (tile && start && command.name !== "hit-flash") {
       tile.container.position.set(start.x, start.y);
@@ -77289,16 +77298,48 @@ ${entry.unavailableReason}` : ""),
     }
     this.animationStarts.delete(command.id);
   }
-  /** Quickly clears a played card from the hand and battlefield while its effect resolves. */
+  /** Moves a played card into its readable preview while its effect resolves. */
   movePlayedCardAside(tile, start, progress) {
-    const destination = this.getCardAnimationAnchors().played;
+    if (tile.container.parent !== this.effectsLayer) this.effectsLayer.addChild(tile.container);
+    this.playedCardMotions.set(tile, { start, progress });
+    this.layoutPlayedCardPreviews();
+  }
+  /** Reflows every preview at its current animation progress when another card enters or leaves the fan. */
+  layoutPlayedCardPreviews() {
+    const previews = [...this.playedCardMotions.keys()].sort((left, right) => this.effectsLayer.children.indexOf(left.container) - this.effectsLayer.children.indexOf(right.container));
+    const positions = this.getPlayedCardDestinations(previews.length);
+    previews.forEach((tile, index) => {
+      const motion = this.playedCardMotions.get(tile);
+      const destination = positions[index];
+      if (motion && destination) this.applyPlayedCardTransform(tile, motion.start, motion.progress, destination);
+    });
+  }
+  /** Releases a preview slot without taking ownership of the card's return, discard, or exhaust motion. */
+  removePlayedCardPreview(tile) {
+    if (this.playedCardMotions.delete(tile)) this.layoutPlayedCardPreviews();
+  }
+  /** Applies the card's current movement progress toward its distinct preview slot. */
+  applyPlayedCardTransform(tile, start, progress, destination) {
     const easedProgress = easeMotion(progress, "outCubic");
-    this.effectsLayer.addChild(tile.container);
     tile.container.eventMode = "none";
     tile.container.position.set(interpolate(start.x, destination.x, easedProgress), interpolate(start.y, destination.y, easedProgress));
     tile.container.rotation = interpolate(start.rotation, 0, easedProgress);
     tile.container.scale.set(interpolate(start.scale, playedCardScale, easedProgress));
-    tile.container.alpha = interpolate(start.alpha ?? 1, 0.55, easedProgress);
+    tile.container.alpha = 1;
+    tile.cardView?.setMotionState("resolving");
+  }
+  /** Fans simultaneous previews in stable play order inside the protected right-hand combat area. */
+  getPlayedCardDestinations(count2) {
+    const anchor = this.getCardAnimationAnchors().played;
+    const viewport = this.viewport ?? { width: 960, height: 540 };
+    const intervals = Math.max(1, count2 - 1);
+    const halfWidth = handCardVisualSize.width * playedCardScale / 2;
+    const halfHeight = handCardVisualSize.height * playedCardScale / 2;
+    const layout = calculateCombatLayout(viewport);
+    const bottom = Math.min(layout.regions.hand.y, layout.regions.endTurn.y);
+    const horizontalStep = Math.min(24, Math.max(0, anchor.x - viewport.width / 2 - halfWidth - 8) / intervals);
+    const verticalStep = Math.min(12, Math.max(0, bottom - halfHeight - anchor.y - 4) / intervals);
+    return Array.from({ length: count2 }, (_, index) => ({ x: anchor.x - index * horizontalStep, y: anchor.y + index * verticalStep }));
   }
   /** Gets the card or item whose target options should be visible to the player. */
   getTargetingEntry() {
@@ -77468,7 +77509,7 @@ ${entry.unavailableReason}` : ""),
           focused: entryId === this.focusedEntryId,
           selected: entryId === this.selectedEntryId
         });
-        tile.cardView.setMotionState(this.getCardMotionState(id, entryId));
+        tile.cardView.setMotionState(entry.isQueued || this.queuedEntryIds.has(entryId) ? "resolving" : this.getCardMotionState(id, entryId));
       }
     }
     this.prioritizeInspectedHandTile();
@@ -77904,6 +77945,7 @@ ${entry.unavailableReason}` : ""),
     const tileId = `${kind === "playCard" ? "card" : "item"}:${sourceId}`;
     const releasedDrag = this.releasedDragPositions.get(tileId);
     const tile = this.handTiles.get(tileId);
+    if (tile) this.removePlayedCardPreview(tile);
     this.committedCardMotion.delete(tileId);
     if (tile && (releasedDrag || kind === "playCard")) {
       this.releasedDragPositions.delete(tileId);
@@ -78005,7 +78047,7 @@ ${entry.unavailableReason}` : ""),
       });
     }
     this.handLayoutTransitions.delete(tileId);
-    this.effectsLayer.addChild(tile.container);
+    if (tile.container.parent !== this.effectsLayer) this.effectsLayer.addChild(tile.container);
     tile.container.eventMode = "none";
     this.committedCardMotion.set(tileId, {
       start,
@@ -78021,17 +78063,18 @@ ${entry.unavailableReason}` : ""),
         this.committedCardMotion.delete(tileId);
         continue;
       }
-      if (motion.elapsedMs >= 120) {
+      if (motion.elapsedMs >= playedCardDurationMs) {
         if (this.retiredTileIds.has(tileId)) this.clearDragMotion(tileId);
+        else this.movePlayedCardAside(motion.tile, motion.start, 1);
         continue;
       }
       motion.elapsedMs += Math.max(0, deltaMs);
       this.movePlayedCardAside(
         motion.tile,
         motion.start,
-        getMotionProgress(motion.elapsedMs, this.reducedMotion ? 0 : 120)
+        getMotionProgress(motion.elapsedMs, this.reducedMotion ? 0 : playedCardDurationMs)
       );
-      if (motion.elapsedMs >= 120 && this.retiredTileIds.has(tileId)) this.clearDragMotion(tileId);
+      if (motion.elapsedMs >= playedCardDurationMs && this.retiredTileIds.has(tileId)) this.clearDragMotion(tileId);
     }
   }
   /** Releases retired visual objects once feedback no longer owns their transforms. */
@@ -78039,7 +78082,9 @@ ${entry.unavailableReason}` : ""),
     for (const id of this.retiredTileIds) {
       if (this.isAnimationLocked(id) || this.committedCardMotion.has(id)) continue;
       const tiles = id.startsWith("card:") || id.startsWith("item:") ? this.handTiles : this.entityTiles;
-      tiles.get(id)?.container.destroy({ children: true });
+      const tile = tiles.get(id);
+      if (tile) this.removePlayedCardPreview(tile);
+      tile?.container.destroy({ children: true });
       tiles.delete(id);
       this.clearDragMotion(id);
       this.retiredTileIds.delete(id);
