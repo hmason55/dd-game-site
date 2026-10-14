@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 160">
+  <title>Moss-Crowned Horn placeholder</title>
+  <rect width="180" height="160" rx="12" fill="#17232d"/>
+  <circle cx="90" cy="80" r="59" fill="#23313b"/>
+  <g fill="#9fb58b" stroke="#9fb58b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M46 69l17-9q24 42 63-14l15 10q-42 91-95 13z"/><path d="M63 64l-8 15m71-33l15 10" fill="none"/>
+  </g>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 160">
+  <title>Seed of the Bloomroot placeholder</title>
+  <rect width="180" height="160" rx="12" fill="#17232d"/>
+  <circle cx="90" cy="80" r="59" fill="#23313b"/>
+  <g fill="#9fb58b" stroke="#9fb58b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M90 37l29 39-12 40-17 16-17-16-12-40z"/><path d="M90 37v95M61 76h58m-46 40l17-40 17 40" fill="none"/>
+  </g>
+</svg>

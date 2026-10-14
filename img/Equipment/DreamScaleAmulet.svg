@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 160">
+  <title>Dream-Scale Amulet placeholder</title>
+  <rect width="180" height="160" rx="12" fill="#17232d"/>
+  <circle cx="90" cy="80" r="59" fill="#23313b"/>
+  <g fill="#8fb9cc" stroke="#8fb9cc" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M62 42q-14 27 8 48m48-48q14 27-8 48" fill="none"/><path d="M90 75l28 23-28 31-28-31z"/><circle cx="90" cy="99" r="9" fill="#23313b"/>
+  </g>
+</svg>

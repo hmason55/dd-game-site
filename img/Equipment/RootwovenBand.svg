@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 160">
+  <title>Rootwoven Band placeholder</title>
+  <rect width="180" height="160" rx="12" fill="#17232d"/>
+  <circle cx="90" cy="80" r="59" fill="#23313b"/>
+  <g fill="#9fb58b" stroke="#9fb58b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M51 55q39-21 78 0v45q-39-21-78 0z"/><path d="M58 65q32-15 64 0M58 91q32-15 64 0" fill="none"/><rect x="78" y="59" width="24" height="34" rx="3"/><path d="M90 100l24 30 15-18-23-18"/>
+  </g>
+</svg>

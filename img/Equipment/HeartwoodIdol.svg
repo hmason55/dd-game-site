@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 160">
+  <title>Heartwood Idol placeholder</title>
+  <rect width="180" height="160" rx="12" fill="#17232d"/>
+  <circle cx="90" cy="80" r="59" fill="#23313b"/>
+  <g fill="#9fb58b" stroke="#9fb58b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M69 52l21-15 21 15-5 26 18 40H56l18-40z"/><path d="M80 62h1m18 0h1M80 94h20" fill="none"/><path d="M52 125h76" fill="none"/>
+  </g>
+</svg>

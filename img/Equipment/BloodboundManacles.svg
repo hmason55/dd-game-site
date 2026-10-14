@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 160">
+  <title>Bloodbound Manacles placeholder</title>
+  <rect width="180" height="160" rx="12" fill="#17232d"/>
+  <circle cx="90" cy="80" r="59" fill="#23313b"/>
+  <g fill="#c67b79" stroke="#c67b79" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M52 50l35-8 12 73-35 8zM104 42l28 8-12 73-28-8z"/><path d="M58 69l31-7m-27 40l31-7m9-33l26 7m-33 26l27 7" fill="none"/>
+  </g>
+</svg>

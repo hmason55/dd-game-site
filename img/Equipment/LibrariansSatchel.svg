@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 160">
+  <title>Librarian&apos;s Satchel placeholder</title>
+  <rect width="180" height="160" rx="12" fill="#17232d"/>
+  <circle cx="90" cy="80" r="59" fill="#23313b"/>
+  <g fill="#d4b477" stroke="#d4b477" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="52" y="58" width="76" height="67" rx="12"/><path d="M68 58V44h44v14M52 82h76M76 102h28" fill="none"/><rect x="83" y="76" width="14" height="18" rx="3"/>
+  </g>
+</svg>

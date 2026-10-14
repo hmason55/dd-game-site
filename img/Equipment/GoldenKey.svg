@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 160">
+  <title>Golden Key placeholder</title>
+  <rect width="180" height="160" rx="12" fill="#17232d"/>
+  <circle cx="90" cy="80" r="59" fill="#23313b"/>
+  <g fill="#d4b477" stroke="#d4b477" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="72" cy="62" r="22"/><circle cx="72" cy="62" r="8" fill="#23313b"/><path d="M87 78l39 39m-15-15l-9 9m18 0l-9 9" fill="none"/>
+  </g>
+</svg>

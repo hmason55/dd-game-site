@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 160">
+  <title>Stoneguard Plate placeholder</title>
+  <rect width="180" height="160" rx="12" fill="#17232d"/>
+  <circle cx="90" cy="80" r="59" fill="#23313b"/>
+  <g fill="#d4b477" stroke="#d4b477" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M64 44l26 12 26-12 22 22-18 18v39H60V84L42 66z"/><path d="M90 56v62M65 90h50" fill="none"/>
+  </g>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 160">
+  <title>Triumphant Standard placeholder</title>
+  <rect width="180" height="160" rx="12" fill="#17232d"/>
+  <circle cx="90" cy="80" r="59" fill="#23313b"/>
+  <g fill="#d4b477" stroke="#d4b477" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M59 36v94" fill="none"/><path d="M63 42h69l-19 24 19 24H63z"/><path d="M78 66h30" fill="none"/>
+  </g>
+</svg>

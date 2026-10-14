@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 160">
+  <title>Soul Anchor placeholder</title>
+  <rect width="180" height="160" rx="12" fill="#17232d"/>
+  <circle cx="90" cy="80" r="59" fill="#23313b"/>
+  <g fill="#d4b477" stroke="#d4b477" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="90" cy="48" r="10" fill="none"/><path d="M90 58v66M66 76h48M52 98q6 26 38 26t38-26M52 98l-5 15m5-15l14 6m62-6l5 15m-5-15l-14 6" fill="none"/>
+  </g>
+</svg>

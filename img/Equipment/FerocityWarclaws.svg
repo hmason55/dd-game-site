@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 160">
+  <title>Ferocity Warclaws placeholder</title>
+  <rect width="180" height="160" rx="12" fill="#17232d"/>
+  <circle cx="90" cy="80" r="59" fill="#23313b"/>
+  <g fill="#d4b477" stroke="#d4b477" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M63 120l-9-47 8-9 9 20V45h12v35-43h12v43-39h12v42-31h12v49l-18 19z"/><path d="M66 104h40" fill="none"/>
+  </g>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 160">
+  <title>Silent Step Boots placeholder</title>
+  <rect width="180" height="160" rx="12" fill="#17232d"/>
+  <circle cx="90" cy="80" r="59" fill="#23313b"/>
+  <g fill="#d4b477" stroke="#d4b477" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M62 42h28v54l20 12v16H58V99l4-57zm42 0h24v58l18 10v14h-28"/><path d="M65 62h22m-24 18h24m21-18h17" fill="none"/>
+  </g>
+</svg>
