@@ -70725,7 +70725,11 @@ var CircleParticleDisplay = class extends Container {
     this.addChild(this.core);
   }
   /** Sets size and glow through transforms without rebuilding shared circle paths. */
-  configure(size, glowIntensity, glowColor, glowAlpha) {
+  configure(size, glowIntensity, glowColor, glowAlpha, context2) {
+    if (context2) {
+      this.core.context = context2;
+      this.halo.context = context2;
+    }
     this.core.scale.set(size / 32);
     this.halo.scale.set(size * (1 + glowIntensity / 12) / 32);
     this.halo.tint = glowColor;
@@ -70893,6 +70897,42 @@ function createCircleParticleTexture() {
   return Texture.from(canvas);
 }
 
+// src/particle-glyph.ts
+init_lib();
+var outlines = {
+  streak: [-32, 0, 22, -5, 32, 0, -22, 5],
+  shard: [0, -32, 15, 6, 0, 28, -12, 8],
+  ember: [0, -32, 10, -8, 20, 8, 9, 28, -10, 24, -18, 6, -7, -10],
+  spore: [-26, -8, -14, -24, 8, -28, 26, -10, 24, 14, 7, 28, -18, 20],
+  spark: [0, -32, 7, -7, 32, 0, 7, 7, 0, 32, -7, 7, -32, 0, -7, -7],
+  droplet: [0, -32, 17, 2, 19, 18, 8, 28, -8, 28, -19, 18, -17, 2],
+  wisp: [-28, 24, -12, 0, -16, -18, 0, -30, 21, -16, 26, 3, 12, 17, -2, 9],
+  bone: [-28, -15, -16, -21, -8, -8, 8, 8, 21, 8, 28, 20, 18, 28, 7, 20, 5, 12, -12, -5, -24, -4, -30, -10],
+  leaf: [-28, 26, -20, -8, 0, -26, 28, -28, 22, 4, 6, 22]
+};
+function readParticleGlyph(value) {
+  return typeof value === "string" && Object.hasOwn(outlines, value) ? value : "circle";
+}
+function createParticleGlyphContext(glyph) {
+  const context2 = new GraphicsContext();
+  return glyph === "circle" ? context2.circle(0, 0, 32).fill(16777215) : context2.poly(outlines[glyph]).fill(16777215);
+}
+function createParticleGlyphTexture(glyph) {
+  const canvas = DOMAdapter.get().createCanvas(64, 64);
+  const context2 = canvas.getContext("2d");
+  if (!context2) throw new Error("A 2D context is required to prepare particle glyphs.");
+  const points = outlines[glyph];
+  context2.fillStyle = "#ffffff";
+  context2.beginPath();
+  context2.moveTo((points[0] ?? 0) + 32, (points[1] ?? 0) + 32);
+  for (let index = 2; index < points.length; index += 2) {
+    context2.lineTo((points[index] ?? 0) + 32, (points[index + 1] ?? 0) + 32);
+  }
+  context2.closePath();
+  context2.fill();
+  return Texture.from(canvas);
+}
+
 // src/particle-effect-manager.ts
 var ParticleEffectManager = class {
   constructor(layer, options = {}) {
@@ -70920,7 +70960,8 @@ var ParticleEffectManager = class {
   liveParticleCount = 0;
   pooledParticleCount = 0;
   circleTexture;
-  circleContext;
+  glyphContexts = /* @__PURE__ */ new Map();
+  glyphTextures = /* @__PURE__ */ new Map();
   rendererBackend;
   decorativeBatches;
   resolveAnchor;
@@ -71001,8 +71042,8 @@ var ParticleEffectManager = class {
       activeEmitterCount: this.emitters.size,
       liveParticleCount: this.liveParticleCount,
       pooledParticleCount: this.pooledParticleCount,
-      cachedTextureCount: this.textureCache.size + (this.circleTexture ? 1 : 0),
-      cachedTextureByteEstimate: getTextureByteEstimate(this.textureCache.values()) + (this.circleTexture ? getTextureByteEstimate([this.circleTexture]) : 0)
+      cachedTextureCount: this.textureCache.size + this.glyphTextures.size + (this.circleTexture ? 1 : 0),
+      cachedTextureByteEstimate: getTextureByteEstimate([...this.textureCache.values(), ...this.glyphTextures.values()]) + (this.circleTexture ? getTextureByteEstimate([this.circleTexture]) : 0)
     };
   }
   /**
@@ -71044,8 +71085,10 @@ var ParticleEffectManager = class {
     this.pooledParticleCount = 0;
     this.circleTexture?.destroy(true);
     this.circleTexture = void 0;
-    this.circleContext?.destroy();
-    this.circleContext = void 0;
+    for (const context2 of this.glyphContexts.values()) context2.destroy();
+    for (const texture of this.glyphTextures.values()) texture.destroy(true);
+    this.glyphContexts.clear();
+    this.glyphTextures.clear();
     this.textureCache.clear();
   }
   /** Keeps finite combat text readable after a lethal hit removes its target from the scene. */
@@ -71191,13 +71234,13 @@ var ParticleEffectManager = class {
   initializeParticleDisplay(particle, options) {
     const display = particle.display;
     if (display instanceof DecorativeParticleDisplay) {
-      const texture = options.renderMode === "image" && options.imageSrc ? this.getTexture(options.imageSrc) : this.getCircleTexture();
+      const texture = options.renderMode === "image" && options.imageSrc ? this.getTexture(options.imageSrc) : this.getGlyphTexture(options.particleGlyph);
       const glow = options.renderMode === "default" ? options.glowIntensity : 0;
       display.configure(texture, particle.size, glow, toHexColor(options.glowColor), Math.min(0.38, glow / 40) * options.glowColor.a);
       this.decorativeBatches.attach(display, toPixiBlendMode(options.blendMode));
     } else if (display instanceof CircleParticleDisplay) {
       display.blendMode = toPixiBlendMode(options.blendMode);
-      display.configure(particle.size, options.glowIntensity, toHexColor(options.glowColor), Math.min(0.38, options.glowIntensity / 40) * options.glowColor.a);
+      display.configure(particle.size, options.glowIntensity, toHexColor(options.glowColor), Math.min(0.38, options.glowIntensity / 40) * options.glowColor.a, this.getGlyphContext(options.particleGlyph));
     } else {
       display.blendMode = toPixiBlendMode(options.blendMode);
       display.scale.set(1);
@@ -71251,8 +71294,7 @@ var ParticleEffectManager = class {
     }
     if (this.rendererBackend === "gpu") return new DecorativeParticleDisplay();
     if (options.renderMode === "image" && options.imageSrc) return new Sprite(this.getTexture(options.imageSrc));
-    this.circleContext ??= new GraphicsContext().circle(0, 0, 32).fill(16777215);
-    return new CircleParticleDisplay(this.circleContext);
+    return new CircleParticleDisplay(this.getGlyphContext(options.particleGlyph));
   }
   configureDisplay(display, options) {
     if (display instanceof Text) {
@@ -71268,6 +71310,19 @@ var ParticleEffectManager = class {
   getCircleTexture() {
     this.circleTexture ??= createCircleParticleTexture();
     return this.circleTexture;
+  }
+  /** Caches the finite glyph catalogue independently of externally supplied image textures. */
+  getGlyphTexture(glyph) {
+    if (glyph === "circle") return this.getCircleTexture();
+    const texture = this.glyphTextures.get(glyph) ?? createParticleGlyphTexture(glyph);
+    this.glyphTextures.set(glyph, texture);
+    return texture;
+  }
+  /** Rebinds pooled Canvas displays to shared geometry when the next attack uses another glyph. */
+  getGlyphContext(glyph) {
+    const context2 = this.glyphContexts.get(glyph) ?? createParticleGlyphContext(glyph);
+    this.glyphContexts.set(glyph, context2);
+    return context2;
   }
   getTexture(source8) {
     const texture = this.textureCache.get(source8) ?? Texture.from(source8);
@@ -71355,6 +71410,7 @@ function parseOptions(value, maxParticlesPerEmitter, reducedMotion) {
   const quality = requestedRenderMode === "text" ? 1 : reducedMotion ? 0 : Math.min(1, Math.max(0.1, requestedQuality));
   return {
     id: value.id,
+    particleGlyph: readParticleGlyph(value.particleGlyph),
     effectDefinition: optionalString(value.effectDefinition),
     anchorId: optionalString(value.anchorId),
     position: readVector(value.position),
