@@ -70292,12 +70292,13 @@ var AnimationDirector = class {
   /**
    * Creates a director with a no-op executor for explicit wait commands.
    */
-  constructor(executor = waitCommandExecutor) {
+  constructor(executor = waitCommandExecutor, speedPolicy = new VisualAnimationSpeedPolicy()) {
     this.executor = executor;
+    this.speedPolicy = speedPolicy;
   }
   executor;
+  speedPolicy;
   activeTimelines = /* @__PURE__ */ new Map();
-  speedPolicy = new VisualAnimationSpeedPolicy();
   nextTimelineKey = 0;
   disposed = false;
   /**
@@ -73778,6 +73779,25 @@ function calculateCombatLayout(viewport) {
     hitRegions: Object.freeze({ endTurn: regions.endTurn })
   });
 }
+function layoutPlayedCardPreview(viewport) {
+  const layout = calculateCombatLayout(viewport);
+  const top = layout.regions.header.height;
+  const bottom = Math.min(layout.regions.hand.y, layout.regions.endTurn.y);
+  const availableHeight = Math.max(0, bottom - top);
+  const scale = Math.min(
+    1.25,
+    Math.max(0, layout.viewport.width * 0.42 - 24) / handCardVisualSize.width,
+    Math.max(0, availableHeight - 24) / handCardVisualSize.height
+  );
+  const halfWidth = handCardVisualSize.width * scale / 2;
+  const preferredX = Math.min(
+    layout.viewport.width - 24 - halfWidth,
+    Math.max(layout.viewport.width / 2 + halfWidth + 12, layout.viewport.width * 0.76)
+  );
+  const leftOfEndTurnX = layout.regions.endTurn.x - halfWidth - 8;
+  const x2 = leftOfEndTurnX >= layout.viewport.width / 2 + halfWidth + 12 ? Math.min(preferredX, leftOfEndTurnX) : preferredX;
+  return { x: x2, y: top + availableHeight / 2, scale };
+}
 function getShortEncounterPageSize(kind, viewport) {
   const width = normalizeLayoutDimension(viewport.width);
   const pageControlInset2 = 52;
@@ -75720,8 +75740,7 @@ var constrainedHandInspectionScale = 1.28;
 var focusedHandLift = 34;
 var draggedCardLift = 48;
 var draggedCardScale = 1.32;
-var playedCardScale = 0.38;
-var playedCardDurationMs = 320;
+var playedCardDurationMs = 640;
 var entityHitHalfWidth = 94;
 var entityHitHalfHeight = 64;
 var pageControlInset = 52;
@@ -75729,11 +75748,12 @@ var EncounterScene = class {
   /**
    * Creates the ordered layers that belong to this scene.
    */
-  constructor(emitIntent, assetLoader, announceInteraction, reducedMotion = false) {
+  constructor(emitIntent, assetLoader, announceInteraction, reducedMotion = false, animationSpeedPolicy = new VisualAnimationSpeedPolicy()) {
     this.emitIntent = emitIntent;
     this.assetLoader = assetLoader;
     this.announceInteraction = announceInteraction;
     this.reducedMotion = reducedMotion;
+    this.animationSpeedPolicy = animationSpeedPolicy;
     this.runHud = new RunHud(() => this.requestRelicCollection(), () => this.requestDeckCollection(), false);
     this.root.eventMode = "static";
     this.root.on("globalpointermove", (event) => this.moveDrag(event));
@@ -75765,6 +75785,7 @@ var EncounterScene = class {
   assetLoader;
   announceInteraction;
   reducedMotion;
+  animationSpeedPolicy;
   root = new Container();
   backgroundLayer = new Container();
   enemyLayer = new Container();
@@ -76867,12 +76888,13 @@ var EncounterScene = class {
     if (!cardView) {
       return;
     }
+    const unavailableReason = this.getVisualUnavailableReason(entry.unavailableReason);
     cardView.setContent({
       energyCost: entry.energyCost,
       manaCost: entry.manaCost,
       name: entry.name,
-      description: withTargetDamage(entry.description, this.getPreviewDamage(entry)) + (entry.unavailableReason ? `
-${entry.unavailableReason}` : ""),
+      description: withTargetDamage(entry.description, this.getPreviewDamage(entry)) + (unavailableReason ? `
+${unavailableReason}` : ""),
       damage: this.getPreviewDamage(entry),
       baseDamage: entry.baseDamage ?? void 0,
       type: entry.cardType,
@@ -77377,10 +77399,11 @@ ${entry.unavailableReason}` : ""),
   /** Applies the card's current movement progress toward its distinct preview slot. */
   applyPlayedCardTransform(tile, start, progress, destination) {
     const easedProgress = easeMotion(progress, "outCubic");
+    const sizeProgress = easeMotion(Math.min(1, Math.max(0, (progress - 0.5) * 2)), "outCubic");
     tile.container.eventMode = "none";
     tile.container.position.set(interpolate(start.x, destination.x, easedProgress), interpolate(start.y, destination.y, easedProgress));
     tile.container.rotation = interpolate(start.rotation, 0, easedProgress);
-    tile.container.scale.set(interpolate(start.scale, playedCardScale, easedProgress));
+    tile.container.scale.set(interpolate(start.scale, destination.scale ?? 1, sizeProgress));
     tile.container.alpha = 1;
     tile.cardView?.setMotionState("resolving");
   }
@@ -77389,13 +77412,13 @@ ${entry.unavailableReason}` : ""),
     const anchor = this.getCardAnimationAnchors().played;
     const viewport = this.viewport ?? { width: 960, height: 540 };
     const intervals = Math.max(1, count2 - 1);
-    const halfWidth = handCardVisualSize.width * playedCardScale / 2;
-    const halfHeight = handCardVisualSize.height * playedCardScale / 2;
+    const halfWidth = handCardVisualSize.width * (anchor.scale ?? 1) / 2;
+    const halfHeight = handCardVisualSize.height * (anchor.scale ?? 1) / 2;
     const layout = calculateCombatLayout(viewport);
     const bottom = Math.min(layout.regions.hand.y, layout.regions.endTurn.y);
     const horizontalStep = Math.min(24, Math.max(0, anchor.x - viewport.width / 2 - halfWidth - 8) / intervals);
     const verticalStep = Math.min(12, Math.max(0, bottom - halfHeight - anchor.y - 4) / intervals);
-    return Array.from({ length: count2 }, (_, index) => ({ x: anchor.x - index * horizontalStep, y: anchor.y + index * verticalStep }));
+    return Array.from({ length: count2 }, (_, index) => ({ x: anchor.x - index * horizontalStep, y: anchor.y + index * verticalStep, scale: anchor.scale ?? 1 }));
   }
   /** Gets the card or item whose target options should be visible to the player. */
   getTargetingEntry() {
@@ -77430,7 +77453,7 @@ ${entry.unavailableReason}` : ""),
   getCardAnimationAnchors() {
     const viewport = this.viewport ?? { width: 960, height: 540 };
     return {
-      played: { x: viewport.width - 38, y: viewport.height * 0.45 },
+      played: layoutPlayedCardPreview(viewport),
       draw: { x: Math.max(0, viewport.width - 80), y: Math.max(0, viewport.height - 40) },
       discard: { x: Math.max(0, viewport.width - 100), y: viewport.height + 30 }
     };
@@ -77622,7 +77645,10 @@ ${entry.unavailableReason}` : ""),
       const isHoverable = entry !== void 0 && this.isEntryHoverable(tileId, entry);
       if (entry && isCardPresentationState2(entry) && tile.cardView) {
         const isPreview = entry.isQueued || this.queuedEntryIds.has(entry.id);
-        tile.cardView.setPlayability(isInteractive || isPreview ? "playable" : "unplayable");
+        tile.cardView.setPlayability(entry.isDraggable || isPreview ? "playable" : "unplayable");
+      }
+      if (entry && !this.isDragPositionManaged(tileId) && !this.retiredTileIds.has(tileId)) {
+        tile.container.alpha = entry.isDraggable ? 1 : 0.52;
       }
       tile.container.eventMode = isInteractive || isHoverable ? "static" : "none";
       tile.container.cursor = isInteractive ? "pointer" : "default";
@@ -78111,9 +78137,10 @@ ${entry.unavailableReason}` : ""),
     tile.container.eventMode = "none";
     this.committedCardMotion.set(tileId, {
       start,
-      destination: { ...this.getCardAnimationAnchors().played, rotation: 0, scale: playedCardScale },
+      destination: { ...layoutPlayedCardPreview(this.viewport ?? { width: 960, height: 540 }), rotation: 0 },
       tile,
-      elapsedMs: 0
+      elapsedMs: 0,
+      durationMs: this.reducedMotion ? 0 : this.animationSpeedPolicy.scaleDuration(playedCardDurationMs)
     });
   }
   /** Clears queued cards from the input area on the shared ticker without waiting for earlier effects. */
@@ -78123,7 +78150,8 @@ ${entry.unavailableReason}` : ""),
         this.committedCardMotion.delete(tileId);
         continue;
       }
-      if (motion.elapsedMs >= playedCardDurationMs) {
+      const durationMs = motion.durationMs ?? playedCardDurationMs;
+      if (motion.elapsedMs >= durationMs) {
         if (this.retiredTileIds.has(tileId)) this.clearDragMotion(tileId);
         else this.movePlayedCardAside(motion.tile, motion.start, 1);
         continue;
@@ -78132,10 +78160,15 @@ ${entry.unavailableReason}` : ""),
       this.movePlayedCardAside(
         motion.tile,
         motion.start,
-        getMotionProgress(motion.elapsedMs, this.reducedMotion ? 0 : playedCardDurationMs)
+        getMotionProgress(motion.elapsedMs, durationMs)
       );
-      if (motion.elapsedMs >= playedCardDurationMs && this.retiredTileIds.has(tileId)) this.clearDragMotion(tileId);
+      if (motion.elapsedMs >= durationMs && this.retiredTileIds.has(tileId)) this.clearDragMotion(tileId);
     }
+  }
+  /** Keeps stamina availability available to assistive technology without repeating it on the card face. */
+  getVisualUnavailableReason(reason) {
+    if (!reason || /^Requires \d+ Stamina\.$/i.test(reason)) return void 0;
+    return reason;
   }
   /** Releases retired visual objects once feedback no longer owns their transforms. */
   pruneRetiredTiles() {
@@ -80393,7 +80426,7 @@ async function createEventRenderer(canvas, sink) {
       const optionIndex = name === "chooseOption" && choiceId !== null ? state?.options.findIndex((option) => option.id === choiceId) ?? -1 : null;
       const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: eventSceneProtocolVersion, sceneId: "event", name, sequence, sourceId: null, targetId: null, optionIndex: optionIndex !== null && optionIndex >= 0 ? optionIndex : null, choiceId, selectionIds });
       if (disposed) return;
-      announce(result.accepted ? "Resolved." : "That choice is no longer available.");
+      if (!result.accepted) announce("That choice is no longer available.");
       playEffect(result.accepted ? "choice-confirmed" : "choice-rejected");
       if (!result.accepted && submissionGeneration === activeSubmissionGeneration) {
         acceptedActionAwaitingReconcile = false;
@@ -85498,6 +85531,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   }
   const canvasFocus = createCanvasFocusCoordinator(canvas);
   const accessibilityOverlay = createEncounterAccessibilityOverlay(canvas);
+  const animationSpeedPolicy = new VisualAnimationSpeedPolicy();
   let semanticInteropCount = 0;
   let viewport = encounterDesignViewport;
   let safeArea = emptySafeAreaInsets;
@@ -85509,7 +85543,8 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     },
     assetLoader,
     accessibilityOverlay.announce,
-    prefersReducedMotion5()
+    prefersReducedMotion5(),
+    animationSpeedPolicy
   );
   const runtime = new RunPresentationRuntime(createRunRuntimeApplication(application), [], {
     transitionViewport: { width: application.renderer.width, height: application.renderer.height },
@@ -85521,7 +85556,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     width: () => application.renderer.width,
     height: () => application.renderer.height
   });
-  const animationDirector = new AnimationDirector(scene.createAnimationCommandExecutor());
+  const animationDirector = new AnimationDirector(scene.createAnimationCommandExecutor(), animationSpeedPolicy);
   const particleEffects = new ParticleEffectManager(runtime.renderLayers.effect, {
     // Pixi RendererType.CANVAS is 4; GPU batching would add tinted bitmap work on that backend.
     rendererBackend: application.renderer.type === 4 ? "canvas" : "gpu",

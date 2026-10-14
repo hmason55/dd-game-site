@@ -828,8 +828,8 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
 
 .saving-spinner {
     position: fixed;
-    bottom: 64px;
-    right: 16px;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    right: calc(32px + env(safe-area-inset-right));
     width: 48px;
     height: 48px;
     border-radius: 12px;
