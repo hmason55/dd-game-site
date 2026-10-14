@@ -75665,7 +75665,7 @@ var focusedHandLift = 34;
 var draggedCardLift = 48;
 var draggedCardScale = 1.32;
 var playedCardScale = 0.38;
-var playedCardDurationMs = 240;
+var playedCardDurationMs = 320;
 var entityHitHalfWidth = 94;
 var entityHitHalfHeight = 64;
 var pageControlInset = 52;
@@ -77564,6 +77564,10 @@ ${entry.unavailableReason}` : ""),
       const entry = this.selectableEntries.get(entryId);
       const isInteractive = entry !== void 0 && this.isEntryInteractive(tileId, entry);
       const isHoverable = entry !== void 0 && this.isEntryHoverable(tileId, entry);
+      if (entry && isCardPresentationState2(entry) && tile.cardView) {
+        const isPreview = entry.isQueued || this.queuedEntryIds.has(entry.id);
+        tile.cardView.setPlayability(isInteractive || isPreview ? "playable" : "unplayable");
+      }
       tile.container.eventMode = isInteractive || isHoverable ? "static" : "none";
       tile.container.cursor = isInteractive ? "pointer" : "default";
     }
@@ -82703,7 +82707,11 @@ async function createMapRenderer(canvas, sink) {
         selectedNodeId = void 0;
         focusedIndex = 0;
       }
-      if (cancelledTravelTransition) travelTransition = void 0;
+      if (cancelledTravelTransition) {
+        travelTransition = void 0;
+        pending = false;
+        acceptedActionAwaitingReconcile = false;
+      }
       if (currentChanged) centerOnCurrentNode();
       if (pending && acceptedActionAwaitingReconcile) {
         pending = false;
