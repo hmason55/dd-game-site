@@ -84176,7 +84176,7 @@ var ProgressionGraph = class extends Container {
     this.graphWidth = width - 14;
     this.onInspect = onInspect;
     const rows = Math.max(1, ...nodes.map((node) => (node.y ?? 0) + 1));
-    this.scroll = new ScrollContainer({ width: this.graphWidth, height, contentHeight: firstNodeY + rows * rowHeight });
+    this.scroll = new ScrollContainer({ width: this.graphWidth, height, contentHeight: firstNodeY + rows * rowHeight, fadeEdges: true });
     this.addChild(this.scroll, this.scrollbar);
     this.input = installChoiceScrollInput(canvas, this.scroll, blocked, () => this.drawScrollbar());
     this.drawBranches();
@@ -84761,7 +84761,6 @@ Shared Remembrance ${settings.sharedRemembrancePoints ?? 0}`, 24, top + rowHeigh
     }
     const selected = nodes[selectedIndex];
     if (selected) graph.focusNode(selected.id);
-    addText(compact ? "Swipe to explore \xB7 \u2191\u2193 inspect \xB7 Enter train" : "Scroll or swipe to explore \xB7 \u2191\u2193 inspect \xB7 Enter to train \xB7 Page Up/Down to scroll", margin, height - 64, compact ? 10 : 12, graphWidth);
     addButton("Close", "progression:close", width - margin - 104, height - 46, 104, 36, true, "close");
   };
   const keydown = (event) => {
