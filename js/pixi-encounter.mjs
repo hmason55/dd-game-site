@@ -72070,19 +72070,14 @@ var runUiIconAssets = {
   stamina: { url: "/img/Icons/Stamina.png", fallback: "\u2726" },
   status: { url: "/img/Icons/Status.png", fallback: "\u25C6" }
 };
-var runUiFontAssets = {
-  alegreya: "/fonts/Alegreya-Variable.ttf",
-  atkinsonRegular: "/fonts/AtkinsonHyperlegibleNext-Regular.ttf",
-  atkinsonSemiBold: "/fonts/AtkinsonHyperlegibleNext-SemiBold.ttf",
-  atkinsonBold: "/fonts/AtkinsonHyperlegibleNext-Bold.ttf"
-};
 var runAssetBundleManifest = {
   "core-ui": {
     id: "core-ui",
     residency: "run",
     optionalFontFamilies: ["Alegreya", "Atkinson Hyperlegible Next"],
     urls: [
-      ...Object.values(runUiFontAssets),
+      // CSS owns the FontFace objects. Load the declared families through document.fonts;
+      // Pixi's URL loader would register duplicate faces and unload them during teardown.
       runUiIconAssets.health.url,
       runUiIconAssets.stamina.url,
       runUiIconAssets.status.url
@@ -72170,6 +72165,20 @@ function getRunAssetBundle(name) {
 }
 
 // src/encounter-assets.ts
+var sharedTextures = /* @__PURE__ */ new Map();
+var sharedTextureBundles = new RunAssetBundleManager({
+  load: async (url) => {
+    sharedTextures.set(url, await Assets.load(url));
+  },
+  unload: async (url) => {
+    try {
+      await Assets.unload(url);
+    } catch {
+    } finally {
+      sharedTextures.delete(url);
+    }
+  }
+});
 var encounterAssetManifest = {
   textures: [
     "/img/Player/HoodedTraveler.svg",
@@ -72185,7 +72194,7 @@ var encounterAssetManifest = {
 var EncounterAssetLoader = class {
   textures = /* @__PURE__ */ new Map();
   leases = /* @__PURE__ */ new Map();
-  releasedTextureUrls = /* @__PURE__ */ new Set();
+  sharedTextureLeases = /* @__PURE__ */ new Map();
   sceneAssetReferences = /* @__PURE__ */ new Map();
   bundles = new RunAssetBundleManager({
     load: async (url) => {
@@ -72194,8 +72203,13 @@ var EncounterAssetLoader = class {
         await loadFont(fontFamily);
         return;
       }
-      const texture = await Assets.load(url);
-      if (!this.disposed) {
+      const lease = this.getOrCreateSharedTextureLease(url);
+      const result = await lease.preload();
+      const texture = sharedTextures.get(url);
+      if (result.canceled || result.failedUrls.length > 0) {
+        throw new Error(`Unable to load encounter texture: ${url}`);
+      }
+      if (!this.disposed && texture) {
         this.textures.set(url, texture);
       }
     },
@@ -72204,7 +72218,6 @@ var EncounterAssetLoader = class {
         return;
       }
       this.textures.delete(url);
-      this.releasedTextureUrls.add(url);
     }
   });
   preloader = new RunAssetPreloadOrchestrator(this.bundles);
@@ -72332,6 +72345,14 @@ var EncounterAssetLoader = class {
     this.leases.set(url, lease);
     return lease;
   }
+  /** Retains module-wide texture ownership independently of scene bundle residency. */
+  getOrCreateSharedTextureLease(url) {
+    const existing = this.sharedTextureLeases.get(url);
+    if (existing) return existing;
+    const lease = sharedTextureBundles.open({ id: `renderer:${url}`, urls: [url] });
+    this.sharedTextureLeases.set(url, lease);
+    return lease;
+  }
   async disposeBundles() {
     try {
       await this.preloader.dispose();
@@ -72340,7 +72361,7 @@ var EncounterAssetLoader = class {
         await this.bundles.dispose();
       } finally {
         try {
-          await this.unloadReleasedTextures();
+          await this.releaseSharedTextures();
         } finally {
           this.leases.clear();
           this.sceneAssetReferences.clear();
@@ -72349,12 +72370,13 @@ var EncounterAssetLoader = class {
       }
     }
   }
-  async unloadReleasedTextures() {
-    const urls = [...this.releasedTextureUrls];
-    this.releasedTextureUrls.clear();
-    await Promise.all(urls.map(async (url) => {
+  /** Releases global textures only after the last renderer owner has finished drawing. */
+  async releaseSharedTextures() {
+    const leases = [...this.sharedTextureLeases.values()];
+    this.sharedTextureLeases.clear();
+    await Promise.all(leases.map(async (lease) => {
       try {
-        await Assets.unload(url);
+        await lease.dispose();
       } catch {
       }
     }));
@@ -85677,10 +85699,13 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   const suspendWhenHidden = () => {
     updateRuntimeSuspension();
   };
-  const preventContextLoss = (event) => {
-    event.preventDefault();
+  const suspendForContextLoss = () => {
     contextLost = true;
     updateRuntimeSuspension();
+  };
+  const handleWebGlContextLoss = (event) => {
+    event.preventDefault();
+    suspendForContextLoss();
   };
   const reconcileAfterContextRestore = () => {
     contextLost = false;
@@ -85709,8 +85734,10 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
   const devicePixelRatioWatcher = createDevicePixelRatioWatcher(handleViewportChange);
   visualViewport?.addEventListener("resize", handleVisualViewportChange);
   document.addEventListener("visibilitychange", suspendWhenHidden);
-  canvas.addEventListener("webglcontextlost", preventContextLoss);
+  canvas.addEventListener("webglcontextlost", handleWebGlContextLoss);
   canvas.addEventListener("webglcontextrestored", reconcileAfterContextRestore);
+  canvas.addEventListener("contextlost", suspendForContextLoss);
+  canvas.addEventListener("contextrestored", reconcileAfterContextRestore);
   canvas.addEventListener("keydown", handleKeyboardEvent);
   resizeRenderer();
   suspendWhenHidden();
@@ -85818,7 +85845,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
         averageFrameTimeMs: runtimeDiagnostics.averageFrameTimeMs,
         maximumFrameTimeMs: runtimeDiagnostics.maximumFrameTimeMs,
         longFrameCount: runtimeDiagnostics.longFrameCount,
-        listenerCount: 14 + (document.fonts ? 1 : 0),
+        listenerCount: 16 + (document.fonts ? 1 : 0),
         appliedSequence,
         rendererType,
         suspended,
@@ -85867,8 +85894,10 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     visualViewport?.removeEventListener("resize", handleVisualViewportChange);
     document.removeEventListener("visibilitychange", suspendWhenHidden);
     canvasFocus.dispose();
-    canvas.removeEventListener("webglcontextlost", preventContextLoss);
+    canvas.removeEventListener("webglcontextlost", handleWebGlContextLoss);
     canvas.removeEventListener("webglcontextrestored", reconcileAfterContextRestore);
+    canvas.removeEventListener("contextlost", suspendForContextLoss);
+    canvas.removeEventListener("contextrestored", reconcileAfterContextRestore);
     canvas.removeEventListener("keydown", handleKeyboardEvent);
     try {
       await runtime.dispose();
