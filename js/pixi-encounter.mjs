@@ -73785,18 +73785,17 @@ function layoutPlayedCardPreview(viewport) {
   const bottom = Math.min(layout.regions.hand.y, layout.regions.endTurn.y);
   const availableHeight = Math.max(0, bottom - top);
   const scale = Math.min(
-    1.25,
-    Math.max(0, layout.viewport.width * 0.42 - 24) / handCardVisualSize.width,
+    layout.mode === "Wide" ? 0.38 : 0.3,
     Math.max(0, availableHeight - 24) / handCardVisualSize.height
   );
   const halfWidth = handCardVisualSize.width * scale / 2;
-  const preferredX = Math.min(
-    layout.viewport.width - 24 - halfWidth,
-    Math.max(layout.viewport.width / 2 + halfWidth + 12, layout.viewport.width * 0.76)
-  );
-  const leftOfEndTurnX = layout.regions.endTurn.x - halfWidth - 8;
-  const x2 = leftOfEndTurnX >= layout.viewport.width / 2 + halfWidth + 12 ? Math.min(preferredX, leftOfEndTurnX) : preferredX;
-  return { x: x2, y: top + availableHeight / 2, scale };
+  const halfHeight = handCardVisualSize.height * scale / 2;
+  const rightInset = layout.mode === "Wide" ? Math.max(38, 16 + halfWidth) : 16 + halfWidth;
+  return {
+    x: layout.viewport.width - rightInset,
+    y: Math.max(top + halfHeight, Math.min(bottom - halfHeight, layout.viewport.height * 0.45)),
+    scale
+  };
 }
 function getShortEncounterPageSize(kind, viewport) {
   const width = normalizeLayoutDimension(viewport.width);
@@ -75740,7 +75739,7 @@ var constrainedHandInspectionScale = 1.28;
 var focusedHandLift = 34;
 var draggedCardLift = 48;
 var draggedCardScale = 1.32;
-var playedCardDurationMs = 640;
+var playedCardDurationMs = 200;
 var entityHitHalfWidth = 94;
 var entityHitHalfHeight = 64;
 var pageControlInset = 52;
@@ -77399,11 +77398,10 @@ ${unavailableReason}` : ""),
   /** Applies the card's current movement progress toward its distinct preview slot. */
   applyPlayedCardTransform(tile, start, progress, destination) {
     const easedProgress = easeMotion(progress, "outCubic");
-    const sizeProgress = easeMotion(Math.min(1, Math.max(0, (progress - 0.5) * 2)), "outCubic");
     tile.container.eventMode = "none";
     tile.container.position.set(interpolate(start.x, destination.x, easedProgress), interpolate(start.y, destination.y, easedProgress));
     tile.container.rotation = interpolate(start.rotation, 0, easedProgress);
-    tile.container.scale.set(interpolate(start.scale, destination.scale ?? 1, sizeProgress));
+    tile.container.scale.set(interpolate(start.scale, destination.scale ?? 1, easedProgress));
     tile.container.alpha = 1;
     tile.cardView?.setMotionState("resolving");
   }
