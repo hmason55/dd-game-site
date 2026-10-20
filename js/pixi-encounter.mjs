@@ -71346,11 +71346,22 @@ var ParticleEffectManager = class {
       particle.display.rotation = particle.rotation;
       particle.display.alpha = alpha * color.a;
       if (particle.display instanceof Text) {
-        const pop = this.reducedMotion || options.effectDefinition === "resource-gain" ? 1 : 1 + 0.25 * (1 - clampUnit(particle.ageMs / 500));
-        particle.display.scale.set(pop);
-      }
-      if (particle.display instanceof CircleParticleDisplay) particle.display.update(toHexColor(color), progress);
+        this.renderText(particle.display, options, particle.ageMs, toHexColor(color));
+      } else if (particle.display instanceof CircleParticleDisplay) particle.display.update(toHexColor(color), progress);
       else particle.display.tint = toHexColor(color);
+    }
+  }
+  /** Bakes Canvas text color into its raster so recycled textures cannot reuse stale tinted glyphs. */
+  renderText(display, options, ageMs, color) {
+    const pop = this.reducedMotion || options.effectDefinition === "resource-gain" ? 1 : 1 + 0.25 * (1 - clampUnit(ageMs / 500));
+    display.scale.set(pop);
+    if (this.rendererBackend === "canvas") {
+      display.style.fill = color;
+      display.tint = 16777215;
+      const icon = this.resourceIcons.get(display);
+      if (icon) icon.tint = color;
+    } else {
+      display.tint = color;
     }
   }
   /** Removes an unordered particle in constant time while keeping global diagnostics exact. */
