@@ -350,6 +350,27 @@
 @media (max-width: 600px) {
     .pixi-treasure-surface[b-d4ng9ktinb] { height: min(70dvh, 36rem); min-height: min(20rem, calc(100dvh - 8rem)); width: calc(100vw - 1rem); }
 }
+/* /Components/SaveSpinner.razor.rz.scp.css */
+.save-failure-notice[b-vhpolka68p] {
+    position: fixed;
+    bottom: calc(136px + env(safe-area-inset-bottom));
+    right: calc(16px + env(safe-area-inset-right));
+    max-width: min(28rem, calc(100vw - 32px));
+    z-index: 2100;
+    padding: 1rem;
+    border: 1px solid #f2d295;
+    border-radius: 8px;
+    background: #102126;
+    color: #fff;
+}
+
+.save-failure-notice button[b-vhpolka68p] {
+    display: block;
+    margin-top: .5rem;
+    padding: .5rem 1rem;
+    background: #f2d295;
+    color: #102126;
+}
 /* /Layout/MainLayout.razor.rz.scp.css */
 .page[b-f125ol7vjg] {
     position: relative;
