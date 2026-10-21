@@ -83087,6 +83087,43 @@ async function createMainMenuRenderer(canvas, sink, initialState) {
   let focusedIndex = 0;
   let pending = false;
   let disposed = false;
+  const semanticControls = canvas.ownerDocument?.createElement("div");
+  const semanticButtons = /* @__PURE__ */ new Map();
+  if (semanticControls) {
+    semanticControls.style.cssText = "position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap";
+    semanticControls.setAttribute("role", "group");
+    semanticControls.setAttribute("aria-label", "Main menu actions");
+    canvas.after(semanticControls);
+  }
+  const reconcileSemanticControls = (entries) => {
+    if (!semanticControls) return;
+    for (const [action, button] of semanticButtons) {
+      if (entries.some((entry) => entry.action === action)) continue;
+      const hadFocus = canvas.ownerDocument.activeElement === button;
+      button.remove();
+      semanticButtons.delete(action);
+      if (hadFocus) canvas.focus();
+    }
+    entries.forEach((entry, index) => {
+      let button = semanticButtons.get(entry.action);
+      if (!button) {
+        button = canvas.ownerDocument.createElement("button");
+        button.type = "button";
+        button.textContent = entry.label;
+        button.addEventListener("click", () => void submit(entry.action));
+        button.addEventListener("focus", () => {
+          focusedIndex = getEntries(state).findIndex((candidate) => candidate.action === entry.action);
+          buttons.forEach((control, index2) => control.setFocused(index2 === focusedIndex));
+        });
+        const nextButton = entries.slice(index + 1).map((next) => semanticButtons.get(next.action)).find((next) => next !== void 0);
+        if (nextButton) semanticControls.insertBefore(button, nextButton);
+        else semanticControls.appendChild(button);
+        semanticButtons.set(entry.action, button);
+      }
+      if (canvas.ownerDocument.activeElement === button) focusedIndex = index;
+      button.disabled = pending;
+    });
+  };
   const layout = () => {
     if (disposed) return;
     const viewport = getViewport(canvas);
@@ -83115,12 +83152,16 @@ async function createMainMenuRenderer(canvas, sink, initialState) {
     feedback.position.set(width / 2, panelY + panelHeight - 22);
   };
   const submit = async (action) => {
-    if (pending) return;
+    if (pending || disposed) return;
     pending = true;
     buttons.forEach((button) => button.setEnabled(false));
+    semanticButtons.forEach((button) => {
+      button.disabled = true;
+    });
     feedback.text = "Opening\u2026";
     try {
       const accepted = await sink.invokeMethodAsync("HandleActionFromRendererAsync", action);
+      if (disposed) return;
       if (!accepted) {
         feedback.text = "That option is unavailable.";
         pending = false;
@@ -83132,6 +83173,7 @@ async function createMainMenuRenderer(canvas, sink, initialState) {
         layout();
       }
     } catch {
+      if (disposed) return;
       feedback.text = "The menu could not complete that request.";
       pending = false;
       reconcileButtons();
@@ -83139,6 +83181,7 @@ async function createMainMenuRenderer(canvas, sink, initialState) {
   };
   const reconcileButtons = () => {
     const entries = getEntries(state);
+    reconcileSemanticControls(entries);
     if (focusedIndex >= entries.length) focusedIndex = Math.max(0, entries.length - 1);
     buttonLayer.removeChildren();
     buttons = entries.map((entry, index) => {
@@ -83166,6 +83209,7 @@ async function createMainMenuRenderer(canvas, sink, initialState) {
   const resizeObserver = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(layout);
   resizeObserver?.observe(canvas.parentElement ?? canvas);
   const reconcile = (candidate) => {
+    if (disposed) return false;
     const nextState = toMainMenuState(candidate);
     if (!nextState) return false;
     state = nextState;
@@ -83185,6 +83229,7 @@ async function createMainMenuRenderer(canvas, sink, initialState) {
       canvas.removeEventListener("keydown", keydown);
       window.removeEventListener("resize", layout);
       resizeObserver?.disconnect();
+      semanticControls?.remove();
       restoreCanvasPresentation();
       application.destroy({ removeView: false }, { children: true });
     }
@@ -83232,6 +83277,7 @@ Milestones reached: ${reached}`;
 }
 
 // src/pixi-character-select.ts
+var characterGroupId = 0;
 async function createCharacterSelectRenderer(canvas, sink, initialState) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 529183, canvas, preference: "canvas" });
@@ -83261,7 +83307,21 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
   let selectionRevision = 0;
   let startingRun = false;
   let focusedControl = -1;
+  let focusedCharacter;
   const semanticControls = canvas.ownerDocument?.createElement("div");
+  const semanticCharacters = canvas.ownerDocument?.createElement("div");
+  const semanticCharacterButtons = /* @__PURE__ */ new Map();
+  const radioGroupName = `pixi-character-${++characterGroupId}`;
+  const semanticStatus = canvas.ownerDocument?.createElement("p");
+  if (semanticCharacters && semanticControls && semanticStatus) {
+    semanticCharacters.setAttribute("role", "radiogroup");
+    semanticCharacters.setAttribute("aria-label", "Available characters");
+    semanticStatus.setAttribute("role", "status");
+    semanticStatus.setAttribute("aria-live", "polite");
+    semanticStatus.setAttribute("aria-atomic", "true");
+    semanticControls.appendChild(semanticCharacters);
+    semanticControls.appendChild(semanticStatus);
+  }
   const semanticButtons = ["New seed", "Paste", "Embark"].map((label, index) => {
     const button = canvas.ownerDocument?.createElement("button");
     if (!button || !semanticControls) return void 0;
@@ -83295,12 +83355,18 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
     characterButtons.forEach((button, index) => {
       button.setEnabled(!startingRun);
       button.setSelected(index === selection);
+      button.setFocused(state?.characters[index] === focusedCharacter);
     });
-    seedButtons.forEach((button) => button.setEnabled(!startingRun));
+    seedButtons.forEach((button, index) => button.setEnabled(!startingRun && (index !== 2 || (state?.characters.length ?? 0) > 0)));
     seedButtons.forEach((button, index) => button.setFocused(index === focusedControl));
-    semanticButtons.forEach((button) => {
-      if (button) button.disabled = startingRun;
+    semanticButtons.forEach((button, index) => {
+      if (button) button.disabled = startingRun || index === 2 && (state?.characters.length ?? 0) === 0;
     });
+    semanticCharacterButtons.forEach((button, character) => {
+      button.checked = character === state?.characters[selection];
+      button.disabled = startingRun;
+    });
+    if (semanticStatus) semanticStatus.textContent = `Selected character: ${state?.characters[selection] ?? "None"}. Seed: ${state?.seed ?? "0"}`;
   };
   const rejectSelection = (revision) => {
     if (disposed || revision !== selectionRevision) return;
@@ -83334,9 +83400,42 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
       if (!disposed) updateButtons();
     }
   };
+  const reconcileSemanticCharacters = () => {
+    if (!state || !semanticCharacters) return;
+    for (const [character, button] of semanticCharacterButtons) {
+      if (state.characters.includes(character)) continue;
+      const hadFocus = canvas.ownerDocument.activeElement === button;
+      button.remove();
+      semanticCharacterButtons.delete(character);
+      if (hadFocus) canvas.focus();
+    }
+    state.characters.forEach((character) => {
+      if (semanticCharacterButtons.has(character)) return;
+      const button = canvas.ownerDocument.createElement("input");
+      button.type = "radio";
+      button.name = radioGroupName;
+      button.value = character;
+      button.setAttribute("aria-label", character);
+      button.addEventListener("change", () => {
+        if (button.checked) selectCharacter(state?.characters.indexOf(character) ?? -1);
+      });
+      button.addEventListener("focus", () => {
+        focusedCharacter = character;
+        const index = state?.characters.indexOf(character) ?? -1;
+        characterButtons.forEach((control, controlIndex) => control.setFocused(controlIndex === index));
+      });
+      button.addEventListener("blur", () => {
+        focusedCharacter = void 0;
+        characterButtons.forEach((control) => control.setFocused(false));
+      });
+      semanticCharacters.appendChild(button);
+      semanticCharacterButtons.set(character, button);
+    });
+  };
   const rebuild = () => {
     if (!state) return;
     selection = Math.max(0, state.characters.indexOf(localCharacter ?? state.selectedCharacter));
+    reconcileSemanticCharacters();
     buttons.removeChildren();
     characterButtons = state.characters.map((character, index) => {
       const button = new GameButton({ label: character, width: 1, height: 1, selected: index === selection, onPress: () => selectCharacter(index) });
@@ -83420,6 +83519,7 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
   const resizeObserver = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(layout);
   resizeObserver?.observe(canvas.parentElement ?? canvas);
   const reconcile = (candidate) => {
+    if (disposed) return false;
     const nextState = toCharacterSelectState(candidate);
     if (!nextState) return false;
     if (!nextState.characters.includes(localCharacter ?? "")) localCharacter = void 0;
