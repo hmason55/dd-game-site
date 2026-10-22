@@ -148,7 +148,7 @@
 .pixi-menu-overlay-surface.renderer-unavailable canvas[b-vvhjhjzarl] { display: none; }
 .pixi-menu-overlay-surface.renderer-unavailable.shared-runtime[b-vvhjhjzarl] { background: rgba(3, 10, 18, .95); pointer-events: auto; }
 .pixi-menu-overlay-surface.renderer-unavailable .pixi-menu-overlay-accessibility[b-vvhjhjzarl] { background: #0e2132; color: #f1f4f8; height: calc(100dvh - 2rem); inset: 1rem; max-width: 38rem; overflow: auto; padding: 1rem; pointer-events: auto; position: absolute; width: calc(100vw - 2rem); }
-.pixi-menu-overlay-accessibility button[b-vvhjhjzarl], .pixi-menu-overlay-accessibility input[b-vvhjhjzarl] { min-height: 44px; min-width: 44px; }
+.pixi-menu-overlay-accessibility[b-vvhjhjzarl]  button, .pixi-menu-overlay-accessibility[b-vvhjhjzarl]  input { min-height: 44px; min-width: 44px; }
 /* /Components/PixiRunControlsSurface.razor.rz.scp.css */
 .pixi-run-controls-surface[b-2ntaig32y6] {
     bottom: 0;
