@@ -73475,6 +73475,16 @@ function normalizeCoordinate(value) {
 }
 
 // src/health-block-meter.ts
+var healthBlockMeterColors = {
+  health: uiTokens.color.health,
+  block: uiTokens.color.block,
+  overflow: mixColors(uiTokens.color.block, uiTokens.color.panelShadow, 0.35),
+  chip: mixColors(uiTokens.color.health, uiTokens.color.text, 0.45)
+};
+function mixColors(color, tint, amount) {
+  const channel = (shift) => Math.round((color >> shift & 255) * (1 - amount) + (tint >> shift & 255) * amount);
+  return channel(16) << 16 | channel(8) << 8 | channel(0);
+}
 function healthBlockSegments(health, maximum, block) {
   if (maximum <= 0) return { health: 0, block: 0, overflow: 0 };
   const hp = Math.max(0, Math.min(maximum, health));
@@ -73508,9 +73518,9 @@ var HealthBlockMeter = class extends Container {
     }
     this.previous = { health, maximum };
     this.track.clear().roundRect(-70, 0, 140, 22, 4).fill({ color: uiTokens.color.panelShadow, alpha: 0.96 }).stroke({ color: uiTokens.color.panelStroke, width: 1 });
-    this.segment(-68, segments.health * 136, 14170949);
-    this.segment(-68 + segments.health * 136, segments.block * 136, 12895428);
-    this.segment(68 - segments.overflow * 136, segments.overflow * 136, 7829367);
+    this.segment(-68, segments.health * 136, healthBlockMeterColors.health);
+    this.segment(-68 + segments.health * 136, segments.block * 136, healthBlockMeterColors.block);
+    this.drawOverflow(segments.overflow * 136);
   }
   /** Moves each detached fragment upward and outward while fading it independently. */
   tick(deltaMs) {
@@ -73527,11 +73537,22 @@ var HealthBlockMeter = class extends Container {
     }
   }
   segment(x2, width, color) {
-    if (width > 0) this.track.rect(x2, 2, width, 18).fill({ color, alpha: 1 });
+    if (width > 0) this.track.rect(x2, 2, width, 18).fill({ color, alpha: 1 }).stroke({ color: uiTokens.color.panelShadow, width: 1 });
+  }
+  /** Distinguishes overlapping shield from ordinary block with a darker gold fill, stripes, and an edge. */
+  drawOverflow(width) {
+    if (width <= 0) return;
+    const left = 68 - width;
+    this.segment(left, width, healthBlockMeterColors.overflow);
+    for (let offset = 0; offset < width; offset += 8) {
+      const run = Math.min(6, width - offset);
+      this.track.moveTo(left + offset, 20).lineTo(left + offset + run, 20 - run * 3).stroke({ color: healthBlockMeterColors.block, width: 1, alpha: 0.7 });
+    }
+    this.track.moveTo(left, 2).lineTo(left, 20).stroke({ color: uiTokens.color.text, width: 1, alpha: 0.75 });
   }
   addChip(x2, width) {
     if (this.chips.length >= 24) this.chips.shift()?.graphic.destroy();
-    const graphic = new Graphics().rect(0, 2, width, 18).fill({ color: 16752809 });
+    const graphic = new Graphics().rect(0, 2, width, 18).fill({ color: healthBlockMeterColors.chip });
     graphic.position.set(x2, 0);
     this.addChild(graphic);
     this.chips.push({ graphic, x: x2, elapsed: 0 });
