@@ -140,7 +140,7 @@
 }
 /* /Components/PixiMenuOverlaySurface.razor.rz.scp.css */
 .pixi-menu-overlay-surface[b-vvhjhjzarl] { background: rgba(3, 10, 18, .82); inset: 0; padding: clamp(.5rem, 4vh, 3rem); position: fixed; z-index: 1450; }
-.pixi-menu-overlay-surface canvas[b-vvhjhjzarl] { display: block; height: 100%; margin: auto; max-height: 48rem; max-width: 60rem; touch-action: none; width: 100%; }
+.pixi-menu-overlay-surface canvas[b-vvhjhjzarl] { border-radius: 1rem; box-shadow: 0 1.5rem 5rem #0009; display: block; height: 100%; margin: auto; max-height: 48rem; max-width: 60rem; touch-action: none; width: 100%; }
 .pixi-menu-overlay-accessibility[b-vvhjhjzarl] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
 .pixi-menu-overlay-surface.shared-runtime[b-vvhjhjzarl] { background: transparent; pointer-events: none; }
 .pixi-menu-overlay-surface.shared-runtime canvas[b-vvhjhjzarl] { display: none; }
@@ -149,6 +149,21 @@
 .pixi-menu-overlay-surface.renderer-unavailable.shared-runtime[b-vvhjhjzarl] { background: rgba(3, 10, 18, .95); pointer-events: auto; }
 .pixi-menu-overlay-surface.renderer-unavailable .pixi-menu-overlay-accessibility[b-vvhjhjzarl] { background: #0e2132; color: #f1f4f8; height: calc(100dvh - 2rem); inset: 1rem; max-width: 38rem; overflow: auto; padding: 1rem; pointer-events: auto; position: absolute; width: calc(100vw - 2rem); }
 .pixi-menu-overlay-accessibility[b-vvhjhjzarl]  button, .pixi-menu-overlay-accessibility[b-vvhjhjzarl]  input { min-height: 44px; min-width: 44px; }
+.pixi-menu-overlay-accessibility[b-vvhjhjzarl] { border: 1px solid #71858a; border-radius: 1rem; box-sizing: border-box; font-family: system-ui, sans-serif; }
+.pixi-menu-overlay-accessibility[b-vvhjhjzarl]  h2 { color: #f2eee4; font-size: 1.75rem; margin: 0 0 .5rem; }
+.pixi-menu-overlay-accessibility[b-vvhjhjzarl]  p { color: #c4cbc8; line-height: 1.5; }
+.pixi-menu-overlay-accessibility[b-vvhjhjzarl]  fieldset { border: 1px solid #43565e; border-radius: .75rem; display: flex; flex-wrap: wrap; gap: .75rem; margin: 1.25rem 0; padding: 1rem; }
+.pixi-menu-overlay-accessibility[b-vvhjhjzarl]  legend { color: #d0b77c; font-size: .85rem; font-weight: 600; padding: 0 .5rem; }
+.pixi-menu-overlay-accessibility[b-vvhjhjzarl]  label { align-items: center; display: grid; gap: 1rem; grid-template-columns: 6rem 1fr; position: relative; width: 100%; }
+.pixi-menu-overlay-accessibility[b-vvhjhjzarl]  input { accent-color: #d0b77c; width: 100%; }
+.pixi-menu-overlay-accessibility[b-vvhjhjzarl]  button { background: #26343a; border: 1px solid #71858a; border-radius: .5rem; color: #f2eee4; cursor: pointer; font: inherit; padding: .6rem .9rem; position: relative; }
+.pixi-menu-overlay-accessibility[b-vvhjhjzarl]  button:hover, .pixi-menu-overlay-accessibility[b-vvhjhjzarl]  button[aria-pressed="true"] { background: #344950; border-color: #d0b77c; }
+.pixi-menu-overlay-accessibility[b-vvhjhjzarl]  :focus-visible { outline: 2px solid #63d8ee; outline-offset: 3px; }
+.pixi-menu-overlay-accessibility[b-vvhjhjzarl]  button[title]:focus-visible::after, .pixi-menu-overlay-accessibility[b-vvhjhjzarl]  label[title]:focus-within::after { background: #08171c; border: 1px solid #d0b77c; border-radius: .5rem; bottom: 100%; color: #f2eee4; content: attr(title); font-size: .85rem; left: 0; padding: .75rem; position: absolute; text-align: left; width: min(15rem, 65vw); z-index: 1; }
+.pixi-menu-overlay-accessibility[b-vvhjhjzarl]  .settings-tabs, .pixi-menu-overlay-accessibility[b-vvhjhjzarl]  .settings-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.pixi-menu-overlay-accessibility[b-vvhjhjzarl]  .settings-actions { border-top: 1px solid #43565e; margin-top: 1.5rem; padding-top: 1rem; }
+.pixi-menu-overlay-accessibility[b-vvhjhjzarl]  .settings-actions button:last-child { background: #375a52; border-color: #90c7a7; margin-left: auto; }
+.pixi-menu-overlay-accessibility[b-vvhjhjzarl]  .settings-actions button:nth-child(2) { border-color: #e2806e; color: #efb3a8; }
 /* /Components/PixiRunControlsSurface.razor.rz.scp.css */
 .pixi-run-controls-surface[b-2ntaig32y6] {
     bottom: 0;

@@ -84347,6 +84347,37 @@ function splitLongWord(word, maxHeight, measure) {
   return fragments;
 }
 
+// src/settings-help.ts
+function settingHelp(action) {
+  const key = action.startsWith("setting:") ? action.split(":").slice(0, 2).join(":") : action;
+  if (action.startsWith("particle:")) return "Choose the amount of visual particles. Lower levels reduce effects and can improve performance. Activate to cycle through Low, Medium, High, and Maximum.";
+  const help = {
+    "setting:master": "Adjust the overall volume of all game audio. Set to 0% to mute everything.",
+    "setting:sfx": "Adjust sound effects such as card plays, attacks, and interface sounds.",
+    "setting:music": "Adjust the volume of background music.",
+    "setting:ambient": "Adjust environmental sounds and background atmosphere.",
+    "setting:speed": "Adjust the pace of gameplay animations. 0.5\xD7 is slower; 2.0\xD7 is faster.",
+    "toggle:resource-gains": "Show floating text when resources such as energy, mana, or block are gained.",
+    "toggle:effect-sources": "Include effect names in floating resource text to identify what caused a gain.",
+    "toggle:damage": "Show floating damage numbers during combat.",
+    "toggle:cards": "Include card names in floating damage text when damage values are enabled.",
+    "toggle:relics": "Include relic names in floating damage text when damage values are enabled.",
+    "toggle:items": "Include item names in floating damage text when damage values are enabled.",
+    "settings:debug": "Open developer tools for character and shared Remembrance progression.",
+    "settings:back": "Return to gameplay preferences.",
+    "debug:xp:25": "Add 25 Remembrance points to the current character for debugging.",
+    "debug:xp:100": "Add 100 Remembrance points to the current character for debugging.",
+    "debug:reset": "Reset the current character's Remembrance progression for debugging.",
+    "debug:shared:25": "Add 25 shared Remembrance points for debugging.",
+    "debug:shared:reset": "Reset shared Remembrance progression for debugging.",
+    defaults: "Restore default audio and gameplay preferences after confirmation.",
+    clear: "Delete saved game data after confirmation. This cannot be undone.",
+    cancel: "Close settings and discard unsaved changes.",
+    save: "Save your audio and gameplay preferences and close settings."
+  };
+  return help[key];
+}
+
 // src/pixi-menu-overlay.ts
 init_lib();
 
@@ -84372,7 +84403,7 @@ function installSettingsSliderInput(canvas, geometry, initial, min, max, step, p
   const down = (event) => {
     if (activePointer !== void 0 || event.button !== 0 || event.isPrimary === false) return;
     const location = point(event);
-    if (location.x < geometry.x - 10 || location.x > geometry.x + geometry.width + 10 || location.y < geometry.y || location.y > geometry.y + 46) return;
+    if (location.x < geometry.x - 10 || location.x > geometry.x + geometry.width + 10 || location.y < geometry.y || location.y > geometry.y + (geometry.height ?? 46)) return;
     activePointer = event.pointerId;
     canvas.setPointerCapture?.(event.pointerId);
     update(event);
@@ -84698,7 +84729,8 @@ async function createMenuOverlayRenderer(canvas, sink) {
   const root = new Container();
   const backdrop = new Graphics();
   const content = new Container();
-  root.addChild(backdrop, content);
+  const tooltip = new ChoiceTooltip();
+  root.addChild(backdrop, content, tooltip);
   (host?.layer ?? application.stage).addChild(root);
   let state;
   let controls = [];
@@ -84713,9 +84745,17 @@ async function createMenuOverlayRenderer(canvas, sink) {
   let height = 1;
   let progressionGraph;
   let progressionOffset = 0;
+  let debugSettingsOpen = false;
   const sliderDisposers = [];
   const submit = async (action) => {
     if (pending || disposed) return;
+    if (action === "settings:debug" || action === "settings:back") {
+      debugSettingsOpen = action === "settings:debug";
+      selectedIndex = 3;
+      layout();
+      return;
+    }
+    if (action.startsWith("tab:")) debugSettingsOpen = false;
     if (action === "history:page:previous" || action === "history:page:next") {
       historyPage = Math.max(0, Math.min(historyPageCount - 1, historyPage + (action.endsWith("next") ? 1 : -1)));
       layout();
@@ -84726,6 +84766,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
       layout();
       return;
     }
+    tooltip.hide();
     pending = true;
     try {
       await sink.invokeMethodAsync("HandleActionFromRendererAsync", action);
@@ -84742,6 +84783,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     for (const dispose of sliderDisposers.splice(0)) dispose();
     for (const child of content.removeChildren()) child.destroy({ children: true });
     controls = [];
+    tooltip.hide();
   };
   const addText = (value, x2, y2, fontSize = 18, wrap = width - 40) => {
     const label = new Text({ text: value, style: { ...uiTokens.typography.body, fill: 15856888, fontSize, wordWrap: true, wordWrapWidth: Math.max(1, wrap) } });
@@ -84754,36 +84796,44 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const index = controls.length;
     const activeSection = action === `history:section:${state?.history?.selectedSectionIndex}` || action === `history:run:${state?.history?.selectedRunId}`;
     const activeTab = action.startsWith("tab:") && state?.settings?.tabIndex === Number(action.slice(4));
-    const button = new GameButton({ ...settingsActionColors(action), menuIcon: icon, width: buttonWidth, height: buttonHeight2, label, enabled, selected: index === selectedIndex || activeTab || activeSection, onPress: () => {
+    const primaryColors = action === "save" || action.startsWith("outcome:") ? { fill: 3627602, stroke: 9488295 } : {};
+    const button = new GameButton({ ...primaryColors, ...settingsActionColors(action), menuIcon: icon, width: buttonWidth, height: buttonHeight2, label, enabled, selected: index === selectedIndex || activeTab || activeSection, onPress: () => {
       selectedIndex = index;
       void submit(action);
     } });
     button.position.set(x2, y2);
     content.addChild(button);
-    controls.push({ action, label, enabled });
+    const help = state?.settings && !state.confirmation ? settingHelp(action) : void 0;
+    const focus = () => {
+      if (help) tooltip.show(help, { x: x2, y: y2, width: buttonWidth, height: buttonHeight2 }, { width, height });
+    };
+    button.on("pointerover", focus);
+    button.on("pointerout", () => tooltip.hide());
+    controls.push({ action, label, enabled, focus });
   };
-  const addSlider = (slider, y2) => {
+  const addSlider = (slider, y2, rowHeight2 = 46) => {
     const compact = width < 520;
     const labelWidth = compact ? 92 : 160;
     const trackX = labelWidth + 32;
-    const trackWidth = Math.max(74, width - trackX - 120);
+    const trackWidth = Math.max(40, width - trackX - 112);
+    content.addChild(new Graphics().roundRect(24, y2, width - 48, rowHeight2, 8).fill({ color: uiTokens.color.panelInset, alpha: 0.7 }));
     const sliderLabel = addText(slider.label, 24, y2 + 8, compact ? 15 : 18, labelWidth);
     if (controls.length === selectedIndex) sliderLabel.style.fill = 16113563;
     const track = new Graphics();
     track.eventMode = "static";
     track.cursor = "pointer";
-    track.hitArea = { contains: (x2, pointerY) => x2 >= trackX && x2 <= trackX + trackWidth && pointerY >= y2 && pointerY <= y2 + 46 };
+    track.hitArea = { contains: (x2, pointerY) => x2 >= trackX && x2 <= trackX + trackWidth && pointerY >= y2 && pointerY <= y2 + rowHeight2 };
     content.addChild(track);
     const valueText = addText("", width - 94, y2 + 8, 16, 76);
     const preview = (value) => {
       const fraction = (value - slider.min) / (slider.max - slider.min);
       track.clear().roundRect(trackX, y2 + 18, trackWidth, 10, 5).fill({ color: 2640219 }).roundRect(trackX, y2 + 18, trackWidth * fraction, 10, 5).fill({ color: 14989928 }).circle(trackX + trackWidth * fraction, y2 + 23, 10).fill({ color: 16113563 });
-      valueText.text = value.toFixed(slider.key === "speed" ? 1 : 2);
+      valueText.text = slider.key === "speed" ? `${value.toFixed(1)}\xD7` : `${Math.round(value * 100)}%`;
     };
     preview(slider.value);
     sliderDisposers.push(installSettingsSliderInput(
       host?.canvas ?? canvas,
-      { x: trackX, y: y2 + (host ? 44 : 0), width: trackWidth, sceneWidth: width, sceneHeight: height + (host ? 44 : 0) },
+      { x: trackX, y: y2 + (host ? 44 : 0), width: trackWidth, height: rowHeight2, sceneWidth: width, sceneHeight: height + (host ? 44 : 0) },
       slider.value,
       slider.min,
       slider.max,
@@ -84793,72 +84843,101 @@ async function createMenuOverlayRenderer(canvas, sink) {
         void submit(sliderAction(slider, value));
       }
     ));
-    controls.push({ action: sliderAction(slider, slider.value + slider.step), label: slider.label, slider });
+    const focus = () => tooltip.show(settingHelp(`setting:${slider.key}`) ?? "", { x: 24, y: y2, width: width - 48, height: 46 }, { width, height });
+    track.on("pointerover", focus);
+    track.on("pointerout", () => tooltip.hide());
+    sliderLabel.eventMode = "static";
+    sliderLabel.on("pointerover", focus);
+    sliderLabel.on("pointerout", () => tooltip.hide());
+    controls.push({ action: sliderAction(slider, slider.value + slider.step), label: slider.label, slider, focus });
   };
   const layoutSettings = (settings) => {
     const short = height < 440;
-    const top = short ? 98 : 116;
+    const top = short ? 112 : 156;
     const footerY = height - (width < 520 && !short ? 102 : 50);
-    const gameplayRows = settings.debugProgressionEnabled ? 7 : 4;
-    const rowHeight2 = settings.tabIndex === 0 ? short ? 42 : 54 : Math.max(28, Math.min(short ? 42 : 54, (footerY - top - 8) / gameplayRows));
-    const controlHeight = Math.min(40, rowHeight2 - 4);
+    const rowCount = settings.tabIndex === 1 && width < 520 && !short && !debugSettingsOpen ? 5 : 4;
+    const rowHeight2 = Math.min(short ? 40 : 62, (footerY - top - 16) / rowCount);
     addText("Settings", 24, 15, short ? 24 : 30);
-    const tabWidth = Math.min(180, (width - 64) / 3);
-    addButton("Audio", "tab:0", 24, short ? 48 : 60, tabWidth, 38);
-    addButton("Gameplay", "tab:1", 32 + tabWidth, short ? 48 : 60, tabWidth, 38);
-    addButton("Damage text", "tab:2", 40 + tabWidth * 2, short ? 48 : 60, tabWidth, 38);
-    if (settings.tabIndex === 0) {
-      const sliders = [
-        { key: "master", label: "Master", value: settings.masterVolume, min: 0, max: 1, step: 0.05 },
-        { key: "sfx", label: "SFX", value: settings.sfxVolume, min: 0, max: 1, step: 0.05 },
-        { key: "music", label: "Music", value: settings.musicVolume, min: 0, max: 1, step: 0.05 },
-        { key: "ambient", label: "Ambient", value: settings.ambientVolume, min: 0, max: 1, step: 0.05 }
-      ];
-      sliders.forEach((slider, index) => addSlider(slider, top + index * rowHeight2));
-    } else if (settings.tabIndex === 2) {
-      const toggles = [
-        ["Show values", "damage", settings.damageTextEnabled !== false],
-        ["Card source", "cards", settings.damageTextCardSources === true],
-        ["Relic source", "relics", settings.damageTextRelicSources === true],
-        ["Item source", "items", settings.damageTextItemSources === true]
-      ];
-      const columns = short ? 2 : 1;
-      const toggleHeight = short ? 38 : 44;
-      const toggleWidth = (width - 48 - (columns - 1) * 8) / columns;
-      toggles.forEach(([label, key, enabled], index) => addButton(`${label}: ${enabled ? "On" : "Off"}`, `toggle:${key}`, 24 + index % columns * (toggleWidth + 8), top + Math.floor(index / columns) * (toggleHeight + 4), toggleWidth, toggleHeight));
-    } else {
-      addSlider({ key: "speed", label: "Speed", value: settings.speed, min: 0.5, max: 2, step: 0.1 }, top);
-      const levels = ["Low", "Medium", "High", "Maximum"];
-      const next = levels[(levels.indexOf(settings.particleLevel) + 1) % levels.length] ?? "High";
-      addButton(`Particles: ${settings.particleLevel}`, `particle:${next}`, 24, top + rowHeight2, Math.min(240, width - 48), controlHeight);
-      const feedbackWidth = Math.min(240, (width - 56) / 2);
-      addButton(`Resource gains: ${settings.showResourceGainText === false ? "Off" : "On"}`, "toggle:resource-gains", 24, top + rowHeight2 * 3, feedbackWidth, controlHeight);
-      addButton(`Effect names: ${settings.showEffectSources === false ? "Off" : "On"}`, "toggle:effect-sources", 32 + feedbackWidth, top + rowHeight2 * 3, feedbackWidth, controlHeight);
-      if (settings.debugProgressionEnabled) {
-        addText(`Character Remembrance ${settings.metaExperience} \xB7 ${settings.unlockedMetaRewards} milestones
-Shared Remembrance ${settings.sharedRemembrancePoints ?? 0}`, 24, top + rowHeight2 * 4, rowHeight2 < 40 ? 12 : 14, width - 48);
-        const debugWidth = Math.min(210, (width - 64) / 3);
-        [["Character +25", "debug:xp:25"], ["Character +100", "debug:xp:100"], ["Reset character", "debug:reset"]].forEach(([label, action], index) => addButton(label, action, 24 + index * (debugWidth + 8), top + rowHeight2 * 5, debugWidth, controlHeight));
-        [["Shared +25", "debug:shared:25"], ["Reset shared", "debug:shared:reset"]].forEach(([label, action], index) => addButton(label, action, 24 + index * (debugWidth + 8), top + rowHeight2 * 6, debugWidth, controlHeight));
-      }
-    }
+    if (!short) addText("Make the journey feel right for you.", 24, 52, 14, width - 48).style.fill = uiTokens.color.textMuted;
+    const tabWidth = (width - 64) / 3;
+    addButton("Audio", "tab:0", 24, short ? 48 : 82, tabWidth, 38);
+    addButton("Gameplay", "tab:1", 32 + tabWidth, short ? 48 : 82, tabWidth, 38);
+    addButton(width < 520 ? "Damage" : "Damage text", "tab:2", 40 + tabWidth * 2, short ? 48 : 82, tabWidth, 38);
+    const section = settings.tabIndex === 0 ? "VOLUME MIXER" : settings.tabIndex === 2 ? "FLOATING DAMAGE TEXT" : debugSettingsOpen ? "DEBUG PROGRESSION" : "PACE & EFFECTS";
+    addText(section, 24, top - 25, 12, width - 48).style.fill = uiTokens.color.panelOrnament;
+    if (settings.tabIndex === 0) layoutAudioSettings(settings, top, rowHeight2);
+    else if (settings.tabIndex === 2) layoutDamageSettings(settings, top, short);
+    else if (debugSettingsOpen && settings.debugProgressionEnabled) layoutDebugSettings(settings, top, rowHeight2);
+    else layoutGameplaySettings(settings, top, rowHeight2, short);
+    layoutSettingsFooter(footerY, short);
+  };
+  const layoutAudioSettings = (settings, top, rowHeight2) => {
+    const sliders = [
+      { key: "master", label: "Master", value: settings.masterVolume, min: 0, max: 1, step: 0.05 },
+      { key: "sfx", label: "Sound effects", value: settings.sfxVolume, min: 0, max: 1, step: 0.05 },
+      { key: "music", label: "Music", value: settings.musicVolume, min: 0, max: 1, step: 0.05 },
+      { key: "ambient", label: "Ambient", value: settings.ambientVolume, min: 0, max: 1, step: 0.05 }
+    ];
+    sliders.forEach((slider, index) => addSlider(slider, top + index * rowHeight2, Math.min(46, rowHeight2 - 4)));
+  };
+  const layoutDamageSettings = (settings, top, short) => {
+    const toggles = [
+      ["Show values", "damage", settings.damageTextEnabled !== false],
+      ["Card source", "cards", settings.damageTextCardSources === true],
+      ["Relic source", "relics", settings.damageTextRelicSources === true],
+      ["Item source", "items", settings.damageTextItemSources === true]
+    ];
+    const columns = width >= 520 ? 2 : 1;
+    const toggleHeight = short ? 38 : 50;
+    const toggleWidth = (width - 48 - (columns - 1) * 8) / columns;
+    toggles.forEach(([label, key, enabled], index) => addButton(`${label}: ${enabled ? "On" : "Off"}`, `toggle:${key}`, 24 + index % columns * (toggleWidth + 8), top + Math.floor(index / columns) * (toggleHeight + 4), toggleWidth, toggleHeight));
+  };
+  const layoutGameplaySettings = (settings, top, rowHeight2, short) => {
+    const controlHeight = Math.min(40, rowHeight2 - 4);
+    addSlider({ key: "speed", label: "Speed", value: settings.speed, min: 0.5, max: 2, step: 0.1 }, top, Math.min(46, rowHeight2 - 4));
+    const levels = ["Low", "Medium", "High", "Maximum"];
+    const next = levels[(levels.indexOf(settings.particleLevel) + 1) % levels.length] ?? "High";
+    const particleWidth = settings.debugProgressionEnabled ? (width - 56) / 2 : Math.min(300, width - 48);
+    addButton(`Particles: ${settings.particleLevel}`, `particle:${next}`, 24, top + rowHeight2, particleWidth, controlHeight);
+    addText("RESOURCE FEEDBACK", 24, top + rowHeight2 * 2 + 4, 12, width - 48).style.fill = uiTokens.color.panelOrnament;
+    const narrow = width < 520 && !short;
+    const feedbackWidth = narrow ? width - 48 : (width - 56) / 2;
+    addButton(`Resource gains: ${settings.showResourceGainText === false ? "Off" : "On"}`, "toggle:resource-gains", 24, top + rowHeight2 * 3, feedbackWidth, controlHeight);
+    addButton(`Effect names: ${settings.showEffectSources === false ? "Off" : "On"}`, "toggle:effect-sources", narrow ? 24 : 32 + feedbackWidth, top + rowHeight2 * (narrow ? 4 : 3), feedbackWidth, controlHeight);
+    if (settings.debugProgressionEnabled) addButton("Debug tools", "settings:debug", 32 + particleWidth, top + rowHeight2, particleWidth, controlHeight);
+  };
+  const layoutSettingsFooter = (footerY, short) => {
     const twoRows = width < 520 && !short;
     const buttonWidth = twoRows ? (width - 56) / 2 : (width - 56) / 4;
+    content.addChild(new Graphics().moveTo(24, footerY - 12).lineTo(width - 24, footerY - 12).stroke({ color: uiTokens.color.panelStroke, alpha: 0.45, width: 1 }));
     const footer = [["Defaults", "defaults"], ["Clear data", "clear"], ["Cancel", "cancel"], ["Save", "save"]];
     footer.forEach(([label, action], index) => addButton(label, action, 24 + index % (twoRows ? 2 : 4) * (buttonWidth + 8), footerY + (twoRows ? Math.floor(index / 2) * 48 : 0), buttonWidth, 40));
   };
+  const layoutDebugSettings = (settings, top, rowHeight2) => {
+    addText(`Character: ${settings.metaExperience} points \xB7 ${settings.unlockedMetaRewards} milestones`, 24, top, 13, width - 48);
+    const buttonWidth = (width - 64) / 3;
+    [["+25", "debug:xp:25"], ["+100", "debug:xp:100"], ["Reset", "debug:reset"]].forEach(([label, action], index) => addButton(label, action, 24 + index * (buttonWidth + 8), top + rowHeight2, buttonWidth, Math.min(40, rowHeight2 - 4)));
+    addText(`Shared: ${settings.sharedRemembrancePoints ?? 0} points`, 24, top + rowHeight2 * 2, 13, width - 48);
+    [["+25", "debug:shared:25"], ["Reset", "debug:shared:reset"], ["Back", "settings:back"]].forEach(([label, action], index) => addButton(label, action, 24 + index * (buttonWidth + 8), top + rowHeight2 * 3, buttonWidth, Math.min(40, rowHeight2 - 4)));
+  };
   const layoutConfirmation = (confirmation) => {
-    addText(confirmation.title, 24, Math.max(20, height / 3 - 50), 30);
-    addText(confirmation.message, 24, Math.max(70, height / 3 + 10), 18, width - 48);
+    const title = addText(confirmation.title, 24, 24, height < 440 ? 24 : 30, width - 48);
+    const messageY = title.y + title.height + 24;
+    const panel = new Graphics();
+    content.addChild(panel);
+    const message = addText(confirmation.message, 40, messageY + 16, 18, width - 80);
+    panel.roundRect(24, messageY, width - 48, message.height + 32, 10).fill({ color: uiTokens.color.panelInset });
+    content.addChild(new Graphics().moveTo(24, height - 86).lineTo(width - 24, height - 86).stroke({ color: uiTokens.color.panelStroke, alpha: 0.45, width: 1 }));
     const buttonWidth = Math.min(220, (width - 64) / 2);
     addButton("Cancel", "cancel", 24, height - 70, buttonWidth);
     addButton("Confirm", `confirm:${confirmation.action}`, width - 24 - buttonWidth, height - 70, buttonWidth);
   };
   const layoutOutcome = (outcome) => {
-    const title = addText(outcome.title, 24, 20, height < 440 ? 26 : 34);
+    const title = addText(outcome.title, 24, 20, height < 440 ? 26 : 34, width - 48);
     title.style.fill = outcome.title === "Victory!" ? 16113563 : 15699855;
-    const message = addText(outcome.message, 24, 66, 16, width - 48);
-    let lineY = 66 + message.height + 12;
+    const messageY = title.y + title.height + 16;
+    const message = addText(outcome.message, 24, messageY, 16, width - 48);
+    let lineY = messageY + message.height + 12;
     for (const line of outcome.remembranceLines ?? []) {
       const text = addText(line, 24, lineY, height < 440 ? 12 : 15, width - 48);
       lineY += text.height + 8;
@@ -84876,7 +84955,7 @@ Shared Remembrance ${settings.sharedRemembrancePoints ?? 0}`, 24, top + rowHeigh
     height = Math.max(1, (host?.height() ?? canvas.clientHeight ?? canvas.parentElement?.clientHeight ?? 600) - (host ? 44 : 0));
     root.position.set(0, host ? 44 : 0);
     application?.renderer.resize(width, height);
-    backdrop.clear().rect(0, 0, width, height).fill({ color: uiColors.panelFill, alpha: 0.94 });
+    backdrop.clear().roundRect(1, 1, width - 2, height - 2, 16).fill({ color: uiColors.panelFill, alpha: 0.98 }).stroke({ color: uiTokens.color.panelStroke, alpha: 0.65, width: 1 }).moveTo(24, 3).lineTo(width - 24, 3).stroke({ color: uiTokens.color.panelOrnament, alpha: 0.7, width: 2 });
     backdrop.eventMode = "static";
     clearContent();
     if (state.outcome) layoutOutcome(state.outcome);
@@ -84905,6 +84984,8 @@ Shared Remembrance ${settings.sharedRemembrancePoints ?? 0}`, 24, top + rowHeigh
     const x2 = wide ? 258 : 24;
     const detailWidth = width - x2 - 24;
     const footerY = height - 54;
+    if (wide) content.addChild(new Graphics().roundRect(12, 56, 232, height - 120, 10).fill({ color: uiTokens.color.panelInset, alpha: 0.7 }));
+    content.addChild(new Graphics().roundRect(x2 - 12, 56, detailWidth + 24, height - 120, 10).fill({ color: uiTokens.color.panelInset, alpha: 0.45 }));
     if (wide) layoutRunList(history, footerY);
     const summaryBottom = layoutHistorySummary(run, x2, detailWidth, short);
     const detailsTop = layoutHistoryCategories(run, x2, detailWidth, short, summaryBottom);
