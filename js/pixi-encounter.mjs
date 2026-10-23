@@ -72540,10 +72540,6 @@ function getSceneEnvironment(value) {
   if (typeof candidate.localeId !== "string" || !/^[a-z-]{1,64}$/.test(candidate.localeId) || typeof candidate.localeName !== "string" || candidate.localeName.length > 80 || typeof candidate.chunkIndex !== "number" || !Number.isInteger(candidate.chunkIndex) || candidate.chunkIndex < 0 || typeof candidate.backgroundUrl !== "string" || !backgroundPattern.test(candidate.backgroundUrl)) return void 0;
   return candidate;
 }
-function getSnapshotEnvironment(snapshot) {
-  if (typeof snapshot !== "object" || snapshot === null) return void 0;
-  return getSceneEnvironment(snapshot.environment);
-}
 function getJourneyBackground(scene, environment) {
   if (scene === "map") return "/img/Scenes/journey-map.svg";
   return getSceneEnvironment(environment)?.backgroundUrl ?? `/img/Scenes/journey-${scene === "rest" || scene === "shop" ? scene : "ruins"}.svg`;
@@ -78950,45 +78946,6 @@ function getParticleBudgets(coarsePointer) {
   return coarsePointer ? { maxParticles: 240, maxParticlesPerEmitter: 60 } : { maxParticles: 600, maxParticlesPerEmitter: 120 };
 }
 
-// src/journey-layout.ts
-function updateJourneyBackdrop(canvas, scene, environment) {
-  if (!canvas.style) return;
-  canvas.style.backgroundImage = `url('${getJourneyBackground(scene, environment)}')`;
-}
-function clearJourneyLayer(layer) {
-  for (const child of [...layer.children]) child.destroy({ children: true });
-  layer.removeChildren();
-}
-function getJourneyLayout(width, height) {
-  const mobile = width < 700 && height > width;
-  const short = height < 420;
-  const inset = mobile ? 12 : 20;
-  const gap = mobile ? 12 : 20;
-  const detailWidth = Math.min(360, width * 0.38);
-  const artHeight = Math.min(height * 0.36, 290);
-  return {
-    mobile,
-    short,
-    art: mobile ? { x: inset, y: inset, width: width - inset * 2, height: artHeight } : { x: inset, y: inset, width: width - detailWidth - inset * 2 - gap, height: height - inset * 2 },
-    detail: mobile ? { x: inset, y: inset + artHeight + gap, width: width - inset * 2, height: height - artHeight - inset * 2 - gap } : { x: width - detailWidth - inset, y: inset, width: detailWidth, height: height - inset * 2 }
-  };
-}
-function installJourneyBackdrop(canvas, scene) {
-  if (!canvas.style) return () => {
-  };
-  const previous = { image: canvas.style.backgroundImage, size: canvas.style.backgroundSize, position: canvas.style.backgroundPosition, color: canvas.style.backgroundColor };
-  canvas.style.backgroundImage = `url('${getJourneyBackground(scene, void 0)}')`;
-  canvas.style.backgroundSize = "cover";
-  canvas.style.backgroundPosition = "center";
-  canvas.style.backgroundColor = "#08171c";
-  return () => {
-    canvas.style.backgroundImage = previous.image;
-    canvas.style.backgroundSize = previous.size;
-    canvas.style.backgroundPosition = previous.position;
-    canvas.style.backgroundColor = previous.color;
-  };
-}
-
 // src/pixi-reward.ts
 init_lib();
 
@@ -80136,7 +80093,6 @@ async function createRewardRenderer(canvas, actionSink) {
     preference: "canvas"
   });
   const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
-  const restoreBackdrop = installJourneyBackdrop(canvas, "reward");
   canvas.tabIndex = 0;
   const canvasFocus = createCanvasFocusCoordinator(canvas);
   const accessibility = createRewardAccessibilityOverlay(canvas);
@@ -80178,7 +80134,6 @@ async function createRewardRenderer(canvas, actionSink) {
         return false;
       }
       const accepted = scene.reconcile(snapshot, getCanvasViewport(canvas));
-      if (accepted) updateJourneyBackdrop(canvas, "reward", getSnapshotEnvironment(snapshot));
       return accepted;
     },
     dispose() {
@@ -80192,7 +80147,6 @@ async function createRewardRenderer(canvas, actionSink) {
       application.ticker.remove(tick);
       scrollInput.dispose();
       canvasFocus.dispose();
-      restoreBackdrop();
       accessibility.dispose();
       restoreCanvasPresentation();
       application.destroy({ removeView: false }, { children: true });
@@ -80235,6 +80189,45 @@ function prefersReducedMotion2() {
   return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+// src/journey-layout.ts
+function updateJourneyBackdrop(canvas, scene, environment) {
+  if (!canvas.style) return;
+  canvas.style.backgroundImage = `url('${getJourneyBackground(scene, environment)}')`;
+}
+function clearJourneyLayer(layer) {
+  for (const child of [...layer.children]) child.destroy({ children: true });
+  layer.removeChildren();
+}
+function getJourneyLayout(width, height) {
+  const mobile = width < 700 && height > width;
+  const short = height < 420;
+  const inset = mobile ? 12 : 20;
+  const gap = mobile ? 12 : 20;
+  const detailWidth = Math.min(360, width * 0.38);
+  const artHeight = Math.min(height * 0.36, 290);
+  return {
+    mobile,
+    short,
+    art: mobile ? { x: inset, y: inset, width: width - inset * 2, height: artHeight } : { x: inset, y: inset, width: width - detailWidth - inset * 2 - gap, height: height - inset * 2 },
+    detail: mobile ? { x: inset, y: inset + artHeight + gap, width: width - inset * 2, height: height - artHeight - inset * 2 - gap } : { x: width - detailWidth - inset, y: inset, width: detailWidth, height: height - inset * 2 }
+  };
+}
+function installJourneyBackdrop(canvas, scene) {
+  if (!canvas.style) return () => {
+  };
+  const previous = { image: canvas.style.backgroundImage, size: canvas.style.backgroundSize, position: canvas.style.backgroundPosition, color: canvas.style.backgroundColor };
+  canvas.style.backgroundImage = `url('${getJourneyBackground(scene, void 0)}')`;
+  canvas.style.backgroundSize = "cover";
+  canvas.style.backgroundPosition = "center";
+  canvas.style.backgroundColor = "#08171c";
+  return () => {
+    canvas.style.backgroundImage = previous.image;
+    canvas.style.backgroundSize = previous.size;
+    canvas.style.backgroundPosition = previous.position;
+    canvas.style.backgroundColor = previous.color;
+  };
+}
+
 // src/pixi-event.ts
 init_lib();
 
@@ -80254,6 +80247,7 @@ var ModalOverlay = class extends Container {
     this.sceneWidth = normalizeSize2(options.sceneWidth);
     this.sceneHeight = normalizeSize2(options.sceneHeight);
     this.modalPanel = new GamePanel(options);
+    this.modalPanel.alpha = 0.94;
     this.backdrop.eventMode = "static";
     this.addChild(this.backdrop, this.modalPanel);
     this.redraw();
@@ -83678,7 +83672,7 @@ async function acquireFallbackRenderer() {
     document.body.appendChild(fallbackCanvas);
     const application = new Application();
     try {
-      await application.init({ antialias: true, autoDensity: true, resolution: Math.max(1, window.devicePixelRatio || 1), background: 529183, canvas: fallbackCanvas, preference: "canvas" });
+      await application.init({ antialias: true, autoDensity: true, resolution: Math.max(1, window.devicePixelRatio || 1), background: 529183, backgroundAlpha: 0, canvas: fallbackCanvas, preference: "canvas" });
       installCanvasPresentationRecovery(application, fallbackCanvas);
       return { application, canvas: fallbackCanvas };
     } catch (error) {
@@ -83998,7 +83992,7 @@ async function createCollectionRenderer(canvas, sink) {
     viewportHeight = plan.viewportHeight;
     measureEntries(plan, listWidth);
     scrollOffset = Math.min(scrollOffset, Math.max(0, totalRowHeight - viewportHeight));
-    background.clear().roundRect(0, railHeight, width, height, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill, alpha: 0.98 }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
+    background.clear().roundRect(0, railHeight, width, height, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill, alpha: 0.94 }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
     background.eventMode = "static";
     content.position.set(bounds.x + (bounds.width - contentWidth) / 2, bounds.y + railHeight);
     title.anchor.x = plan.short ? 0 : 0.5;
@@ -84581,7 +84575,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
   const host = getCollectionOverlayHost();
   const application = host ? void 0 : new Application();
   if (application) {
-    await application.init({ antialias: true, autoDensity: true, resolution: Math.max(1, window.devicePixelRatio || 1), background: 529183, canvas, preference: "canvas" });
+    await application.init({ antialias: true, autoDensity: true, resolution: Math.max(1, window.devicePixelRatio || 1), background: 529183, backgroundAlpha: 0, canvas, preference: "canvas" });
     canvas.style.width = "100%";
     canvas.style.height = "100%";
   }
@@ -84776,7 +84770,7 @@ Shared Remembrance ${settings.sharedRemembrancePoints ?? 0}`, 24, top + rowHeigh
     height = Math.max(1, (host?.height() ?? canvas.clientHeight ?? canvas.parentElement?.clientHeight ?? 600) - (host ? 44 : 0));
     root.position.set(0, host ? 44 : 0);
     application?.renderer.resize(width, height);
-    backdrop.clear().rect(0, 0, width, height).fill({ color: uiColors.panelFill, alpha: 0.98 });
+    backdrop.clear().rect(0, 0, width, height).fill({ color: uiColors.panelFill, alpha: 0.94 });
     backdrop.eventMode = "static";
     clearContent();
     if (state.outcome) layoutOutcome(state.outcome);
@@ -85037,11 +85031,12 @@ function planCardChoiceLayout(width, height, count2) {
 }
 async function createCardChoiceRenderer(canvas, sink) {
   const application = new Application();
-  await application.init({ antialias: true, autoDensity: true, resolution: Math.max(1, window.devicePixelRatio || 1), background: 529183, canvas, preference: "canvas" });
+  await application.init({ antialias: true, autoDensity: true, resolution: Math.max(1, window.devicePixelRatio || 1), background: 529183, backgroundAlpha: 0, canvas, preference: "canvas" });
   const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
   canvas.tabIndex = 0;
   const root = new Container();
   const panel = new GamePanel({ width: 1, height: 1, fill: uiColors.panelFill, stroke: uiColors.panelStroke });
+  panel.alpha = 0.94;
   const title = new SceneTitle({ title: "Choose a card", width: 1 });
   const cardLayer = new Container();
   const cardMask = new Graphics();
