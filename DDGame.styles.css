@@ -59,6 +59,40 @@
     .pixi-reward-surface[b-lxd0nfvn0m] { height: calc(100dvh - 5rem - env(safe-area-inset-bottom)); min-height: 0; }
 }
 
+/* /Components/EncounterInventoryBar.razor.rz.scp.css */
+.encounter-inventory-bar[b-h7jgvqbn9t] {
+    position: fixed;
+    top: env(safe-area-inset-top);
+    left: 0;
+    right: 0;
+    height: 44px;
+    display: flex;
+    gap: 8px;
+    background: #14282e;
+    border-bottom: 1px solid #526268;
+    color: #f4efe3;
+    z-index: 100;
+}
+.card-piles[b-h7jgvqbn9t], .equipment-statuses[b-h7jgvqbn9t] { display: flex; gap: 4px; align-items: center; }
+.card-piles[b-h7jgvqbn9t] { flex-shrink: 0; }
+.equipment-statuses[b-h7jgvqbn9t] { overflow-x: auto; min-width: 0; padding: 0 4px; }
+button[b-h7jgvqbn9t] { color: inherit; border: 1px solid #526268; border-radius: 4px; background: #10252c; cursor: pointer; }
+button:focus-visible[b-h7jgvqbn9t] { outline: 2px solid #f4d38b; outline-offset: -2px; }
+button:disabled[b-h7jgvqbn9t] { opacity: 0.5; cursor: default; }
+.card-piles button[b-h7jgvqbn9t] { display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; height: 44px; padding: 4px 8px; }
+.equipment-status[b-h7jgvqbn9t] { position: relative; flex: 0 0 auto; min-width: 64px; height: 42px; padding: 0 4px; }
+.equipment-status img[b-h7jgvqbn9t] { width: 24px; height: 24px; object-fit: cover; border-radius: 3px; }
+.equipment-status.active[b-h7jgvqbn9t] { border-color: #e8bc63; background: #3b3424; }
+.equipment-status.ready[b-h7jgvqbn9t] { box-shadow: inset 0 0 0 1px #69d4c3; }
+.equipment-badge[b-h7jgvqbn9t] { display: block; font-size: 10px; white-space: nowrap; line-height: 14px; }
+.equipment-inspection[b-h7jgvqbn9t] { position: fixed; top: calc(48px + env(safe-area-inset-top)); right: 8px; width: min(360px, calc(100vw - 16px)); padding: 12px; background: #10252c; color: #f4efe3; border: 1px solid #e8bc63; border-radius: 4px; z-index: 101; }
+.equipment-inspection button[b-h7jgvqbn9t] { float: right; min-width: 44px; min-height: 44px; margin: -8px -8px 0 4px; }
+.equipment-inspection p[b-h7jgvqbn9t] { margin: 8px 0; }
+.equipment-inspection small[b-h7jgvqbn9t] { color: #c7c5b9; }
+@media (max-width: 767px) and (orientation: portrait) {
+    .pile-label[b-h7jgvqbn9t] { display: none; }
+    .card-piles button[b-h7jgvqbn9t] { gap: 2px; padding: 2px; min-width: 48px; }
+}
 /* /Components/PixiCharacterSelectSurface.razor.rz.scp.css */
 .pixi-character-select-surface[b-oywb2u3hc5] {
     background: #08131f;
@@ -174,10 +208,13 @@
     z-index: 1200;
 }
 
-.pixi-run-controls-surface.open[b-2ntaig32y6] { height: min(100dvh, 620px); }
-.pixi-run-resource-rail[b-2ntaig32y6] { position: fixed; top: env(safe-area-inset-top); left: 0; width: 100%; height: 44px; background: #23363c; }
+.pixi-run-controls-surface.open[b-2ntaig32y6] { height: min(100dvh, var(--run-menu-height, 620px)); }
+@media (max-width: 767px) and (orientation: portrait) {
+    .pixi-run-controls-surface.open[b-2ntaig32y6] { height: min(100dvh, var(--run-menu-portrait-height, 620px)); }
+}
+.pixi-run-resource-rail[b-2ntaig32y6] { position: fixed; bottom: calc(10px + env(safe-area-inset-bottom)); left: 70px; width: calc(100% - 76px); height: 44px; z-index: 1; background: #23363c; }
 .pixi-run-resource-rail[hidden][b-2ntaig32y6] { display: none; }
-.pixi-run-resource-rail[b-2ntaig32y6]  .run-resource-tooltip { position: absolute; top: 44px; max-width: calc(100vw - 24px); padding: 8px 12px; background: #08171c; color: #f4efe3; border: 1px solid #caa65c; border-radius: 4px; pointer-events: none; }
+.pixi-run-resource-rail[b-2ntaig32y6]  .run-resource-tooltip { position: absolute; bottom: 54px; max-width: calc(100vw - 24px); padding: 8px 12px; background: #08171c; color: #f4efe3; border: 1px solid #caa65c; border-radius: 4px; pointer-events: none; }
 .pixi-run-controls-surface canvas[b-2ntaig32y6] { display: block; height: 100%; outline: none; touch-action: manipulation; width: 100%; }
 .pixi-run-resource-rail canvas[b-2ntaig32y6] { height: 44px; }
 .pixi-run-controls-surface canvas:focus-visible[b-2ntaig32y6] { outline: 3px solid var(--mud-palette-secondary); outline-offset: -3px; }
@@ -227,6 +264,9 @@
     position: absolute;
     width: 100%;
 }
+
+.pixi-run-controls-surface.renderer-unavailable .pixi-run-resource-rail[b-2ntaig32y6] { position: static; width: 100%; height: auto; }
+.pixi-run-controls-surface.renderer-unavailable .pixi-run-controls-help[b-2ntaig32y6] { clip: auto; position: static; white-space: normal; width: auto; height: auto; }
 /* /Components/Rooms/PixiEncounterSurface.razor.rz.scp.css */
 .pixi-encounter-surface[b-9jzg35z109] {
     position: relative;

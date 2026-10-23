@@ -70679,6 +70679,9 @@ function createResourceIcon(kind, color) {
     icon.fill({ color });
   };
   switch (kind) {
+    case "experience":
+      polygon([10, 0, 13, 6, 20, 7, 15, 12, 16, 20, 10, 16, 4, 20, 5, 12, 0, 7, 7, 6]);
+      break;
     case "health":
       icon.moveTo(10, 19).bezierCurveTo(6, 15, 1, 11, 1, 6).bezierCurveTo(1, 0, 7, 0, 10, 5).bezierCurveTo(13, 0, 19, 0, 19, 6).bezierCurveTo(19, 11, 14, 15, 10, 19).fill({ color });
       break;
@@ -72939,6 +72942,7 @@ var GameButton = class extends GamePanel {
   labelText;
   navigationIcon;
   fullLabel;
+  iconOnly = false;
   onPress;
   stateOutline = new Graphics();
   isEnabled;
@@ -73054,13 +73058,19 @@ var GameButton = class extends GamePanel {
     this.fitLabel();
     this.updatePresentation();
   }
+  /** Switches compact navigation to icons while preserving its accessible title. */
+  setIconOnly(value) {
+    this.iconOnly = value && this.navigationIcon !== void 0;
+    this.fitLabel();
+  }
   /** Fits each label independently to the control's inset without stretching its glyphs. */
   fitLabel() {
     this.labelText.text = this.fullLabel;
     this.accessibleTitle = this.fullLabel;
     this.labelText.style.wordWrap = false;
+    this.labelText.visible = !this.iconOnly;
     const inset = this.navigationIcon ? 32 : 0;
-    if (this.navigationIcon) this.navigationIcon.position.set(10, (this.panelSize.height - 16) / 2);
+    if (this.navigationIcon) this.navigationIcon.position.set(this.iconOnly ? (this.panelSize.width - 16) / 2 : 10, (this.panelSize.height - 16) / 2);
     this.labelText.position.set((this.panelSize.width + inset) / 2, this.panelSize.height / 2);
     fitTextToBox(this.labelText, this.panelSize.width - 16 - inset, this.panelSize.height - 12, 16, 11);
   }
@@ -75243,7 +75253,6 @@ function getMotionIntensity(value, reducedMotion) {
 
 // src/run-hud.ts
 init_lib();
-var relicRailLimit = 24;
 var RunHud = class extends Container {
   constructor(requestRelicCollection, requestDeckCollection, showRail = true) {
     super();
@@ -75251,7 +75260,7 @@ var RunHud = class extends Container {
     this.requestDeckCollection = requestDeckCollection;
     this.showRail = showRail;
     this.sceneTitle.resolution = Math.max(2, typeof window === "undefined" ? 2 : window.devicePixelRatio || 1);
-    this.addChild(this.health, this.healthBar, this.currency, this.deck, this.relics, this.stamina, this.mana, this.sceneTitle, this.frame);
+    this.addChild(this.health, this.healthBar, this.currency, this.deck, this.relics, this.stamina, this.mana, this.sceneTitle, this.frame, this.experience);
     this.relics.on("pointertap", () => {
       if (this.relicCollectionAvailable) {
         this.requestRelicCollection?.();
@@ -75281,6 +75290,7 @@ var RunHud = class extends Container {
   stamina = createHudCounter("stamina", uiTokens.color.stamina, "0 / 0");
   mana = createHudCounter("mana", uiTokens.color.mana, "0 / 0");
   currency = createHudCounter("currency", uiTokens.color.selected, 0);
+  experience = createHudCounter("experience", uiTokens.color.selected, 0);
   deck = createHudCounter("deck", uiTokens.color.textMuted, 0);
   relics = createHudCounter("relic", uiTokens.color.selected, 0);
   sceneTitle = new Text({ text: "", style: { ...getUiTextStyle("Caption"), letterSpacing: 3 } });
@@ -75294,6 +75304,7 @@ var RunHud = class extends Container {
       [this.mana, "Mana"],
       [this.health, "Health"],
       [this.currency, "Gold"],
+      [this.experience, "Training XP"],
       [this.deck, "Cards"],
       [this.relics, "Equipment"]
     ]) {
@@ -75324,8 +75335,9 @@ var RunHud = class extends Container {
       this.mana.setValue(manaValue);
     }
     this.currency.setValue(state.currency);
+    this.experience.setValue(state.experience ?? 0);
     this.deck.setValue(state.deckCount);
-    this.relics.setValue(formatRelicRailCount(state.relicCount));
+    this.relics.setValue(state.relicCount);
     this.relicCollectionAvailable = true;
     this.relics.eventMode = "static";
     this.relics.cursor = this.relicCollectionAvailable ? "pointer" : "default";
@@ -75334,16 +75346,16 @@ var RunHud = class extends Container {
     this.layout(viewport);
     this.layoutInspectionAreas();
     if (!this.showRail) {
-      for (const display of [this.health, this.healthBar, this.currency, this.deck, this.relics, this.frame]) display.visible = false;
+      for (const display of [this.health, this.healthBar, this.currency, this.experience, this.deck, this.relics, this.frame]) display.visible = false;
     }
   }
   /** Includes each icon, label and numeric value in a single padded inspection target. */
   layoutInspectionAreas() {
-    for (const counter of [this.health, this.currency, this.deck, this.relics, this.stamina, this.mana]) {
+    for (const counter of [this.health, this.currency, this.experience, this.deck, this.relics, this.stamina, this.mana]) {
       const frame = this.collectionFrames.get(counter);
       frame?.clear();
-      const width = Math.max(36, counter.width || 0);
-      counter.hitArea = new Rectangle(-4, -4, width + 8, 32);
+      const width = Math.max(36, (counter.width || 0) / (counter.scale.x || 1));
+      counter.hitArea = new Rectangle(-4, -8, width + 8, 44 / (counter.scale.y || 1));
       counter.interactiveChildren = false;
       if (frame) {
         frame.roundRect(-4, -4, width + 8, 32, 4).fill({ color: uiTokens.color.surface, alpha: 0.18 }).stroke({ color: uiTokens.color.panelStroke, width: 1 });
@@ -75376,25 +75388,20 @@ var RunHud = class extends Container {
   /** Measures resource groups so changing counts cannot collide with neighboring icons. */
   layoutRail(viewport) {
     for (const frame of this.collectionFrames.values()) frame.clear();
-    const gap = 12;
-    const healthWidth = Math.max(72, this.health.width || 0);
-    this.health.position.set(12, 8);
-    this.healthBar.position.set(12, 32);
-    this.healthBar.resize(healthWidth, 4);
-    const right = [this.currency, this.deck, this.relics];
-    right.forEach((counter) => {
+    const counters = [this.health, this.currency, this.experience, this.deck, this.relics];
+    const unitWidth = Math.max(1, (viewport.width - 8) / 5.5);
+    let x2 = 4;
+    counters.forEach((counter, index) => {
+      const slotWidth = unitWidth * (index === 0 ? 1.5 : 1);
       counter.visible = true;
+      counter.scale.set(1);
+      const scale = Math.min(1, (slotWidth - 8) / Math.max(1, counter.width));
+      counter.scale.set(Math.max(0.1, scale));
+      counter.position.set(x2 + (slotWidth - counter.width) / 2, 8);
+      x2 += slotWidth;
     });
-    const width = (counter) => Math.max(36, counter.width || 0);
-    const groupWidth = () => right.filter((counter) => counter.visible).reduce((total, counter) => total + width(counter) + gap, -gap);
-    for (const optional of [this.currency, this.deck]) {
-      if (healthWidth + groupWidth() + gap > viewport.width - 24) optional.visible = false;
-    }
-    let x2 = viewport.width - 12 - groupWidth();
-    for (const counter of right.filter((counter2) => counter2.visible)) {
-      counter.position.set(x2, 8);
-      x2 += width(counter) + gap;
-    }
+    this.healthBar.position.set(this.health.x, 37);
+    this.healthBar.resize(Math.max(1, this.health.width), 4);
   }
   /** Fits locale and room names below the resource rail. */
   layoutMetadata(viewport, short) {
@@ -75404,12 +75411,8 @@ var RunHud = class extends Container {
   }
 };
 function createHudCounter(kind, color, value) {
-  const label = kind === "deck" ? "Cards" : kind === "relic" ? "Equipment" : "";
+  const label = "";
   return new ResourceCounter({ icon: createResourceIcon(kind, color), label, value, valueLayout: "inline" });
-}
-function formatRelicRailCount(relicCount) {
-  const normalizedCount = Math.max(0, Math.floor(relicCount));
-  return normalizedCount >= relicRailLimit ? `${relicRailLimit}+` : normalizedCount;
 }
 function formatResourceValue(current, available) {
   return `${Math.trunc(current)} / ${Math.trunc(available)}`;
@@ -85500,8 +85503,7 @@ var toolbarHeight = 64;
 var buttonHeight = 48;
 var menuButtonHeight = 44;
 var buttonGap = 6;
-var actionIds = /* @__PURE__ */ new Set(["encounterCards", "deck", "relics", "discard", "inventory", "endTurn", "map", "backpack", "training", "rewards", "history", "settings", "fullscreen", "title", "restart", "debug", "copySeed"]);
-var toolbarPriority = ["endTurn", "training", "map", "inventory", "encounterCards", "backpack", "discard", "fullscreen", "rewards", "history", "settings"];
+var actionIds = /* @__PURE__ */ new Set(["encounterCards", "deck", "relics", "discard", "exhaust", "inventory", "endTurn", "map", "backpack", "training", "rewards", "history", "settings", "fullscreen", "title", "restart", "debug", "copySeed"]);
 async function createRunControlsRenderer(canvas, sink, initialState) {
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, resolution: Math.max(1, window.devicePixelRatio || 1), backgroundAlpha: 0, canvas, preference: "canvas" });
@@ -85554,7 +85556,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
   const createButton = (action, label, enabled, width, height, x2, y2) => {
     let button = retainedButtons.get(action);
     if (!button) {
-      const created = new GameButton({ menuIcon: width >= 110 ? controlIcon(action) : void 0, width, height, label, labelStyle: "NumericResource", onPress: () => void submit(action) });
+      const created = new GameButton({ menuIcon: controlIcon(action), width, height, label, labelStyle: "NumericResource", onPress: () => void submit(action) });
       created.on("pointerover", () => created.setFocused(true));
       created.on("pointerout", () => created.setFocused(action === focusedAction));
       created.on("pointerdown", () => created.setSelected(true));
@@ -85565,6 +85567,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     }
     visibleButtonActions.add(action);
     button.label = label;
+    button.setIconOnly(action === "menu" || window.innerWidth < window.innerHeight && window.innerWidth < 768);
     button.resize(width, height);
     button.setEnabled(enabled);
     button.setFocused(action === focusedAction);
@@ -85594,15 +85597,8 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     panel.clear();
     const barY = Math.max(0, height - toolbarHeight);
     toolbar.clear().rect(0, barY, width, toolbarHeight).fill(uiColors.panelFill).rect(0, barY, width, 2).fill(uiColors.panelStroke);
-    const menuWidth = 64;
-    const slotWidth = state.statusLines ? 150 : 98;
-    const availableSlots = Math.max(0, Math.floor((width - menuWidth - 16) / slotWidth));
-    const priority = state.statusLines ? ["history", "settings", "fullscreen"] : toolbarPriority;
-    const primaries = priority.map((id) => state.actions.find((action) => action.id === id && action.primary)).filter((entry) => entry !== void 0).slice(0, availableSlots);
-    const menuActions = state.actions.filter((entry) => !primaries.some((primary) => primary.id === entry.id));
-    const primaryWidth = Math.min(state.statusLines ? 144 : 92, Math.max(44, (width - menuWidth - 16) / Math.max(1, primaries.length) - buttonGap));
+    const menuActions = state.actions;
     createButton("menu", state.menuOpen ? "Close" : "Menu", true, 58, buttonHeight, 6, barY + 8);
-    primaries.forEach((entry, index) => createButton(entry.id, entry.label, entry.enabled, primaryWidth, buttonHeight, menuWidth + 6 + index * (primaryWidth + buttonGap), barY + 8));
     if (!state.menuOpen) {
       transientFeedback = "";
       removeInactiveButtons();
@@ -85613,7 +85609,8 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     const panelWidth = Math.min(width - 16, 620);
     const panelX = (width - panelWidth) / 2;
     panel.roundRect(panelX, 8, panelWidth, Math.max(1, barY - 14), uiTokens.frame.panelCornerRadius).fill(uiColors.panelFill).stroke({ color: uiColors.panelStroke, width: 2 });
-    const columns = panelWidth >= 520 ? 2 : 1;
+    const portrait = window.innerWidth < window.innerHeight && window.innerWidth < 768;
+    const columns = portrait ? Math.max(1, Math.floor(panelWidth / 76)) : panelWidth >= 520 ? 2 : 1;
     const rowHeight2 = menuButtonHeight + buttonGap;
     const rows = Math.max(1, Math.floor((barY - 86) / rowHeight2));
     const pageSize = rows * columns;
@@ -85729,7 +85726,7 @@ function toRunControlsState(value) {
   return { menuOpen, actions: validActions, statusLines };
 }
 function controlIcon(action) {
-  const icons = { menu: "menu", history: "history", settings: "settings", fullscreen: "fullscreen", title: "home", restart: "restart", previous: "previous", next: "next", deck: "cards", encounterCards: "cards", inventory: "inventory", backpack: "inventory", relics: "equipment", map: "rooms", rewards: "rewards" };
+  const icons = { menu: "menu", history: "history", settings: "settings", fullscreen: "fullscreen", title: "home", restart: "restart", previous: "previous", next: "next", deck: "cards", encounterCards: "cards", inventory: "inventory", backpack: "inventory", relics: "equipment", map: "rooms", rewards: "rewards", discard: "previous", exhaust: "close", endTurn: "next", training: "training", debug: "settings", copySeed: "events" };
   return icons[action];
 }
 
@@ -85805,9 +85802,11 @@ function toRunResourceState(value) {
   const maximumHealth = read("maximumHealth", "MaximumHealth");
   const currency = read("currency", "Currency");
   const deckCount = read("deckCount", "DeckCount");
+  const experience = read("experience", "Experience") ?? 0;
+  if (typeof experience !== "number" || !Number.isFinite(experience)) return void 0;
   const relicCount = read("relicCount", "RelicCount");
   if (typeof health !== "number" || typeof maximumHealth !== "number" || typeof currency !== "number" || typeof deckCount !== "number" || typeof relicCount !== "number" || ![health, maximumHealth, currency, deckCount, relicCount].every(Number.isFinite)) return void 0;
-  return { health, maximumHealth, currency, deckCount, relicCount, phase: "Exploring" };
+  return { health, maximumHealth, currency, experience, deckCount, relicCount, phase: "Exploring" };
 }
 
 // src/pixi-encounter.ts
