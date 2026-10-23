@@ -72521,195 +72521,8 @@ var noOpAccessibilityOverlay = {
   }
 };
 
-// src/item-view.ts
-function itemArtwork(name, image) {
-  if (image) return image;
-  if (name === "Throwing Knife") return "/img/Items/ThrowingKnife.svg";
-  if (name === "Healing Herb") return "/img/Items/HealingHerb.svg";
-  return "/img/Items/Supplies.svg";
-}
-function itemCardContent(name, description, uses) {
-  return { name, description: description + "\n" + uses, type: "Item", rarity: "Common", energyCost: 0, manaCost: 0 };
-}
-
-// src/scene-environment.ts
-var backgroundPattern = /^\/img\/Scenes\/locale-(?:(crossroads|ruins|grove|shore|depths|vault|observatory|threshold)-(travel|rest|shop)|(terrace|marsh|foundry|chamber)-(travel|rest|shop|event|treasure|boss))\.svg$/;
-function getSceneEnvironment(value) {
-  if (typeof value !== "object" || value === null) return void 0;
-  const candidate = value;
-  if (typeof candidate.localeId !== "string" || !/^[a-z-]{1,64}$/.test(candidate.localeId) || typeof candidate.localeName !== "string" || candidate.localeName.length > 80 || typeof candidate.chunkIndex !== "number" || !Number.isInteger(candidate.chunkIndex) || candidate.chunkIndex < 0 || typeof candidate.backgroundUrl !== "string" || !backgroundPattern.test(candidate.backgroundUrl)) return void 0;
-  return candidate;
-}
-function getJourneyBackground(scene, environment) {
-  if (scene === "map") return "/img/Scenes/journey-map.svg";
-  return getSceneEnvironment(environment)?.backgroundUrl ?? `/img/Scenes/journey-${scene === "rest" || scene === "shop" ? scene : "ruins"}.svg`;
-}
-
-// src/encounter-scene.ts
+// src/health-block-meter.ts
 init_lib();
-
-// src/journey-artwork.ts
-init_lib();
-async function loadJourneyTexture(url) {
-  if (!url || typeof Image === "undefined") return void 0;
-  try {
-    const { Assets: Assets2 } = await Promise.resolve().then(() => (init_lib(), lib_exports));
-    return await Assets2.load(url);
-  } catch {
-    return void 0;
-  }
-}
-var JourneyArtwork = class extends Container {
-  image = new Sprite(Texture.EMPTY);
-  crop = new Graphics();
-  imageUrl = "";
-  generation = 0;
-  frameWidth = 1;
-  frameHeight = 1;
-  groundLine;
-  /** Creates one retained image and clipping mask. */
-  constructor() {
-    super();
-    this.eventMode = "none";
-    this.image.mask = this.crop;
-    this.image.visible = false;
-    this.addChild(this.image, this.crop);
-  }
-  /** Replaces the image only after the requested URL has loaded and remains current. */
-  setImage(url) {
-    if (url === this.imageUrl) return;
-    this.imageUrl = url;
-    const generation = ++this.generation;
-    this.image.visible = false;
-    if (!url || typeof Image === "undefined") return;
-    void loadJourneyTexture(url).then((texture) => {
-      if (!texture || this.destroyed || generation !== this.generation) return;
-      this.image.texture = texture;
-      this.image.visible = true;
-      this.resize(this.frameWidth, this.frameHeight, this.groundLine);
-    }).catch(() => {
-    });
-  }
-  /** Fits art inside a clipped frame without stretching its aspect ratio. */
-  resize(width, height, groundLine) {
-    this.frameWidth = Math.max(1, width);
-    this.frameHeight = Math.max(1, height);
-    this.groundLine = groundLine;
-    this.crop.clear().roundRect(0, 0, this.frameWidth, this.frameHeight, 3).fill(16777215);
-    if (!this.image.visible) return;
-    const sourceGround = this.image.texture.height * 0.56;
-    const scale = groundLine === void 0 ? Math.max(this.frameWidth / this.image.texture.width, this.frameHeight / this.image.texture.height) : Math.max(
-      this.frameWidth / this.image.texture.width,
-      groundLine / sourceGround,
-      (this.frameHeight - groundLine) / (this.image.texture.height - sourceGround)
-    );
-    this.image.width = this.image.texture.width * scale;
-    this.image.height = this.image.texture.height * scale;
-    this.image.position.set(
-      (this.frameWidth - this.image.width) / 2,
-      groundLine === void 0 ? (this.frameHeight - this.image.height) / 2 : groundLine - sourceGround * scale
-    );
-  }
-};
-
-// src/encounter-backdrop.ts
-init_lib();
-
-// src/combat-treatments/caerleth.ts
-var caerlethForestCombatSceneTreatment = {
-  id: "caerleth-forest",
-  regionId: "caerleth",
-  settingId: "forest",
-  atmosphere: "pale-reach",
-  sceneryKind: "grove",
-  distantLightAlpha: 0.38,
-  foregroundSilhouetteCount: 3,
-  mistAlpha: 0.16
-};
-var caerlethSnowCombatSceneTreatment = {
-  id: "caerleth-snow",
-  regionId: "caerleth",
-  settingId: "snow",
-  atmosphere: "pale-reach",
-  sceneryKind: "snow-grove",
-  distantLightAlpha: 0.5,
-  foregroundSilhouetteCount: 3,
-  mistAlpha: 0.22
-};
-var caerlethCombatSceneTreatments = {
-  "caerleth-forest": caerlethForestCombatSceneTreatment,
-  "caerleth-snow": caerlethSnowCombatSceneTreatment
-};
-
-// src/combat-treatments/irrigal.ts
-var irrigalCombatSceneTreatment = {
-  id: "irrigal",
-  regionId: "irrigal",
-  sceneryKind: "observatory",
-  atmosphere: "pale-reach",
-  distantLightAlpha: 0.34,
-  foregroundSilhouetteCount: 3,
-  mistAlpha: 0.1
-};
-var kaavrelCombatSceneTreatment = {
-  ...irrigalCombatSceneTreatment,
-  id: "irrigal-kaavrel",
-  settingId: "kaavrel",
-  mistAlpha: 0.12
-};
-
-// src/combat-treatments/keshorun.ts
-var keshorunCombatSceneTreatment = {
-  id: "keshorun",
-  regionId: "keshorun",
-  atmosphere: "pale-reach",
-  distantLightAlpha: 0.42,
-  foregroundSilhouetteCount: 4,
-  mistAlpha: 0.1,
-  sceneryKind: "archive"
-};
-
-// src/combat-treatments/sil.ts
-var silCombatSceneTreatment = {
-  id: "sil",
-  regionId: "sil",
-  atmosphere: "pale-reach",
-  sceneryKind: "monolith",
-  distantLightAlpha: 0.2,
-  foregroundSilhouetteCount: 2,
-  mistAlpha: 0.06
-};
-
-// src/combat-scene-treatment.ts
-var foldCombatSceneTreatment = {
-  id: "fold",
-  regionId: "fold",
-  atmosphere: "pale-reach",
-  sceneryKind: "ruins",
-  distantLightAlpha: 0.46,
-  foregroundSilhouetteCount: 3,
-  mistAlpha: 0.14
-};
-var shatteredFoldCombatSceneTreatment = {
-  ...foldCombatSceneTreatment,
-  id: "fold-shattered",
-  settingId: "shattered",
-  distantLightAlpha: 0.36,
-  foregroundSilhouetteCount: 5,
-  mistAlpha: 0.2
-};
-var combatSceneTreatmentRegistry = {
-  fold: foldCombatSceneTreatment,
-  "fold-shattered": shatteredFoldCombatSceneTreatment,
-  keshorun: keshorunCombatSceneTreatment,
-  irrigal: irrigalCombatSceneTreatment,
-  "irrigal-kaavrel": kaavrelCombatSceneTreatment,
-  ...caerlethCombatSceneTreatments,
-  sil: silCombatSceneTreatment
-};
-function getCombatSceneTreatment(value) {
-  return typeof value === "string" && Object.hasOwn(combatSceneTreatmentRegistry, value) ? combatSceneTreatmentRegistry[value] ?? foldCombatSceneTreatment : foldCombatSceneTreatment;
-}
 
 // src/menu-icons.ts
 init_lib();
@@ -73659,6 +73472,260 @@ function normalizeSize(value) {
 }
 function normalizeCoordinate(value) {
   return Number.isFinite(value) ? value : 0;
+}
+
+// src/health-block-meter.ts
+function healthBlockSegments(health, maximum, block) {
+  if (maximum <= 0) return { health: 0, block: 0, overflow: 0 };
+  const hp = Math.max(0, Math.min(maximum, health));
+  const shield = Math.max(0, block);
+  return {
+    health: hp / maximum,
+    block: Math.min(maximum - hp, shield) / maximum,
+    overflow: Math.min(maximum, Math.max(0, hp + shield - maximum)) / maximum
+  };
+}
+var HealthBlockMeter = class extends Container {
+  constructor(reducedMotion, scaleDuration) {
+    super();
+    this.reducedMotion = reducedMotion;
+    this.scaleDuration = scaleDuration;
+    this.addChild(this.track);
+  }
+  reducedMotion;
+  scaleDuration;
+  track = new Graphics();
+  previous;
+  chips = [];
+  /** Updates the authoritative values; block loss and initial snapshots never produce health chips. */
+  setState(health, maximum, block) {
+    const segments = healthBlockSegments(health, maximum, block);
+    const previous = this.previous;
+    if (previous && previous.maximum === maximum && health < previous.health && maximum > 0) {
+      const end = Math.min(1, Math.max(0, previous.health / maximum));
+      const width = (end - segments.health) * 136;
+      if (width > 0) this.addChip(-68 + segments.health * 136, width);
+    }
+    this.previous = { health, maximum };
+    this.track.clear().roundRect(-70, 0, 140, 22, 4).fill({ color: uiTokens.color.panelShadow, alpha: 0.96 }).stroke({ color: uiTokens.color.panelStroke, width: 1 });
+    this.segment(-68, segments.health * 136, 14170949);
+    this.segment(-68 + segments.health * 136, segments.block * 136, 12895428);
+    this.segment(68 - segments.overflow * 136, segments.overflow * 136, 7829367);
+  }
+  /** Moves each detached fragment upward and outward while fading it independently. */
+  tick(deltaMs) {
+    const duration = Math.max(1, this.scaleDuration(650));
+    for (const chip of [...this.chips]) {
+      chip.elapsed += Math.max(0, deltaMs);
+      const progress = Math.min(1, chip.elapsed / duration);
+      chip.graphic.alpha = (1 - progress) * 0.85;
+      chip.graphic.position.set(chip.x + (this.reducedMotion ? 0 : 18 * progress), this.reducedMotion ? 0 : -30 * progress);
+      if (progress === 1) {
+        chip.graphic.destroy();
+        this.chips.splice(this.chips.indexOf(chip), 1);
+      }
+    }
+  }
+  segment(x2, width, color) {
+    if (width > 0) this.track.rect(x2, 2, width, 18).fill({ color, alpha: 1 });
+  }
+  addChip(x2, width) {
+    if (this.chips.length >= 24) this.chips.shift()?.graphic.destroy();
+    const graphic = new Graphics().rect(0, 2, width, 18).fill({ color: 16752809 });
+    graphic.position.set(x2, 0);
+    this.addChild(graphic);
+    this.chips.push({ graphic, x: x2, elapsed: 0 });
+  }
+};
+
+// src/item-view.ts
+function itemArtwork(name, image) {
+  if (image) return image;
+  if (name === "Throwing Knife") return "/img/Items/ThrowingKnife.svg";
+  if (name === "Healing Herb") return "/img/Items/HealingHerb.svg";
+  return "/img/Items/Supplies.svg";
+}
+function itemCardContent(name, description, uses) {
+  return { name, description: description + "\n" + uses, type: "Item", rarity: "Common", energyCost: 0, manaCost: 0 };
+}
+
+// src/scene-environment.ts
+var backgroundPattern = /^\/img\/Scenes\/locale-(?:(crossroads|ruins|grove|shore|depths|vault|observatory|threshold)-(travel|rest|shop)|(terrace|marsh|foundry|chamber)-(travel|rest|shop|event|treasure|boss))\.svg$/;
+function getSceneEnvironment(value) {
+  if (typeof value !== "object" || value === null) return void 0;
+  const candidate = value;
+  if (typeof candidate.localeId !== "string" || !/^[a-z-]{1,64}$/.test(candidate.localeId) || typeof candidate.localeName !== "string" || candidate.localeName.length > 80 || typeof candidate.chunkIndex !== "number" || !Number.isInteger(candidate.chunkIndex) || candidate.chunkIndex < 0 || typeof candidate.backgroundUrl !== "string" || !backgroundPattern.test(candidate.backgroundUrl)) return void 0;
+  return candidate;
+}
+function getJourneyBackground(scene, environment) {
+  if (scene === "map") return "/img/Scenes/journey-map.svg";
+  return getSceneEnvironment(environment)?.backgroundUrl ?? `/img/Scenes/journey-${scene === "rest" || scene === "shop" ? scene : "ruins"}.svg`;
+}
+
+// src/encounter-scene.ts
+init_lib();
+
+// src/journey-artwork.ts
+init_lib();
+async function loadJourneyTexture(url) {
+  if (!url || typeof Image === "undefined") return void 0;
+  try {
+    const { Assets: Assets2 } = await Promise.resolve().then(() => (init_lib(), lib_exports));
+    return await Assets2.load(url);
+  } catch {
+    return void 0;
+  }
+}
+var JourneyArtwork = class extends Container {
+  image = new Sprite(Texture.EMPTY);
+  crop = new Graphics();
+  imageUrl = "";
+  generation = 0;
+  frameWidth = 1;
+  frameHeight = 1;
+  groundLine;
+  /** Creates one retained image and clipping mask. */
+  constructor() {
+    super();
+    this.eventMode = "none";
+    this.image.mask = this.crop;
+    this.image.visible = false;
+    this.addChild(this.image, this.crop);
+  }
+  /** Replaces the image only after the requested URL has loaded and remains current. */
+  setImage(url) {
+    if (url === this.imageUrl) return;
+    this.imageUrl = url;
+    const generation = ++this.generation;
+    this.image.visible = false;
+    if (!url || typeof Image === "undefined") return;
+    void loadJourneyTexture(url).then((texture) => {
+      if (!texture || this.destroyed || generation !== this.generation) return;
+      this.image.texture = texture;
+      this.image.visible = true;
+      this.resize(this.frameWidth, this.frameHeight, this.groundLine);
+    }).catch(() => {
+    });
+  }
+  /** Fits art inside a clipped frame without stretching its aspect ratio. */
+  resize(width, height, groundLine) {
+    this.frameWidth = Math.max(1, width);
+    this.frameHeight = Math.max(1, height);
+    this.groundLine = groundLine;
+    this.crop.clear().roundRect(0, 0, this.frameWidth, this.frameHeight, 3).fill(16777215);
+    if (!this.image.visible) return;
+    const sourceGround = this.image.texture.height * 0.56;
+    const scale = groundLine === void 0 ? Math.max(this.frameWidth / this.image.texture.width, this.frameHeight / this.image.texture.height) : Math.max(
+      this.frameWidth / this.image.texture.width,
+      groundLine / sourceGround,
+      (this.frameHeight - groundLine) / (this.image.texture.height - sourceGround)
+    );
+    this.image.width = this.image.texture.width * scale;
+    this.image.height = this.image.texture.height * scale;
+    this.image.position.set(
+      (this.frameWidth - this.image.width) / 2,
+      groundLine === void 0 ? (this.frameHeight - this.image.height) / 2 : groundLine - sourceGround * scale
+    );
+  }
+};
+
+// src/encounter-backdrop.ts
+init_lib();
+
+// src/combat-treatments/caerleth.ts
+var caerlethForestCombatSceneTreatment = {
+  id: "caerleth-forest",
+  regionId: "caerleth",
+  settingId: "forest",
+  atmosphere: "pale-reach",
+  sceneryKind: "grove",
+  distantLightAlpha: 0.38,
+  foregroundSilhouetteCount: 3,
+  mistAlpha: 0.16
+};
+var caerlethSnowCombatSceneTreatment = {
+  id: "caerleth-snow",
+  regionId: "caerleth",
+  settingId: "snow",
+  atmosphere: "pale-reach",
+  sceneryKind: "snow-grove",
+  distantLightAlpha: 0.5,
+  foregroundSilhouetteCount: 3,
+  mistAlpha: 0.22
+};
+var caerlethCombatSceneTreatments = {
+  "caerleth-forest": caerlethForestCombatSceneTreatment,
+  "caerleth-snow": caerlethSnowCombatSceneTreatment
+};
+
+// src/combat-treatments/irrigal.ts
+var irrigalCombatSceneTreatment = {
+  id: "irrigal",
+  regionId: "irrigal",
+  sceneryKind: "observatory",
+  atmosphere: "pale-reach",
+  distantLightAlpha: 0.34,
+  foregroundSilhouetteCount: 3,
+  mistAlpha: 0.1
+};
+var kaavrelCombatSceneTreatment = {
+  ...irrigalCombatSceneTreatment,
+  id: "irrigal-kaavrel",
+  settingId: "kaavrel",
+  mistAlpha: 0.12
+};
+
+// src/combat-treatments/keshorun.ts
+var keshorunCombatSceneTreatment = {
+  id: "keshorun",
+  regionId: "keshorun",
+  atmosphere: "pale-reach",
+  distantLightAlpha: 0.42,
+  foregroundSilhouetteCount: 4,
+  mistAlpha: 0.1,
+  sceneryKind: "archive"
+};
+
+// src/combat-treatments/sil.ts
+var silCombatSceneTreatment = {
+  id: "sil",
+  regionId: "sil",
+  atmosphere: "pale-reach",
+  sceneryKind: "monolith",
+  distantLightAlpha: 0.2,
+  foregroundSilhouetteCount: 2,
+  mistAlpha: 0.06
+};
+
+// src/combat-scene-treatment.ts
+var foldCombatSceneTreatment = {
+  id: "fold",
+  regionId: "fold",
+  atmosphere: "pale-reach",
+  sceneryKind: "ruins",
+  distantLightAlpha: 0.46,
+  foregroundSilhouetteCount: 3,
+  mistAlpha: 0.14
+};
+var shatteredFoldCombatSceneTreatment = {
+  ...foldCombatSceneTreatment,
+  id: "fold-shattered",
+  settingId: "shattered",
+  distantLightAlpha: 0.36,
+  foregroundSilhouetteCount: 5,
+  mistAlpha: 0.2
+};
+var combatSceneTreatmentRegistry = {
+  fold: foldCombatSceneTreatment,
+  "fold-shattered": shatteredFoldCombatSceneTreatment,
+  keshorun: keshorunCombatSceneTreatment,
+  irrigal: irrigalCombatSceneTreatment,
+  "irrigal-kaavrel": kaavrelCombatSceneTreatment,
+  ...caerlethCombatSceneTreatments,
+  sil: silCombatSceneTreatment
+};
+function getCombatSceneTreatment(value) {
+  return typeof value === "string" && Object.hasOwn(combatSceneTreatmentRegistry, value) ? combatSceneTreatmentRegistry[value] ?? foldCombatSceneTreatment : foldCombatSceneTreatment;
 }
 
 // src/viewport-layout.ts
@@ -75740,6 +75807,8 @@ var supportedAnimationNames = /* @__PURE__ */ new Set([
   "enter",
   "prepare-attack",
   "attack",
+  "attack-strike",
+  "attack-return",
   "hit",
   "block",
   "buff",
@@ -75882,6 +75951,7 @@ var EncounterScene = class {
   enemyPage = 0;
   handPage = 0;
   animationStarts = /* @__PURE__ */ new Map();
+  attackOrigins = /* @__PURE__ */ new Map();
   pendingEntityLayouts = /* @__PURE__ */ new Map();
   animationCommandHandlers = /* @__PURE__ */ new Map([
     ["idle", (_source, _target, tile, start, progress) => tile.container.scale.set(start.scale * (1 + Math.sin(progress * Math.PI * 2) * 0.015))],
@@ -75891,6 +75961,13 @@ var EncounterScene = class {
     }],
     ["prepare-attack", (source8, target, _tile, start, progress) => this.prepareAttack(source8, target, start, progress)],
     ["attack", (source8, target, _tile, start, progress) => this.attack(source8, target, start, progress)],
+    ["attack-strike", (source8, target, _tile, start, progress) => {
+      if (!this.attackOrigins.has(source8)) this.attackOrigins.set(source8, start);
+      this.attack(source8, target, start, progress / 2);
+    }],
+    ["attack-return", (source8, target, _tile, start, progress) => {
+      this.attack(source8, target, this.attackOrigins.get(source8) ?? start, 0.5 + progress / 2);
+    }],
     ["hit", (_source, _target, tile, start, progress) => this.hit(tile, start, progress)],
     ["block", (_source, _target, tile, start, progress) => this.pulseScale(tile, start, progress, 0.12)],
     ["buff", (_source, _target, tile, _start, progress) => this.pulseAccent(tile, progress, uiTokens.color.valid)],
@@ -75986,6 +76063,10 @@ var EncounterScene = class {
       cancel: (command) => this.cancelAnimationCommand(command),
       complete: (command) => {
         this.animationStarts.delete(command.id);
+        if (command.name === "attack-return" && command.sourceId) {
+          const tile = this.getSceneTile(command.sourceId);
+          if (tile) this.attackOrigins.delete(tile);
+        }
       }
     };
   }
@@ -76143,6 +76224,7 @@ var EncounterScene = class {
     this.releasedDragPositions.clear();
     this.root.destroy({ children: true });
     this.entityTiles.clear();
+    this.attackOrigins.clear();
     this.pendingEntityLayouts.clear();
     this.handTiles.clear();
     this.selectableEntries.clear();
@@ -76466,8 +76548,7 @@ var EncounterScene = class {
     tile.title.position.set(0, -78);
     tile.description.position.set(0, artY + artHeight / 2 + 18);
     const meterY = entity.isPlayer ? artY + artHeight / 2 + 14 : -70;
-    const healthFill = entity.block > 0 ? uiTokens.color.textMuted : uiTokens.color.health;
-    this.drawMeter(tile.healthBar, entity.health, entity.maxHealth, -70, 0, 140, 22, healthFill);
+    tile.healthBar.setState(entity.health, entity.maxHealth, entity.block);
     this.drawMeter(tile.postureBar, entity.posture, entity.maxPosture, -70, 0, 140, 20, uiTokens.color.block);
     tile.healthBar.visible = entity.maxHealth > 0;
     tile.postureBar.visible = showPosture;
@@ -76551,7 +76632,7 @@ var EncounterScene = class {
     const description = new Text({ text: "", style: { ...uiTokens.typography.intent, align: "center", stroke: { color: uiTokens.color.panelShadow, width: 3 } } });
     const detail = new Text({ text: "", style: { ...uiTokens.typography.body, align: "center", fontSize: 13, stroke: { color: uiTokens.color.panelShadow, width: 3 } } });
     const effects = new Text({ text: "", style: { ...uiTokens.typography.caption, align: "center", fill: uiTokens.color.block, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true, wordWrapWidth: 156 } });
-    const healthBar = new Graphics();
+    const healthBar = new HealthBlockMeter(this.reducedMotion, (duration) => this.animationSpeedPolicy.scaleDuration(duration));
     const postureBar = new Graphics();
     const defenses = new Text({ text: "", style: { ...uiTokens.typography.caption, align: "center", fill: uiTokens.color.block, stroke: { color: uiTokens.color.panelShadow, width: 2 } } });
     defenses.anchor.set(0.5);
@@ -76805,6 +76886,7 @@ var EncounterScene = class {
     this.handLayoutTransitions.clear();
     this.hideDragAimArrow();
     this.animationStarts.clear();
+    this.attackOrigins.clear();
   }
   /**
    * Determines whether the next layout uses different scene coordinates.
@@ -76818,6 +76900,7 @@ var EncounterScene = class {
    * @param deltaMs - Elapsed time supplied by the renderer ticker.
    */
   tick(deltaMs) {
+    for (const tile of this.entityTiles.values()) tile.healthBar.tick(deltaMs);
     this.tickCommittedCards(deltaMs);
     this.pruneRetiredTiles();
     if (this.rejectionFeedbackRemainingMs > 0) {
@@ -77342,10 +77425,11 @@ ${unavailableReason}` : ""),
     return this.latestSnapshot?.phase === "WaitingForInput" && !this.intentPending && entry !== void 0 && this.isValidTarget(entry.targetMode, entity);
   }
   isAnimationLocked(id) {
-    return this.animationLockResolver(id);
+    const tile = this.getSceneTile(id);
+    return tile !== void 0 && this.attackOrigins.has(tile) || this.animationLockResolver(id);
   }
   executeAnimationCommand(command, progress) {
-    this.showAnimationEnemy(command);
+    this.prepareAnimationObjects(command);
     const source8 = command.sourceId ? this.getSceneTile(command.sourceId) : void 0;
     if (!source8) {
       return;
@@ -77368,8 +77452,8 @@ ${unavailableReason}` : ""),
     }
     this.animationCommandHandlers.get(command.name)?.(source8, target, animatedTile, start, progress);
   }
-  /** Reveals an action's enemy without compacting the formation or resetting other animation transforms. */
-  showAnimationEnemy(command) {
+  /** Reveals an action's enemy before scheduling without compacting the formation or resetting active transforms. */
+  prepareAnimationObjects(command) {
     const snapshot = this.latestSnapshot;
     const viewport = this.viewport;
     if (!snapshot || !viewport || !isShortEncounter(viewport) || this.animationStarts.has(command.id)) return;
@@ -77389,7 +77473,7 @@ ${unavailableReason}` : ""),
     const target = command.targetId ? this.getSceneTile(command.targetId) : void 0;
     const tile = command.name === "nudge" ? target : source8;
     if (tile) this.removePlayedCardPreview(tile);
-    const start = this.animationStarts.get(command.id);
+    const start = (tile ? this.attackOrigins.get(tile) : void 0) ?? this.animationStarts.get(command.id);
     if (tile && start && command.name !== "hit-flash") {
       tile.container.position.set(start.x, start.y);
       tile.container.alpha = start.alpha;
@@ -77399,7 +77483,8 @@ ${unavailableReason}` : ""),
       tile.impactHighlight.visible = false;
     }
     if (tile && command.name === "hit-flash") tile.impactHighlight.visible = false;
-    if (command.name === "attack") {
+    if (command.name === "attack" || command.name === "attack-strike" || command.name === "attack-return") {
+      if (tile) this.attackOrigins.delete(tile);
       this.attackTrail.clear();
     }
     this.animationStarts.delete(command.id);
@@ -85904,6 +85989,15 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
       const commands = "commands" in request ? request.commands : [request];
       if (commands.some((command) => ["prepare-attack", "card-play-to-target", "card-play-to-corner", "draw-to-hand"].includes(command.name))) {
         particleEffects.clearResourceFeedback();
+      }
+      const attack = commands.find((command) => command.name === "attack-strike" || command.name === "attack-return");
+      if (attack) {
+        scene.prepareAnimationObjects(attack);
+        if (!areAnimationObjectsAvailable(request)) {
+          scene.createAnimationCommandExecutor().cancel(attack);
+          scene.refreshAnimationLocks();
+          return Promise.resolve({ id: request.id, state: "cancelled", message: "The attack's visual objects are unavailable." });
+        }
       }
       return areAnimationObjectsAvailable(request) ? scheduleAnimation(request) : deferAnimationUntilReconciled(request);
     },
