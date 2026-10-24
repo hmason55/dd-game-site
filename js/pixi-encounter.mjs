@@ -72544,14 +72544,47 @@ var sparkle = (g2) => {
 };
 var drawings = {
   history: clock,
-  restart: clock,
   home,
   rooms: home,
   inventory: bag,
   shop: bag,
-  rewards: sparkle,
-  training: sparkle,
   remembrance: sparkle,
+  restart: (g2) => {
+    g2.moveTo(3, 5).lineTo(1, 5).lineTo(1, 1).moveTo(1, 5).lineTo(5, 5).stroke(stroke).moveTo(2, 5).lineTo(5, 2).lineTo(10, 2).lineTo(14, 6).lineTo(14, 10).lineTo(10, 14).lineTo(5, 14).lineTo(2, 11).stroke(stroke);
+  },
+  backpack: (g2) => {
+    g2.roundRect(3, 3, 10, 12, 2).stroke(stroke).roundRect(6, 1, 4, 3, 1).stroke(stroke).roundRect(5, 9, 6, 4, 1).stroke(stroke).moveTo(3, 7).lineTo(13, 7).moveTo(1, 7).lineTo(1, 13).moveTo(15, 7).lineTo(15, 13).stroke(stroke);
+  },
+  map: (g2) => {
+    g2.moveTo(1, 3).lineTo(5, 1).lineTo(11, 3).lineTo(15, 1).lineTo(15, 13).lineTo(11, 15).lineTo(5, 13).lineTo(1, 15).closePath().moveTo(5, 1).lineTo(5, 13).moveTo(11, 3).lineTo(11, 15).stroke(stroke);
+  },
+  items: (g2) => {
+    g2.rect(6, 1, 4, 3).stroke(stroke).moveTo(6, 4).lineTo(6, 6).lineTo(3, 10).lineTo(3, 13).lineTo(5, 15).lineTo(11, 15).lineTo(13, 13).lineTo(13, 10).lineTo(10, 6).lineTo(10, 4).closePath().stroke(stroke).moveTo(4, 10).lineTo(12, 10).stroke(stroke);
+  },
+  hand: (g2) => {
+    g2.moveTo(1, 6).lineTo(5, 4).lineTo(10, 13).lineTo(6, 15).closePath().stroke(stroke).moveTo(6, 3).lineTo(10, 2).lineTo(13, 12).lineTo(9, 13).stroke(stroke).moveTo(11, 1).lineTo(15, 1).lineTo(15, 11).lineTo(13, 11).stroke(stroke);
+  },
+  discard: (g2) => {
+    g2.rect(2, 1, 8, 10).stroke(stroke).moveTo(12, 5).lineTo(12, 13).moveTo(9, 10).lineTo(12, 13).lineTo(15, 10).moveTo(1, 14).lineTo(8, 14).stroke(stroke);
+  },
+  exhaust: (g2) => {
+    g2.moveTo(8, 1).lineTo(11, 7).lineTo(13, 5).lineTo(15, 10).lineTo(13, 14).lineTo(8, 15).lineTo(3, 13).lineTo(2, 9).lineTo(5, 4).lineTo(6, 8).closePath().stroke(stroke);
+  },
+  endTurn: (g2) => {
+    g2.moveTo(1, 8).lineTo(11, 8).moveTo(7, 4).lineTo(11, 8).lineTo(7, 12).moveTo(14, 2).lineTo(14, 14).stroke(stroke);
+  },
+  debug: (g2) => {
+    g2.roundRect(5, 5, 6, 9, 3).stroke(stroke).circle(8, 3, 2).stroke(stroke).moveTo(2, 5).lineTo(5, 7).moveTo(1, 10).lineTo(5, 10).moveTo(2, 15).lineTo(5, 12).moveTo(14, 5).lineTo(11, 7).moveTo(15, 10).lineTo(11, 10).moveTo(14, 15).lineTo(11, 12).moveTo(8, 6).lineTo(8, 13).stroke(stroke);
+  },
+  seed: (g2) => {
+    g2.roundRect(1, 4, 9, 11, 1).stroke(stroke).roundRect(5, 1, 9, 11, 1).stroke(stroke).moveTo(8, 9).lineTo(8, 6).lineTo(11, 4).lineTo(11, 7).lineTo(8, 9).stroke(stroke);
+  },
+  rewards: (g2) => {
+    g2.rect(2, 6, 12, 9).stroke(stroke).rect(1, 4, 14, 3).stroke(stroke).moveTo(8, 4).lineTo(8, 15).moveTo(8, 4).lineTo(3, 3).lineTo(4, 1).lineTo(8, 4).lineTo(12, 1).lineTo(13, 3).lineTo(8, 4).stroke(stroke);
+  },
+  training: (g2) => {
+    g2.moveTo(2, 14).lineTo(12, 4).lineTo(15, 1).lineTo(12, 1).lineTo(2, 11).moveTo(2, 9).lineTo(7, 14).moveTo(1, 15).lineTo(3, 13).stroke(stroke);
+  },
   settings: (g2) => {
     g2.circle(8, 8, 4).stroke(stroke).circle(8, 8, 1.5).stroke(stroke);
     for (let i2 = 0; i2 < 8; i2++) {
@@ -72941,6 +72974,7 @@ var GamePanel = class extends Container {
 var GameButton = class extends GamePanel {
   labelText;
   navigationIcon;
+  navigationIconName;
   fullLabel;
   iconOnly = false;
   onPress;
@@ -72957,6 +72991,7 @@ var GameButton = class extends GamePanel {
     this.isEnabled = options.enabled ?? true;
     this.isFocused = this.isEnabled && (options.focused ?? false);
     this.isSelected = this.isEnabled && (options.selected ?? false);
+    this.navigationIconName = options.menuIcon;
     this.navigationIcon = options.menuIcon ? createMenuIcon(options.menuIcon) : void 0;
     if (this.navigationIcon) this.content.addChild(this.navigationIcon);
     this.fullLabel = options.label;
@@ -73057,6 +73092,15 @@ var GameButton = class extends GamePanel {
     this.labelText.position.set(this.panelSize.width / 2, this.panelSize.height / 2);
     this.fitLabel();
     this.updatePresentation();
+  }
+  /** Updates a retained button when its semantic action changes, such as Items versus Hand. */
+  setMenuIcon(name) {
+    if (name === this.navigationIconName) return;
+    this.navigationIcon?.destroy();
+    this.navigationIconName = name;
+    this.navigationIcon = name ? createMenuIcon(name) : void 0;
+    if (this.navigationIcon) this.content.addChild(this.navigationIcon);
+    this.fitLabel();
   }
   /** Switches compact navigation to icons while preserving its accessible title. */
   setIconOnly(value) {
@@ -85556,7 +85600,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
   const createButton = (action, label, enabled, width, height, x2, y2) => {
     let button = retainedButtons.get(action);
     if (!button) {
-      const created = new GameButton({ menuIcon: controlIcon(action), width, height, label, labelStyle: "NumericResource", onPress: () => void submit(action) });
+      const created = new GameButton({ menuIcon: controlIcon(action, label), width, height, label, labelStyle: "NumericResource", onPress: () => void submit(action) });
       created.on("pointerover", () => created.setFocused(true));
       created.on("pointerout", () => created.setFocused(action === focusedAction));
       created.on("pointerdown", () => created.setSelected(true));
@@ -85567,6 +85611,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     }
     visibleButtonActions.add(action);
     button.label = label;
+    button.setMenuIcon(controlIcon(action, label));
     button.setIconOnly(action === "menu" || window.innerWidth < window.innerHeight && window.innerWidth < 768);
     button.resize(width, height);
     button.setEnabled(enabled);
@@ -85597,8 +85642,13 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     panel.clear();
     const barY = Math.max(0, height - toolbarHeight);
     toolbar.clear().rect(0, barY, width, toolbarHeight).fill(uiColors.panelFill).rect(0, barY, width, 2).fill(uiColors.panelStroke);
-    const menuActions = state.actions;
+    const menuActions = getRunMenuActions(state);
     createButton("menu", state.menuOpen ? "Close" : "Menu", true, 58, buttonHeight, 6, barY + 8);
+    const inventory = state.actions.find((action) => action.id === "inventory");
+    if (inventory) {
+      const inventoryWidth = window.innerWidth < window.innerHeight && window.innerWidth < 768 ? 48 : 104;
+      createButton(inventory.id, inventory.label, inventory.enabled, inventoryWidth, buttonHeight, width - inventoryWidth - 6, barY + 8);
+    }
     if (!state.menuOpen) {
       transientFeedback = "";
       removeInactiveButtons();
@@ -85725,9 +85775,15 @@ function toRunControlsState(value) {
   if (statusLines != null && (!Array.isArray(statusLines) || !statusLines.every((line) => typeof line === "string"))) return void 0;
   return { menuOpen, actions: validActions, statusLines };
 }
-function controlIcon(action) {
-  const icons = { menu: "menu", history: "history", settings: "settings", fullscreen: "fullscreen", title: "home", restart: "restart", previous: "previous", next: "next", deck: "cards", encounterCards: "cards", inventory: "inventory", backpack: "inventory", relics: "equipment", map: "rooms", rewards: "rewards", discard: "previous", exhaust: "close", endTurn: "next", training: "training", debug: "settings", copySeed: "events" };
+function controlIcon(action, label) {
+  if (action === "inventory") return label === "Hand" ? "hand" : "items";
+  const icons = { menu: "menu", history: "history", settings: "settings", fullscreen: "fullscreen", title: "home", restart: "restart", previous: "previous", next: "next", deck: "cards", encounterCards: "cards", inventory: "inventory", backpack: "backpack", relics: "equipment", map: "map", rewards: "rewards", discard: "discard", exhaust: "exhaust", endTurn: "endTurn", training: "training", debug: "debug", copySeed: "seed" };
   return icons[action];
+}
+function getRunMenuActions(state) {
+  const backpack = state.actions.some((action) => action.id === "backpack");
+  const collectionActions = /* @__PURE__ */ new Set(["deck", "relics", "encounterCards", "discard", "exhaust", "training"]);
+  return state.actions.filter((action) => action.id !== "inventory" && !(backpack && collectionActions.has(action.id)));
 }
 
 // src/pixi-run-hud.ts

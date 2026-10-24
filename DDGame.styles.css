@@ -213,6 +213,10 @@ button:disabled[b-h7jgvqbn9t] { opacity: 0.5; cursor: default; }
     .pixi-run-controls-surface.open[b-2ntaig32y6] { height: min(100dvh, var(--run-menu-portrait-height, 620px)); }
 }
 .pixi-run-resource-rail[b-2ntaig32y6] { position: fixed; bottom: calc(10px + env(safe-area-inset-bottom)); left: 70px; width: calc(100% - 76px); height: 44px; z-index: 1; background: #23363c; }
+.pixi-run-controls-surface.has-inventory .pixi-run-resource-rail[b-2ntaig32y6] { width: calc(100% - 186px); }
+@media (max-width: 767px) and (orientation: portrait) {
+    .pixi-run-controls-surface.has-inventory .pixi-run-resource-rail[b-2ntaig32y6] { width: calc(100% - 130px); }
+}
 .pixi-run-resource-rail[hidden][b-2ntaig32y6] { display: none; }
 .pixi-run-resource-rail[b-2ntaig32y6]  .run-resource-tooltip { position: absolute; bottom: 54px; max-width: calc(100vw - 24px); padding: 8px 12px; background: #08171c; color: #f4efe3; border: 1px solid #caa65c; border-radius: 4px; pointer-events: none; }
 .pixi-run-controls-surface canvas[b-2ntaig32y6] { display: block; height: 100%; outline: none; touch-action: manipulation; width: 100%; }
