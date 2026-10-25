@@ -70215,7 +70215,7 @@ init_lib();
 var encounterRendererProtocolVersion = 4;
 var encounterSceneId = "encounter";
 function isEncounterPresentationSnapshot(value) {
-  if (!isRecord(value) || value.protocolVersion !== encounterRendererProtocolVersion || value.sceneId !== encounterSceneId || !isFiniteNumber(value.sequence) || !isString(value.phase) || typeof value.inventoryMode !== "boolean" || !isEntityPresentationState(value.player) || !isArrayOf(value.enemies, isEntityPresentationState) || !isArrayOf(value.hand, isCardPresentationState) || !isArrayOf(value.items, isItemPresentationState) || !isFiniteNumber(value.currency) || !isFiniteNumber(value.deckCount) || !isFiniteNumber(value.relicCount) || value.pinnedRelics !== void 0 && !isArrayOf(value.pinnedRelics, isRelicPresentationState) || value.sceneTreatmentId !== void 0 && !isString(value.sceneTreatmentId) || value.roomName !== void 0 && !isString(value.roomName)) {
+  if (!isRecord(value) || value.protocolVersion !== encounterRendererProtocolVersion || value.sceneId !== encounterSceneId || !isFiniteNumber(value.sequence) || !isString(value.phase) || typeof value.inventoryMode !== "boolean" || !isEntityPresentationState(value.player) || !isArrayOf(value.enemies, isEntityPresentationState) || !isArrayOf(value.hand, isCardPresentationState) || !isArrayOf(value.items, isItemPresentationState) || !isFiniteNumber(value.currency) || !isFiniteNumber(value.deckCount) || !isFiniteNumber(value.relicCount) || value.pinnedRelics !== void 0 && !isArrayOf(value.pinnedRelics, isRelicPresentationState) || value.sceneTreatmentId !== void 0 && !isString(value.sceneTreatmentId) || value.endTurnQueued !== void 0 && typeof value.endTurnQueued !== "boolean" || value.roomName !== void 0 && !isString(value.roomName)) {
     return false;
   }
   return true;
@@ -73131,18 +73131,15 @@ var GameButton = class extends GamePanel {
       return;
     }
     if (this.isSelected) {
-      this.stateOutline.roundRect(1, 1, Math.max(0, width - 2), Math.max(0, height - 2), 3).fill({ color: uiColors.buttonSelected, alpha: 0.08 }).stroke({ color: uiColors.buttonSelected, width: 1 });
+      this.stateOutline.roundRect(0, 0, width, height, 8).fill({ color: uiColors.buttonSelected, alpha: 0.08 }).stroke({ color: uiColors.buttonSelected, width: 1 });
     }
     if (this.isFocused) {
-      this.stateOutline.roundRect(1, 1, Math.max(0, width - 2), Math.max(0, height - 2), 3).stroke({ color: uiColors.buttonFocus, width: 1.5 });
+      this.stateOutline.roundRect(0, 0, width, height, 8).stroke({ color: uiColors.buttonFocus, width: 1.5 });
     }
   }
 };
 function drawButtonSurface(graphics, width, height, fill = 1058092, stroke2 = 5467506) {
   graphics.clear().roundRect(0, 0, width, height, 8).fill({ color: fill }).stroke({ color: stroke2, width: 1 });
-  graphics.roundRect(3, 3, Math.max(0, width - 6), Math.max(0, height / 2 - 3), 5).fill({ color: 15920868, alpha: 0.035 });
-  graphics.rect(8, 3, Math.max(0, width - 16), 1).fill({ color: 15920868, alpha: 0.14 });
-  graphics.rect(4, Math.max(0, height - 3), Math.max(0, width - 8), 1).fill({ color: 133646, alpha: 0.36 });
 }
 var SceneTitle = class extends Container {
   titleText;
@@ -73550,31 +73547,45 @@ function healthBlockSegments(health, maximum, block) {
   };
 }
 var HealthBlockMeter = class extends Container {
-  constructor(reducedMotion, scaleDuration) {
+  constructor(reducedMotion, scaleDuration, fill = healthBlockMeterColors.health, chipColor = healthBlockMeterColors.chip) {
     super();
     this.reducedMotion = reducedMotion;
     this.scaleDuration = scaleDuration;
+    this.fill = fill;
+    this.chipColor = chipColor;
     this.addChild(this.track);
   }
   reducedMotion;
   scaleDuration;
+  fill;
+  chipColor;
   track = new Graphics();
   previous;
   chips = [];
-  /** Updates the authoritative values; block loss and initial snapshots never produce health chips. */
+  /** Updates authoritative values without animating initial snapshots, gains, or maximum changes. */
   setState(health, maximum, block) {
     const segments = healthBlockSegments(health, maximum, block);
     const previous = this.previous;
-    if (previous && previous.maximum === maximum && health < previous.health && maximum > 0) {
-      const end = Math.min(1, Math.max(0, previous.health / maximum));
-      const width = (end - segments.health) * 136;
-      if (width > 0) this.addChip(-68 + segments.health * 136, width);
+    if (previous && previous.maximum === maximum && maximum > 0) {
+      const before = healthBlockSegments(previous.health, maximum, previous.block);
+      if (health < previous.health) this.addLoss(-68 + segments.health * 136, before.health - segments.health, this.chipColor);
+      if (block < previous.block) this.chipBlockLoss(before, segments);
     }
-    this.previous = { health, maximum };
+    this.previous = { health, maximum, block };
     this.track.clear().roundRect(-70, 0, 140, 22, 4).fill({ color: uiTokens.color.panelShadow, alpha: 0.96 }).stroke({ color: uiTokens.color.panelStroke, width: 1 });
-    this.segment(-68, segments.health * 136, healthBlockMeterColors.health);
+    this.segment(-68, segments.health * 136, this.fill);
     this.segment(-68 + segments.health * 136, segments.block * 136, healthBlockMeterColors.block);
     this.drawOverflow(segments.overflow * 136);
+  }
+  /** Detaches only the visible portions of spent block, including block drawn over full health. */
+  chipBlockLoss(before, after) {
+    const lostBlock = Math.max(0, before.block - after.block);
+    this.addLoss(-68 + (before.health + before.block - lostBlock) * 136, lostBlock, 15134192);
+    this.addLoss(68 - before.overflow * 136, before.overflow - after.overflow, 11188415);
+  }
+  /** Converts a positive loss fraction to the detached fragment's meter width. */
+  addLoss(x2, fraction, color) {
+    if (fraction > 0) this.addChip(x2, fraction * 136, color);
   }
   /** Moves each detached fragment upward and outward while fading it independently. */
   tick(deltaMs) {
@@ -73604,9 +73615,9 @@ var HealthBlockMeter = class extends Container {
     }
     this.track.moveTo(left, 2).lineTo(left, 20).stroke({ color: uiTokens.color.text, width: 1, alpha: 0.75 });
   }
-  addChip(x2, width) {
+  addChip(x2, width, color) {
     if (this.chips.length >= 24) this.chips.shift()?.graphic.destroy();
-    const graphic = new Graphics().rect(0, 2, width, 18).fill({ color: healthBlockMeterColors.chip });
+    const graphic = new Graphics().rect(0, 2, width, 18).fill({ color });
     graphic.position.set(x2, 0);
     this.addChild(graphic);
     this.chips.push({ graphic, x: x2, elapsed: 0 });
@@ -73932,7 +73943,7 @@ function calculateCombatLayout(viewport) {
     header: createLayoutRectangle(0, 0, width, headerHeight),
     enemies: createLayoutRectangle(0, headerHeight, width, enemyHeight),
     player: createLayoutRectangle(0, headerHeight + enemyHeight, width, playerHeight),
-    hand: createLayoutRectangle(16, handY, Math.max(0, width - 32), Math.max(0, combatBottom - handY)),
+    hand: createLayoutRectangle(16, handY, Math.max(0, (isShortFallback ? getShortHandWidth(normalizedViewport) : width) - 32), Math.max(0, combatBottom - handY)),
     endTurn: createLayoutRectangle(endTurnX, endTurnY, endTurnWidth, endTurnHeight),
     cardPreview
   });
@@ -73971,7 +73982,8 @@ function layoutPlayedCardPreview(viewport) {
 function getShortEncounterPageSize(kind, viewport) {
   const width = normalizeLayoutDimension(viewport.width);
   const pageControlInset2 = 52;
-  const availableWidth = Math.max(0, width - pageControlInset2 * 2 - 32);
+  const contentWidth = kind === "hand" ? getShortHandWidth(viewport) : width;
+  const availableWidth = Math.max(0, contentWidth - pageControlInset2 * 2 - 32);
   const tileWidth = kind === "enemy" ? 176 * 0.4 : handCardVisualSize.width * (layoutHand(1, { width, height: normalizeLayoutDimension(viewport.height) })[0]?.scale ?? 0.4);
   const capacity = Math.max(1, Math.floor((availableWidth - tileWidth) / 44) + 1);
   return Math.min(kind === "enemy" ? 5 : 6, capacity);
@@ -74048,12 +74060,12 @@ function getPlayerHudBottom(viewport) {
   const bottom = isShortEncounter(viewport) ? 78 : 138;
   return player.y + bottom * (player.scale ?? 1);
 }
-function layoutHand(count2, viewport) {
+function layoutHand(count2, viewport, pageInset = 0) {
   if (count2 === 0) {
     return [];
   }
   if (isShortEncounter(viewport)) {
-    return layoutShortHand(count2, viewport);
+    return layoutShortHand(count2, viewport, pageInset);
   }
   if (getEncounterLayoutMode(viewport) !== "Wide") {
     return layoutNarrowHand(count2, viewport);
@@ -74128,21 +74140,25 @@ function layoutShortPlayer(viewport) {
   const scale = Math.min(0.62, Math.max(0.4, (viewport.height - 160) / 240));
   return { x: viewport.width / 2, y: viewport.height * 0.56, scale };
 }
-function layoutShortHand(count2, viewport) {
+function layoutShortHand(count2, viewport, pageInset) {
   const player = layoutShortPlayer(viewport);
   const playerBottom = player.y + 58 * (player.scale ?? 1);
   const verticalScale = (viewport.height - 22 - playerBottom) / handCardVisualSize.height;
   const scale = Math.max(44 / handCardVisualSize.width, Math.min(0.62, verticalScale));
   const tileWidth = handCardVisualSize.width * scale;
-  const availableWidth = Math.max(tileWidth, viewport.width - 32);
+  const handWidth = getShortHandWidth(viewport);
+  const availableWidth = Math.max(tileWidth, handWidth - 32 - pageInset * 2);
   const step = count2 === 1 ? 0 : Math.min(tileWidth + 4, (availableWidth - tileWidth) / (count2 - 1));
   const rowWidth = tileWidth + step * (count2 - 1);
   const y2 = viewport.height - 4 - handCardVisualSize.height * scale / 2;
   return Array.from({ length: count2 }, (_, index) => ({
-    x: (viewport.width - rowWidth) / 2 + tileWidth / 2 + index * step,
+    x: (handWidth - rowWidth) / 2 + tileWidth / 2 + index * step,
     y: y2,
     scale
   }));
+}
+function getShortHandWidth(viewport) {
+  return Math.max(44, normalizeLayoutDimension(viewport.width) - 144 - 16);
 }
 function isShortEncounter(viewport) {
   return viewport.height <= shortEncounterMaximumHeight && viewport.width >= minimumEncounterContentWidth;
@@ -75402,7 +75418,7 @@ var RunHud = class extends Container {
       counter.hitArea = new Rectangle(-4, -8, width + 8, 44 / (counter.scale.y || 1));
       counter.interactiveChildren = false;
       if (frame) {
-        frame.roundRect(-4, -4, width + 8, 32, 4).fill({ color: uiTokens.color.surface, alpha: 0.18 }).stroke({ color: uiTokens.color.panelStroke, width: 1 });
+        frame.roundRect(-4, -4, width + 8, 32, 4).fill({ color: uiTokens.color.surface, alpha: 0.18 });
         frame.alpha = 0.65;
       }
     }
@@ -75439,12 +75455,12 @@ var RunHud = class extends Container {
       const slotWidth = unitWidth * (index === 0 ? 1.5 : 1);
       counter.visible = true;
       counter.scale.set(1);
-      const scale = Math.min(1, (slotWidth - 8) / Math.max(1, counter.width));
+      const scale = Math.min(1, (slotWidth - 8) / Math.max(1, counter.width || 0));
       counter.scale.set(Math.max(0.1, scale));
-      counter.position.set(x2 + (slotWidth - counter.width) / 2, 8);
+      counter.position.set(x2 + (slotWidth - counter.width) / 2, (44 - (index === 0 ? 30 : 24) * counter.scale.x) / 2);
       x2 += slotWidth;
     });
-    this.healthBar.position.set(this.health.x, 37);
+    this.healthBar.position.set(this.health.x, this.health.y + 24 * this.health.scale.x + 2);
     this.healthBar.resize(Math.max(1, this.health.width), 4);
   }
   /** Fits locale and room names below the resource rail. */
@@ -76220,7 +76236,7 @@ var EncounterScene = class {
       return;
     }
     if (snapshot.sequence !== this.currentSequence || this.hasViewportChanged(viewport)) this.dismissInspection(true);
-    const shouldReleasePendingIntent = this.intentPending && !this.itemIntentAwaitingResponse && this.pendingIntentSequence !== void 0 && snapshot.sequence > this.pendingIntentSequence;
+    const shouldReleasePendingIntent = this.intentPending && !snapshot.endTurnQueued && !this.itemIntentAwaitingResponse && this.pendingIntentSequence !== void 0 && snapshot.sequence > this.pendingIntentSequence;
     if (this.hasViewportChanged(viewport)) {
       this.resetTransientLayoutState();
       this.alignPagesToFocusedObjects(snapshot, viewport);
@@ -76254,7 +76270,7 @@ var EncounterScene = class {
     const endTurnBounds = calculateCombatLayout(viewport).regions.endTurn;
     this.endTurn.resize(endTurnBounds.width, endTurnBounds.height);
     this.endTurn.position.set(endTurnBounds.x, endTurnBounds.y);
-    this.endTurn.visible = !isShortEncounter(viewport);
+    this.endTurn.visible = true;
     if (shouldReleasePendingIntent) {
       this.releasePendingIntent();
     }
@@ -76368,7 +76384,7 @@ var EncounterScene = class {
     if (showHand) {
       const y2 = layoutHand(1, viewport)[0]?.y ?? viewport.height - 60;
       this.previousHandPage.position.set(8, y2 - 22);
-      this.nextHandPage.position.set(viewport.width - 52, y2 - 22);
+      this.nextHandPage.position.set(getShortHandWidth(viewport) - 52, y2 - 22);
     }
   }
   /** Reserves every original formation slot, including defeated actors, until the encounter ends. */
@@ -76419,10 +76435,9 @@ var EncounterScene = class {
     const entries = this.visiblePage(allEntries, viewport, "hand");
     const expectedIds = /* @__PURE__ */ new Set();
     const paged = isShortEncounter(viewport) && allEntries.length > getShortEncounterPageSize("hand", viewport);
-    const handViewport = paged ? { width: viewport.width - pageControlInset * 2, height: viewport.height } : viewport;
     const layoutEntries = entries.filter((entry) => !isCardPresentationState2(entry) || !(entry.isQueued || this.committedCardSequences.has(entry.id) || this.queuedEntryIds.has(entry.id)));
-    const positions = layoutHand(layoutEntries.length, handViewport);
-    const fallbackPositions = layoutHand(entries.length, handViewport);
+    const positions = layoutHand(layoutEntries.length, viewport, paged ? pageControlInset : 0);
+    const fallbackPositions = layoutHand(entries.length, viewport, paged ? pageControlInset : 0);
     const previousPositions = new Map(this.handLayoutPositions);
     this.selectableEntries.clear();
     this.handLayoutPositions.clear();
@@ -76435,7 +76450,7 @@ var EncounterScene = class {
       const id = snapshot.inventoryMode ? `item:${entry.id}` : `card:${entry.id}`;
       expectedIds.add(id);
       const previousPosition = previousPositions.get(id);
-      const actualPosition = layoutIndex < 0 && previousPosition ? previousPosition : paged ? { ...position, x: position.x + pageControlInset } : position;
+      const actualPosition = layoutIndex < 0 && previousPosition ? previousPosition : position;
       this.handLayoutPositions.set(id, actualPosition);
       if (previousPosition && !this.isDragPositionManaged(id) && (previousPosition.x !== actualPosition.x || previousPosition.y !== actualPosition.y || previousPosition.scale !== actualPosition.scale || previousPosition.rotation !== actualPosition.rotation)) {
         this.startHandLayoutTransition(id);
@@ -76617,7 +76632,7 @@ var EncounterScene = class {
     tile.description.position.set(0, artY + artHeight / 2 + 18);
     const meterY = entity.isPlayer ? artY + artHeight / 2 + 14 : -70;
     tile.healthBar.setState(entity.health, entity.maxHealth, entity.block);
-    this.drawMeter(tile.postureBar, entity.posture, entity.maxPosture, -70, 0, 140, 20, uiTokens.color.block);
+    tile.postureBar.setState(entity.posture, entity.maxPosture, 0);
     tile.healthBar.visible = entity.maxHealth > 0;
     tile.postureBar.visible = showPosture;
     this.layoutEntityMeters(tile, meterY);
@@ -76701,7 +76716,7 @@ var EncounterScene = class {
     const detail = new Text({ text: "", style: { ...uiTokens.typography.body, align: "center", fontSize: 13, stroke: { color: uiTokens.color.panelShadow, width: 3 } } });
     const effects = new Text({ text: "", style: { ...uiTokens.typography.caption, align: "center", fill: uiTokens.color.block, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true, wordWrapWidth: 156 } });
     const healthBar = new HealthBlockMeter(this.reducedMotion, (duration) => this.animationSpeedPolicy.scaleDuration(duration));
-    const postureBar = new Graphics();
+    const postureBar = new HealthBlockMeter(this.reducedMotion, (duration) => this.animationSpeedPolicy.scaleDuration(duration), uiTokens.color.block, 12054527);
     const defenses = new Text({ text: "", style: { ...uiTokens.typography.caption, align: "center", fill: uiTokens.color.block, stroke: { color: uiTokens.color.panelShadow, width: 2 } } });
     defenses.anchor.set(0.5);
     const blockIcon = createResourceIcon("block", uiTokens.color.block);
@@ -76819,14 +76834,6 @@ var EncounterScene = class {
   /** Returns whether a pointer tap may participate in the scene's single-pointer interaction policy. */
   isPrimaryPointerTap(event) {
     return event === void 0 || isPrimaryPointer({ isPrimary: event.isPrimary ?? true });
-  }
-  /** Draws a compact clamped status meter below an entity's numeric status. */
-  drawMeter(graphic, value, maximum, x2, y2, width, height, fill) {
-    const ratio = maximum > 0 ? Math.max(0, Math.min(1, value / maximum)) : 0;
-    graphic.clear().roundRect(x2, y2, width, height, 4).fill({ color: uiTokens.color.panelShadow, alpha: 0.96 }).stroke({ color: uiTokens.color.panelStroke, width: 1 });
-    if (ratio > 0) {
-      graphic.roundRect(x2 + 2, y2 + 2, (width - 4) * ratio, height - 4, 3).fill({ color: fill, alpha: 0.82 });
-    }
   }
   /** Enlarges an entry while a pointer is over it without changing semantic selection. */
   handleEntryHover(entry) {
@@ -76968,7 +76975,10 @@ var EncounterScene = class {
    * @param deltaMs - Elapsed time supplied by the renderer ticker.
    */
   tick(deltaMs) {
-    for (const tile of this.entityTiles.values()) tile.healthBar.tick(deltaMs);
+    for (const tile of this.entityTiles.values()) {
+      tile.healthBar.tick(deltaMs);
+      tile.postureBar.tick(deltaMs);
+    }
     this.tickCommittedCards(deltaMs);
     this.pruneRetiredTiles();
     if (this.rejectionFeedbackRemainingMs > 0) {
@@ -77816,8 +77826,8 @@ ${unavailableReason}` : ""),
     }
   }
   refreshInteractionState() {
-    this.endTurn.label = this.latestSnapshot?.phase === "Victory" ? "VICTORY" : this.endingTurnPending || this.latestSnapshot?.phase !== "WaitingForInput" ? "ENEMY TURN" : "END TURN";
-    this.endTurn.setEnabled(!this.inputReleased && !this.intentPending && !this.activeDrag && this.queuedEntryIds.size === 0 && this.latestSnapshot?.phase === "WaitingForInput");
+    this.endTurn.label = this.latestSnapshot?.phase === "Victory" ? "VICTORY" : this.endingTurnPending || this.latestSnapshot?.endTurnQueued ? "TURN QUEUED" : this.latestSnapshot?.phase !== "WaitingForInput" ? "ENEMY TURN" : "END TURN";
+    this.endTurn.setEnabled(!this.inputReleased && !this.intentPending && !this.activeDrag && !this.latestSnapshot?.endTurnQueued && this.latestSnapshot?.phase === "WaitingForInput");
     for (const [tileId, tile] of this.handTiles) {
       const entryId = tileId.substring(tileId.indexOf(":") + 1);
       const entry = this.selectableEntries.get(entryId);
@@ -82849,7 +82859,7 @@ async function createMapRenderer(canvas, sink) {
     const selected = selectedNode() ?? nodes.find((node) => node.isCurrent);
     clearJourneyLayer(controls);
     if (state?.isPreview === true) {
-      addControl("Close", "Close map preview", !pending && !travelTransition, width - 104, 12, 88, close);
+      addControl("Close", "Close map preview", !pending && !travelTransition, width - 124, 12, 104, close);
     }
     contextPanel.visible = metrics.contextVisible;
     contextTitle.visible = metrics.contextVisible;
@@ -83767,16 +83777,16 @@ init_lib();
 function planCollectionLayout(width, height) {
   const short = height < 440;
   const compact = width < 700 || short;
-  const listTop = short ? 96 : 108;
+  const listTop = short ? 102 : 108;
   return {
     portrait: width <= 600 && height > width,
     compact,
     short,
     listTop,
     viewportHeight: short ? Math.max(44, height - listTop - 16) : Math.max(44, height - 190 - (compact ? 106 : 0)),
-    tabY: 54,
+    tabY: 60,
     tabHeight: short ? 38 : 44,
-    closeY: short ? 8 : height - 54
+    closeY: 12
   };
 }
 function planCollectionContentBounds(width, height, safeArea = emptySafeAreaInsets, headerInset = 0) {
@@ -84148,8 +84158,9 @@ async function createCollectionRenderer(canvas, sink) {
     background.clear().roundRect(0, railHeight, width, height, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill, alpha: 0.94 }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
     background.eventMode = "static";
     content.position.set(bounds.x + (bounds.width - contentWidth) / 2, bounds.y + railHeight);
-    title.anchor.x = plan.short ? 0 : 0.5;
-    title.position.set(plan.short ? 20 : contentWidth / 2, 12);
+    title.anchor.x = 0;
+    title.position.set(20, 12);
+    fitTextToBox(title, Math.max(1, contentWidth - 164), 44, 30, 16);
     empty.position.set(30, plan.listTop + 18);
     close.resize(104, 44);
     close.position.set(contentWidth - 124, plan.closeY);
@@ -84900,16 +84911,16 @@ async function createMenuOverlayRenderer(canvas, sink) {
   };
   const layoutSettings = (settings) => {
     const short = height < 440;
-    const top = short ? 112 : 156;
+    const top = short ? 124 : 156;
     const footerY = height - (width < 520 && !short ? 102 : 50);
     const rowCount = settings.tabIndex === 1 && width < 520 && !short && !debugSettingsOpen ? 5 : 4;
     const rowHeight2 = Math.min(short ? 40 : 62, (footerY - top - 16) / rowCount);
-    addText("Settings", 24, 15, short ? 24 : 30);
+    addText("Settings", 24, 15, short ? 24 : 30, width - 164);
     if (!short) addText("Make the journey feel right for you.", 24, 52, 14, width - 48).style.fill = uiTokens.color.textMuted;
     const tabWidth = (width - 64) / 3;
-    addButton("Audio", "tab:0", 24, short ? 48 : 82, tabWidth, 38);
-    addButton("Gameplay", "tab:1", 32 + tabWidth, short ? 48 : 82, tabWidth, 38);
-    addButton(width < 520 ? "Damage" : "Damage text", "tab:2", 40 + tabWidth * 2, short ? 48 : 82, tabWidth, 38);
+    addButton("Audio", "tab:0", 24, short ? 60 : 82, tabWidth, 38);
+    addButton("Gameplay", "tab:1", 32 + tabWidth, short ? 60 : 82, tabWidth, 38);
+    addButton(width < 520 ? "Damage" : "Damage text", "tab:2", 40 + tabWidth * 2, short ? 60 : 82, tabWidth, 38);
     const section = settings.tabIndex === 0 ? "VOLUME MIXER" : settings.tabIndex === 2 ? "FLOATING DAMAGE TEXT" : debugSettingsOpen ? "DEBUG PROGRESSION" : "PACE & EFFECTS";
     addText(section, 24, top - 25, 12, width - 48).style.fill = uiTokens.color.panelOrnament;
     if (settings.tabIndex === 0) layoutAudioSettings(settings, top, rowHeight2);
@@ -84917,6 +84928,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     else if (debugSettingsOpen && settings.debugProgressionEnabled) layoutDebugSettings(settings, top, rowHeight2);
     else layoutGameplaySettings(settings, top, rowHeight2, short);
     layoutSettingsFooter(footerY, short);
+    addButton("Close", "cancel", width - 124, 12, 104, 44, true, "close");
   };
   const layoutAudioSettings = (settings, top, rowHeight2) => {
     const sliders = [
@@ -84968,7 +84980,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     [["+25", "debug:shared:25"], ["Reset", "debug:shared:reset"], ["Back", "settings:back"]].forEach(([label, action], index) => addButton(label, action, 24 + index * (buttonWidth + 8), top + rowHeight2 * 3, buttonWidth, Math.min(40, rowHeight2 - 4)));
   };
   const layoutConfirmation = (confirmation) => {
-    const title = addText(confirmation.title, 24, 24, height < 440 ? 24 : 30, width - 48);
+    const title = addText(confirmation.title, 24, 24, height < 440 ? 24 : 30, width - 164);
     const messageY = title.y + title.height + 24;
     const panel = new Graphics();
     content.addChild(panel);
@@ -84978,6 +84990,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const buttonWidth = Math.min(220, (width - 64) / 2);
     addButton("Cancel", "cancel", 24, height - 70, buttonWidth);
     addButton("Confirm", `confirm:${confirmation.action}`, width - 24 - buttonWidth, height - 70, buttonWidth);
+    addButton("Close", "cancel", width - 124, 12, 104, 44, true, "close");
   };
   const layoutOutcome = (outcome) => {
     const title = addText(outcome.title, 24, 20, height < 440 ? 26 : 34, width - 48);
@@ -85016,7 +85029,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const runIndex = Math.max(0, history.runs.findIndex((run2) => run2.id === history.selectedRunId));
     const run = history.runs[runIndex];
     addText("Run History", 24, 16, 26);
-    addButton("Close", "history:close", width - 116, 14, 92, 38, true, "close");
+    addButton("Close", "history:close", width - 124, 12, 104, 44, true, "close");
     if (!run) {
       addText("Your story starts here. Embark on a run to record your journey, discoveries, and rewards.", 24, 88, 18, width - 48);
       return;
@@ -85150,7 +85163,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     }
     const selected = nodes[selectedIndex];
     if (selected) graph.focusNode(selected.id);
-    addButton("Close", "progression:close", width - margin - 104, height - 46, 104, 36, true, "close");
+    addButton("Close", "progression:close", width - 124, 12, 104, 44, true, "close");
   };
   const keydown = (event) => {
     if (!state) return;
@@ -85322,7 +85335,7 @@ async function createCardChoiceRenderer(canvas, sink) {
     panel.resize(width - 24, height - 24);
     panel.position.set(12, 12);
     title.title = state?.title ?? "Choose a card";
-    title.resize(width - 64);
+    title.resize(width - (state?.allowCancel ? 200 : 64));
     title.position.set(32, 36);
     const entries = cardLayer.children.filter((child) => child instanceof CardChoiceButton);
     const plan = planCardChoiceLayout(width, height, entries.length);
@@ -85341,12 +85354,12 @@ async function createCardChoiceRenderer(canvas, sink) {
     const confirm = activeConfirm();
     confirm.label = state?.buttonText ?? "Confirm";
     confirm.resize(132, 44);
-    confirm.position.set(width - (state?.allowCancel ? 292 : 152), controlsY);
+    confirm.position.set(width - 152, controlsY);
     primaryConfirm.visible = confirm === primaryConfirm;
     dangerConfirm.visible = confirm === dangerConfirm;
     cancel.visible = state?.allowCancel === true;
-    cancel.resize(112, 44);
-    cancel.position.set(width - 140, controlsY);
+    cancel.resize(104, 44);
+    cancel.position.set(width - 124, 12);
   };
   const scroll = (amount) => {
     scrollOffset += amount;
@@ -85550,7 +85563,7 @@ var buttonGap = 6;
 var actionIds = /* @__PURE__ */ new Set(["encounterCards", "deck", "relics", "discard", "exhaust", "inventory", "endTurn", "map", "backpack", "training", "rewards", "history", "settings", "fullscreen", "title", "restart", "debug", "copySeed"]);
 async function createRunControlsRenderer(canvas, sink, initialState) {
   const application = new Application();
-  await application.init({ antialias: true, autoDensity: true, resolution: Math.max(1, window.devicePixelRatio || 1), backgroundAlpha: 0, canvas, preference: "canvas" });
+  await application.init({ antialias: true, autoDensity: true, resolution: Math.max(2, window.devicePixelRatio || 1), backgroundAlpha: 0, canvas, preference: "canvas" });
   const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
   canvas.tabIndex = 0;
   const root = new Container();
@@ -85560,6 +85573,11 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
   const controls = new Container();
   const feedback = new Text({ text: "", style: new TextStyle({ ...uiTokens.typography.body, fill: 16765322, fontSize: 13 }) });
   root.addChild(backdrop, panel, toolbar, controls, feedback);
+  backdrop.eventMode = "static";
+  backdrop.on("pointertap", () => {
+    if (state.menuOpen) void submit("menu");
+  });
+  panel.eventMode = "static";
   application.stage.addChild(root);
   let state = { menuOpen: false, actions: [] };
   let buttons = [];
@@ -85579,13 +85597,13 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
       layout();
       return true;
     }
-    if (action !== "menu" && !state.actions.some((entry) => entry.id === action && entry.enabled)) return false;
+    if (action !== "menu" && action !== "closeMenu" && !state.actions.some((entry) => entry.id === action && entry.enabled)) return false;
     pending = true;
     controls.eventMode = "none";
     transientFeedback = "Working\u2026";
     feedback.text = transientFeedback;
     try {
-      const accepted = await sink.invokeMethodAsync("HandleActionFromRendererAsync", action);
+      const accepted = await sink.invokeMethodAsync("HandleActionFromRendererAsync", action === "closeMenu" ? "menu" : action);
       if (disposed) return false;
       transientFeedback = accepted ? action === "copySeed" ? "Seed copied" : "" : "That action is unavailable.";
       return accepted;
@@ -85612,7 +85630,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     visibleButtonActions.add(action);
     button.label = label;
     button.setMenuIcon(controlIcon(action, label));
-    button.setIconOnly(action === "menu" || window.innerWidth < window.innerHeight && window.innerWidth < 768);
+    button.setIconOnly(action === "menu");
     button.resize(width, height);
     button.setEnabled(enabled);
     button.setFocused(action === focusedAction);
@@ -85658,11 +85676,13 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     backdrop.clear().rect(0, 0, width, barY).fill({ color: 463132, alpha: 0.78 });
     const panelWidth = Math.min(width - 16, 620);
     const panelX = (width - panelWidth) / 2;
-    panel.roundRect(panelX, 8, panelWidth, Math.max(1, barY - 14), uiTokens.frame.panelCornerRadius).fill(uiColors.panelFill).stroke({ color: uiColors.panelStroke, width: 2 });
-    const portrait = window.innerWidth < window.innerHeight && window.innerWidth < 768;
-    const columns = portrait ? Math.max(1, Math.floor(panelWidth / 76)) : panelWidth >= 520 ? 2 : 1;
+    const panelHeight = Math.min(Math.max(1, barY - 14), 136 + Math.ceil(menuActions.length / (panelWidth >= 520 ? 2 : 1)) * (menuButtonHeight + buttonGap));
+    const panelY = Math.max(8, (barY - panelHeight) / 2);
+    panel.roundRect(panelX, panelY, panelWidth, panelHeight, uiTokens.frame.panelCornerRadius).fill(uiColors.panelFill).stroke({ color: uiColors.panelStroke, width: 2 });
+    createButton("closeMenu", "Close", true, 104, 44, panelX + panelWidth - 124, panelY + 12);
+    const columns = panelWidth >= 520 ? 2 : 1;
     const rowHeight2 = menuButtonHeight + buttonGap;
-    const rows = Math.max(1, Math.floor((barY - 86) / rowHeight2));
+    const rows = Math.max(1, Math.floor((panelHeight - 136) / rowHeight2));
     const pageSize = rows * columns;
     const totalPages = Math.max(1, Math.ceil(menuActions.length / pageSize));
     page = Math.max(0, Math.min(page, totalPages - 1));
@@ -85671,15 +85691,15 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     visibleActions.forEach((entry, index) => {
       const column = index % columns;
       const row = Math.floor(index / columns);
-      createButton(entry.id, entry.label, entry.enabled, entryWidth, menuButtonHeight, panelX + 12 + column * (entryWidth + buttonGap), 20 + row * rowHeight2);
+      createButton(entry.id, entry.label, entry.enabled, entryWidth, menuButtonHeight, panelX + 12 + column * (entryWidth + buttonGap), panelY + 64 + row * rowHeight2);
     });
     if (totalPages > 1) {
-      createButton("previous", "Previous", page > 0, 96, menuButtonHeight, panelX + 12, barY - 56);
-      createButton("next", "Next", page < totalPages - 1, 96, menuButtonHeight, panelX + panelWidth - 108, barY - 56);
+      createButton("previous", "Previous", page > 0, 96, menuButtonHeight, panelX + 12, panelY + panelHeight - 70);
+      createButton("next", "Next", page < totalPages - 1, 96, menuButtonHeight, panelX + panelWidth - 108, panelY + panelHeight - 70);
     }
     feedback.text = transientFeedback || state.statusLines?.join(" \xB7 ") || "";
     feedback.visible = true;
-    feedback.position.set(panelX + 12, barY - 22);
+    feedback.position.set(panelX + 12, panelY + panelHeight - 22);
     removeInactiveButtons();
   };
   const keydown = (event) => {
@@ -85777,20 +85797,20 @@ function toRunControlsState(value) {
 }
 function controlIcon(action, label) {
   if (action === "inventory") return label === "Hand" ? "hand" : "items";
-  const icons = { menu: "menu", history: "history", settings: "settings", fullscreen: "fullscreen", title: "home", restart: "restart", previous: "previous", next: "next", deck: "cards", encounterCards: "cards", inventory: "inventory", backpack: "backpack", relics: "equipment", map: "map", rewards: "rewards", discard: "discard", exhaust: "exhaust", endTurn: "endTurn", training: "training", debug: "debug", copySeed: "seed" };
+  const icons = { menu: "menu", closeMenu: "close", history: "history", settings: "settings", fullscreen: "fullscreen", title: "home", restart: "restart", previous: "previous", next: "next", deck: "cards", encounterCards: "cards", inventory: "inventory", backpack: "backpack", relics: "equipment", map: "map", rewards: "rewards", discard: "discard", exhaust: "exhaust", endTurn: "endTurn", training: "training", debug: "debug", copySeed: "seed" };
   return icons[action];
 }
 function getRunMenuActions(state) {
   const backpack = state.actions.some((action) => action.id === "backpack");
   const collectionActions = /* @__PURE__ */ new Set(["deck", "relics", "encounterCards", "discard", "exhaust", "training"]);
-  return state.actions.filter((action) => action.id !== "inventory" && !(backpack && collectionActions.has(action.id)));
+  return state.actions.filter((action) => action.id !== "history" && action.id !== "endTurn" && action.id !== "inventory" && !(backpack && collectionActions.has(action.id)));
 }
 
 // src/pixi-run-hud.ts
 init_lib();
 async function createRunHudRenderer(canvas, sink, initialState) {
   const application = new Application();
-  await application.init({ antialias: true, autoDensity: true, backgroundAlpha: 0, canvas, preference: "canvas" });
+  await application.init({ antialias: true, autoDensity: true, resolution: Math.max(2, window.devicePixelRatio || 1), backgroundAlpha: 0, canvas, preference: "canvas" });
   let pending = false;
   let disposed = false;
   let state = toRunResourceState(initialState);

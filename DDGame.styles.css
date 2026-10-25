@@ -83,7 +83,7 @@ button:disabled[b-h7jgvqbn9t] { opacity: 0.5; cursor: default; }
 .equipment-status[b-h7jgvqbn9t] { position: relative; flex: 0 0 auto; min-width: 64px; height: 42px; padding: 0 4px; }
 .equipment-status img[b-h7jgvqbn9t] { width: 24px; height: 24px; object-fit: cover; border-radius: 3px; }
 .equipment-status.active[b-h7jgvqbn9t] { border-color: #e8bc63; background: #3b3424; }
-.equipment-status.ready[b-h7jgvqbn9t] { box-shadow: inset 0 0 0 1px #69d4c3; }
+.equipment-status.ready[b-h7jgvqbn9t] { border-color: #69d4c3; }
 .equipment-badge[b-h7jgvqbn9t] { display: block; font-size: 10px; white-space: nowrap; line-height: 14px; }
 .equipment-inspection[b-h7jgvqbn9t] { position: fixed; top: calc(48px + env(safe-area-inset-top)); right: 8px; width: min(360px, calc(100vw - 16px)); padding: 12px; background: #10252c; color: #f4efe3; border: 1px solid #e8bc63; border-radius: 4px; z-index: 101; }
 .equipment-inspection button[b-h7jgvqbn9t] { float: right; min-width: 44px; min-height: 44px; margin: -8px -8px 0 4px; }
@@ -200,17 +200,17 @@ button:disabled[b-h7jgvqbn9t] { opacity: 0.5; cursor: default; }
 .pixi-menu-overlay-accessibility[b-vvhjhjzarl]  .settings-actions button:nth-child(2) { border-color: #e2806e; color: #efb3a8; }
 /* /Components/PixiRunControlsSurface.razor.rz.scp.css */
 .pixi-run-controls-surface[b-2ntaig32y6] {
-    bottom: 0;
-    height: calc(64px + env(safe-area-inset-bottom));
+    bottom: env(safe-area-inset-bottom);
+    height: 64px;
     left: 0;
     position: fixed;
     width: 100%;
     z-index: 1200;
 }
 
-.pixi-run-controls-surface.open[b-2ntaig32y6] { height: min(100dvh, var(--run-menu-height, 620px)); }
+.pixi-run-controls-surface.open[b-2ntaig32y6] { height: calc(100dvh - env(safe-area-inset-bottom)); }
 @media (max-width: 767px) and (orientation: portrait) {
-    .pixi-run-controls-surface.open[b-2ntaig32y6] { height: min(100dvh, var(--run-menu-portrait-height, 620px)); }
+    .pixi-run-controls-surface.open[b-2ntaig32y6] { height: calc(100dvh - env(safe-area-inset-bottom)); }
 }
 .pixi-run-resource-rail[b-2ntaig32y6] { position: fixed; bottom: calc(10px + env(safe-area-inset-bottom)); left: 70px; width: calc(100% - 76px); height: 44px; z-index: 1; background: #23363c; }
 .pixi-run-controls-surface.has-inventory .pixi-run-resource-rail[b-2ntaig32y6] { width: calc(100% - 186px); }
