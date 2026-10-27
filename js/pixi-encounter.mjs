@@ -82386,6 +82386,8 @@ init_lib();
 // src/map-layout.ts
 var depthSpacing = 56;
 var endpointPadding = 34;
+var mapLocaleTopPadding = 64;
+var mapLocaleBottomPadding = 52;
 function getMapLayoutMetrics(width, height, nodes) {
   const mode = getViewportLayoutMode({ width, height });
   const contextVisible = nodes.length > 0;
@@ -82397,7 +82399,7 @@ function getMapLayoutMetrics(width, height, nodes) {
   const minRow = nodes.length > 0 ? Math.min(...nodes.map((node) => node.row)) : 0;
   const maxRow = nodes.length > 0 ? Math.max(...nodes.map((node) => node.row)) : 0;
   const availableGraphWidth = Math.max(0, graphBounds.width - endpointPadding * 2);
-  const availableGraphHeight = Math.max(0, graphBounds.height - 80);
+  const availableGraphHeight = Math.max(0, graphBounds.height - mapLocaleTopPadding - mapLocaleBottomPadding);
   const columnStep = Math.max(44, Math.min(56, availableGraphHeight / Math.max(1, maxColumn - minColumn)));
   const rowStep = depthSpacing;
   const mapWidth = (maxRow - minRow) * rowStep;
@@ -82413,7 +82415,7 @@ function getMapLayoutMetrics(width, height, nodes) {
     columnStep,
     rowStep,
     mapLeft: graphBounds.left + endpointPadding + Math.max(0, (availableGraphWidth - mapWidth) / 2),
-    mapTop: graphBounds.top + 44 + Math.max(0, (availableGraphHeight - mapHeight) / 2),
+    mapTop: graphBounds.top + mapLocaleTopPadding + Math.max(0, (availableGraphHeight - mapHeight) / 2),
     nodeRadius: 16,
     minimumPanX: Math.min(0, availableGraphWidth - mapWidth),
     minimumPanY: Math.min(0, availableGraphHeight - mapHeight)
@@ -82921,9 +82923,9 @@ async function createMapRenderer(canvas, sink) {
     for (const band of localeBands) {
       const points = band.nodes.map(pointFor);
       const left = Math.min(...points.map((point) => point.x)) - rowStep * 0.44;
-      const top = Math.min(...points.map((point) => point.y)) - 40;
+      const top = Math.min(...points.map((point) => point.y)) - mapLocaleTopPadding;
       const right = Math.max(...points.map((point) => point.x)) + rowStep * 0.44;
-      const bottom = Math.max(...points.map((point) => point.y)) + 30;
+      const bottom = Math.max(...points.map((point) => point.y)) + mapLocaleBottomPadding;
       band.shape.clear().roundRect(left, top, right - left, bottom - top, 16).fill({ color: 8229253, alpha: 0.09 }).stroke({ color: 10202011, width: 1, alpha: 0.2 });
       band.label.position.set(left + 10, top + 6);
     }
@@ -85572,10 +85574,11 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
   const toolbar = new Graphics();
   const controls = new Container();
   const feedback = new Text({ text: "", style: new TextStyle({ ...uiTokens.typography.body, fill: 16765322, fontSize: 13 }) });
-  root.addChild(backdrop, panel, toolbar, controls, feedback);
+  const overflow = new ScrollContainer({ width: 1, height: 1 });
+  root.addChild(backdrop, panel, toolbar, controls, feedback, overflow);
   backdrop.eventMode = "static";
-  backdrop.on("pointertap", () => {
-    if (state.menuOpen) void submit("menu");
+  backdrop.on("pointertap", (event) => {
+    if (state.menuOpen && (event?.pointerType !== "touch" || !scrollInput.suppressesTap(event.pointerId))) void submit("menu");
   });
   panel.eventMode = "static";
   application.stage.addChild(root);
@@ -85585,18 +85588,16 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
   const retainedButtons = /* @__PURE__ */ new Map();
   const visibleButtonActions = /* @__PURE__ */ new Set();
   let focusedAction = "menu";
-  let page = 0;
   let pending = false;
   let transientFeedback = "";
   let disposed = false;
   let previousFocus = null;
+  const scrollInput = installChoiceScrollInput(canvas, overflow, () => disposed || pending || !state.menuOpen, () => {
+  });
+  const advanceScroll = (ticker) => scrollInput.advance(ticker.deltaMS);
+  application.ticker.add(advanceScroll);
   const submit = async (action) => {
     if (pending || disposed) return false;
-    if (action === "previous" || action === "next") {
-      page += action === "next" ? 1 : -1;
-      layout();
-      return true;
-    }
     if (action !== "menu" && action !== "closeMenu" && !state.actions.some((entry) => entry.id === action && entry.enabled)) return false;
     pending = true;
     controls.eventMode = "none";
@@ -85619,6 +85620,10 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     let button = retainedButtons.get(action);
     if (!button) {
       const created = new GameButton({ menuIcon: controlIcon(action, label), width, height, label, labelStyle: "NumericResource", onPress: () => void submit(action) });
+      created.removeAllListeners("pointertap");
+      created.on("pointertap", (event) => {
+        if (event?.pointerType !== "touch" || !scrollInput.suppressesTap(event.pointerId)) created.press();
+      });
       created.on("pointerover", () => created.setFocused(true));
       created.on("pointerout", () => created.setFocused(action === focusedAction));
       created.on("pointerdown", () => created.setSelected(true));
@@ -85655,6 +85660,9 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     buttons = [];
     buttonActions.clear();
     controls.removeChildren();
+    overflow.content.removeChildren();
+    overflow.visible = false;
+    overflow.eventMode = pending ? "none" : "passive";
     controls.eventMode = pending ? "none" : "passive";
     backdrop.clear();
     panel.clear();
@@ -85668,6 +85676,9 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
       createButton(inventory.id, inventory.label, inventory.enabled, inventoryWidth, buttonHeight, width - inventoryWidth - 6, barY + 8);
     }
     if (!state.menuOpen) {
+      scrollInput.stop();
+      overflow.setContentHeight(0);
+      overflow.setScrollOffset(0);
       transientFeedback = "";
       removeInactiveButtons();
       feedback.visible = false;
@@ -85676,27 +85687,32 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     backdrop.clear().rect(0, 0, width, barY).fill({ color: 463132, alpha: 0.78 });
     const panelWidth = Math.min(width - 16, 620);
     const panelX = (width - panelWidth) / 2;
-    const panelHeight = Math.min(Math.max(1, barY - 14), 136 + Math.ceil(menuActions.length / (panelWidth >= 520 ? 2 : 1)) * (menuButtonHeight + buttonGap));
+    const availableHeight = Math.max(1, barY - 16);
+    const rowHeight2 = menuButtonHeight + buttonGap;
+    const maxColumns = Math.max(1, Math.floor((panelWidth - 18) / 150));
+    const preferredColumns = panelWidth >= 520 ? 2 : 1;
+    const fittingRows = Math.max(1, Math.floor((availableHeight - 90) / rowHeight2));
+    const columns = Math.min(maxColumns, Math.max(preferredColumns, Math.ceil(menuActions.length / fittingRows)));
+    const contentHeight = Math.ceil(menuActions.length / columns) * rowHeight2;
+    const panelHeight = Math.min(availableHeight, 90 + contentHeight);
     const panelY = Math.max(8, (barY - panelHeight) / 2);
     panel.roundRect(panelX, panelY, panelWidth, panelHeight, uiTokens.frame.panelCornerRadius).fill(uiColors.panelFill).stroke({ color: uiColors.panelStroke, width: 2 });
     createButton("closeMenu", "Close", true, 104, 44, panelX + panelWidth - 124, panelY + 12);
-    const columns = panelWidth >= 520 ? 2 : 1;
-    const rowHeight2 = menuButtonHeight + buttonGap;
-    const rows = Math.max(1, Math.floor((panelHeight - 136) / rowHeight2));
-    const pageSize = rows * columns;
-    const totalPages = Math.max(1, Math.ceil(menuActions.length / pageSize));
-    page = Math.max(0, Math.min(page, totalPages - 1));
-    const visibleActions = menuActions.slice(page * pageSize, (page + 1) * pageSize);
+    overflow.position.set(panelX + 12, panelY + 64);
+    overflow.resize(panelWidth - 24, Math.max(1, panelHeight - 90));
+    overflow.setContentHeight(contentHeight);
+    overflow.visible = overflow.maximumScrollOffset > 0;
     const entryWidth = (panelWidth - 24 - buttonGap * (columns - 1)) / columns;
-    visibleActions.forEach((entry, index) => {
+    menuActions.forEach((entry, index) => {
       const column = index % columns;
       const row = Math.floor(index / columns);
       createButton(entry.id, entry.label, entry.enabled, entryWidth, menuButtonHeight, panelX + 12 + column * (entryWidth + buttonGap), panelY + 64 + row * rowHeight2);
+      const button = retainedButtons.get(entry.id);
+      if (overflow.visible && button) {
+        overflow.content.addChild(button);
+        button.position.set(column * (entryWidth + buttonGap), row * rowHeight2);
+      }
     });
-    if (totalPages > 1) {
-      createButton("previous", "Previous", page > 0, 96, menuButtonHeight, panelX + 12, panelY + panelHeight - 70);
-      createButton("next", "Next", page < totalPages - 1, 96, menuButtonHeight, panelX + panelWidth - 108, panelY + panelHeight - 70);
-    }
     feedback.text = transientFeedback || state.statusLines?.join(" \xB7 ") || "";
     feedback.visible = true;
     feedback.position.set(panelX + 12, panelY + panelHeight - 22);
@@ -85716,6 +85732,11 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
       if (next) {
         focusedAction = buttonActions.get(next) ?? "menu";
         buttons.forEach((button) => button.setFocused(button === next));
+        if (overflow.visible && next.parent === overflow.content) {
+          const top = next.y;
+          if (top < overflow.scrollOffset) overflow.setScrollOffset(top);
+          else if (top + menuButtonHeight > overflow.scrollOffset + overflow.viewportSize.height) overflow.setScrollOffset(top + menuButtonHeight - overflow.viewportSize.height);
+        }
       }
       event.preventDefault();
       return;
@@ -85766,6 +85787,8 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
       if (disposed) return;
       disposed = true;
       resizeObserver.disconnect();
+      scrollInput.dispose();
+      application.ticker.remove(advanceScroll);
       canvas.removeEventListener("keydown", keydown);
       canvas.removeEventListener("pointerdown", focusCanvas);
       document.removeEventListener("keydown", globalKeydown);
