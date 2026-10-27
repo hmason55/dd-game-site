@@ -72958,6 +72958,13 @@ var GamePanel = class extends Container {
     this.redraw();
   }
   redraw() {
+    if (this.surface === "toolbar") {
+      this.shadow.clear();
+      this.background.clear().roundRect(0, 0, this.panelWidth, this.panelHeight, 6).fill(2307644);
+      this.innerFrame.clear();
+      this.ornaments.clear();
+      return;
+    }
     if (this.surface === "button") {
       this.shadow.clear();
       drawButtonSurface(this.background, this.panelWidth, this.panelHeight, this.fill, this.stroke);
@@ -72982,16 +72989,19 @@ var GameButton = class extends GamePanel {
   isEnabled;
   isFocused;
   isSelected;
+  toolbarAppearance;
   /**
    * Creates an interactive button.
    */
   constructor(options) {
-    super({ ...options, surface: "button" });
+    super({ ...options, surface: options.appearance === "toolbar" ? "toolbar" : "button" });
+    this.toolbarAppearance = options.appearance === "toolbar";
     this.onPress = options.onPress;
     this.isEnabled = options.enabled ?? true;
     this.isFocused = this.isEnabled && (options.focused ?? false);
     this.isSelected = this.isEnabled && (options.selected ?? false);
     this.navigationIconName = options.menuIcon;
+    this.content.addChild(this.stateOutline);
     this.navigationIcon = options.menuIcon ? createMenuIcon(options.menuIcon) : void 0;
     if (this.navigationIcon) this.content.addChild(this.navigationIcon);
     this.fullLabel = options.label;
@@ -72999,7 +73009,7 @@ var GameButton = class extends GamePanel {
     this.labelText.resolution = Math.max(2, typeof window === "undefined" ? 2 : window.devicePixelRatio || 1);
     this.labelText.anchor.set(0.5);
     this.labelText.position.set(this.panelSize.width / 2, this.panelSize.height / 2);
-    this.content.addChild(this.labelText, this.stateOutline);
+    this.content.addChild(this.labelText);
     this.fitLabel();
     this.on("pointertap", () => this.press());
     this.updatePresentation();
@@ -73121,7 +73131,7 @@ var GameButton = class extends GamePanel {
   updatePresentation() {
     this.eventMode = this.isEnabled ? "static" : "none";
     this.cursor = this.isEnabled ? "pointer" : "default";
-    this.alpha = this.isEnabled ? 1 : uiTokens.interaction.disabledAlpha;
+    this.alpha = this.isEnabled ? 1 : this.toolbarAppearance ? 0.5 : uiTokens.interaction.disabledAlpha;
     this.redrawStateOutline();
   }
   redrawStateOutline() {
@@ -73131,10 +73141,13 @@ var GameButton = class extends GamePanel {
       return;
     }
     if (this.isSelected) {
-      this.stateOutline.roundRect(0, 0, width, height, 8).fill({ color: uiColors.buttonSelected, alpha: 0.08 }).stroke({ color: uiColors.buttonSelected, width: 1 });
+      this.stateOutline.roundRect(0, 0, width, height, this.toolbarAppearance ? 6 : 8).fill({ color: uiColors.buttonSelected, alpha: 0.08 }).stroke({ color: uiColors.buttonSelected, width: 1 });
     }
     if (this.isFocused) {
-      this.stateOutline.roundRect(0, 0, width, height, 8).stroke({ color: uiColors.buttonFocus, width: 1.5 });
+      if (this.toolbarAppearance) {
+        this.stateOutline.roundRect(0, 0, width, height, 6).fill(3163982);
+      }
+      this.stateOutline.roundRect(1, 1, width - 2, height - 2, this.toolbarAppearance ? 6 : 8).stroke({ color: this.toolbarAppearance ? 16044939 : uiColors.buttonFocus, width: 1.5 });
     }
   }
 };
@@ -75346,7 +75359,14 @@ var RunHud = class extends Container {
   requestDeckCollection;
   showRail;
   health = createHudCounter("health", uiTokens.color.health, "0/0");
-  healthBar = new ProgressIndicator({ width: 64, height: 5, value: 0, maximum: 1, fill: uiTokens.color.health });
+  healthBar = new ProgressIndicator({
+    width: 64,
+    height: 6,
+    value: 0,
+    maximum: 1,
+    fill: uiTokens.color.health,
+    background: 7439754
+  });
   stamina = createHudCounter("stamina", uiTokens.color.stamina, "0 / 0");
   mana = createHudCounter("mana", uiTokens.color.mana, "0 / 0");
   currency = createHudCounter("currency", uiTokens.color.selected, 0);
@@ -75461,7 +75481,7 @@ var RunHud = class extends Container {
       x2 += slotWidth;
     });
     this.healthBar.position.set(this.health.x, this.health.y + 24 * this.health.scale.x + 2);
-    this.healthBar.resize(Math.max(1, this.health.width), 4);
+    this.healthBar.resize(Math.max(1, this.health.width), 6);
   }
   /** Fits locale and room names below the resource rail. */
   layoutMetadata(viewport, short) {
@@ -85619,7 +85639,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
   const createButton = (action, label, enabled, width, height, x2, y2) => {
     let button = retainedButtons.get(action);
     if (!button) {
-      const created = new GameButton({ menuIcon: controlIcon(action, label), width, height, label, labelStyle: "NumericResource", onPress: () => void submit(action) });
+      const created = new GameButton({ appearance: "toolbar", menuIcon: controlIcon(action, label), width, height, label, onPress: () => void submit(action) });
       created.removeAllListeners("pointertap");
       created.on("pointertap", (event) => {
         if (event?.pointerType !== "touch" || !scrollInput.suppressesTap(event.pointerId)) created.press();
@@ -85667,7 +85687,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     backdrop.clear();
     panel.clear();
     const barY = Math.max(0, height - toolbarHeight);
-    toolbar.clear().rect(0, barY, width, toolbarHeight).fill(uiColors.panelFill).rect(0, barY, width, 2).fill(uiColors.panelStroke);
+    toolbar.clear().rect(0, barY, width, toolbarHeight).fill(1321006);
     const menuActions = getRunMenuActions(state);
     createButton("menu", state.menuOpen ? "Close" : "Menu", true, 58, buttonHeight, 6, barY + 8);
     const inventory = state.actions.find((action) => action.id === "inventory");
