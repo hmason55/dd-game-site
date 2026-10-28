@@ -71433,6 +71433,14 @@ function drawSigil(g2, x2, y2, s2, color, ritual) {
   }
 }
 
+// src/resource-shape.ts
+function traceResourceShape(graphics, kind, x2, y2, width, height) {
+  if (kind === "stamina") {
+    return graphics.moveTo(x2 + width / 2, y2).lineTo(x2 + width, y2 + height / 2).lineTo(x2 + width / 2, y2 + height).lineTo(x2, y2 + height / 2).lineTo(x2 + width / 2, y2);
+  }
+  return graphics.moveTo(x2, y2).lineTo(x2 + width, y2).lineTo(x2 + width / 2, y2 + height).lineTo(x2, y2);
+}
+
 // src/card-view.ts
 var defaultCardWidth = 180;
 var defaultCardHeight = 252;
@@ -71728,10 +71736,10 @@ var CardView = class extends Container {
       this.costPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.badgeWidth, header.badgeHeight, this.handPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.panelShadow, alpha: 0.94 }).stroke({ color: palette.accent, width: 2 });
     }
     if (header.hasEnergyCost) {
-      this.energyCostPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.energyBadgeWidth, header.badgeHeight, this.handPresentation || this.rewardPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.stamina, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
+      traceResourceShape(this.energyCostPlate, "stamina", artBounds.x + 5, artBounds.y + 5, header.energyBadgeWidth, header.badgeHeight).fill({ color: uiTokens.color.stamina, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
     }
     if (header.hasManaCost) {
-      this.manaCostPlate.roundRect(this.handPresentation || this.rewardPresentation ? artBounds.x + artBounds.width - header.manaBadgeWidth - 5 : artBounds.x + 9 + header.energyBadgeWidth, artBounds.y + 5, header.manaBadgeWidth, header.badgeHeight, this.handPresentation || this.rewardPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.mana, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
+      traceResourceShape(this.manaCostPlate, "mana", this.handPresentation || this.rewardPresentation ? artBounds.x + artBounds.width - header.manaBadgeWidth - 5 : artBounds.x + 9 + header.energyBadgeWidth, artBounds.y + 5, header.manaBadgeWidth, header.badgeHeight).fill({ color: uiTokens.color.mana, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
     }
   }
   updateArtwork(artBounds) {
@@ -71759,21 +71767,21 @@ var CardView = class extends Container {
     const energyCost = getVisibleResourceCost(this.cardContent.energyCost);
     const manaCost = getVisibleResourceCost(this.cardContent.manaCost);
     this.costLabel.text = cost;
-    this.energyCostLabel.text = energyCost === void 0 ? "" : this.rewardPresentation ? String(energyCost) : `\u26A1 ${energyCost}`;
-    this.manaCostLabel.text = manaCost === void 0 ? "" : this.rewardPresentation ? String(manaCost) : `\u2726 ${manaCost}`;
+    this.energyCostLabel.text = energyCost === void 0 ? "" : String(energyCost);
+    this.manaCostLabel.text = manaCost === void 0 ? "" : String(manaCost);
     const hasLegacyCost = cost.length > 0;
     const hasEnergyCost = energyCost !== void 0;
     const hasManaCost = manaCost !== void 0;
     const badgeWidth = hasLegacyCost ? Math.min(this.cardWidth - 14, Math.max(badgeHeight, this.costLabel.width + 14)) : 0;
-    const energyBadgeWidth = hasEnergyCost ? Math.max(badgeHeight, this.energyCostLabel.width + 14) : 0;
-    const manaBadgeWidth = hasManaCost ? Math.max(badgeHeight, this.manaCostLabel.width + 14) : 0;
+    const energyBadgeWidth = hasEnergyCost ? Math.max(badgeHeight, this.energyCostLabel.width * 2 + 14) : 0;
+    const manaBadgeWidth = hasManaCost ? Math.max(badgeHeight, this.manaCostLabel.width * 2 + 14) : 0;
     const headerHeight = this.rewardPresentation ? Math.max(badgeHeight + 42, this.cardHeight * 0.25) : Math.max(82, this.cardHeight * 0.34);
     this.costLabel.visible = hasLegacyCost;
     this.energyCostLabel.visible = hasEnergyCost;
     this.manaCostLabel.visible = hasManaCost;
     this.costLabel.position.set(uiTokens.frame.borderWidth + 5 + badgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
     this.energyCostLabel.position.set(uiTokens.frame.borderWidth + 5 + energyBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
-    this.manaCostLabel.position.set(this.rewardPresentation ? this.cardWidth - uiTokens.frame.borderWidth - 5 - manaBadgeWidth / 2 : uiTokens.frame.borderWidth + 9 + energyBadgeWidth + manaBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
+    this.manaCostLabel.position.set(this.rewardPresentation ? this.cardWidth - uiTokens.frame.borderWidth - 5 - manaBadgeWidth / 2 : uiTokens.frame.borderWidth + 9 + energyBadgeWidth + manaBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 3);
     this.nameLabel.text = this.cardContent.name;
     this.nameLabel.position.set(this.cardWidth / 2, uiTokens.frame.borderWidth + badgeHeight + 11);
     this.typeLabel.text = this.cardContent.type;
@@ -71799,19 +71807,21 @@ var CardView = class extends Container {
   /** Places readable names/effects below the illustration and resource costs in opposite corners. */
   updateHandLabels() {
     const scale = this.cardWidth / defaultCardWidth;
-    const badgeHeight = 38 * scale;
+    const badgeHeight = 46 * scale;
     const rulesY = this.cardHeight * 0.58;
     const energy = getVisibleResourceCost(this.cardContent.energyCost);
     const mana = getVisibleResourceCost(this.cardContent.manaCost);
-    this.costStyle.fontSize = 30 * scale;
+    this.costStyle.fontSize = 22 * scale;
     this.costStyle.fill = uiTokens.color.text;
     this.costLabel.visible = false;
     this.energyCostLabel.visible = energy !== void 0;
     this.manaCostLabel.visible = mana !== void 0;
     this.energyCostLabel.text = energy === void 0 ? "" : String(energy);
     this.manaCostLabel.text = mana === void 0 ? "" : String(mana);
-    this.energyCostLabel.position.set(uiTokens.frame.borderWidth + 5 + badgeHeight / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
-    this.manaCostLabel.position.set(this.cardWidth - uiTokens.frame.borderWidth - 5 - badgeHeight / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
+    const energyBadgeWidth = Math.max(badgeHeight, this.energyCostLabel.width * 2 + 10 * scale);
+    const manaBadgeWidth = Math.max(badgeHeight, this.manaCostLabel.width * 2 + 10 * scale);
+    this.energyCostLabel.position.set(uiTokens.frame.borderWidth + 5 + energyBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
+    this.manaCostLabel.position.set(this.cardWidth - uiTokens.frame.borderWidth - 5 - manaBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 3);
     this.nameLabel.text = this.cardContent.name.toUpperCase();
     this.nameStyle.wordWrap = true;
     this.nameLabel.position.set(this.cardWidth / 2, rulesY + 5);
@@ -71827,8 +71837,8 @@ var CardView = class extends Container {
       hasLegacyCost: false,
       hasEnergyCost: energy !== void 0,
       hasManaCost: mana !== void 0,
-      energyBadgeWidth: energy === void 0 ? 0 : badgeHeight,
-      manaBadgeWidth: mana === void 0 ? 0 : badgeHeight,
+      energyBadgeWidth: energy === void 0 ? 0 : energyBadgeWidth,
+      manaBadgeWidth: mana === void 0 ? 0 : manaBadgeWidth,
       height: 0
     };
   }
@@ -72829,11 +72839,8 @@ function createResourceIcon(kind, color) {
       icon.moveTo(10, 2).lineTo(10, 17).moveTo(3, 7).lineTo(17, 7).stroke({ color: 1186592, width: 1, alpha: 0.5 });
       break;
     case "stamina":
-      polygon([11, 0, 3, 11, 9, 11, 7, 20, 17, 7, 11, 7, 14, 0]);
-      break;
     case "mana":
-      icon.moveTo(10, 0).lineTo(16, 9).bezierCurveTo(23, 20, -3, 24, 3, 11).lineTo(10, 0).fill({ color });
-      icon.moveTo(6, 12).lineTo(6, 15).lineTo(8, 17).stroke({ color: 15920868, width: 1.5, alpha: 0.7 });
+      traceResourceShape(icon, kind, 0, 0, 20, 20).fill({ color });
       break;
   }
   icon.eventMode = "none";
@@ -74207,7 +74214,7 @@ function assertResidency(definitions, expectedResidency) {
 // src/run-asset-manifests.ts
 var runUiIconAssets = {
   health: { url: "/img/Icons/Health.png", fallback: "\u2665" },
-  stamina: { url: "/img/Icons/Stamina.png", fallback: "\u2726" },
+  stamina: { url: "/img/Icons/Stamina.svg", fallback: "\u25C6" },
   status: { url: "/img/Icons/Status.png", fallback: "\u25C6" }
 };
 var runAssetBundleManifest = {
@@ -80768,12 +80775,16 @@ var EventDeckRow = class extends Container {
   artwork = new JourneyArtwork();
   energy = new Text({ text: "", style: { ...uiTokens.typography.body, fontSize: 14, fill: uiTokens.color.stamina } });
   mana = new Text({ text: "", style: { ...uiTokens.typography.body, fontSize: 14, fill: uiTokens.color.mana } });
+  staminaIcon = createResourceIcon("stamina", uiTokens.color.stamina);
+  manaIcon = createResourceIcon("mana", uiTokens.color.mana);
   /** Creates a row whose height expands to retain all card details at the current viewport width. */
   constructor(name, details, image, width, selected, enabled, onPress, energyCost, manaCost) {
     super();
     this.heading.resolution = this.body.resolution = 2;
     this.energy.resolution = this.mana.resolution = 2;
-    this.addChild(this.frame, this.heading, this.body, this.artwork, this.energy, this.mana);
+    this.addChild(this.frame, this.heading, this.body, this.artwork, this.energy, this.mana, this.staminaIcon, this.manaIcon);
+    this.staminaIcon.scale.set(0.7);
+    this.manaIcon.scale.set(0.7);
     this.artwork.resize(56, 56);
     this.artwork.position.set(12, 12);
     this.on("pointertap", (event) => {
@@ -80792,10 +80803,13 @@ var EventDeckRow = class extends Container {
     const costsY = 12 + Math.max(this.heading.height, estimateHeight(name, textWidth, 22));
     const hasCosts = energyCost != null || manaCost != null;
     this.energy.visible = this.mana.visible = hasCosts;
-    this.energy.text = `\u26A1 ${energyCost ?? 0}`;
-    this.mana.text = `\u2726 ${manaCost ?? 0}`;
-    this.energy.position.set(textX, costsY);
-    this.mana.position.set(textX + 60, costsY);
+    this.staminaIcon.visible = this.manaIcon.visible = hasCosts;
+    this.energy.text = String(energyCost ?? 0);
+    this.mana.text = String(manaCost ?? 0);
+    this.staminaIcon.position.set(textX, costsY + 2);
+    this.manaIcon.position.set(textX + 60, costsY + 2);
+    this.energy.position.set(textX + 20, costsY);
+    this.mana.position.set(textX + 80, costsY);
     const bodyY = costsY + (hasCosts ? 22 : 0);
     this.body.position.set(textX, bodyY);
     this.layoutHeight = Math.max(80, bodyY + Math.max(this.body.height, estimateHeight(details, textWidth, 19)) + 10);
@@ -85000,7 +85014,9 @@ function drawStatIcon(g2, stat, color) {
   } else if (stat === "Attack") {
     g2.moveTo(-7, 9).lineTo(10, -11).lineTo(9, -3).lineTo(-5, 11).closePath().stroke(stroke2).moveTo(-9, 2).lineTo(1, 12).moveTo(-5, 8).lineTo(-11, 14).stroke(stroke2);
   } else if (stat === "MaxEnergy") {
-    g2.poly([3, -13, -8, 2, 0, 2, -3, 13, 9, -3, 1, -3]).stroke(stroke2);
+    traceResourceShape(g2, "stamina", -13, -13, 26, 26).fill({ color: uiTokens.color.stamina });
+  } else if (["MaxMana", "ManaPerTurn", "MaxManaMinusEnergy"].includes(stat)) {
+    traceResourceShape(g2, "mana", -13, -13, 26, 26).fill({ color: uiTokens.color.mana });
   } else {
     g2.moveTo(0, -13).lineTo(5, -4).lineTo(13, 0).lineTo(5, 4).lineTo(0, 13).lineTo(-5, 4).lineTo(-13, 0).lineTo(-5, -4).closePath().stroke(stroke2);
   }

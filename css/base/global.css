@@ -1085,6 +1085,14 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     opacity: 0.2;
 }
 
+.resource-bar-wrapper.stamina .diamond-segment {
+    clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.resource-bar-wrapper.mana .diamond-segment {
+    clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
 .no-hover,
 .no-hover * {
     pointer-events: none !important;
@@ -1280,12 +1288,43 @@ button[role="checkbox"] .card {
     text-align: center;
 }
 
-.card-cost-chip.diamond {
-    transform: rotate(45deg);
+.card-cost-chip.diamond,
+.card-cost-chip.triangle {
+    position: relative;
+    --chip-size: 26px;
+    width: auto;
+    min-width: var(--chip-size);
+    border: 0;
+    background-color: transparent !important;
 }
 
-.card-cost-chip.diamond span {
-    transform: rotate(-45deg) translate(0%, 0%);
+.card-cost-chip.diamond::before,
+.card-cost-chip.triangle::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.card-cost-chip.diamond::before {
+    clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+    background-color: #90c7a7;
+}
+
+.card-cost-chip.triangle::before {
+    clip-path: polygon(0 0, 100% 0, 50% 100%);
+    background-color: #93c9e8;
+}
+
+.card-cost-chip.diamond > span,
+.card-cost-chip.triangle > span {
+    position: relative;
+    box-sizing: border-box;
+    padding-inline: 0.7em;
+}
+
+.card-cost-chip.triangle > span {
+    transform: translateY(-16.67%);
 }
 
 .card-type-icon {
