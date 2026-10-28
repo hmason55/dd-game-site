@@ -82484,20 +82484,17 @@ function getGraphBounds(width, height, contextSide, contextVisible, context2) {
 function getMapDestinationLayout(metrics) {
   const { contextBounds: bounds, contextSide } = metrics;
   const compactSide = contextSide && bounds.height < 220;
-  const artHeight = compactSide ? 0 : contextSide ? 64 : 48;
-  const artWidth = compactSide ? 0 : contextSide ? 64 : 48;
-  const textX = bounds.left + (contextSide ? 16 : 76);
-  const titleY = bounds.top + (compactSide ? 12 : contextSide ? 88 : 14);
-  const detailsY = titleY + 30;
+  const artHeight = compactSide ? 40 : contextSide ? 64 : 48;
+  const artWidth = compactSide ? 40 : contextSide ? 64 : 48;
+  const textX = bounds.left + (compactSide ? 68 : contextSide ? 16 : 76);
+  const titleY = bounds.top + (compactSide ? 20 : contextSide ? 88 : 24);
   const controlY = bounds.top + bounds.height - 54;
   return {
     artWidth,
     artHeight,
     textX,
     titleY,
-    detailsY,
-    textWidth: Math.max(1, bounds.width - (contextSide ? 32 : 92)),
-    detailsHeight: Math.max(1, controlY - detailsY - 8),
+    textWidth: Math.max(1, bounds.width - (compactSide ? 84 : contextSide ? 32 : 92)),
     controlY
   };
 }
@@ -82526,14 +82523,13 @@ async function createMapRenderer(canvas, sink) {
   const contextPanel = new Graphics();
   const region = new Text({ text: "", style: new TextStyle(regionStyle) });
   const contextTitle = new Text({ text: "Inspect a location", style: new TextStyle(contextTitleStyle4) });
-  const contextDetails = new Text({ text: "Select a node to review its route and destination.", style: new TextStyle(contextBodyStyle3) });
   const feedback = new Text({ text: "", style: new TextStyle(feedbackStyle5) });
   feedback.visible = false;
   const controls = new Container();
   const destinationArt = new JourneyArtwork();
   graph.addChild(connectionLayer, nodeLayer, travelMarker);
   graph.mask = graphMask;
-  root.addChild(background, graphFade, region, contextPanel, contextTitle, contextDetails, controls, feedback, graphMask);
+  root.addChild(background, graphFade, region, contextPanel, contextTitle, controls, feedback, graphMask);
   root.addChild(destinationArt);
   application.stage.addChild(root);
   const nodeViews = /* @__PURE__ */ new Map();
@@ -82906,13 +82902,10 @@ async function createMapRenderer(canvas, sink) {
     }
     contextPanel.visible = metrics.contextVisible;
     contextTitle.visible = metrics.contextVisible;
-    contextDetails.visible = metrics.contextVisible;
     destinationArt.visible = selected !== void 0 && metrics.contextVisible;
     if (selected && metrics.contextVisible) {
       contextPanel.clear().roundRect(contextBounds.left, contextBounds.top, contextBounds.width, contextBounds.height, 4).fill({ color: 530204, alpha: 0.97 }).roundRect(contextBounds.left, contextBounds.top, contextBounds.width, contextBounds.height, 12).stroke({ color: 9549506, width: 2 }).rect(contextBounds.left + 2, contextBounds.top + 14, 4, Math.max(1, contextBounds.height - 28)).fill({ color: selected.isReachable ? 7854502 : 16113563, alpha: 0.9 });
       contextTitle.text = selected.kind.toUpperCase();
-      const localeName = getSceneEnvironment(selected.environment)?.localeName;
-      contextDetails.text = `${localeName ? localeName + ". " : ""}${selected.description} ${selected.isReachable ? "" : selected.isCurrent ? "Current location." : selected.isVisited ? "Visited." : "Route locked."}`;
       const destination = getMapDestinationLayout(metrics);
       destinationArt.visible = destination.artHeight > 0;
       destinationArt.setImage(getJourneyBackground(selected.kind.toLowerCase(), selected.environment));
@@ -82920,8 +82913,6 @@ async function createMapRenderer(canvas, sink) {
       destinationArt.position.set(contextBounds.left + 16, contextBounds.top + 12);
       contextTitle.position.set(destination.textX, destination.titleY);
       fitTextToBox(contextTitle, destination.textWidth, 24, 18, 16);
-      contextDetails.position.set(destination.textX, destination.detailsY);
-      fitTextToBox(contextDetails, destination.textWidth, destination.detailsHeight, 14, 13);
       const controlWidth = contextBounds.width - 32;
       addControl(selected.isCurrent ? "You are here" : "Travel", "Travel to selected location", !selected.isCurrent && selected.isReachable && state?.canTravel === true && !pending && !travelTransition, contextBounds.left + 16, destination.controlY, controlWidth, () => activate(selected));
     }
@@ -83204,7 +83195,6 @@ var noOpAccessibilityOverlay3 = { update() {
 } };
 var regionStyle = { fill: 9549506, fontFamily: "Alegreya, Georgia, serif", fontSize: 14, fontWeight: "bold", letterSpacing: 0.6 };
 var contextTitleStyle4 = { fill: 16317180, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "bold" };
-var contextBodyStyle3 = { fill: 13358561, fontFamily: "Alegreya, Georgia, serif", fontSize: 14, lineHeight: 19, wordWrap: true };
 var feedbackStyle5 = { fill: 14844014, fontFamily: "Alegreya, Georgia, serif", fontSize: 15, align: "center" };
 var controlStyle = uiTokens.typography.button;
 
