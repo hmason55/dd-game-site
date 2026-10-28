@@ -70656,6 +70656,7 @@ var GamePanel = class extends Container {
   }
 };
 var GameButton = class extends GamePanel {
+  stackedIcon = false;
   labelText;
   navigationIcon;
   navigationIconName;
@@ -70789,6 +70790,11 @@ var GameButton = class extends GamePanel {
     if (this.navigationIcon) this.content.addChild(this.navigationIcon);
     this.fitLabel();
   }
+  /** Stacks the navigation symbol above its label on narrow collection tabs. */
+  setStackedIcon(value) {
+    this.stackedIcon = value;
+    this.fitLabel();
+  }
   /** Switches compact navigation to icons while preserving its accessible title. */
   setIconOnly(value) {
     this.iconOnly = value && this.navigationIcon !== void 0;
@@ -70800,6 +70806,12 @@ var GameButton = class extends GamePanel {
     this.accessibleTitle = this.fullLabel;
     this.labelText.style.wordWrap = false;
     this.labelText.visible = !this.iconOnly;
+    if (this.stackedIcon && this.navigationIcon && !this.iconOnly) {
+      this.navigationIcon.position.set((this.panelSize.width - 16) / 2, 8);
+      this.labelText.position.set(this.panelSize.width / 2, this.panelSize.height - 15);
+      fitTextToBox(this.labelText, this.panelSize.width - 8, 22, 14, 11);
+      return;
+    }
     const inset = this.navigationIcon ? 32 : 0;
     if (this.navigationIcon) this.navigationIcon.position.set(this.iconOnly ? (this.panelSize.width - 16) / 2 : 10, (this.panelSize.height - 16) / 2);
     this.labelText.position.set((this.panelSize.width + inset) / 2, this.panelSize.height / 2);
@@ -79516,6 +79528,14 @@ function getParticleBudgets(coarsePointer) {
 // src/pixi-reward.ts
 init_lib();
 
+// src/dialog-style.ts
+function styleDialogTitle(title, width) {
+  Object.assign(title.style, uiTokens.typography.panelTitle, { fill: 16113563 });
+  title.anchor.set(0, 0);
+  title.position.set(24, 12);
+  fitTextToBox(title, Math.max(1, width - 172), 44, 30, 18);
+}
+
 // src/reward-scene.ts
 init_lib();
 
@@ -79580,7 +79600,7 @@ var RewardScene = class {
   /** Keeps relic text at a readable size while short screens scroll through the options. */
   optionScroll = new ScrollContainer({ width: 1, height: 1 });
   background = new Graphics();
-  title = new SceneTitle({ title: "Rewards", width: 1 });
+  title = new Text({ text: "Rewards", style: uiTokens.typography.panelTitle });
   currency = new ResourceCounter({ label: "Gold", value: 0, icon: "\xA4" });
   inventoryDestination = new Text({ text: "Deck \xB7 Relics \xB7 Items", style: new TextStyle(inventoryStyle) });
   choiceLayer = new Container();
@@ -79827,24 +79847,20 @@ var RewardScene = class {
   }
   /** Positions the title and return action without taking room away from short-screen cards. */
   layoutHeader(panel, short, hasOptions) {
-    this.title.title = this.getRewardTitle(hasOptions);
-    this.title.resize(panel.width - 32);
-    this.title.position.set(panel.x + 16, panel.y + 12);
+    this.title.text = this.getRewardTitle(hasOptions);
+    styleDialogTitle(this.title, panel.width);
+    this.title.position.set(panel.x + 24, panel.y + 12);
     this.currency.visible = false;
     this.inventoryDestination.visible = false;
-    this.backButton.position.set(panel.x + 16, panel.y + (short ? 12 : 46));
+    this.backButton.position.set(panel.x + panel.width - 116, panel.y + 12);
     this.backButton.visible = hasOptions;
-    if (short && this.backButton.visible) {
-      this.title.resize(panel.width - 142);
-      this.title.position.set(panel.x + 126, panel.y + 12);
-    }
     this.layoutSubtitle(panel, short, hasOptions);
   }
   /** Labels card choices distinctly from other selectable drops. */
   getRewardTitle(hasOptions) {
-    if (!hasOptions) return this.snapshot?.title ?? "REWARDS";
-    if (this.selectedReward?.options?.every((option) => option.kind === "relic")) return this.viewport.height < 420 ? "RELICS" : "CHOOSE A RELIC";
-    return this.selectedReward?.options?.every((option) => option.kind === "card") ? "CHOOSE A CARD" : "CHOOSE A REWARD";
+    if (!hasOptions) return this.snapshot?.title ?? "Rewards";
+    if (this.selectedReward?.options?.every((option) => option.kind === "relic")) return "Choose a relic";
+    return this.selectedReward?.options?.every((option) => option.kind === "card") ? "Choose a card" : "Choose a reward";
   }
   /** Keeps optional instructions clear of the return control. */
   layoutSubtitle(panel, short, hasOptions) {
@@ -80480,7 +80496,7 @@ function installChoiceScrollInput(canvas, scroll, isBlocked, onScroll) {
     event.preventDefault();
   };
   const pointerdown = (event) => {
-    if (isBlocked() || event.pointerType !== "touch" || !isPrimaryPointer(event) || gesture) return;
+    if (event.defaultPrevented || isBlocked() || event.pointerType !== "touch" || !isPrimaryPointer(event) || gesture) return;
     suppressedPointerId = void 0;
     motion.stop();
     if (scroll.maximumScrollOffset === 0) return;
@@ -83159,6 +83175,10 @@ async function createMapRenderer(canvas, sink) {
     region.text = getSceneEnvironment(state?.environment)?.localeName ?? state?.regionName ?? "";
     region.position.set(20, 14);
     region.anchor.set(0, 0);
+    if (state?.isPreview) {
+      region.text = "Map";
+      styleDialogTitle(region, width);
+    }
     feedback.position.set(contextBounds.left + contextBounds.width / 2, metrics.contextVisible ? contextBounds.top - 22 : height - 28);
     feedback.anchor.set(0.5, 0);
     feedback.style.wordWrap = true;
@@ -84073,750 +84093,6 @@ async function createLeaveRenderer(canvas, sink) {
   };
 }
 
-// src/pixi-collection.ts
-init_lib();
-function planCollectionLayout(width, height) {
-  const short = height < 440;
-  const compact = width < 700 || short;
-  const listTop = short ? 102 : 108;
-  return {
-    portrait: width <= 600 && height > width,
-    compact,
-    short,
-    listTop,
-    viewportHeight: short ? Math.max(44, height - listTop - 16) : Math.max(44, height - 190 - (compact ? 106 : 0)),
-    tabY: 60,
-    tabHeight: short ? 38 : 44,
-    closeY: 12
-  };
-}
-function planCollectionContentBounds(width, height, safeArea = emptySafeAreaInsets, headerInset = 0) {
-  return describeViewport({ width, height }, { safeArea: { ...safeArea, top: Math.max(safeArea.top, headerInset) } }).contentBounds;
-}
-function planCollectionDetailVisibility(plan, kind) {
-  if (plan.short) return { compactDetail: false, details: false };
-  if (!plan.compact) return { compactDetail: false, details: true };
-  return { compactDetail: kind === "card", details: kind !== "card" };
-}
-function planCollectionCardGrid(width, count2, portrait = false) {
-  const gap = 12;
-  const columns = portrait ? Math.max(1, Math.min(3, Math.floor((width + gap) / 76))) : Math.max(1, Math.min(5, Math.floor((width + gap) / 172)));
-  const cardWidth = Math.min(220, (width - gap * (columns - 1)) / columns);
-  const height = cardWidth * 252 / 180;
-  return { columns, width: cardWidth, height, contentHeight: Math.max(0, Math.ceil(count2 / columns) * (height + gap) - gap) };
-}
-function createCollectionCard(entry) {
-  if (entry.kind === "item") return new CardView({ presentation: "hand", ...itemCardContent(entry.name, entry.description, entry.detail), enabled: true });
-  return new CardView({
-    presentation: "hand",
-    inspection: entry.inspection ?? null,
-    name: entry.name,
-    description: entry.description,
-    type: entry.cardType ?? "Card",
-    rarity: toCardRarity3(entry.rarity),
-    energyCost: entry.energyCost ?? Number(entry.cost ?? 0),
-    manaCost: entry.manaCost ?? 0,
-    enabled: true
-  });
-}
-function planCollectionDashboard(width) {
-  const columns = Math.max(1, Math.min(3, Math.floor((width + 12) / 280)));
-  return { columns, width: (width - (columns - 1) * 12) / columns };
-}
-var fallbackRenderer;
-function planCollectionFallbackBounds(width, height, safeArea) {
-  const top = safeArea.top + 44;
-  const canvas = { x: 0, y: top, width, height: Math.max(1, height - top) };
-  return { canvas, content: planCollectionContentBounds(width, canvas.height, { ...safeArea, top: 0 }) };
-}
-async function acquireFallbackRenderer() {
-  fallbackRenderer ??= (async () => {
-    const fallbackCanvas = document.createElement("canvas");
-    fallbackCanvas.className = "pixi-collection-fallback-canvas";
-    fallbackCanvas.style.cssText = "position:fixed;inset:calc(44px + env(safe-area-inset-top)) 0 0;width:100vw;height:calc(100dvh - 44px - env(safe-area-inset-top));z-index:1399;display:none;touch-action:none";
-    document.body.appendChild(fallbackCanvas);
-    const application = new Application();
-    try {
-      await application.init({ antialias: true, autoDensity: true, resolution: Math.max(1, window.devicePixelRatio || 1), background: 529183, backgroundAlpha: 0, canvas: fallbackCanvas, preference: "canvas" });
-      installCanvasPresentationRecovery(application, fallbackCanvas);
-      return { application, canvas: fallbackCanvas };
-    } catch (error) {
-      fallbackCanvas.remove();
-      fallbackRenderer = void 0;
-      throw error;
-    }
-  })();
-  const renderer = await fallbackRenderer;
-  renderer.canvas.style.display = "block";
-  renderer.application.ticker.start();
-  return renderer;
-}
-async function createCollectionRenderer(canvas, sink) {
-  const host = getCollectionOverlayHost();
-  const fallback = host ? void 0 : await acquireFallbackRenderer();
-  const application = fallback?.application;
-  const inputCanvas = host?.canvas ?? fallback.canvas;
-  const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  const dialogElement = canvas.parentElement;
-  const restoreRunControls = suspendRunControls(document.querySelector(".pixi-run-controls-surface"), true);
-  dialogElement?.classList.add("shared-runtime");
-  inputCanvas.tabIndex = 0;
-  dialogElement?.focus({ preventScroll: true });
-  const root = new Container();
-  const background = new Graphics();
-  const title = new Text({ text: "", style: { ...uiTokens.typography.panelTitle, fill: 16113563 } });
-  const tabLayer = new Container();
-  const entriesLayer = new Container();
-  const entriesFade = new ScrollContentFade(entriesLayer);
-  const listMask = new Graphics();
-  const empty = new Text({ text: "", style: { ...uiTokens.typography.body, fill: 12109785 } });
-  const compactDetail = new Text({ text: "", style: { ...uiTokens.typography.body, fill: 14214126, wordWrap: true } });
-  title.resolution = empty.resolution = compactDetail.resolution = 2;
-  const close = new GameButton({ width: 1, height: 1, label: "Close", onPress: () => {
-    void sink.invokeMethodAsync("HandleActionFromRendererAsync", "close");
-  } });
-  const content = new Container();
-  const details = new Container();
-  const keywordTooltip = new ChoiceTooltip();
-  content.addChild(title, tabLayer, entriesFade, listMask, empty, compactDetail, close, details);
-  root.addChild(background, content, keywordTooltip);
-  entriesLayer.mask = listMask;
-  (host?.layer ?? application.stage).addChild(root);
-  title.anchor.set(0.5, 0);
-  let state;
-  let disposed = false;
-  let scrollOffset = 0;
-  const scrollMotion = new ScrollMotion(!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
-  let gestureStart;
-  let suppressedTap = false;
-  let selectedIndex = 0;
-  let generation = 0;
-  let viewportHeight = 1;
-  let rendererWidth = 0;
-  let rendererHeight = 0;
-  let rowOffsets = [];
-  let rowHeights = [];
-  let totalRowHeight = 0;
-  let scrollLayout;
-  const destroyChildren = (layer) => {
-    for (const child of layer.removeChildren()) child.destroy({ children: true });
-  };
-  const selectedEntry = () => state?.tabs[state.activeTabIndex]?.entries[selectedIndex];
-  const showEnchantmentTooltip = () => {
-    const entry = selectedEntry();
-    const descriptions = entry?.inspection ? void 0 : entry?.enchantmentDescriptions;
-    const card = entriesLayer.children[selectedIndex];
-    if (descriptions?.length && card)
-      keywordTooltip.show(descriptions.join("\n"), card.getBounds(), { width: host?.width() ?? application.renderer.width, height: host?.height() ?? application.renderer.height });
-    else keywordTooltip.hide();
-  };
-  const rebuildDetails = () => {
-    destroyChildren(details);
-    const entry = selectedEntry();
-    compactDetail.text = entry ? `${entry.name} \u2014 ${entry.description}` : "";
-    if (!entry) return;
-    if (isCardGrid()) return;
-    if (entry.kind === "card" || entry.kind === "item") {
-      const card = createCollectionCard(entry);
-      details.addChild(card);
-      if (artworkPath(entry) && isSafeImagePath(artworkPath(entry))) {
-        const currentGeneration = generation;
-        void Assets.load(artworkPath(entry)).then((texture) => {
-          if (!disposed && currentGeneration === generation && !card.destroyed) card.setContent({ ...card.content, artTexture: texture });
-        }).catch(() => void 0);
-      }
-    } else {
-      const heading = new Text({ text: entry.name, style: { ...uiTokens.typography.panelTitle, fill: 16113563, wordWrap: true } });
-      const description = new Text({ text: entry.description, style: {
-        ...uiTokens.typography.body,
-        fill: uiTokens.color.textMuted,
-        fontSize: 15,
-        lineHeight: 21,
-        wordWrap: true
-      } });
-      heading.resolution = description.resolution = 2;
-      details.addChild(heading, description);
-    }
-  };
-  const selectEntry = (index) => {
-    scrollMotion.stop();
-    const count2 = state?.tabs[state.activeTabIndex]?.entries.length ?? 0;
-    selectedIndex = Math.max(0, Math.min(count2 - 1, index));
-    const top = rowOffsets[selectedIndex] ?? 0;
-    const bottom = top + (rowHeights[selectedIndex] ?? 76);
-    if (top < scrollOffset) scrollOffset = top;
-    if (bottom > scrollOffset + viewportHeight) scrollOffset = Math.max(top, bottom - viewportHeight);
-    rebuildDetails();
-    layout();
-    showEnchantmentTooltip();
-  };
-  const rebuild = () => {
-    generation++;
-    destroyChildren(tabLayer);
-    destroyChildren(entriesLayer);
-    destroyChildren(details);
-    if (!state) return;
-    title.text = state.title;
-    const currentState = state;
-    currentState.tabs.forEach((tab2, index) => tabLayer.addChild(new GameButton({ width: 1, height: 1, label: tab2.label, selected: index === currentState.activeTabIndex, onPress: () => {
-      void sink.invokeMethodAsync("HandleActionFromRendererAsync", `tab:${index}`);
-    } })));
-    const tab = currentState.tabs[currentState.activeTabIndex];
-    if (!tab) return;
-    empty.text = tab.entries.length === 0 ? "Nothing here yet." : "";
-    tab.entries.forEach((entry, index) => {
-      if (entry.kind === "card" || entry.kind === "item") {
-        const face = createCollectionCard(entry);
-        face.eventMode = "static";
-        face.cursor = "pointer";
-        face.on("pointertap", () => {
-          if (!suppressedTap) selectEntry(index);
-        });
-        entriesLayer.addChild(face);
-        if (artworkPath(entry) && isSafeImagePath(artworkPath(entry))) {
-          const currentGeneration = generation;
-          void Assets.load(artworkPath(entry)).then((texture) => {
-            if (!disposed && currentGeneration === generation && !face.destroyed) face.setContent({ ...face.content, artTexture: texture });
-          }).catch(() => void 0);
-        }
-        return;
-      }
-      const card = new Graphics();
-      const name = new Text({ text: entry.name, style: {
-        ...uiTokens.typography.button,
-        fill: uiTokens.color.text,
-        fontSize: 18,
-        lineHeight: 22,
-        wordWrap: true
-      } });
-      const detail = new Text({ text: entry.detail, style: { ...uiTokens.typography.body, fill: 9425057, fontSize: 14, lineHeight: 19, wordWrap: true } });
-      const description = new Text({ text: entry.description, style: {
-        ...uiTokens.typography.body,
-        fill: uiTokens.color.textMuted,
-        fontSize: 14,
-        lineHeight: 19,
-        wordWrap: true
-      } });
-      if (tab.label === "Stats") {
-        description.style.fontSize = 28;
-        description.style.lineHeight = 34;
-        description.style.fill = 16113563;
-      }
-      name.resolution = detail.resolution = description.resolution = 2;
-      card.eventMode = "static";
-      card.cursor = "pointer";
-      card.on("pointertap", () => {
-        if (!suppressedTap) selectEntry(index);
-      });
-      card.addChild(name, detail, description);
-      if (artworkPath(entry) && isSafeImagePath(artworkPath(entry))) {
-        const image = new Sprite(Texture.EMPTY);
-        card.addChild(image);
-        const currentGeneration = generation;
-        void Assets.load(artworkPath(entry)).then((texture) => {
-          if (disposed || currentGeneration !== generation || image.destroyed) return;
-          image.texture = texture;
-          layout();
-        }).catch(() => void 0);
-      }
-      entriesLayer.addChild(card);
-    });
-    rebuildDetails();
-  };
-  const layoutTabs = (width, plan) => {
-    const tabs = tabLayer.children.filter((child) => child instanceof GameButton);
-    const tabWidth = Math.max(44, (width - 40) / Math.max(1, tabs.length));
-    const compact = width < 500;
-    tabs.forEach((tab, index) => {
-      const tabState = state?.tabs[index];
-      if (tabState) tab.label = compact ? compactTabLabel(tabState.label) : tabState.label;
-      tab.resize(Math.max(44, tabWidth - 4), plan.tabHeight);
-      tab.position.set(20 + index * tabWidth, plan.tabY);
-    });
-  };
-  const isDashboard = () => ["Stats", "Training"].includes(state?.tabs[state.activeTabIndex]?.label ?? "");
-  const layoutEntry = (child, index, plan, listWidth) => {
-    const grid = planCollectionDashboard(listWidth);
-    const tileWidth = isDashboard() ? grid.width : listWidth;
-    child.position.set(isDashboard() ? index % grid.columns * (grid.width + 12) : 0, 0);
-    const y2 = plan.listTop + (rowOffsets[index] ?? 0) - scrollOffset;
-    const [name, detail, description] = child.children.filter((entry) => entry instanceof Text);
-    const image = child.children.find((entry) => entry instanceof Sprite);
-    const textX = image ? 90 : 36;
-    const textWidth = Math.max(1, tileWidth - (textX - 20) - 12);
-    for (const label of [name, detail, description]) if (label) label.style.wordWrapWidth = textWidth;
-    const row = measureCollectionRow({
-      name: name?.text ?? "",
-      detail: detail?.text ?? "",
-      description: description?.text ?? "",
-      nameHeight: name?.height ?? 0,
-      detailHeight: detail?.height ?? 0,
-      descriptionHeight: description?.height ?? 0
-    }, textWidth);
-    child.clear().roundRect(20, y2, tileWidth, row.height, 8).fill({ color: index === selectedIndex ? uiTokens.color.surfaceRaised : uiTokens.color.surface }).stroke({ color: isDashboard() ? detail?.text.startsWith("Unlocked") ? 9425057 : detail?.text.startsWith("Locked") ? 4284778 : 13280860 : index === selectedIndex ? uiTokens.color.selected : 4284778, width: 1 });
-    name?.position.set(textX, y2 + 8);
-    if (detail) {
-      detail.visible = detail.text.length > 0;
-      detail.position.set(textX, y2 + row.detailY);
-    }
-    description?.position.set(textX, y2 + row.descriptionY);
-    if (image instanceof Sprite) fitImage(image, 56, 56, 28, y2 + 10);
-    if (detail) detail.style.fill = detail.text.startsWith("Locked") ? uiTokens.color.textMuted : 9425057;
-    rowHeights[index] = row.height;
-    child.visible = y2 + row.height >= plan.listTop && y2 < plan.listTop + plan.viewportHeight;
-  };
-  const measureEntries = (plan, listWidth) => {
-    rowOffsets = [];
-    rowHeights = [];
-    totalRowHeight = 0;
-    if (isCardGrid()) {
-      const grid = planCollectionCardGrid(listWidth, entriesLayer.children.length, plan.portrait && !isItemGrid());
-      entriesLayer.children.forEach((_child, index) => {
-        rowOffsets[index] = Math.floor(index / grid.columns) * (grid.height + 12);
-        rowHeights[index] = grid.height;
-      });
-      totalRowHeight = grid.contentHeight;
-      return;
-    }
-    const columns = isDashboard() ? planCollectionDashboard(listWidth).columns : 1;
-    let rowHeight2 = 0;
-    entriesLayer.children.forEach((child, index) => {
-      rowOffsets[index] = totalRowHeight;
-      if (child instanceof Graphics) layoutEntry(child, index, plan, listWidth);
-      if (child instanceof CardView) rowHeights[index] = planCollectionCardGrid(Math.min(220, listWidth), 1).height;
-      rowHeight2 = Math.max(rowHeight2, rowHeights[index] ?? 76);
-      if (index % columns === columns - 1 || index === entriesLayer.children.length - 1) {
-        totalRowHeight += rowHeight2 + 12;
-        rowHeight2 = 0;
-      }
-    });
-    totalRowHeight = Math.max(0, totalRowHeight - 12);
-  };
-  const layoutEntries = (plan, listWidth) => {
-    listMask.clear().rect(20, plan.listTop, listWidth, plan.viewportHeight).fill({ color: 16777215 });
-    const grid = planCollectionCardGrid(isCardGrid() ? listWidth : Math.min(220, listWidth), entriesLayer.children.length, isCardGrid() && plan.portrait && !isItemGrid());
-    entriesLayer.children.forEach((child, index) => {
-      if (child instanceof CardView) {
-        const y2 = plan.listTop + (rowOffsets[index] ?? 0) - scrollOffset;
-        const gridX = 20 + Math.max(0, (listWidth - grid.width * grid.columns - (grid.columns - 1) * 12) / 2);
-        child.resize({ width: grid.width, height: grid.height });
-        child.position.set(gridX + index % grid.columns * (grid.width + 12), y2);
-        child.setInteractionState({ enabled: true, focused: false, selected: index === selectedIndex });
-        child.visible = y2 + grid.height >= plan.listTop && y2 < plan.listTop + plan.viewportHeight;
-      }
-      if (child instanceof Graphics) layoutEntry(child, index, plan, listWidth);
-    });
-    entriesFade.setViewport({
-      x: 20,
-      y: plan.listTop,
-      width: listWidth,
-      height: plan.viewportHeight,
-      top: scrollOffset > 0,
-      bottom: scrollOffset < Math.max(0, totalRowHeight - viewportHeight)
-    }, content);
-  };
-  const layoutDetails = (width, height, plan) => {
-    const entry = selectedEntry();
-    const visibility = planCollectionDetailVisibility(plan, entry?.kind);
-    const detailObject = details.children[0];
-    if (detailObject instanceof CardView) {
-      detailObject.visible = !plan.compact;
-      if (!plan.compact) detailObject.resize({ width: 180, height: Math.min(252, height - 190) });
-    }
-    details.position.set(plan.compact ? 30 : width - 220, plan.compact ? height - 164 : 110);
-    compactDetail.visible = visibility.compactDetail && entry !== void 0;
-    compactDetail.style.wordWrapWidth = width - 60;
-    compactDetail.position.set(30, height - 156);
-    details.visible = visibility.details && entry !== void 0;
-    if (plan.compact) {
-      details.children.forEach((child, index) => {
-        if (child instanceof Text) {
-          child.style.wordWrapWidth = width - 60;
-          child.position.set(0, index === 0 ? 0 : Math.max(36, (details.children[0]?.height ?? 22) + 10));
-        }
-      });
-    } else {
-      details.visible = true;
-      details.children.forEach((child, index) => {
-        if (child instanceof Text) {
-          child.style.wordWrapWidth = 200;
-          child.position.set(0, index === 0 ? 0 : Math.max(36, (details.children[0]?.height ?? 22) + 10));
-        }
-      });
-    }
-  };
-  const layout = () => {
-    if (disposed) return;
-    const safeArea = readCollectionSafeArea(inputCanvas);
-    const fallbackBounds = planCollectionFallbackBounds(Math.max(1, window.innerWidth), Math.max(1, window.innerHeight), safeArea);
-    const width = host?.width() ?? fallbackBounds.canvas.width;
-    const railHeight = host ? 44 : 0;
-    const height = host ? host.height() - railHeight : fallbackBounds.canvas.height;
-    if (application && (rendererWidth !== width || rendererHeight !== height)) {
-      application.renderer.resize(width, height);
-      rendererWidth = width;
-      rendererHeight = height;
-    }
-    const bounds = host ? planCollectionContentBounds(width, height, safeArea) : fallbackBounds.content;
-    const contentWidth = Math.max(1, isDashboard() ? Math.min(1100, bounds.width) : bounds.width);
-    const contentHeight = Math.max(1, bounds.height);
-    const cardGrid = isCardGrid() || isDashboard();
-    const basePlan = planCollectionLayout(contentWidth, contentHeight);
-    const plan = cardGrid ? { ...basePlan, viewportHeight: Math.max(44, contentHeight - basePlan.listTop - (basePlan.short ? 16 : 72)) } : basePlan;
-    const listWidth = cardGrid || plan.compact ? contentWidth - 40 : Math.max(240, contentWidth - 280);
-    viewportHeight = plan.viewportHeight;
-    measureEntries(plan, listWidth);
-    scrollOffset = Math.min(scrollOffset, Math.max(0, totalRowHeight - viewportHeight));
-    background.clear().roundRect(0, railHeight, width, height, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill, alpha: 0.94 }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
-    background.eventMode = "static";
-    content.position.set(bounds.x + (bounds.width - contentWidth) / 2, bounds.y + railHeight);
-    title.anchor.x = 0;
-    title.position.set(20, 12);
-    fitTextToBox(title, Math.max(1, contentWidth - 164), 44, 30, 16);
-    empty.position.set(30, plan.listTop + 18);
-    close.resize(104, 44);
-    close.position.set(contentWidth - 124, plan.closeY);
-    layoutTabs(contentWidth, plan);
-    layoutEntries(plan, listWidth);
-    scrollLayout = { plan, listWidth };
-    layoutDetails(contentWidth, contentHeight, plan);
-    if (cardGrid) {
-      details.visible = false;
-      compactDetail.visible = false;
-    }
-  };
-  const isItemGrid = () => state?.tabs[state.activeTabIndex]?.entries.every((entry) => entry.kind === "item") ?? false;
-  const isCardGrid = () => {
-    const entries = state?.tabs[state.activeTabIndex]?.entries;
-    return Boolean(entries?.length && entries.every((entry) => entry.kind === "card" || entry.kind === "item"));
-  };
-  const scroll = (amount) => {
-    keywordTooltip.hide();
-    const previousOffset = scrollOffset;
-    scrollOffset = Math.max(0, Math.min(Math.max(0, totalRowHeight - viewportHeight), scrollOffset + amount));
-    if (previousOffset === scrollOffset || !scrollLayout) return;
-    const { plan, listWidth } = scrollLayout;
-    const delta = previousOffset - scrollOffset;
-    entriesLayer.children.forEach((child, index) => {
-      child.y += delta;
-      const y2 = plan.listTop + (rowOffsets[index] ?? 0) - scrollOffset;
-      child.visible = y2 + (rowHeights[index] ?? 76) >= plan.listTop && y2 < plan.listTop + viewportHeight;
-    });
-    entriesFade.setViewport({
-      x: 20,
-      y: plan.listTop,
-      width: listWidth,
-      height: viewportHeight,
-      top: scrollOffset > 0,
-      bottom: scrollOffset < Math.max(0, totalRowHeight - viewportHeight)
-    }, content);
-  };
-  const wheel = (event) => {
-    scrollMotion.stop();
-    scroll(getWheelScrollDelta(event.deltaY, event.deltaMode, viewportHeight));
-    event.preventDefault();
-    event.stopImmediatePropagation();
-  };
-  let scrollPointerId;
-  let lastScrollPointerY = 0;
-  const pointerdown = (event) => {
-    suppressedTap = false;
-    scrollMotion.stop();
-    if (event.pointerType !== "mouse") {
-      gestureStart = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
-      scrollMotion.begin(event.timeStamp);
-      scrollPointerId = event.pointerId;
-      lastScrollPointerY = event.clientY;
-    }
-  };
-  const pointermove = (event) => {
-    if (event.pointerId === scrollPointerId) {
-      if (!gestureStart || !hasExceededPointerDragSlop(gestureStart, event)) return;
-      suppressedTap = true;
-      const delta = lastScrollPointerY - event.clientY;
-      scrollMotion.drag(0, delta, event.timeStamp);
-      scroll(delta);
-      lastScrollPointerY = event.clientY;
-      event.preventDefault();
-    }
-  };
-  const pointerend = (event) => {
-    if (event.pointerId !== scrollPointerId) return;
-    scrollPointerId = void 0;
-    gestureStart = void 0;
-    scrollMotion.release(event.timeStamp, event.type === "pointercancel" || !suppressedTap);
-    scrollMotion.animate(({ y: y2 }) => {
-      const before = scrollOffset;
-      scroll(y2);
-      return before !== scrollOffset;
-    });
-  };
-  const keydown = (event) => {
-    scrollMotion.stop();
-    if (event.key === "Tab" && dialogElement) {
-      const buttons = [...dialogElement.querySelectorAll("button")];
-      const next = event.shiftKey ? buttons.at(-1) : buttons[0];
-      if (document.activeElement === dialogElement || document.activeElement === (event.shiftKey ? buttons[0] : buttons.at(-1))) {
-        next?.focus();
-        event.preventDefault();
-        event.stopImmediatePropagation();
-      }
-      return;
-    }
-    if (event.key === "Escape") void sink.invokeMethodAsync("HandleActionFromRendererAsync", "close");
-    else if (event.key === "ArrowDown") selectEntry(selectedIndex + 1);
-    else if (event.key === "ArrowUp") selectEntry(selectedIndex - 1);
-    else if (event.key === "PageDown") scroll(viewportHeight * 0.7);
-    else if (event.key === "PageUp") scroll(-viewportHeight * 0.7);
-    else if (event.key === "ArrowRight") void sink.invokeMethodAsync("HandleActionFromRendererAsync", `tab:${Math.min((state?.tabs.length ?? 1) - 1, (state?.activeTabIndex ?? 0) + 1)}`);
-    else if (event.key === "ArrowLeft") void sink.invokeMethodAsync("HandleActionFromRendererAsync", `tab:${Math.max(0, (state?.activeTabIndex ?? 0) - 1)}`);
-    else return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-  };
-  document.addEventListener("keydown", keydown, true);
-  inputCanvas.addEventListener("wheel", wheel, { capture: true, passive: false });
-  inputCanvas.addEventListener("pointerdown", pointerdown, true);
-  inputCanvas.addEventListener("pointermove", pointermove, { capture: true, passive: false });
-  inputCanvas.addEventListener("pointerup", pointerend, true);
-  inputCanvas.addEventListener("pointercancel", pointerend, true);
-  window.addEventListener("resize", layout);
-  const observer = new ResizeObserver(layout);
-  observer.observe(inputCanvas);
-  return { reconcile(candidate) {
-    if (!isState(candidate)) return false;
-    const changedTab = state?.activeTabIndex !== candidate.activeTabIndex || state?.title !== candidate.title;
-    state = candidate;
-    if (changedTab) {
-      scrollMotion.stop();
-      suppressedTap = false;
-      scrollOffset = 0;
-      selectedIndex = 0;
-    }
-    rebuild();
-    layout();
-    showEnchantmentTooltip();
-    return true;
-  }, dispose() {
-    if (disposed) return;
-    disposed = true;
-    scrollMotion.stop();
-    generation++;
-    observer.disconnect();
-    window.removeEventListener("resize", layout);
-    document.removeEventListener("keydown", keydown, true);
-    inputCanvas.removeEventListener("wheel", wheel, true);
-    inputCanvas.removeEventListener("pointerdown", pointerdown, true);
-    inputCanvas.removeEventListener("pointermove", pointermove, true);
-    inputCanvas.removeEventListener("pointerup", pointerend, true);
-    inputCanvas.removeEventListener("pointercancel", pointerend, true);
-    if (!root.destroyed) {
-      root.parent?.removeChild(root);
-      root.destroy({ children: true });
-    }
-    if (fallback) {
-      fallback.application.ticker.stop();
-      fallback.canvas.style.display = "none";
-    }
-    restoreRunControls();
-    dialogElement?.classList.remove("shared-runtime");
-    if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
-    else if (host?.canvas.isConnected) host.canvas.focus({ preventScroll: true });
-  } };
-}
-function readCollectionSafeArea(canvas) {
-  const ownerDocument = canvas.ownerDocument;
-  const probe = ownerDocument.createElement("div");
-  probe.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)";
-  ownerDocument.body.appendChild(probe);
-  try {
-    const style = getComputedStyle(probe);
-    return {
-      top: Number.parseFloat(style.paddingTop) || 0,
-      right: Number.parseFloat(style.paddingRight) || 0,
-      bottom: Number.parseFloat(style.paddingBottom) || 0,
-      left: Number.parseFloat(style.paddingLeft) || 0
-    };
-  } finally {
-    probe.remove();
-  }
-}
-function isState(value) {
-  if (typeof value !== "object" || value === null) return false;
-  const state = value;
-  return typeof state.title === "string" && Array.isArray(state.tabs) && Number.isInteger(state.activeTabIndex) && state.activeTabIndex >= 0 && state.activeTabIndex < state.tabs.length && state.tabs.every((tab) => typeof tab.label === "string" && Array.isArray(tab.entries) && tab.entries.every((entry) => {
-    if (typeof entry !== "object" || entry === null) return false;
-    const value2 = entry;
-    return typeof value2.name === "string" && typeof value2.description === "string" && typeof value2.detail === "string" && (value2.cardType === void 0 || value2.cardType === null || typeof value2.cardType === "string") && isOptionalResourceCost(value2.energyCost) && isOptionalResourceCost(value2.manaCost);
-  }));
-}
-function isOptionalResourceCost(value) {
-  return value === void 0 || value === null || typeof value === "number" && Number.isFinite(value);
-}
-function toCardRarity3(value) {
-  return value === "Uncommon" || value === "Rare" || value === "Special" ? value : "Common";
-}
-function compactTabLabel(label) {
-  if (label === "Equipment") return "Gear";
-  if (label === "Training") return "XP";
-  if (label === "Discard") return "Used";
-  if (label === "Exhaust") return "Gone";
-  return label;
-}
-function isSafeImagePath(path2) {
-  return /^(\.\/|\/)?img\/[a-zA-Z0-9/_ .-]+$/.test(path2) && !path2.includes("..");
-}
-function fitImage(sprite, width, height, x2, y2) {
-  if (sprite.texture.width <= 1 || sprite.texture.height <= 1) return;
-  const scale = Math.min(width / sprite.texture.width, height / sprite.texture.height);
-  sprite.scale.set(scale);
-  sprite.position.set(x2 + (width - sprite.texture.width * scale) / 2, y2 + (height - sprite.texture.height * scale) / 2);
-}
-function artworkPath(entry) {
-  return entry.kind === "item" ? itemArtwork(entry.name, entry.image) : entry.image ?? "";
-}
-
-// src/history-pagination.ts
-function paginateHistoryLines(lines, maxHeight, measure) {
-  const pages = [];
-  let page = "";
-  for (const line of lines) {
-    let first = true;
-    for (const word of line.split(/\s+/)) {
-      if (measure(word) > maxHeight) {
-        if (page) {
-          pages.push(page);
-          page = "";
-        }
-        const fragments = splitLongWord(word, maxHeight, measure);
-        pages.push(...fragments.slice(0, -1));
-        page = fragments.at(-1) ?? "";
-        first = false;
-        continue;
-      }
-      const separator = page ? first ? "\n\n" : " " : "";
-      const candidate = page + separator + word;
-      if (page && measure(candidate) > maxHeight) {
-        pages.push(page);
-        page = word;
-      } else page = candidate;
-      first = false;
-    }
-  }
-  if (page) pages.push(page);
-  return pages.length ? pages : ["No entries recorded."];
-}
-function splitLongWord(word, maxHeight, measure) {
-  const fragments = [];
-  let fragment8 = "";
-  for (const character of word) {
-    if (fragment8 && measure(fragment8 + character) > maxHeight) {
-      fragments.push(fragment8);
-      fragment8 = character;
-    } else fragment8 += character;
-  }
-  if (fragment8) fragments.push(fragment8);
-  return fragments;
-}
-
-// src/settings-help.ts
-function settingHelp(action) {
-  const key = action.startsWith("setting:") ? action.split(":").slice(0, 2).join(":") : action;
-  if (action.startsWith("particle:")) return "Choose the amount of visual particles. Lower levels reduce effects and can improve performance. Activate to cycle through Low, Medium, High, and Maximum.";
-  const help = {
-    "setting:master": "Adjust the overall volume of all game audio. Set to 0% to mute everything.",
-    "setting:sfx": "Adjust sound effects such as card plays, attacks, and interface sounds.",
-    "setting:music": "Adjust the volume of background music.",
-    "setting:ambient": "Adjust environmental sounds and background atmosphere.",
-    "setting:speed": "Adjust the pace of gameplay animations. 0.5\xD7 is slower; 2.0\xD7 is faster.",
-    "toggle:resource-gains": "Show floating text when resources such as energy, mana, or block are gained.",
-    "toggle:effect-sources": "Include effect names in floating resource text to identify what caused a gain.",
-    "toggle:damage": "Show floating damage numbers during combat.",
-    "toggle:cards": "Include card names in floating damage text when damage values are enabled.",
-    "toggle:relics": "Include relic names in floating damage text when damage values are enabled.",
-    "toggle:items": "Include item names in floating damage text when damage values are enabled.",
-    "settings:debug": "Open developer tools for character and shared Remembrance progression.",
-    "settings:back": "Return to gameplay preferences.",
-    "debug:xp:25": "Add 25 Remembrance points to the current character for debugging.",
-    "debug:xp:100": "Add 100 Remembrance points to the current character for debugging.",
-    "debug:reset": "Reset the current character's Remembrance progression for debugging.",
-    "debug:shared:25": "Add 25 shared Remembrance points for debugging.",
-    "debug:shared:reset": "Reset shared Remembrance progression for debugging.",
-    defaults: "Restore default audio and gameplay preferences after confirmation.",
-    clear: "Delete saved game data after confirmation. This cannot be undone.",
-    cancel: "Close settings and discard unsaved changes.",
-    save: "Save your audio and gameplay preferences and close settings."
-  };
-  return help[key];
-}
-
-// src/pixi-menu-overlay.ts
-init_lib();
-
-// src/settings-slider-input.ts
-function quantizeSetting(value, min, max, step) {
-  const clamped = Math.max(min, Math.min(max, value));
-  return Number((Math.round((clamped - min) / step) * step + min).toFixed(2));
-}
-function installSettingsSliderInput(canvas, geometry, initial, min, max, step, preview, commit) {
-  let activePointer;
-  let value = initial;
-  const point = (event) => {
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: (event.clientX - rect.left) * geometry.sceneWidth / Math.max(1, rect.width),
-      y: (event.clientY - rect.top) * geometry.sceneHeight / Math.max(1, rect.height)
-    };
-  };
-  const update = (event) => {
-    value = quantizeSetting(min + (point(event).x - geometry.x) / geometry.width * (max - min), min, max, step);
-    preview(value);
-  };
-  const down = (event) => {
-    if (activePointer !== void 0 || event.button !== 0 || event.isPrimary === false) return;
-    const location = point(event);
-    if (location.x < geometry.x - 10 || location.x > geometry.x + geometry.width + 10 || location.y < geometry.y || location.y > geometry.y + (geometry.height ?? 46)) return;
-    activePointer = event.pointerId;
-    canvas.setPointerCapture?.(event.pointerId);
-    update(event);
-    event.preventDefault();
-  };
-  const move = (event) => {
-    if (event.pointerId !== activePointer) return;
-    update(event);
-    event.preventDefault();
-  };
-  const release = () => {
-    const pointer = activePointer;
-    activePointer = void 0;
-    if (pointer !== void 0 && canvas.hasPointerCapture?.(pointer)) canvas.releasePointerCapture(pointer);
-  };
-  const up = (event) => {
-    if (event.pointerId !== activePointer) return;
-    update(event);
-    release();
-    commit(value);
-  };
-  const cancel = (event) => {
-    if (event.pointerId !== activePointer) return;
-    release();
-    preview(initial);
-  };
-  canvas.addEventListener("pointerdown", down);
-  canvas.addEventListener("pointermove", move);
-  canvas.addEventListener("pointerup", up);
-  canvas.addEventListener("pointercancel", cancel);
-  canvas.addEventListener("lostpointercapture", cancel);
-  return () => {
-    canvas.removeEventListener("pointerdown", down);
-    canvas.removeEventListener("pointermove", move);
-    canvas.removeEventListener("pointerup", up);
-    canvas.removeEventListener("pointercancel", cancel);
-    canvas.removeEventListener("lostpointercapture", cancel);
-    release();
-  };
-}
-
 // src/progression-graph.ts
 init_lib();
 var branchColors = [uiTokens.color.health, uiTokens.color.stamina, uiTokens.color.mana];
@@ -85021,6 +84297,890 @@ function drawStatIcon(g2, stat, color) {
     g2.moveTo(0, -13).lineTo(5, -4).lineTo(13, 0).lineTo(5, 4).lineTo(0, 13).lineTo(-5, 4).lineTo(-13, 0).lineTo(-5, -4).closePath().stroke(stroke2);
   }
 }
+function isProgressionNode(value) {
+  if (typeof value !== "object" || value === null) return false;
+  const item = value;
+  return typeof item.id === "string" && typeof item.name === "string" && typeof item.description === "string" && typeof item.stat === "string" && Number.isInteger(item.cost) && typeof item.isUnlocked === "boolean" && typeof item.isAvailable === "boolean" && typeof item.isAffordable === "boolean" && Array.isArray(item.prerequisites) && item.prerequisites.every((label) => typeof label === "string") && typeof item.status === "string" && (item.x === void 0 || Number.isInteger(item.x)) && (item.y === void 0 || Number.isInteger(item.y)) && (item.prerequisiteIds === void 0 || Array.isArray(item.prerequisiteIds) && item.prerequisiteIds.every((id) => typeof id === "string")) && (item.requireAllPrerequisites === void 0 || typeof item.requireAllPrerequisites === "boolean");
+}
+
+// src/pixi-collection.ts
+init_lib();
+function planCollectionLayout(width, height) {
+  const short = height < 440;
+  const compact = width < 700 || short;
+  const tabHeight = width < 500 ? 60 : short ? 38 : 44;
+  const listTop = 60 + tabHeight + 20;
+  return {
+    portrait: width <= 600 && height > width,
+    compact,
+    short,
+    listTop,
+    viewportHeight: short ? Math.max(44, height - listTop - 16) : Math.max(44, height - listTop - (compact ? 188 : 82)),
+    tabY: 60,
+    tabHeight,
+    closeY: 12
+  };
+}
+function planCollectionContentBounds(width, height, safeArea = emptySafeAreaInsets, headerInset = 0) {
+  return describeViewport({ width, height }, { safeArea: { ...safeArea, top: Math.max(safeArea.top, headerInset) } }).contentBounds;
+}
+function planCollectionDetailVisibility(plan, kind) {
+  if (plan.short) return { compactDetail: false, details: false };
+  if (!plan.compact) return { compactDetail: false, details: true };
+  return { compactDetail: kind === "card", details: kind !== "card" };
+}
+function planCollectionCardGrid(width, count2, portrait = false) {
+  const gap = 12;
+  const columns = portrait ? Math.max(1, Math.min(3, Math.floor((width + gap) / 76))) : Math.max(1, Math.min(5, Math.floor((width + gap) / 172)));
+  const cardWidth = Math.min(220, (width - gap * (columns - 1)) / columns);
+  const height = cardWidth * 252 / 180;
+  return { columns, width: cardWidth, height, contentHeight: Math.max(0, Math.ceil(count2 / columns) * (height + gap) - gap) };
+}
+function createCollectionCard(entry) {
+  if (entry.kind === "item") return new CardView({ presentation: "hand", ...itemCardContent(entry.name, entry.description, entry.detail), enabled: true });
+  return new CardView({
+    presentation: "hand",
+    inspection: entry.inspection ?? null,
+    name: entry.name,
+    description: entry.description,
+    type: entry.cardType ?? "Card",
+    rarity: toCardRarity3(entry.rarity),
+    energyCost: entry.energyCost ?? Number(entry.cost ?? 0),
+    manaCost: entry.manaCost ?? 0,
+    enabled: true
+  });
+}
+function planCollectionDashboard(width) {
+  const columns = Math.max(1, Math.min(3, Math.floor((width + 12) / 280)));
+  return { columns, width: (width - (columns - 1) * 12) / columns };
+}
+var fallbackRenderer;
+function planCollectionFallbackBounds(width, height, safeArea) {
+  const top = safeArea.top + 44;
+  const canvas = { x: 0, y: top, width, height: Math.max(1, height - top) };
+  return { canvas, content: planCollectionContentBounds(width, canvas.height, { ...safeArea, top: 0 }) };
+}
+async function acquireFallbackRenderer() {
+  fallbackRenderer ??= (async () => {
+    const fallbackCanvas = document.createElement("canvas");
+    fallbackCanvas.className = "pixi-collection-fallback-canvas";
+    fallbackCanvas.style.cssText = "position:fixed;inset:calc(44px + env(safe-area-inset-top)) 0 0;width:100vw;height:calc(100dvh - 44px - env(safe-area-inset-top));z-index:1399;display:none;touch-action:none";
+    document.body.appendChild(fallbackCanvas);
+    const application = new Application();
+    try {
+      await application.init({ antialias: true, autoDensity: true, resolution: Math.max(1, window.devicePixelRatio || 1), background: 529183, backgroundAlpha: 0, canvas: fallbackCanvas, preference: "canvas" });
+      installCanvasPresentationRecovery(application, fallbackCanvas);
+      return { application, canvas: fallbackCanvas };
+    } catch (error) {
+      fallbackCanvas.remove();
+      fallbackRenderer = void 0;
+      throw error;
+    }
+  })();
+  const renderer = await fallbackRenderer;
+  renderer.canvas.style.display = "block";
+  renderer.application.ticker.start();
+  return renderer;
+}
+async function createCollectionRenderer(canvas, sink) {
+  const host = getCollectionOverlayHost();
+  const fallback = host ? void 0 : await acquireFallbackRenderer();
+  const application = fallback?.application;
+  const inputCanvas = host?.canvas ?? fallback.canvas;
+  const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const dialogElement = canvas.parentElement;
+  const restoreRunControls = suspendRunControls(document.querySelector(".pixi-run-controls-surface"), true);
+  dialogElement?.classList.add("shared-runtime");
+  inputCanvas.tabIndex = 0;
+  dialogElement?.focus({ preventScroll: true });
+  const root = new Container();
+  const background = new Graphics();
+  const title = new Text({ text: "", style: { ...uiTokens.typography.panelTitle, fill: 16113563 } });
+  const tabLayer = new Container();
+  const entriesLayer = new Container();
+  const entriesFade = new ScrollContentFade(entriesLayer);
+  const listMask = new Graphics();
+  const empty = new Text({ text: "", style: { ...uiTokens.typography.body, fill: 12109785 } });
+  const compactDetail = new Text({ text: "", style: { ...uiTokens.typography.body, fill: 14214126, wordWrap: true } });
+  title.resolution = empty.resolution = compactDetail.resolution = 2;
+  const close = new GameButton({ width: 1, height: 1, label: "Close", onPress: () => {
+    void sink.invokeMethodAsync("HandleActionFromRendererAsync", "close");
+  } });
+  const content = new Container();
+  const details = new Container();
+  const keywordTooltip = new ChoiceTooltip();
+  content.addChild(title, tabLayer, entriesFade, listMask, empty, compactDetail, close, details);
+  root.addChild(background, content, keywordTooltip);
+  entriesLayer.mask = listMask;
+  (host?.layer ?? application.stage).addChild(root);
+  title.anchor.set(0.5, 0);
+  let state;
+  let trainingGraph;
+  let trainingOffset = 0;
+  const trainingLayer = new Container();
+  content.addChild(trainingLayer);
+  const disposeTraining = () => {
+    if (trainingGraph) {
+      trainingOffset = trainingGraph.scroll.scrollOffset;
+      trainingGraph.disposeInput();
+    }
+    trainingGraph = void 0;
+    for (const child of trainingLayer.removeChildren()) child.destroy({ children: true });
+  };
+  let disposed = false;
+  let scrollOffset = 0;
+  const scrollMotion = new ScrollMotion(!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+  let gestureStart;
+  let suppressedTap = false;
+  let selectedIndex = 0;
+  let generation = 0;
+  let viewportHeight = 1;
+  let rendererWidth = 0;
+  let rendererHeight = 0;
+  let rowOffsets = [];
+  let rowHeights = [];
+  let totalRowHeight = 0;
+  let scrollLayout;
+  const destroyChildren = (layer) => {
+    for (const child of layer.removeChildren()) child.destroy({ children: true });
+  };
+  const selectedEntry = () => state?.tabs[state.activeTabIndex]?.entries[selectedIndex];
+  const showEnchantmentTooltip = () => {
+    const entry = selectedEntry();
+    const descriptions = entry?.inspection ? void 0 : entry?.enchantmentDescriptions;
+    const card = entriesLayer.children[selectedIndex];
+    if (descriptions?.length && card)
+      keywordTooltip.show(descriptions.join("\n"), card.getBounds(), { width: host?.width() ?? application.renderer.width, height: host?.height() ?? application.renderer.height });
+    else keywordTooltip.hide();
+  };
+  const rebuildDetails = () => {
+    destroyChildren(details);
+    const entry = selectedEntry();
+    compactDetail.text = entry ? `${entry.name} \u2014 ${entry.description}` : "";
+    if (!entry) return;
+    if (isCardGrid()) return;
+    if (entry.kind === "card" || entry.kind === "item") {
+      const card = createCollectionCard(entry);
+      details.addChild(card);
+      if (artworkPath(entry) && isSafeImagePath(artworkPath(entry))) {
+        const currentGeneration = generation;
+        void Assets.load(artworkPath(entry)).then((texture) => {
+          if (!disposed && currentGeneration === generation && !card.destroyed) card.setContent({ ...card.content, artTexture: texture });
+        }).catch(() => void 0);
+      }
+    } else {
+      const heading = new Text({ text: entry.name, style: { ...uiTokens.typography.panelTitle, fill: 16113563, wordWrap: true } });
+      const description = new Text({ text: entry.description, style: {
+        ...uiTokens.typography.body,
+        fill: uiTokens.color.textMuted,
+        fontSize: 15,
+        lineHeight: 21,
+        wordWrap: true
+      } });
+      heading.resolution = description.resolution = 2;
+      details.addChild(heading, description);
+    }
+  };
+  const selectEntry = (index) => {
+    scrollMotion.stop();
+    const count2 = state?.tabs[state.activeTabIndex]?.entries.length ?? 0;
+    selectedIndex = Math.max(0, Math.min(count2 - 1, index));
+    const top = rowOffsets[selectedIndex] ?? 0;
+    const bottom = top + (rowHeights[selectedIndex] ?? 76);
+    if (top < scrollOffset) scrollOffset = top;
+    if (bottom > scrollOffset + viewportHeight) scrollOffset = Math.max(top, bottom - viewportHeight);
+    rebuildDetails();
+    layout();
+    showEnchantmentTooltip();
+  };
+  const rebuild = () => {
+    generation++;
+    destroyChildren(tabLayer);
+    destroyChildren(entriesLayer);
+    destroyChildren(details);
+    if (!state) return;
+    title.text = state.title;
+    const currentState = state;
+    currentState.tabs.forEach((tab2, index) => tabLayer.addChild(new GameButton({ width: 1, height: 1, label: tab2.label, menuIcon: collectionTabIcon(tab2.label), selected: index === currentState.activeTabIndex, onPress: () => {
+      void sink.invokeMethodAsync("HandleActionFromRendererAsync", `tab:${index}`);
+    } })));
+    const tab = currentState.tabs[currentState.activeTabIndex];
+    if (!tab) return;
+    empty.text = tab.entries.length === 0 ? "Nothing here yet." : "";
+    tab.entries.forEach((entry, index) => {
+      if (entry.kind === "card" || entry.kind === "item") {
+        const face = createCollectionCard(entry);
+        face.eventMode = "static";
+        face.cursor = "pointer";
+        face.on("pointertap", () => {
+          if (!suppressedTap) selectEntry(index);
+        });
+        entriesLayer.addChild(face);
+        if (artworkPath(entry) && isSafeImagePath(artworkPath(entry))) {
+          const currentGeneration = generation;
+          void Assets.load(artworkPath(entry)).then((texture) => {
+            if (!disposed && currentGeneration === generation && !face.destroyed) face.setContent({ ...face.content, artTexture: texture });
+          }).catch(() => void 0);
+        }
+        return;
+      }
+      const card = new Graphics();
+      const name = new Text({ text: entry.name, style: {
+        ...uiTokens.typography.button,
+        fill: uiTokens.color.text,
+        fontSize: 18,
+        lineHeight: 22,
+        wordWrap: true
+      } });
+      const detail = new Text({ text: entry.detail, style: { ...uiTokens.typography.body, fill: 9425057, fontSize: 14, lineHeight: 19, wordWrap: true } });
+      const description = new Text({ text: entry.description, style: {
+        ...uiTokens.typography.body,
+        fill: uiTokens.color.textMuted,
+        fontSize: 14,
+        lineHeight: 19,
+        wordWrap: true
+      } });
+      if (tab.label === "Stats") {
+        description.style.fontSize = 18;
+        description.style.lineHeight = 24;
+        description.style.fill = 16113563;
+      }
+      name.resolution = detail.resolution = description.resolution = 2;
+      card.eventMode = "static";
+      card.cursor = "pointer";
+      card.on("pointertap", () => {
+        if (!suppressedTap) selectEntry(index);
+      });
+      card.addChild(name, detail, description);
+      if (artworkPath(entry) && isSafeImagePath(artworkPath(entry))) {
+        const image = new Sprite(Texture.EMPTY);
+        card.addChild(image);
+        const currentGeneration = generation;
+        void Assets.load(artworkPath(entry)).then((texture) => {
+          if (disposed || currentGeneration !== generation || image.destroyed) return;
+          image.texture = texture;
+          layout();
+        }).catch(() => void 0);
+      }
+      entriesLayer.addChild(card);
+    });
+    rebuildDetails();
+  };
+  const layoutTabs = (width, plan) => {
+    const tabs = tabLayer.children.filter((child) => child instanceof GameButton);
+    const tabWidth = Math.max(44, (width - 48 + 8) / Math.max(1, tabs.length));
+    const compact = width < 500;
+    tabs.forEach((tab, index) => {
+      const tabState = state?.tabs[index];
+      if (tabState) tab.label = compact ? compactTabLabel(tabState.label) : tabState.label;
+      tab.setStackedIcon(compact);
+      tab.resize(Math.max(44, tabWidth - 8), plan.tabHeight);
+      tab.position.set(24 + index * tabWidth, plan.tabY);
+    });
+  };
+  const isDashboard = () => ["Stats", "Training"].includes(state?.tabs[state.activeTabIndex]?.label ?? "");
+  const layoutEntry = (child, index, plan, listWidth) => {
+    const grid = planCollectionDashboard(listWidth);
+    const stats = state?.tabs[state.activeTabIndex]?.label === "Stats";
+    const tileWidth = isDashboard() && !stats ? grid.width : listWidth;
+    child.position.set(isDashboard() && !stats ? index % grid.columns * (grid.width + 12) : 0, 0);
+    const y2 = plan.listTop + (rowOffsets[index] ?? 0) - scrollOffset;
+    const [name, detail, description] = child.children.filter((entry) => entry instanceof Text);
+    const image = child.children.find((entry) => entry instanceof Sprite);
+    const textX = image ? 90 : 36;
+    const textWidth = Math.max(1, tileWidth - (textX - 20) - 12);
+    for (const label of [name, detail, description]) if (label) label.style.wordWrapWidth = textWidth;
+    const row = measureCollectionRow({
+      name: name?.text ?? "",
+      detail: detail?.text ?? "",
+      description: description?.text ?? "",
+      nameHeight: name?.height ?? 0,
+      detailHeight: detail?.height ?? 0,
+      descriptionHeight: description?.height ?? 0
+    }, textWidth);
+    if (stats) {
+      const valueWidth = Math.min(140, tileWidth * 0.3);
+      const labelWidth = Math.max(1, tileWidth - valueWidth - 44);
+      if (name) {
+        name.style.fontSize = 16;
+        name.style.lineHeight = 20;
+        name.style.wordWrapWidth = labelWidth;
+        name.position.set(40, y2 + 8);
+      }
+      if (detail) {
+        detail.style.fontSize = 12;
+        detail.style.lineHeight = 16;
+        detail.style.fill = uiTokens.color.textMuted;
+        detail.style.wordWrapWidth = labelWidth;
+        detail.position.set(40, y2 + 10 + (name?.height ?? 20));
+      }
+      if (description) {
+        description.style.wordWrapWidth = valueWidth;
+        description.position.set(20 + tileWidth - valueWidth - 16, y2 + 12);
+      }
+      const height = Math.max(52, (name?.height ?? 20) + (detail?.height ?? 16) + 20);
+      child.clear().roundRect(24, y2, tileWidth - 4, height, 6).fill({ color: index % 2 === 0 ? uiTokens.color.surfaceRaised : uiTokens.color.surface }).moveTo(40, y2 + height).lineTo(8 + tileWidth, y2 + height).stroke({ color: 4284778, alpha: 0.45, width: 1 });
+      rowHeights[index] = height;
+      child.visible = y2 + height >= plan.listTop && y2 < plan.listTop + plan.viewportHeight;
+      return;
+    }
+    child.clear().roundRect(20, y2, tileWidth, row.height, 8).fill({ color: index === selectedIndex ? uiTokens.color.surfaceRaised : uiTokens.color.surface }).stroke({ color: isDashboard() ? detail?.text.startsWith("Unlocked") ? 9425057 : detail?.text.startsWith("Locked") ? 4284778 : 13280860 : index === selectedIndex ? uiTokens.color.selected : 4284778, width: 1 });
+    name?.position.set(textX, y2 + 8);
+    if (detail) {
+      detail.visible = detail.text.length > 0;
+      detail.position.set(textX, y2 + row.detailY);
+    }
+    description?.position.set(textX, y2 + row.descriptionY);
+    if (image instanceof Sprite) fitImage(image, 56, 56, 28, y2 + 10);
+    if (detail) detail.style.fill = detail.text.startsWith("Locked") ? uiTokens.color.textMuted : 9425057;
+    rowHeights[index] = row.height;
+    child.visible = y2 + row.height >= plan.listTop && y2 < plan.listTop + plan.viewportHeight;
+  };
+  const measureEntries = (plan, listWidth) => {
+    rowOffsets = [];
+    rowHeights = [];
+    totalRowHeight = 0;
+    if (isCardGrid()) {
+      const grid = planCollectionCardGrid(listWidth, entriesLayer.children.length, plan.portrait && !isItemGrid());
+      entriesLayer.children.forEach((_child, index) => {
+        rowOffsets[index] = Math.floor(index / grid.columns) * (grid.height + 12);
+        rowHeights[index] = grid.height;
+      });
+      totalRowHeight = grid.contentHeight;
+      return;
+    }
+    const columns = isDashboard() && state?.tabs[state.activeTabIndex]?.label !== "Stats" ? planCollectionDashboard(listWidth).columns : 1;
+    const rowGap = state?.tabs[state.activeTabIndex]?.label === "Stats" ? 4 : 12;
+    let rowHeight2 = 0;
+    entriesLayer.children.forEach((child, index) => {
+      rowOffsets[index] = totalRowHeight;
+      if (child instanceof Graphics) layoutEntry(child, index, plan, listWidth);
+      if (child instanceof CardView) rowHeights[index] = planCollectionCardGrid(Math.min(220, listWidth), 1).height;
+      rowHeight2 = Math.max(rowHeight2, rowHeights[index] ?? 76);
+      if (index % columns === columns - 1 || index === entriesLayer.children.length - 1) {
+        totalRowHeight += rowHeight2 + rowGap;
+        rowHeight2 = 0;
+      }
+    });
+    totalRowHeight = Math.max(0, totalRowHeight - rowGap);
+  };
+  const layoutEntries = (plan, listWidth) => {
+    listMask.clear().rect(20, plan.listTop, listWidth, plan.viewportHeight).fill({ color: 16777215 });
+    const grid = planCollectionCardGrid(isCardGrid() ? listWidth : Math.min(220, listWidth), entriesLayer.children.length, isCardGrid() && plan.portrait && !isItemGrid());
+    entriesLayer.children.forEach((child, index) => {
+      if (child instanceof CardView) {
+        const y2 = plan.listTop + (rowOffsets[index] ?? 0) - scrollOffset;
+        const gridX = 20 + Math.max(0, (listWidth - grid.width * grid.columns - (grid.columns - 1) * 12) / 2);
+        child.resize({ width: grid.width, height: grid.height });
+        child.position.set(gridX + index % grid.columns * (grid.width + 12), y2);
+        child.setInteractionState({ enabled: true, focused: false, selected: index === selectedIndex });
+        child.visible = y2 + grid.height >= plan.listTop && y2 < plan.listTop + plan.viewportHeight;
+      }
+      if (child instanceof Graphics) layoutEntry(child, index, plan, listWidth);
+    });
+    entriesFade.setViewport({
+      x: 20,
+      y: plan.listTop,
+      width: listWidth,
+      height: plan.viewportHeight,
+      top: scrollOffset > 0,
+      bottom: scrollOffset < Math.max(0, totalRowHeight - viewportHeight)
+    }, content);
+  };
+  const layoutDetails = (width, height, plan) => {
+    const entry = selectedEntry();
+    const visibility = planCollectionDetailVisibility(plan, entry?.kind);
+    const detailObject = details.children[0];
+    if (detailObject instanceof CardView) {
+      detailObject.visible = !plan.compact;
+      if (!plan.compact) detailObject.resize({ width: 180, height: Math.min(252, height - 190) });
+    }
+    details.position.set(plan.compact ? 30 : width - 220, plan.compact ? height - 164 : 110);
+    compactDetail.visible = visibility.compactDetail && entry !== void 0;
+    compactDetail.style.wordWrapWidth = width - 60;
+    compactDetail.position.set(30, height - 156);
+    details.visible = visibility.details && entry !== void 0;
+    if (plan.compact) {
+      details.children.forEach((child, index) => {
+        if (child instanceof Text) {
+          child.style.wordWrapWidth = width - 60;
+          child.position.set(0, index === 0 ? 0 : Math.max(36, (details.children[0]?.height ?? 22) + 10));
+        }
+      });
+    } else {
+      details.visible = true;
+      details.children.forEach((child, index) => {
+        if (child instanceof Text) {
+          child.style.wordWrapWidth = 200;
+          child.position.set(0, index === 0 ? 0 : Math.max(36, (details.children[0]?.height ?? 22) + 10));
+        }
+      });
+    }
+  };
+  const layout = () => {
+    if (disposed) return;
+    const safeArea = readCollectionSafeArea(inputCanvas);
+    const fallbackBounds = planCollectionFallbackBounds(Math.max(1, window.innerWidth), Math.max(1, window.innerHeight), safeArea);
+    const width = host?.width() ?? fallbackBounds.canvas.width;
+    const railHeight = host ? 44 : 0;
+    const height = host ? host.height() - railHeight : fallbackBounds.canvas.height;
+    if (application && (rendererWidth !== width || rendererHeight !== height)) {
+      application.renderer.resize(width, height);
+      rendererWidth = width;
+      rendererHeight = height;
+    }
+    const bounds = host ? planCollectionContentBounds(width, height, safeArea) : fallbackBounds.content;
+    const contentWidth = Math.max(1, Math.min(1100, bounds.width));
+    const contentHeight = Math.max(1, bounds.height);
+    const cardGrid = isCardGrid() || isDashboard();
+    const basePlan = planCollectionLayout(contentWidth, contentHeight);
+    const plan = cardGrid ? { ...basePlan, viewportHeight: Math.max(44, contentHeight - basePlan.listTop - (basePlan.short ? 16 : 72)) } : basePlan;
+    const listWidth = cardGrid || plan.compact ? contentWidth - 40 : Math.max(240, contentWidth - 280);
+    viewportHeight = plan.viewportHeight;
+    measureEntries(plan, listWidth);
+    scrollOffset = Math.min(scrollOffset, Math.max(0, totalRowHeight - viewportHeight));
+    background.clear().roundRect(0, railHeight, width, height, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill, alpha: 0.94 }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
+    background.eventMode = "static";
+    content.position.set(bounds.x + (bounds.width - contentWidth) / 2, bounds.y + railHeight);
+    styleDialogTitle(title, contentWidth);
+    empty.position.set(30, plan.listTop + 18);
+    close.resize(104, 44);
+    close.position.set(contentWidth - 128, plan.closeY);
+    layoutTabs(contentWidth, plan);
+    layoutEntries(plan, listWidth);
+    scrollLayout = { plan, listWidth };
+    layoutDetails(contentWidth, contentHeight, plan);
+    if (cardGrid) {
+      details.visible = false;
+      compactDetail.visible = false;
+    }
+    disposeTraining();
+    const progression = state?.tabs[state.activeTabIndex]?.progression;
+    entriesFade.visible = listMask.visible = !progression;
+    if (progression) {
+      const graphHeight = Math.max(44, contentHeight - plan.listTop - 132);
+      const summary = new Text({ text: `${progression.experience} XP \xB7 Train at a rest site`, style: uiTokens.typography.body });
+      summary.position.set(24, plan.listTop);
+      const detail = new Text({
+        text: "Inspect a node to review its bonus and requirements.",
+        style: { ...uiTokens.typography.body, wordWrap: true, wordWrapWidth: contentWidth - 48 }
+      });
+      detail.position.set(24, plan.listTop + graphHeight + 40);
+      const graph = new ProgressionGraph(
+        inputCanvas,
+        progression.nodes,
+        contentWidth - 48,
+        graphHeight,
+        trainingOffset,
+        () => disposed,
+        (node) => {
+          detail.text = progressionNodeDetail(node);
+        },
+        (node) => {
+          detail.text = progressionNodeDetail(node);
+        }
+      );
+      graph.position.set(24, plan.listTop + 28);
+      trainingGraph = graph;
+      trainingLayer.addChild(summary, graph, detail);
+      empty.visible = false;
+    } else empty.visible = true;
+  };
+  const isItemGrid = () => state?.tabs[state.activeTabIndex]?.entries.every((entry) => entry.kind === "item") ?? false;
+  const isCardGrid = () => {
+    const entries = state?.tabs[state.activeTabIndex]?.entries;
+    return Boolean(entries?.length && entries.every((entry) => entry.kind === "card" || entry.kind === "item"));
+  };
+  const scroll = (amount) => {
+    keywordTooltip.hide();
+    const previousOffset = scrollOffset;
+    scrollOffset = Math.max(0, Math.min(Math.max(0, totalRowHeight - viewportHeight), scrollOffset + amount));
+    if (previousOffset === scrollOffset || !scrollLayout) return;
+    const { plan, listWidth } = scrollLayout;
+    const delta = previousOffset - scrollOffset;
+    entriesLayer.children.forEach((child, index) => {
+      child.y += delta;
+      const y2 = plan.listTop + (rowOffsets[index] ?? 0) - scrollOffset;
+      child.visible = y2 + (rowHeights[index] ?? 76) >= plan.listTop && y2 < plan.listTop + viewportHeight;
+    });
+    entriesFade.setViewport({
+      x: 20,
+      y: plan.listTop,
+      width: listWidth,
+      height: viewportHeight,
+      top: scrollOffset > 0,
+      bottom: scrollOffset < Math.max(0, totalRowHeight - viewportHeight)
+    }, content);
+  };
+  const wheel = (event) => {
+    if (trainingGraph) return;
+    scrollMotion.stop();
+    scroll(getWheelScrollDelta(event.deltaY, event.deltaMode, viewportHeight));
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  let scrollPointerId;
+  let lastScrollPointerY = 0;
+  const pointerdown = (event) => {
+    if (trainingGraph) return;
+    suppressedTap = false;
+    scrollMotion.stop();
+    if (event.pointerType !== "mouse") {
+      gestureStart = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+      scrollMotion.begin(event.timeStamp);
+      scrollPointerId = event.pointerId;
+      lastScrollPointerY = event.clientY;
+    }
+  };
+  const pointermove = (event) => {
+    if (event.pointerId === scrollPointerId) {
+      if (!gestureStart || !hasExceededPointerDragSlop(gestureStart, event)) return;
+      suppressedTap = true;
+      const delta = lastScrollPointerY - event.clientY;
+      scrollMotion.drag(0, delta, event.timeStamp);
+      scroll(delta);
+      lastScrollPointerY = event.clientY;
+      event.preventDefault();
+    }
+  };
+  const pointerend = (event) => {
+    if (event.pointerId !== scrollPointerId) return;
+    scrollPointerId = void 0;
+    gestureStart = void 0;
+    scrollMotion.release(event.timeStamp, event.type === "pointercancel" || !suppressedTap);
+    scrollMotion.animate(({ y: y2 }) => {
+      const before = scrollOffset;
+      scroll(y2);
+      return before !== scrollOffset;
+    });
+  };
+  const keydown = (event) => {
+    scrollMotion.stop();
+    if (event.key === "Tab" && dialogElement) {
+      const buttons = [...dialogElement.querySelectorAll("button")];
+      const next = event.shiftKey ? buttons.at(-1) : buttons[0];
+      if (document.activeElement === dialogElement || document.activeElement === (event.shiftKey ? buttons[0] : buttons.at(-1))) {
+        next?.focus();
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+      return;
+    }
+    if (trainingGraph && state) {
+      const nodes = state.tabs[state.activeTabIndex]?.progression?.nodes ?? [];
+      const direction = event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0;
+      if (direction) {
+        selectedIndex = Math.max(0, Math.min(nodes.length - 1, selectedIndex + direction));
+        const node = nodes[selectedIndex];
+        if (node) trainingGraph.focusNode(node.id, true);
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+      if (event.key === "PageDown" || event.key === "PageUp") {
+        trainingGraph.scrollBy(trainingGraph.scroll.viewportSize.height * (event.key === "PageDown" ? 0.8 : -0.8));
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+    }
+    if (event.key === "Escape") void sink.invokeMethodAsync("HandleActionFromRendererAsync", "close");
+    else if (event.key === "ArrowDown") selectEntry(selectedIndex + 1);
+    else if (event.key === "ArrowUp") selectEntry(selectedIndex - 1);
+    else if (event.key === "PageDown") scroll(viewportHeight * 0.7);
+    else if (event.key === "PageUp") scroll(-viewportHeight * 0.7);
+    else if (event.key === "ArrowRight") void sink.invokeMethodAsync("HandleActionFromRendererAsync", `tab:${Math.min((state?.tabs.length ?? 1) - 1, (state?.activeTabIndex ?? 0) + 1)}`);
+    else if (event.key === "ArrowLeft") void sink.invokeMethodAsync("HandleActionFromRendererAsync", `tab:${Math.max(0, (state?.activeTabIndex ?? 0) - 1)}`);
+    else return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  document.addEventListener("keydown", keydown, true);
+  inputCanvas.addEventListener("wheel", wheel, { capture: true, passive: false });
+  inputCanvas.addEventListener("pointerdown", pointerdown, true);
+  inputCanvas.addEventListener("pointermove", pointermove, { capture: true, passive: false });
+  inputCanvas.addEventListener("pointerup", pointerend, true);
+  inputCanvas.addEventListener("pointercancel", pointerend, true);
+  const tickTraining = () => {
+    trainingGraph?.advance((host?.canvas ? Ticker.shared : application?.ticker)?.deltaMS ?? 16);
+  };
+  const trainingTicker = host ? Ticker.shared : application?.ticker;
+  trainingTicker?.add(tickTraining);
+  window.addEventListener("resize", layout);
+  const observer = new ResizeObserver(layout);
+  observer.observe(inputCanvas);
+  return { reconcile(candidate) {
+    if (!isState(candidate)) return false;
+    const changedTab = state?.activeTabIndex !== candidate.activeTabIndex || state?.title !== candidate.title;
+    if (changedTab) disposeTraining();
+    state = candidate;
+    if (changedTab) {
+      scrollMotion.stop();
+      suppressedTap = false;
+      scrollOffset = 0;
+      selectedIndex = 0;
+      trainingOffset = 0;
+    }
+    rebuild();
+    layout();
+    showEnchantmentTooltip();
+    return true;
+  }, dispose() {
+    if (disposed) return;
+    disposed = true;
+    trainingTicker?.remove(tickTraining);
+    disposeTraining();
+    scrollMotion.stop();
+    generation++;
+    observer.disconnect();
+    window.removeEventListener("resize", layout);
+    document.removeEventListener("keydown", keydown, true);
+    inputCanvas.removeEventListener("wheel", wheel, true);
+    inputCanvas.removeEventListener("pointerdown", pointerdown, true);
+    inputCanvas.removeEventListener("pointermove", pointermove, true);
+    inputCanvas.removeEventListener("pointerup", pointerend, true);
+    inputCanvas.removeEventListener("pointercancel", pointerend, true);
+    if (!root.destroyed) {
+      root.parent?.removeChild(root);
+      root.destroy({ children: true });
+    }
+    if (fallback) {
+      fallback.application.ticker.stop();
+      fallback.canvas.style.display = "none";
+    }
+    restoreRunControls();
+    dialogElement?.classList.remove("shared-runtime");
+    if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    else if (host?.canvas.isConnected) host.canvas.focus({ preventScroll: true });
+  } };
+}
+function readCollectionSafeArea(canvas) {
+  const ownerDocument = canvas.ownerDocument;
+  const probe = ownerDocument.createElement("div");
+  probe.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)";
+  ownerDocument.body.appendChild(probe);
+  try {
+    const style = getComputedStyle(probe);
+    return {
+      top: Number.parseFloat(style.paddingTop) || 0,
+      right: Number.parseFloat(style.paddingRight) || 0,
+      bottom: Number.parseFloat(style.paddingBottom) || 0,
+      left: Number.parseFloat(style.paddingLeft) || 0
+    };
+  } finally {
+    probe.remove();
+  }
+}
+function isState(value) {
+  if (typeof value !== "object" || value === null) return false;
+  const state = value;
+  return typeof state.title === "string" && Array.isArray(state.tabs) && Number.isInteger(state.activeTabIndex) && state.activeTabIndex >= 0 && state.activeTabIndex < state.tabs.length && state.tabs.every((tab) => typeof tab.label === "string" && isCollectionProgression(tab.progression) && Array.isArray(tab.entries) && tab.entries.every((entry) => {
+    if (typeof entry !== "object" || entry === null) return false;
+    const value2 = entry;
+    return typeof value2.name === "string" && typeof value2.description === "string" && typeof value2.detail === "string" && (value2.cardType === void 0 || value2.cardType === null || typeof value2.cardType === "string") && isOptionalResourceCost(value2.energyCost) && isOptionalResourceCost(value2.manaCost);
+  }));
+}
+function isOptionalResourceCost(value) {
+  return value === void 0 || value === null || typeof value === "number" && Number.isFinite(value);
+}
+function toCardRarity3(value) {
+  return value === "Uncommon" || value === "Rare" || value === "Special" ? value : "Common";
+}
+function compactTabLabel(label) {
+  if (label === "Equipment") return "Gear";
+  if (label === "Training") return "Train";
+  if (label === "Discard") return "Used";
+  if (label === "Exhaust") return "Gone";
+  return label;
+}
+function isSafeImagePath(path2) {
+  return /^(\.\/|\/)?img\/[a-zA-Z0-9/_ .-]+$/.test(path2) && !path2.includes("..");
+}
+function fitImage(sprite, width, height, x2, y2) {
+  if (sprite.texture.width <= 1 || sprite.texture.height <= 1) return;
+  const scale = Math.min(width / sprite.texture.width, height / sprite.texture.height);
+  sprite.scale.set(scale);
+  sprite.position.set(x2 + (width - sprite.texture.width * scale) / 2, y2 + (height - sprite.texture.height * scale) / 2);
+}
+function artworkPath(entry) {
+  return entry.kind === "item" ? itemArtwork(entry.name, entry.image) : entry.image ?? "";
+}
+function collectionTabIcon(label) {
+  const icons = { Deck: "cards", Items: "items", Equipment: "equipment", Stats: "events", Training: "training", Discard: "discard", Exhaust: "exhaust" };
+  return icons[label] ?? "cards";
+}
+function isCollectionProgression(value) {
+  if (value == null) return true;
+  if (typeof value !== "object") return false;
+  const progression = value;
+  return Number.isInteger(progression.experience) && Array.isArray(progression.nodes) && progression.nodes.every(isProgressionNode);
+}
+
+// src/settings-switch.ts
+init_lib();
+var SettingsSwitch = class extends Container {
+  constructor(label, checked, width, height, focused, onPress) {
+    super();
+    const background = new Graphics().roundRect(0, 0, width, height, 8).fill({ color: uiTokens.color.panelInset }).stroke({ color: focused ? uiTokens.color.focus : uiTokens.color.panelStroke, width: 1, alpha: focused ? 1 : 0.4 });
+    const text = new Text({ text: label, style: {
+      ...uiTokens.typography.body,
+      fill: uiTokens.color.text,
+      fontSize: 16,
+      wordWrap: true,
+      wordWrapWidth: Math.max(40, width - 122)
+    } });
+    text.resolution = 2;
+    text.position.set(12, (height - text.height) / 2);
+    const state = new Text({ text: checked ? "On" : "Off", style: uiTokens.typography.body });
+    state.position.set(width - 96, (height - state.height) / 2);
+    const track = new Graphics().roundRect(width - 58, height / 2 - 11, 44, 22, 11).fill({ color: checked ? 3627602 : uiTokens.color.surfaceRaised }).stroke({ color: checked ? uiTokens.color.stamina : uiTokens.color.panelStroke, width: 1 }).circle(width - (checked ? 25 : 47), height / 2, 7).fill({ color: uiTokens.color.text });
+    this.addChild(background, text, state, track);
+    this.eventMode = "static";
+    this.cursor = "pointer";
+    this.on("pointertap", onPress);
+  }
+};
+
+// src/history-pagination.ts
+function paginateHistoryLines(lines, maxHeight, measure) {
+  const pages = [];
+  let page = "";
+  for (const line of lines) {
+    let first = true;
+    for (const word of line.split(/\s+/)) {
+      if (measure(word) > maxHeight) {
+        if (page) {
+          pages.push(page);
+          page = "";
+        }
+        const fragments = splitLongWord(word, maxHeight, measure);
+        pages.push(...fragments.slice(0, -1));
+        page = fragments.at(-1) ?? "";
+        first = false;
+        continue;
+      }
+      const separator = page ? first ? "\n\n" : " " : "";
+      const candidate = page + separator + word;
+      if (page && measure(candidate) > maxHeight) {
+        pages.push(page);
+        page = word;
+      } else page = candidate;
+      first = false;
+    }
+  }
+  if (page) pages.push(page);
+  return pages.length ? pages : ["No entries recorded."];
+}
+function splitLongWord(word, maxHeight, measure) {
+  const fragments = [];
+  let fragment8 = "";
+  for (const character of word) {
+    if (fragment8 && measure(fragment8 + character) > maxHeight) {
+      fragments.push(fragment8);
+      fragment8 = character;
+    } else fragment8 += character;
+  }
+  if (fragment8) fragments.push(fragment8);
+  return fragments;
+}
+
+// src/settings-help.ts
+function settingHelp(action) {
+  const key = action.startsWith("setting:") ? action.split(":").slice(0, 2).join(":") : action;
+  if (action.startsWith("particle:")) return "Choose the amount of visual particles. Lower levels reduce effects and can improve performance. Activate to cycle through Low, Medium, High, and Maximum.";
+  const help = {
+    "setting:master": "Adjust the overall volume of all game audio. Set to 0% to mute everything.",
+    "setting:sfx": "Adjust sound effects such as card plays, attacks, and interface sounds.",
+    "setting:music": "Adjust the volume of background music.",
+    "setting:ambient": "Adjust environmental sounds and background atmosphere.",
+    "setting:speed": "Adjust the pace of gameplay animations. 0.5\xD7 is slower; 2.0\xD7 is faster.",
+    "toggle:resource-gains": "Show floating text when resources such as energy, mana, or block are gained.",
+    "toggle:effect-sources": "Include effect names in floating resource text to identify what caused a gain.",
+    "toggle:damage": "Show floating damage numbers during combat.",
+    "toggle:cards": "Include card names in floating damage text when damage values are enabled.",
+    "toggle:relics": "Include relic names in floating damage text when damage values are enabled.",
+    "toggle:items": "Include item names in floating damage text when damage values are enabled.",
+    "settings:debug": "Open developer tools for character and shared Remembrance progression.",
+    "settings:back": "Return to gameplay preferences.",
+    "debug:xp:25": "Add 25 Remembrance points to the current character for debugging.",
+    "debug:xp:100": "Add 100 Remembrance points to the current character for debugging.",
+    "debug:reset": "Reset the current character's Remembrance progression for debugging.",
+    "debug:shared:25": "Add 25 shared Remembrance points for debugging.",
+    "debug:shared:reset": "Reset shared Remembrance progression for debugging.",
+    defaults: "Restore default audio and gameplay preferences after confirmation.",
+    clear: "Delete saved game data after confirmation. This cannot be undone.",
+    cancel: "Close settings and discard unsaved changes.",
+    save: "Save your audio and gameplay preferences and close settings."
+  };
+  return help[key];
+}
+
+// src/pixi-menu-overlay.ts
+init_lib();
+
+// src/settings-slider-input.ts
+function quantizeSetting(value, min, max, step) {
+  const clamped = Math.max(min, Math.min(max, value));
+  return Number((Math.round((clamped - min) / step) * step + min).toFixed(2));
+}
+function installSettingsSliderInput(canvas, geometry, initial, min, max, step, preview, commit) {
+  let activePointer;
+  let value = initial;
+  const point = (event) => {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (event.clientX - rect.left) * geometry.sceneWidth / Math.max(1, rect.width),
+      y: (event.clientY - rect.top) * geometry.sceneHeight / Math.max(1, rect.height)
+    };
+  };
+  const update = (event) => {
+    value = quantizeSetting(min + (point(event).x - geometry.x) / geometry.width * (max - min), min, max, step);
+    preview(value);
+  };
+  const down = (event) => {
+    if (activePointer !== void 0 || event.button !== 0 || event.isPrimary === false) return;
+    const location = point(event);
+    if (location.x < geometry.x - 10 || location.x > geometry.x + geometry.width + 10 || location.y < geometry.y || location.y > geometry.y + (geometry.height ?? 46)) return;
+    activePointer = event.pointerId;
+    canvas.setPointerCapture?.(event.pointerId);
+    update(event);
+    event.preventDefault();
+  };
+  const move = (event) => {
+    if (event.pointerId !== activePointer) return;
+    update(event);
+    event.preventDefault();
+  };
+  const release = () => {
+    const pointer = activePointer;
+    activePointer = void 0;
+    if (pointer !== void 0 && canvas.hasPointerCapture?.(pointer)) canvas.releasePointerCapture(pointer);
+  };
+  const up = (event) => {
+    if (event.pointerId !== activePointer) return;
+    update(event);
+    release();
+    commit(value);
+  };
+  const cancel = (event) => {
+    if (event.pointerId !== activePointer) return;
+    release();
+    preview(initial);
+  };
+  canvas.addEventListener("pointerdown", down);
+  canvas.addEventListener("pointermove", move);
+  canvas.addEventListener("pointerup", up);
+  canvas.addEventListener("pointercancel", cancel);
+  canvas.addEventListener("lostpointercapture", cancel);
+  return () => {
+    canvas.removeEventListener("pointerdown", down);
+    canvas.removeEventListener("pointermove", move);
+    canvas.removeEventListener("pointerup", up);
+    canvas.removeEventListener("pointercancel", cancel);
+    canvas.removeEventListener("lostpointercapture", cancel);
+    release();
+  };
+}
 
 // src/pixi-menu-overlay.ts
 function nextEnabledControlIndex(controls, current, direction, includeCurrent = true) {
@@ -85058,11 +85218,6 @@ function isMenuOverlayState(value) {
   if (typeof settings !== "object" || settings === null) return false;
   const item = settings;
   return Number.isInteger(item.tabIndex) && Number.isFinite(item.masterVolume) && Number.isFinite(item.sfxVolume) && Number.isFinite(item.musicVolume) && Number.isFinite(item.ambientVolume) && Number.isFinite(item.speed) && [item.damageTextEnabled, item.damageTextCardSources, item.damageTextRelicSources, item.damageTextItemSources].every((value2) => value2 === void 0 || typeof value2 === "boolean") && typeof item.cardTiltEnabled === "boolean" && typeof item.particleLevel === "string" && (item.showResourceGainText === void 0 || typeof item.showResourceGainText === "boolean") && (item.showEffectSources === void 0 || typeof item.showEffectSources === "boolean") && typeof item.debugProgressionEnabled === "boolean" && Number.isInteger(item.metaExperience) && Number.isInteger(item.unlockedMetaRewards) && (item.sharedRemembrancePoints === void 0 || Number.isInteger(item.sharedRemembrancePoints));
-}
-function isProgressionNode(value) {
-  if (typeof value !== "object" || value === null) return false;
-  const item = value;
-  return typeof item.id === "string" && typeof item.name === "string" && typeof item.description === "string" && typeof item.stat === "string" && Number.isInteger(item.cost) && typeof item.isUnlocked === "boolean" && typeof item.isAvailable === "boolean" && typeof item.isAffordable === "boolean" && Array.isArray(item.prerequisites) && item.prerequisites.every((label) => typeof label === "string") && typeof item.status === "string" && (item.x === void 0 || Number.isInteger(item.x)) && (item.y === void 0 || Number.isInteger(item.y)) && (item.prerequisiteIds === void 0 || Array.isArray(item.prerequisiteIds) && item.prerequisiteIds.every((id) => typeof id === "string")) && (item.requireAllPrerequisites === void 0 || typeof item.requireAllPrerequisites === "boolean");
 }
 function isHistoryEntry(value) {
   if (typeof value !== "object" || value === null) return false;
@@ -85120,16 +85275,26 @@ async function createMenuOverlayRenderer(canvas, sink) {
   let progressionGraph;
   let progressionOffset = 0;
   let debugSettingsOpen = false;
+  let settingsBody;
+  let settingsInput;
+  let settingsOffset = 0;
+  let settingsTop = 0;
+  let settingsBottom = 0;
   const sliderDisposers = [];
   const submit = async (action) => {
     if (pending || disposed) return;
     if (action === "settings:debug" || action === "settings:back") {
       debugSettingsOpen = action === "settings:debug";
+      settingsBody?.setScrollOffset(0);
       selectedIndex = 3;
       layout();
       return;
     }
-    if (action.startsWith("tab:")) debugSettingsOpen = false;
+    if (action.startsWith("tab:")) {
+      debugSettingsOpen = false;
+      settingsBody?.setScrollOffset(0);
+      settingsOffset = 0;
+    }
     if (action === "history:page:previous" || action === "history:page:next") {
       historyPage = Math.max(0, Math.min(historyPageCount - 1, historyPage + (action.endsWith("next") ? 1 : -1)));
       layout();
@@ -85149,6 +85314,10 @@ async function createMenuOverlayRenderer(canvas, sink) {
     }
   };
   const clearContent = () => {
+    if (settingsBody) settingsOffset = settingsBody.scrollOffset;
+    settingsInput?.dispose();
+    settingsInput = void 0;
+    settingsBody = void 0;
     if (progressionGraph) {
       progressionOffset = progressionGraph.scroll.scrollOffset;
       progressionGraph.disposeInput();
@@ -85171,7 +85340,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const activeSection = action === `history:section:${state?.history?.selectedSectionIndex}` || action === `history:run:${state?.history?.selectedRunId}`;
     const activeTab = action.startsWith("tab:") && state?.settings?.tabIndex === Number(action.slice(4));
     const primaryColors = action === "save" || action.startsWith("outcome:") ? { fill: 3627602, stroke: 9488295 } : {};
-    const button = new GameButton({ ...primaryColors, ...settingsActionColors(action), menuIcon: icon, width: buttonWidth, height: buttonHeight2, label, enabled, selected: index === selectedIndex || activeTab || activeSection, onPress: () => {
+    const button = new GameButton({ ...primaryColors, ...settingsActionColors(action), menuIcon: icon, width: buttonWidth, height: buttonHeight2, label, enabled, selected: activeTab || activeSection || action === `particle:${state?.settings?.particleLevel}`, focused: index === selectedIndex, onPress: () => {
       selectedIndex = index;
       void submit(action);
     } });
@@ -85179,6 +85348,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     content.addChild(button);
     const help = state?.settings && !state.confirmation ? settingHelp(action) : void 0;
     const focus = () => {
+      if (action.startsWith("particle:") || action.startsWith("debug:") || action.startsWith("settings:")) revealSetting(y2, buttonHeight2);
       if (help) tooltip.show(help, { x: x2, y: y2, width: buttonWidth, height: buttonHeight2 }, { width, height });
     };
     button.on("pointerover", focus);
@@ -85191,7 +85361,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const trackX = labelWidth + 32;
     const trackWidth = Math.max(40, width - trackX - 112);
     content.addChild(new Graphics().roundRect(24, y2, width - 48, rowHeight2, 8).fill({ color: uiTokens.color.panelInset, alpha: 0.7 }));
-    const sliderLabel = addText(slider.label, 24, y2 + 8, compact ? 15 : 18, labelWidth);
+    const sliderLabel = addText(slider.label, 36, y2 + 8, 16, labelWidth);
     if (controls.length === selectedIndex) sliderLabel.style.fill = 16113563;
     const track = new Graphics();
     track.eventMode = "static";
@@ -85207,7 +85377,19 @@ async function createMenuOverlayRenderer(canvas, sink) {
     preview(slider.value);
     sliderDisposers.push(installSettingsSliderInput(
       host?.canvas ?? canvas,
-      { x: trackX, y: y2 + (host ? 44 : 0), width: trackWidth, height: rowHeight2, sceneWidth: width, sceneHeight: height + (host ? 44 : 0) },
+      {
+        x: trackX,
+        get y() {
+          return Math.max(settingsTop, y2 - (settingsBody?.scrollOffset ?? 0)) + (host ? 44 : 0);
+        },
+        width: trackWidth,
+        get height() {
+          const visibleY = y2 - (settingsBody?.scrollOffset ?? 0);
+          return Math.max(0, Math.min(settingsBottom, visibleY + rowHeight2) - Math.max(settingsTop, visibleY));
+        },
+        sceneWidth: width,
+        sceneHeight: height + (host ? 44 : 0)
+      },
       slider.value,
       slider.min,
       slider.max,
@@ -85217,7 +85399,10 @@ async function createMenuOverlayRenderer(canvas, sink) {
         void submit(sliderAction(slider, value));
       }
     ));
-    const focus = () => tooltip.show(settingHelp(`setting:${slider.key}`) ?? "", { x: 24, y: y2, width: width - 48, height: 46 }, { width, height });
+    const focus = () => {
+      revealSetting(y2, rowHeight2);
+      tooltip.show(settingHelp(`setting:${slider.key}`) ?? "", { x: 24, y: y2 - (settingsBody?.scrollOffset ?? 0), width: width - 48, height: 46 }, { width, height });
+    };
     track.on("pointerover", focus);
     track.on("pointerout", () => tooltip.hide());
     sliderLabel.eventMode = "static";
@@ -85225,26 +85410,74 @@ async function createMenuOverlayRenderer(canvas, sink) {
     sliderLabel.on("pointerout", () => tooltip.hide());
     controls.push({ action: sliderAction(slider, slider.value + slider.step), label: slider.label, slider, focus });
   };
+  const revealSetting = (y2, controlHeight) => {
+    if (!settingsBody || y2 < settingsTop) return;
+    const top = y2 - settingsTop;
+    if (top < settingsBody.scrollOffset) settingsBody.setScrollOffset(top);
+    else if (top + controlHeight > settingsBody.scrollOffset + settingsBody.viewportSize.height)
+      settingsBody.setScrollOffset(top + controlHeight - settingsBody.viewportSize.height);
+  };
+  const addSwitch = (label, action, checked, x2, y2, controlWidth, controlHeight) => {
+    const index = controls.length;
+    const toggle = new SettingsSwitch(
+      label,
+      checked,
+      controlWidth,
+      controlHeight,
+      index === selectedIndex,
+      () => {
+        selectedIndex = index;
+        void submit(action);
+      }
+    );
+    toggle.position.set(x2, y2);
+    content.addChild(toggle);
+    const focus = () => {
+      revealSetting(y2, controlHeight);
+      tooltip.show(settingHelp(action) ?? "", { x: x2, y: y2 - (settingsBody?.scrollOffset ?? 0), width: controlWidth, height: controlHeight }, { width, height });
+    };
+    toggle.on("pointerover", focus);
+    toggle.on("pointerout", () => tooltip.hide());
+    controls.push({ action, label, focus });
+  };
   const layoutSettings = (settings) => {
     const short = height < 440;
-    const top = short ? 124 : 156;
+    const top = short ? 132 : 140;
     const footerY = height - (width < 520 && !short ? 102 : 50);
-    const rowCount = settings.tabIndex === 1 && width < 520 && !short && !debugSettingsOpen ? 5 : 4;
-    const rowHeight2 = Math.min(short ? 40 : 62, (footerY - top - 16) / rowCount);
-    addText("Settings", 24, 15, short ? 24 : 30, width - 164);
-    if (!short) addText("Make the journey feel right for you.", 24, 52, 14, width - 48).style.fill = uiTokens.color.textMuted;
+    const rowHeight2 = 58;
+    settingsTop = top;
+    settingsBottom = footerY - 16;
+    styleDialogTitle(addText("Settings", 24, 12), width);
     const tabWidth = (width - 64) / 3;
-    addButton("Audio", "tab:0", 24, short ? 60 : 82, tabWidth, 38);
-    addButton("Gameplay", "tab:1", 32 + tabWidth, short ? 60 : 82, tabWidth, 38);
-    addButton(width < 520 ? "Damage" : "Damage text", "tab:2", 40 + tabWidth * 2, short ? 60 : 82, tabWidth, 38);
+    addButton("Audio", "tab:0", 24, 60, tabWidth, 38);
+    addButton("Gameplay", "tab:1", 32 + tabWidth, 60, tabWidth, 38);
+    addButton(width < 520 ? "Damage" : "Damage text", "tab:2", 40 + tabWidth * 2, 60, tabWidth, 38);
     const section = settings.tabIndex === 0 ? "VOLUME MIXER" : settings.tabIndex === 2 ? "FLOATING DAMAGE TEXT" : debugSettingsOpen ? "DEBUG PROGRESSION" : "PACE & EFFECTS";
     addText(section, 24, top - 25, 12, width - 48).style.fill = uiTokens.color.panelOrnament;
+    const bodyStart = content.children.length;
     if (settings.tabIndex === 0) layoutAudioSettings(settings, top, rowHeight2);
     else if (settings.tabIndex === 2) layoutDamageSettings(settings, top, short);
     else if (debugSettingsOpen && settings.debugProgressionEnabled) layoutDebugSettings(settings, top, rowHeight2);
     else layoutGameplaySettings(settings, top, rowHeight2, short);
+    const bodyChildren = content.children.slice(bodyStart);
+    const bodyHeight = Math.max(1, ...bodyChildren.map((child) => child.y + child.getLocalBounds().y + child.height - top));
+    const body = new ScrollContainer({ width, height: Math.max(32, settingsBottom - top), contentHeight: bodyHeight, fadeEdges: true });
+    body.position.set(0, top);
+    body.on("pointertapcapture", (event) => {
+      if (settingsInput?.suppressesTap(event.pointerId)) event.stopPropagation();
+    });
+    bodyChildren.forEach((child) => {
+      child.y -= top;
+      body.content.addChild(child);
+    });
+    body.setScrollOffset(settingsOffset);
+    settingsBody = body;
+    content.addChild(body);
+    settingsInput = installChoiceScrollInput(host?.canvas ?? canvas, body, () => disposed || pending, () => {
+      tooltip.hide();
+    });
     layoutSettingsFooter(footerY, short);
-    addButton("Close", "cancel", width - 124, 12, 104, 44, true, "close");
+    addButton("Close", "cancel", width - 128, 12, 104, 44, true, "close");
   };
   const layoutAudioSettings = (settings, top, rowHeight2) => {
     const sliders = [
@@ -85265,25 +85498,56 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const columns = width >= 520 ? 2 : 1;
     const toggleHeight = short ? 38 : 50;
     const toggleWidth = (width - 48 - (columns - 1) * 8) / columns;
-    toggles.forEach(([label, key, enabled], index) => addButton(`${label}: ${enabled ? "On" : "Off"}`, `toggle:${key}`, 24 + index % columns * (toggleWidth + 8), top + Math.floor(index / columns) * (toggleHeight + 4), toggleWidth, toggleHeight));
+    toggles.forEach(([label, key, enabled], index) => addSwitch(label, `toggle:${key}`, enabled, 24 + index % columns * (toggleWidth + 8), top + Math.floor(index / columns) * (toggleHeight + 4), toggleWidth, toggleHeight));
   };
   const layoutGameplaySettings = (settings, top, rowHeight2, short) => {
     const controlHeight = Math.min(40, rowHeight2 - 4);
     addSlider({ key: "speed", label: "Speed", value: settings.speed, min: 0.5, max: 2, step: 0.1 }, top, Math.min(46, rowHeight2 - 4));
     const levels = ["Low", "Medium", "High", "Maximum"];
-    const next = levels[(levels.indexOf(settings.particleLevel) + 1) % levels.length] ?? "High";
-    const particleWidth = settings.debugProgressionEnabled ? (width - 56) / 2 : Math.min(300, width - 48);
-    addButton(`Particles: ${settings.particleLevel}`, `particle:${next}`, 24, top + rowHeight2, particleWidth, controlHeight);
-    addText("RESOURCE FEEDBACK", 24, top + rowHeight2 * 2 + 4, 12, width - 48).style.fill = uiTokens.color.panelOrnament;
-    const narrow = width < 520 && !short;
+    const qualityColumns = width < 520 ? 2 : 4;
+    const particleWidth = (width - 48 - (qualityColumns - 1) * 8) / qualityColumns;
+    addText("Particles", 24, top + rowHeight2, 16);
+    levels.forEach((level, index) => addButton(
+      level,
+      `particle:${level}`,
+      24 + index % qualityColumns * (particleWidth + 8),
+      top + rowHeight2 + 22 + Math.floor(index / qualityColumns) * (controlHeight + 8),
+      particleWidth,
+      controlHeight
+    ));
+    const narrow = width < 620 && !short;
     const feedbackWidth = narrow ? width - 48 : (width - 56) / 2;
-    addButton(`Resource gains: ${settings.showResourceGainText === false ? "Off" : "On"}`, "toggle:resource-gains", 24, top + rowHeight2 * 3, feedbackWidth, controlHeight);
-    addButton(`Effect names: ${settings.showEffectSources === false ? "Off" : "On"}`, "toggle:effect-sources", narrow ? 24 : 32 + feedbackWidth, top + rowHeight2 * (narrow ? 4 : 3), feedbackWidth, controlHeight);
-    if (settings.debugProgressionEnabled) addButton("Debug tools", "settings:debug", 32 + particleWidth, top + rowHeight2, particleWidth, controlHeight);
+    const feedbackY = top + rowHeight2 + 22 + Math.ceil(levels.length / qualityColumns) * (controlHeight + 8) + 16;
+    addSwitch(
+      "Resource gains",
+      "toggle:resource-gains",
+      settings.showResourceGainText !== false,
+      24,
+      feedbackY,
+      feedbackWidth,
+      controlHeight
+    );
+    addSwitch(
+      "Effect names",
+      "toggle:effect-sources",
+      settings.showEffectSources !== false,
+      narrow ? 24 : 32 + feedbackWidth,
+      feedbackY + (narrow ? rowHeight2 : 0),
+      feedbackWidth,
+      controlHeight
+    );
+    if (settings.debugProgressionEnabled) addButton(
+      "Debug tools",
+      "settings:debug",
+      24,
+      feedbackY + rowHeight2 * (narrow ? 2 : 1),
+      Math.min(240, width - 48),
+      controlHeight
+    );
   };
   const layoutSettingsFooter = (footerY, short) => {
     const twoRows = width < 520 && !short;
-    const buttonWidth = twoRows ? (width - 56) / 2 : (width - 56) / 4;
+    const buttonWidth = twoRows ? (width - 56) / 2 : (width - 72) / 4;
     content.addChild(new Graphics().moveTo(24, footerY - 12).lineTo(width - 24, footerY - 12).stroke({ color: uiTokens.color.panelStroke, alpha: 0.45, width: 1 }));
     const footer = [["Defaults", "defaults"], ["Clear data", "clear"], ["Cancel", "cancel"], ["Save", "save"]];
     footer.forEach(([label, action], index) => addButton(label, action, 24 + index % (twoRows ? 2 : 4) * (buttonWidth + 8), footerY + (twoRows ? Math.floor(index / 2) * 48 : 0), buttonWidth, 40));
@@ -85296,7 +85560,8 @@ async function createMenuOverlayRenderer(canvas, sink) {
     [["+25", "debug:shared:25"], ["Reset", "debug:shared:reset"], ["Back", "settings:back"]].forEach(([label, action], index) => addButton(label, action, 24 + index * (buttonWidth + 8), top + rowHeight2 * 3, buttonWidth, Math.min(40, rowHeight2 - 4)));
   };
   const layoutConfirmation = (confirmation) => {
-    const title = addText(confirmation.title, 24, 24, height < 440 ? 24 : 30, width - 164);
+    const title = addText(confirmation.title, 24, 12);
+    styleDialogTitle(title, width);
     const messageY = title.y + title.height + 24;
     const panel = new Graphics();
     content.addChild(panel);
@@ -85306,10 +85571,11 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const buttonWidth = Math.min(220, (width - 64) / 2);
     addButton("Cancel", "cancel", 24, height - 70, buttonWidth);
     addButton("Confirm", `confirm:${confirmation.action}`, width - 24 - buttonWidth, height - 70, buttonWidth);
-    addButton("Close", "cancel", width - 124, 12, 104, 44, true, "close");
+    addButton("Close", "cancel", width - 128, 12, 104, 44, true, "close");
   };
   const layoutOutcome = (outcome) => {
-    const title = addText(outcome.title, 24, 20, height < 440 ? 26 : 34, width - 48);
+    const title = addText(outcome.title, 24, 12);
+    styleDialogTitle(title, width);
     title.style.fill = outcome.title === "Victory!" ? 16113563 : 15699855;
     const messageY = title.y + title.height + 16;
     const message = addText(outcome.message, 24, messageY, 16, width - 48);
@@ -85344,8 +85610,8 @@ async function createMenuOverlayRenderer(canvas, sink) {
   const layoutHistory = (history) => {
     const runIndex = Math.max(0, history.runs.findIndex((run2) => run2.id === history.selectedRunId));
     const run = history.runs[runIndex];
-    addText("Run History", 24, 16, 26);
-    addButton("Close", "history:close", width - 124, 12, 104, 44, true, "close");
+    styleDialogTitle(addText("Run History", 24, 12), width);
+    addButton("Close", "history:close", width - 128, 12, 104, 44, true, "close");
     if (!run) {
       addText("Your story starts here. Embark on a run to record your journey, discoveries, and rewards.", 24, 88, 18, width - 48);
       return;
@@ -85434,7 +85700,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const footerHeight = compact ? 148 : 124;
     const viewportHeight = Math.max(56, height - top - footerHeight);
     const graphWidth = Math.max(180, width - margin * 2);
-    addText("Skill Tree", margin, 14, compact ? 25 : 30);
+    styleDialogTitle(addText("Skill Tree", 24, 12), width);
     addText(`${progression.experience} XP available \xB7 ${progression.nodes.filter((node) => node.isUnlocked).length}/${progression.nodes.length} allocated`, margin, 51, compact ? 13 : 16);
     const legend = new Graphics();
     content.addChild(legend);
@@ -85479,7 +85745,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     }
     const selected = nodes[selectedIndex];
     if (selected) graph.focusNode(selected.id);
-    addButton("Close", "progression:close", width - 124, 12, 104, 44, true, "close");
+    addButton("Close", "progression:close", width - 128, 12, 104, 44, true, "close");
   };
   const keydown = (event) => {
     if (!state) return;
@@ -85532,7 +85798,10 @@ async function createMenuOverlayRenderer(canvas, sink) {
   document.addEventListener("keydown", keydown, true);
   document.addEventListener("focusin", focusin, true);
   window.addEventListener("resize", layout);
-  const advanceGraph = (ticker2) => progressionGraph?.advance(ticker2.deltaMS);
+  const advanceGraph = (ticker2) => {
+    progressionGraph?.advance(ticker2.deltaMS);
+    settingsInput?.advance(ticker2.deltaMS);
+  };
   const ticker = application?.ticker ?? Ticker.shared;
   ticker.add(advanceGraph);
   const observer = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(layout);
@@ -85551,6 +85820,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
       window.removeEventListener("resize", layout);
       ticker.remove(advanceGraph);
       progressionGraph?.disposeInput();
+      settingsInput?.dispose();
       document.removeEventListener("keydown", keydown, true);
       document.removeEventListener("focusin", focusin, true);
       restoreRunControls();
@@ -85601,7 +85871,7 @@ async function createCardChoiceRenderer(canvas, sink) {
   const keywordTooltip = new ChoiceTooltip();
   const panel = new GamePanel({ width: 1, height: 1, fill: uiColors.panelFill, stroke: uiColors.panelStroke });
   panel.alpha = 0.94;
-  const title = new SceneTitle({ title: "Choose a card", width: 1 });
+  const title = new Text({ text: "Choose a card" });
   const cardLayer = new Container();
   const cardMask = new Graphics();
   cardLayer.mask = cardMask;
@@ -85651,9 +85921,8 @@ async function createCardChoiceRenderer(canvas, sink) {
     application.renderer.resize(width, height);
     panel.resize(width - 24, height - 24);
     panel.position.set(12, 12);
-    title.title = state?.title ?? "Choose a card";
-    title.resize(width - (state?.allowCancel ? 200 : 64));
-    title.position.set(32, 36);
+    title.text = state?.title ?? "Choose a card";
+    styleDialogTitle(title, width);
     const entries = cardLayer.children.filter((child) => child instanceof CardChoiceButton);
     const plan = planCardChoiceLayout(width, height, entries.length);
     const { columns, cardWidth, cardHeight, rowHeight: rowHeight2, listTop, viewportHeight, controlsY, detailHeight } = plan;
