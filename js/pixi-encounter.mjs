@@ -70166,6 +70166,2131 @@ var init_lib = __esm({
   }
 });
 
+// src/inspection-tooltip.ts
+init_lib();
+
+// src/card-view.ts
+init_lib();
+
+// src/ui-component-contract.ts
+function normalizeUiComponentSize(size) {
+  return {
+    width: normalizeDimension(size.width),
+    height: normalizeDimension(size.height)
+  };
+}
+function createUiComponentPresentationState(options) {
+  const enabled = options.enabled ?? true;
+  return {
+    size: normalizeUiComponentSize(options.size),
+    interaction: {
+      enabled,
+      focused: enabled && (options.focused ?? false),
+      selected: enabled && (options.selected ?? false)
+    },
+    reducedMotion: options.reducedMotion ?? false
+  };
+}
+function transitionUiComponentLifecycle(state, event) {
+  if (state === "disposed" || event === "dispose") {
+    return "disposed";
+  }
+  if (event === "suspend") {
+    return "suspended";
+  }
+  return "active";
+}
+function normalizeDimension(value) {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+// src/menu-icons.ts
+init_lib();
+var stroke = { color: 13678460, width: 1.6 };
+var clock = (g2) => {
+  g2.circle(8, 8, 6).stroke(stroke).moveTo(8, 4).lineTo(8, 8).lineTo(11, 10).stroke(stroke);
+};
+var home = (g2) => {
+  g2.moveTo(1, 7).lineTo(8, 1).lineTo(15, 7).stroke(stroke).rect(4, 7, 8, 8).stroke(stroke);
+};
+var bag = (g2) => {
+  g2.roundRect(2, 5, 12, 10, 2).stroke(stroke).roundRect(5, 1, 6, 6, 2).stroke(stroke);
+};
+var sparkle = (g2) => {
+  g2.moveTo(8, 1).lineTo(11, 6).lineTo(15, 8).lineTo(11, 10).lineTo(8, 15).lineTo(5, 10).lineTo(1, 8).lineTo(5, 6).closePath().stroke(stroke);
+};
+var drawings = {
+  history: clock,
+  home,
+  rooms: home,
+  inventory: bag,
+  shop: bag,
+  remembrance: sparkle,
+  restart: (g2) => {
+    g2.moveTo(3, 5).lineTo(1, 5).lineTo(1, 1).moveTo(1, 5).lineTo(5, 5).stroke(stroke).moveTo(2, 5).lineTo(5, 2).lineTo(10, 2).lineTo(14, 6).lineTo(14, 10).lineTo(10, 14).lineTo(5, 14).lineTo(2, 11).stroke(stroke);
+  },
+  backpack: (g2) => {
+    g2.roundRect(3, 3, 10, 12, 2).stroke(stroke).roundRect(6, 1, 4, 3, 1).stroke(stroke).roundRect(5, 9, 6, 4, 1).stroke(stroke).moveTo(3, 7).lineTo(13, 7).moveTo(1, 7).lineTo(1, 13).moveTo(15, 7).lineTo(15, 13).stroke(stroke);
+  },
+  map: (g2) => {
+    g2.moveTo(1, 3).lineTo(5, 1).lineTo(11, 3).lineTo(15, 1).lineTo(15, 13).lineTo(11, 15).lineTo(5, 13).lineTo(1, 15).closePath().moveTo(5, 1).lineTo(5, 13).moveTo(11, 3).lineTo(11, 15).stroke(stroke);
+  },
+  items: (g2) => {
+    g2.rect(6, 1, 4, 3).stroke(stroke).moveTo(6, 4).lineTo(6, 6).lineTo(3, 10).lineTo(3, 13).lineTo(5, 15).lineTo(11, 15).lineTo(13, 13).lineTo(13, 10).lineTo(10, 6).lineTo(10, 4).closePath().stroke(stroke).moveTo(4, 10).lineTo(12, 10).stroke(stroke);
+  },
+  hand: (g2) => {
+    g2.moveTo(1, 6).lineTo(5, 4).lineTo(10, 13).lineTo(6, 15).closePath().stroke(stroke).moveTo(6, 3).lineTo(10, 2).lineTo(13, 12).lineTo(9, 13).stroke(stroke).moveTo(11, 1).lineTo(15, 1).lineTo(15, 11).lineTo(13, 11).stroke(stroke);
+  },
+  discard: (g2) => {
+    g2.rect(2, 1, 8, 10).stroke(stroke).moveTo(12, 5).lineTo(12, 13).moveTo(9, 10).lineTo(12, 13).lineTo(15, 10).moveTo(1, 14).lineTo(8, 14).stroke(stroke);
+  },
+  exhaust: (g2) => {
+    g2.moveTo(8, 1).lineTo(11, 7).lineTo(13, 5).lineTo(15, 10).lineTo(13, 14).lineTo(8, 15).lineTo(3, 13).lineTo(2, 9).lineTo(5, 4).lineTo(6, 8).closePath().stroke(stroke);
+  },
+  endTurn: (g2) => {
+    g2.moveTo(1, 8).lineTo(11, 8).moveTo(7, 4).lineTo(11, 8).lineTo(7, 12).moveTo(14, 2).lineTo(14, 14).stroke(stroke);
+  },
+  debug: (g2) => {
+    g2.roundRect(5, 5, 6, 9, 3).stroke(stroke).circle(8, 3, 2).stroke(stroke).moveTo(2, 5).lineTo(5, 7).moveTo(1, 10).lineTo(5, 10).moveTo(2, 15).lineTo(5, 12).moveTo(14, 5).lineTo(11, 7).moveTo(15, 10).lineTo(11, 10).moveTo(14, 15).lineTo(11, 12).moveTo(8, 6).lineTo(8, 13).stroke(stroke);
+  },
+  seed: (g2) => {
+    g2.roundRect(1, 4, 9, 11, 1).stroke(stroke).roundRect(5, 1, 9, 11, 1).stroke(stroke).moveTo(8, 9).lineTo(8, 6).lineTo(11, 4).lineTo(11, 7).lineTo(8, 9).stroke(stroke);
+  },
+  rewards: (g2) => {
+    g2.rect(2, 6, 12, 9).stroke(stroke).rect(1, 4, 14, 3).stroke(stroke).moveTo(8, 4).lineTo(8, 15).moveTo(8, 4).lineTo(3, 3).lineTo(4, 1).lineTo(8, 4).lineTo(12, 1).lineTo(13, 3).lineTo(8, 4).stroke(stroke);
+  },
+  training: (g2) => {
+    g2.moveTo(2, 14).lineTo(12, 4).lineTo(15, 1).lineTo(12, 1).lineTo(2, 11).moveTo(2, 9).lineTo(7, 14).moveTo(1, 15).lineTo(3, 13).stroke(stroke);
+  },
+  settings: (g2) => {
+    g2.circle(8, 8, 4).stroke(stroke).circle(8, 8, 1.5).stroke(stroke);
+    for (let i2 = 0; i2 < 8; i2++) {
+      const a2 = i2 * Math.PI / 4;
+      g2.moveTo(8 + Math.cos(a2) * 5, 8 + Math.sin(a2) * 5).lineTo(8 + Math.cos(a2) * 7, 8 + Math.sin(a2) * 7).stroke(stroke);
+    }
+  },
+  fullscreen: (g2) => {
+    for (const [x2, y2, dx, dy] of [[1, 1, 1, 1], [15, 1, -1, 1], [1, 15, 1, -1], [15, 15, -1, -1]]) g2.moveTo(x2 + dx * 4, y2).lineTo(x2, y2).lineTo(x2, y2 + dy * 4).stroke(stroke);
+  },
+  previous: (g2) => {
+    g2.moveTo(11, 2).lineTo(5, 8).lineTo(11, 14).stroke(stroke);
+  },
+  next: (g2) => {
+    g2.moveTo(5, 2).lineTo(11, 8).lineTo(5, 14).stroke(stroke);
+  },
+  menu: (g2) => {
+    for (const y2 of [3, 8, 13]) g2.moveTo(1, y2).lineTo(15, y2).stroke(stroke);
+  },
+  close: (g2) => {
+    g2.moveTo(3, 3).lineTo(13, 13).moveTo(13, 3).lineTo(3, 13).stroke(stroke);
+  },
+  cards: (g2) => {
+    g2.rect(1, 1, 9, 12).stroke(stroke).rect(5, 4, 9, 11).stroke(stroke);
+  },
+  equipment: (g2) => {
+    g2.moveTo(8, 1).lineTo(14, 4).lineTo(12, 11).lineTo(8, 15).lineTo(4, 11).lineTo(2, 4).closePath().stroke(stroke);
+  },
+  events: (g2) => {
+    g2.rect(3, 1, 10, 14).stroke(stroke).moveTo(6, 5).lineTo(10, 5).moveTo(6, 9).lineTo(10, 9).stroke(stroke);
+  },
+  rest: (g2) => {
+    g2.moveTo(2, 11).lineTo(14, 11).moveTo(4, 15).lineTo(4, 7).moveTo(12, 15).lineTo(12, 7).stroke(stroke);
+  }
+};
+function createMenuIcon(name) {
+  const g2 = new Graphics();
+  drawings[name](g2);
+  g2.eventMode = "none";
+  return g2;
+}
+
+// src/scroll-content-fade.ts
+init_lib();
+function hasFadedEdges(viewport) {
+  return viewport !== void 0 && [viewport.left, viewport.right, viewport.top, viewport.bottom].some(Boolean);
+}
+function fadeScrollContent(context2, bounds, resolution) {
+  context2.save();
+  context2.setTransform(resolution, 0, 0, resolution, 0, 0);
+  context2.globalCompositeOperation = "destination-out";
+  context2.globalAlpha = 1;
+  fadeHorizontalEdges(context2, bounds);
+  fadeVerticalEdges(context2, bounds);
+  context2.restore();
+}
+function fadeHorizontalEdges(context2, bounds) {
+  const width = Math.min(28, bounds.width / 4);
+  if (bounds.left) drawFade(context2, bounds.x, bounds.y, width, bounds.height, bounds.x, 0, bounds.x + width, 0);
+  if (bounds.right) drawFade(
+    context2,
+    bounds.x + bounds.width - width,
+    bounds.y,
+    width,
+    bounds.height,
+    bounds.x + bounds.width,
+    0,
+    bounds.x + bounds.width - width,
+    0
+  );
+}
+function fadeVerticalEdges(context2, bounds) {
+  const height = Math.min(20, bounds.height / 4);
+  if (bounds.top) drawFade(context2, bounds.x, bounds.y, bounds.width, height, 0, bounds.y, 0, bounds.y + height);
+  if (bounds.bottom) drawFade(
+    context2,
+    bounds.x,
+    bounds.y + bounds.height - height,
+    bounds.width,
+    height,
+    0,
+    bounds.y + bounds.height,
+    0,
+    bounds.y + bounds.height - height
+  );
+}
+function drawFade(context2, x2, y2, width, height, startX, startY, endX, endY) {
+  const gradient = context2.createLinearGradient(startX, startY, endX, endY);
+  gradient.addColorStop(0, "rgba(0,0,0,1)");
+  gradient.addColorStop(0.5, "rgba(0,0,0,0.25)");
+  gradient.addColorStop(1, "rgba(0,0,0,0)");
+  context2.fillStyle = gradient;
+  context2.fillRect(x2, y2, width, height);
+}
+var ScrollContentFade = class extends Container {
+  content;
+  viewport;
+  coordinates;
+  surface;
+  originalContext;
+  /** Wraps existing content without changing its controls, masks, or input ownership. */
+  constructor(content = new Container()) {
+    super();
+    this.content = content;
+    this.coordinates = this;
+    const begin3 = new RenderContainer((renderer) => this.begin(renderer));
+    const end = new RenderContainer((renderer) => this.end(renderer));
+    begin3.eventMode = end.eventMode = "none";
+    this.addChild(begin3, content, end);
+  }
+  /** Updates clipping-edge feedback in the coordinate system of its viewport owner. */
+  setViewport(viewport, coordinates = this) {
+    this.viewport = viewport;
+    this.coordinates = coordinates;
+  }
+  /** Redirects just this layer's draw calls into a reusable transparent surface. */
+  begin(renderer) {
+    const viewport = this.viewport;
+    if (!(renderer instanceof CanvasRenderer) || !hasFadedEdges(viewport)) return;
+    this.surface ??= document.createElement("canvas");
+    const original = renderer.canvasContext.activeContext;
+    if (this.surface.width !== renderer.canvas.width) this.surface.width = renderer.canvas.width;
+    if (this.surface.height !== renderer.canvas.height) this.surface.height = renderer.canvas.height;
+    const context2 = this.surface.getContext("2d");
+    if (!context2) return;
+    context2.setTransform(1, 0, 0, 1, 0, 0);
+    context2.clearRect(0, 0, this.surface.width, this.surface.height);
+    context2.globalCompositeOperation = "source-over";
+    context2.imageSmoothingEnabled = original.imageSmoothingEnabled;
+    this.originalContext = original;
+    renderer.canvasContext.activeContext = context2;
+    renderer.canvasContext.setBlendMode("normal");
+  }
+  /** Masks the isolated pixels and composites them before subsequent scene overlays draw. */
+  end(renderer) {
+    if (!(renderer instanceof CanvasRenderer) || !this.originalContext || !this.surface || !this.viewport) return;
+    const original = this.originalContext;
+    this.originalContext = void 0;
+    const context2 = this.surface.getContext("2d");
+    renderer.canvasContext.activeContext = original;
+    if (!context2) return;
+    const origin = this.coordinates.toGlobal({ x: this.viewport.x, y: this.viewport.y });
+    fadeScrollContent(context2, { ...this.viewport, x: origin.x, y: origin.y }, renderer.canvasContext.activeResolution);
+    original.save();
+    original.setTransform(1, 0, 0, 1, 0, 0);
+    original.globalCompositeOperation = "source-over";
+    original.globalAlpha = 1;
+    original.drawImage(this.surface, 0, 0);
+    original.restore();
+    renderer.canvasContext.setBlendMode("normal");
+    original.globalCompositeOperation = "source-over";
+  }
+  /** Releases the offscreen pixel allocation with its owning scene. */
+  destroy(options) {
+    if (this.surface) this.surface.width = this.surface.height = 0;
+    this.surface = void 0;
+    super.destroy(options);
+  }
+};
+
+// src/ui-primitives.ts
+init_lib();
+
+// src/text-fit.ts
+function fitTextToBox(text, width, height, preferredSize, minimumSize) {
+  const availableWidth = Math.max(1, width);
+  const availableHeight = Math.max(1, height);
+  text.style.fontSize = preferredSize;
+  text.style.wordWrapWidth = availableWidth;
+  text.style.breakWords = true;
+  const exceedsBounds = () => text.width > availableWidth || text.height > availableHeight;
+  while (exceedsBounds() && Number(text.style.fontSize) > minimumSize) {
+    text.style.fontSize = Math.max(minimumSize, Number(text.style.fontSize) - 1);
+  }
+  const fullText = text.text;
+  for (let length2 = fullText.length - 1; length2 >= 0 && exceedsBounds(); length2--) {
+    text.text = fullText.slice(0, length2).trimEnd() + "\u2026";
+  }
+  if (exceedsBounds()) text.text = "";
+}
+
+// src/ui-primitives.ts
+var uiTokens = {
+  color: {
+    canvas: 1186592,
+    surface: 1845293,
+    surfaceRaised: 2503738,
+    text: 15920868,
+    textMuted: 12897224,
+    health: 14844014,
+    stamina: 9488295,
+    mana: 9685480,
+    block: 13678460,
+    dangerIntent: 14844014,
+    focus: 15920868,
+    selected: 6543598,
+    valid: 9488295,
+    invalid: 14844014,
+    disabled: 12897224,
+    panelFill: 1845293,
+    panelStroke: 7439754,
+    panelShadow: 594197,
+    panelInset: 1186592,
+    panelOrnament: 13678460,
+    buttonFocus: 15920868,
+    buttonSelected: 13678460,
+    progressFill: 9488295,
+    progressBackground: 2503738,
+    buttonText: 15920868,
+    panelTitleText: 15920868,
+    bodyText: 12897224
+  },
+  typography: {
+    button: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 16, fontWeight: "600", letterSpacing: 1.1, align: "center" },
+    panelTitle: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "700" },
+    body: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 14 },
+    caption: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 12 },
+    intent: { fill: 15920868, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 13, fontWeight: "700" },
+    cardTitle: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "600" },
+    cardEffect: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 14 },
+    enemyName: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "700" },
+    numericResource: { fill: 15920868, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 16, fontWeight: "700", padding: 2 },
+    endTurn: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 16, fontWeight: "600", letterSpacing: 1.1, align: "center" },
+    secondaryHud: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 12, fontWeight: "600" },
+    relicDetail: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 13 }
+  },
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 12,
+    lg: 16
+  },
+  safeArea: {
+    edge: 8,
+    compactEdge: 4,
+    controlGap: 8
+  },
+  frame: {
+    panelCornerRadius: 10,
+    borderWidth: 2,
+    innerInset: 5,
+    ornamentLength: 18,
+    ornamentThickness: 3,
+    selectedInset: 2,
+    focusInset: 5,
+    selectedCornerRadius: 8,
+    focusCornerRadius: 6
+  },
+  elevation: {
+    overlayAlpha: 0.72,
+    tooltipAlpha: 0.96
+  },
+  motion: {
+    controlTransitionMs: 140,
+    tooltipDelayMs: 250,
+    reducedMotionDurationMs: 0
+  },
+  interaction: {
+    disabledAlpha: 0.5
+  }
+};
+var semanticColors = {
+  canvas: uiTokens.color.canvas,
+  surface: uiTokens.color.surface,
+  surfaceRaised: uiTokens.color.surfaceRaised,
+  text: uiTokens.color.text,
+  textMuted: uiTokens.color.textMuted,
+  health: uiTokens.color.health,
+  stamina: uiTokens.color.stamina,
+  mana: uiTokens.color.mana,
+  block: uiTokens.color.block,
+  dangerIntent: uiTokens.color.dangerIntent,
+  focus: uiTokens.color.focus,
+  selected: uiTokens.color.selected,
+  valid: uiTokens.color.valid,
+  invalid: uiTokens.color.invalid,
+  disabled: uiTokens.color.disabled
+};
+var areaAtmospheres = {
+  neutral: {
+    canvas: uiTokens.color.canvas,
+    distantSurface: 2503738,
+    architecture: 1581864,
+    floor: 1516842,
+    line: 7439754,
+    platform: 4810077
+  },
+  "pale-reach": {
+    canvas: 1380891,
+    distantSurface: 3681087,
+    architecture: 2432557,
+    floor: 2103589,
+    line: 10060187,
+    platform: 6836847
+  }
+};
+function getAreaAtmosphere(name) {
+  return name === "pale-reach" ? areaAtmospheres["pale-reach"] : areaAtmospheres.neutral;
+}
+var uiColors = {
+  panelFill: uiTokens.color.panelFill,
+  panelStroke: uiTokens.color.panelStroke,
+  panelShadow: uiTokens.color.panelShadow,
+  panelInset: uiTokens.color.panelInset,
+  panelOrnament: uiTokens.color.panelOrnament,
+  buttonFocus: uiTokens.color.buttonFocus,
+  buttonSelected: uiTokens.color.buttonSelected,
+  progressFill: uiTokens.color.progressFill,
+  progressBackground: uiTokens.color.progressBackground,
+  buttonText: uiTokens.color.buttonText,
+  panelTitleText: uiTokens.color.panelTitleText,
+  bodyText: uiTokens.color.bodyText
+};
+var textStyles = /* @__PURE__ */ new Map();
+function getUiTextStyle(kind) {
+  const existing = textStyles.get(kind);
+  if (existing) {
+    return existing;
+  }
+  const style = new TextStyle(getTextStyleOptions(kind));
+  textStyles.set(kind, style);
+  return style;
+}
+function getUiPrimitiveDiagnostics() {
+  return { textStyleCacheCount: textStyles.size };
+}
+var GamePanel = class extends Container {
+  shadow = new Graphics();
+  background = new Graphics();
+  innerFrame = new Graphics();
+  ornaments = new Graphics();
+  panelContent = new Container();
+  fill;
+  stroke;
+  cornerRadius;
+  surface;
+  panelWidth;
+  panelHeight;
+  /**
+   * Creates a panel and its dedicated content layer.
+   */
+  constructor(options) {
+    super();
+    this.fill = options.fill ?? (options.surface === "button" ? 1058092 : uiColors.panelFill);
+    this.stroke = options.stroke ?? uiColors.panelStroke;
+    this.cornerRadius = Math.max(0, options.cornerRadius ?? (options.surface === "button" ? 3 : 4));
+    this.surface = options.surface ?? "panel";
+    this.panelWidth = normalizeSize(options.width);
+    this.panelHeight = normalizeSize(options.height);
+    this.addChild(this.shadow, this.background, this.innerFrame, this.ornaments, this.panelContent);
+    this.redraw();
+  }
+  /**
+   * Gets the layer intended for content placed inside this panel.
+   */
+  get content() {
+    return this.panelContent;
+  }
+  /**
+   * Gets the current panel width.
+   */
+  get panelSize() {
+    return { width: this.panelWidth, height: this.panelHeight };
+  }
+  /**
+   * Updates panel dimensions and redraws the panel chrome.
+   */
+  resize(width, height) {
+    this.panelWidth = normalizeSize(width);
+    this.panelHeight = normalizeSize(height);
+    this.redraw();
+  }
+  redraw() {
+    if (this.surface === "toolbar") {
+      this.shadow.clear();
+      this.background.clear().roundRect(0, 0, this.panelWidth, this.panelHeight, 6).fill(2307644);
+      this.innerFrame.clear();
+      this.ornaments.clear();
+      return;
+    }
+    if (this.surface === "button") {
+      this.shadow.clear();
+      drawButtonSurface(this.background, this.panelWidth, this.panelHeight, this.fill, this.stroke);
+      this.innerFrame.clear();
+      this.ornaments.clear();
+      return;
+    }
+    this.shadow.clear().roundRect(2, 4, Math.max(0, this.panelWidth - 2), Math.max(0, this.panelHeight - 2), this.cornerRadius).fill({ color: uiColors.panelShadow, alpha: 0.3 });
+    this.background.clear().roundRect(0, 0, this.panelWidth, this.panelHeight, this.cornerRadius).fill({ color: this.fill }).stroke({ color: this.stroke, width: 1 });
+    this.innerFrame.clear();
+    this.ornaments.clear();
+  }
+};
+var GameButton = class extends GamePanel {
+  labelText;
+  navigationIcon;
+  navigationIconName;
+  fullLabel;
+  iconOnly = false;
+  onPress;
+  stateOutline = new Graphics();
+  isEnabled;
+  isFocused;
+  isSelected;
+  toolbarAppearance;
+  /**
+   * Creates an interactive button.
+   */
+  constructor(options) {
+    super({ ...options, surface: options.appearance === "toolbar" ? "toolbar" : "button" });
+    this.toolbarAppearance = options.appearance === "toolbar";
+    this.onPress = options.onPress;
+    this.isEnabled = options.enabled ?? true;
+    this.isFocused = this.isEnabled && (options.focused ?? false);
+    this.isSelected = this.isEnabled && (options.selected ?? false);
+    this.navigationIconName = options.menuIcon;
+    this.content.addChild(this.stateOutline);
+    this.navigationIcon = options.menuIcon ? createMenuIcon(options.menuIcon) : void 0;
+    if (this.navigationIcon) this.content.addChild(this.navigationIcon);
+    this.fullLabel = options.label;
+    this.labelText = new Text({ text: options.label, style: new TextStyle(getTextStyleOptions(options.labelStyle ?? "Button")) });
+    this.labelText.resolution = Math.max(2, typeof window === "undefined" ? 2 : window.devicePixelRatio || 1);
+    this.labelText.anchor.set(0.5);
+    this.labelText.position.set(this.panelSize.width / 2, this.panelSize.height / 2);
+    this.content.addChild(this.labelText);
+    this.fitLabel();
+    this.on("pointertap", () => this.press());
+    this.updatePresentation();
+  }
+  /**
+   * Gets the current button label.
+   */
+  get label() {
+    return this.fullLabel;
+  }
+  /**
+   * Updates the visible button label.
+   */
+  set label(value) {
+    this.fullLabel = value;
+    this.fitLabel();
+  }
+  /**
+   * Gets whether pointer input can activate the button.
+   */
+  get enabled() {
+    return this.isEnabled;
+  }
+  /**
+   * Gets whether the button is the current keyboard-focus target.
+   */
+  get focused() {
+    return this.isFocused;
+  }
+  /**
+   * Gets whether the button represents the current selection.
+   */
+  get selected() {
+    return this.isSelected;
+  }
+  /**
+   * Gets the highest-priority visual interaction state for this button.
+   */
+  get controlState() {
+    if (!this.isEnabled) {
+      return "disabled";
+    }
+    if (this.isFocused) {
+      return "focused";
+    }
+    return this.isSelected ? "selected" : "default";
+  }
+  /**
+   * Enables or disables pointer interaction while retaining the button's visual position.
+   */
+  setEnabled(enabled) {
+    this.isEnabled = enabled;
+    if (!enabled) {
+      this.isFocused = false;
+      this.isSelected = false;
+    }
+    this.updatePresentation();
+  }
+  /**
+   * Sets whether the button should display keyboard focus.
+   *
+   * Disabled buttons cannot receive focus.
+   */
+  setFocused(focused) {
+    this.isFocused = this.isEnabled && focused;
+    this.updatePresentation();
+  }
+  /**
+   * Sets whether the button should display selection.
+   *
+   * Disabled buttons cannot remain selected.
+   */
+  setSelected(selected) {
+    this.isSelected = this.isEnabled && selected;
+    this.updatePresentation();
+  }
+  /**
+   * Activates the button when enabled.
+   */
+  press() {
+    if (this.isEnabled) {
+      this.onPress?.();
+    }
+  }
+  /**
+   * Keeps the cached label centered when this button changes size.
+   */
+  resize(width, height) {
+    super.resize(width, height);
+    this.labelText.position.set(this.panelSize.width / 2, this.panelSize.height / 2);
+    this.fitLabel();
+    this.updatePresentation();
+  }
+  /** Updates a retained button when its semantic action changes, such as Items versus Hand. */
+  setMenuIcon(name) {
+    if (name === this.navigationIconName) return;
+    this.navigationIcon?.destroy();
+    this.navigationIconName = name;
+    this.navigationIcon = name ? createMenuIcon(name) : void 0;
+    if (this.navigationIcon) this.content.addChild(this.navigationIcon);
+    this.fitLabel();
+  }
+  /** Switches compact navigation to icons while preserving its accessible title. */
+  setIconOnly(value) {
+    this.iconOnly = value && this.navigationIcon !== void 0;
+    this.fitLabel();
+  }
+  /** Fits each label independently to the control's inset without stretching its glyphs. */
+  fitLabel() {
+    this.labelText.text = this.fullLabel;
+    this.accessibleTitle = this.fullLabel;
+    this.labelText.style.wordWrap = false;
+    this.labelText.visible = !this.iconOnly;
+    const inset = this.navigationIcon ? 32 : 0;
+    if (this.navigationIcon) this.navigationIcon.position.set(this.iconOnly ? (this.panelSize.width - 16) / 2 : 10, (this.panelSize.height - 16) / 2);
+    this.labelText.position.set((this.panelSize.width + inset) / 2, this.panelSize.height / 2);
+    fitTextToBox(this.labelText, this.panelSize.width - 16 - inset, this.panelSize.height - 12, 16, 11);
+  }
+  updatePresentation() {
+    this.eventMode = this.isEnabled ? "static" : "none";
+    this.cursor = this.isEnabled ? "pointer" : "default";
+    this.alpha = this.isEnabled ? 1 : this.toolbarAppearance ? 0.5 : uiTokens.interaction.disabledAlpha;
+    this.redrawStateOutline();
+  }
+  redrawStateOutline() {
+    const { width, height } = this.panelSize;
+    this.stateOutline.clear();
+    if (!this.isEnabled) {
+      return;
+    }
+    if (this.isSelected) {
+      this.stateOutline.roundRect(0, 0, width, height, this.toolbarAppearance ? 6 : 8).fill({ color: uiColors.buttonSelected, alpha: 0.08 }).stroke({ color: uiColors.buttonSelected, width: 1 });
+    }
+    if (this.isFocused) {
+      if (this.toolbarAppearance) {
+        this.stateOutline.roundRect(0, 0, width, height, 6).fill(3163982);
+      }
+      this.stateOutline.roundRect(1, 1, width - 2, height - 2, this.toolbarAppearance ? 6 : 8).stroke({ color: this.toolbarAppearance ? 16044939 : uiColors.buttonFocus, width: 1.5 });
+    }
+  }
+};
+function drawButtonSurface(graphics, width, height, fill = 1058092, stroke2 = 5467506) {
+  graphics.clear().roundRect(0, 0, width, height, 8).fill({ color: fill }).stroke({ color: stroke2, width: 1 });
+}
+var SceneTitle = class extends Container {
+  titleText;
+  subtitleText;
+  titleStyle;
+  titleWidth;
+  /**
+   * Creates a scene heading.
+   */
+  constructor(options) {
+    super();
+    this.titleWidth = normalizeSize(options.width);
+    this.titleStyle = new TextStyle(getTextStyleOptions("PanelTitle"));
+    this.titleText = new Text({ text: options.title, style: this.titleStyle });
+    this.titleText.anchor.set(0.5, 0);
+    this.addChild(this.titleText);
+    if (options.subtitle !== void 0) {
+      this.subtitleText = new Text({ text: options.subtitle, style: getUiTextStyle("Body") });
+      this.subtitleText.anchor.set(0.5, 0);
+      this.addChild(this.subtitleText);
+    }
+    this.layout();
+  }
+  /**
+   * Gets the main heading text.
+   */
+  get title() {
+    return this.titleText.text;
+  }
+  /**
+   * Updates the main heading text.
+   */
+  set title(value) {
+    this.titleText.text = value;
+  }
+  /**
+   * Gets the optional subtitle text.
+   */
+  get subtitle() {
+    return this.subtitleText?.text;
+  }
+  /**
+   * Updates the layout width used to center heading text.
+   */
+  resize(width) {
+    this.titleWidth = normalizeSize(width);
+    this.layout();
+  }
+  layout() {
+    const centerX = this.titleWidth / 2;
+    this.titleStyle.wordWrap = true;
+    this.titleStyle.breakWords = true;
+    this.titleStyle.wordWrapWidth = this.titleWidth;
+    this.titleText.position.set(centerX, 0);
+    const titleHeight = Number.isFinite(this.titleText.height) ? this.titleText.height : 20;
+    this.subtitleText?.position.set(centerX, Math.max(24, titleHeight + uiTokens.spacing.xs));
+  }
+};
+var ResourceCounter = class extends Container {
+  valueText;
+  resourceValue;
+  /**
+   * Creates a resource counter.
+   */
+  constructor(options) {
+    super();
+    this.resourceValue = options.value;
+    const resolution = Math.max(2, typeof window === "undefined" ? 2 : window.devicePixelRatio || 1);
+    let offsetX = 0;
+    if (options.icon !== void 0) {
+      const icon = typeof options.icon === "string" ? new Text({ text: options.icon, style: getUiTextStyle("Button") }) : options.icon;
+      if (icon instanceof Text) icon.resolution = resolution;
+      icon.position.set(0, 2);
+      this.addChild(icon);
+      offsetX = 26;
+    }
+    const labelText = new Text({ text: options.label, style: getUiTextStyle("Body") });
+    labelText.resolution = resolution;
+    labelText.position.set(offsetX, 0);
+    this.valueText = new Text({ text: String(options.value), style: getUiTextStyle("NumericResource") });
+    this.valueText.resolution = resolution;
+    const valueX = offsetX + (options.label && options.valueLayout === "inline" ? labelText.width + 8 : 0);
+    this.valueText.position.set(options.valueOffsetX ?? valueX, options.valueLayout === "inline" ? 0 : 18);
+    if (options.valueLayout === "inline") {
+      labelText.anchor.set(0, 0.5);
+      labelText.position.set(offsetX, 12);
+      this.valueText.anchor.set(0, 0.5);
+      this.valueText.position.set(options.valueOffsetX ?? valueX, 12);
+    }
+    if (options.label) {
+      this.addChild(labelText);
+    }
+    this.addChild(this.valueText);
+  }
+  /**
+   * Gets the resource value displayed by this counter.
+   */
+  get value() {
+    return this.resourceValue;
+  }
+  /**
+   * Updates the resource value displayed by this counter.
+   */
+  setValue(value) {
+    this.resourceValue = value;
+    this.valueText.text = String(value);
+  }
+};
+var ProgressIndicator = class extends Container {
+  backgroundGraphic = new Graphics();
+  progressGraphic = new Graphics();
+  fill;
+  background;
+  indicatorWidth;
+  indicatorHeight;
+  currentValue;
+  maximumValue;
+  /**
+   * Creates a progress indicator.
+   */
+  constructor(options) {
+    super();
+    this.indicatorWidth = normalizeSize(options.width);
+    this.indicatorHeight = normalizeSize(options.height);
+    this.currentValue = options.value;
+    this.maximumValue = options.maximum;
+    this.fill = options.fill ?? uiColors.progressFill;
+    this.background = options.background ?? uiColors.progressBackground;
+    this.addChild(this.backgroundGraphic, this.progressGraphic);
+    this.redraw();
+  }
+  /**
+   * Gets the current value used to calculate progress.
+   */
+  get value() {
+    return this.currentValue;
+  }
+  /**
+   * Gets the maximum value used to calculate progress.
+   */
+  get maximum() {
+    return this.maximumValue;
+  }
+  /**
+   * Gets the normalized fill amount in the inclusive range from zero to one.
+   */
+  get progress() {
+    if (!Number.isFinite(this.currentValue) || !Number.isFinite(this.maximumValue) || this.maximumValue <= 0) {
+      return 0;
+    }
+    return Math.min(1, Math.max(0, this.currentValue / this.maximumValue));
+  }
+  /**
+   * Updates the values used to calculate and draw the filled portion.
+   */
+  setProgress(value, maximum) {
+    this.currentValue = value;
+    this.maximumValue = maximum;
+    this.redraw();
+  }
+  /**
+   * Updates indicator dimensions while retaining its current progress values.
+   */
+  resize(width, height) {
+    this.indicatorWidth = normalizeSize(width);
+    this.indicatorHeight = normalizeSize(height);
+    this.redraw();
+  }
+  redraw() {
+    this.backgroundGraphic.clear().rect(0, 0, this.indicatorWidth, this.indicatorHeight).fill({ color: this.background });
+    this.progressGraphic.clear().rect(0, 0, this.indicatorWidth * this.progress, this.indicatorHeight).fill({ color: this.fill });
+  }
+};
+var ScrollContainer = class extends Container {
+  viewport = new Container();
+  viewportMask = new Graphics();
+  contentLayer = new Container();
+  contentFade;
+  viewportWidth;
+  viewportHeight;
+  totalContentHeight;
+  offset = 0;
+  /**
+   * Creates a clipped viewport and its dedicated scrollable content layer.
+   */
+  constructor(options) {
+    super();
+    this.viewportWidth = normalizeSize(options.width);
+    this.viewportHeight = normalizeSize(options.height);
+    this.totalContentHeight = normalizeSize(options.contentHeight ?? options.height);
+    this.contentFade = options.fadeEdges ? new ScrollContentFade(this.contentLayer) : void 0;
+    this.viewport.addChild(this.viewportMask, this.contentFade ?? this.contentLayer);
+    this.viewport.mask = this.viewportMask;
+    this.addChild(this.viewport);
+    this.redrawViewport();
+    this.updateContentPosition();
+  }
+  /**
+   * Gets the layer intended for scrollable scene-specific children.
+   */
+  get content() {
+    return this.contentLayer;
+  }
+  /**
+   * Gets the current viewport dimensions.
+   */
+  get viewportSize() {
+    return { width: this.viewportWidth, height: this.viewportHeight };
+  }
+  /**
+   * Gets the total scrollable content height.
+   */
+  get contentHeight() {
+    return this.totalContentHeight;
+  }
+  /**
+   * Gets the current vertical offset from the top of the content.
+   */
+  get scrollOffset() {
+    return this.offset;
+  }
+  /**
+   * Gets the maximum allowed vertical offset from the top of the content.
+   */
+  get maximumScrollOffset() {
+    return Math.max(0, this.totalContentHeight - this.viewportHeight);
+  }
+  /**
+   * Updates the viewport dimensions while retaining the closest valid scroll offset.
+   */
+  resize(width, height) {
+    this.viewportWidth = normalizeSize(width);
+    this.viewportHeight = normalizeSize(height);
+    this.redrawViewport();
+    this.setScrollOffset(this.offset);
+  }
+  /**
+   * Updates the scrollable content height while retaining the closest valid scroll offset.
+   */
+  setContentHeight(height) {
+    this.totalContentHeight = normalizeSize(height);
+    this.setScrollOffset(this.offset);
+  }
+  /**
+   * Sets the vertical content offset, clamped to the available scroll range.
+   */
+  setScrollOffset(offset) {
+    const normalizedOffset = Number.isFinite(offset) ? offset : 0;
+    this.offset = Math.min(this.maximumScrollOffset, Math.max(0, normalizedOffset));
+    this.updateContentPosition();
+  }
+  /**
+   * Moves the vertical content offset by the supplied amount.
+   */
+  scrollBy(amount) {
+    this.setScrollOffset(this.offset + amount);
+  }
+  redrawViewport() {
+    this.viewportMask.clear().rect(0, 0, this.viewportWidth, this.viewportHeight).fill({ color: 16777215 });
+  }
+  updateContentPosition() {
+    this.contentLayer.position.set(0, -this.offset);
+    this.contentFade?.setViewport({
+      x: 0,
+      y: 0,
+      width: this.viewportWidth,
+      height: this.viewportHeight,
+      top: this.offset > 0,
+      bottom: this.offset < this.maximumScrollOffset
+    }, this.viewport);
+  }
+};
+var Tooltip = class extends GamePanel {
+  tooltipText;
+  placement;
+  gap;
+  open = false;
+  /**
+   * Creates a hidden, non-interactive tooltip surface.
+   */
+  constructor(options) {
+    super(options);
+    this.placement = options.placement ?? "above";
+    this.gap = normalizeSize(options.gap ?? uiTokens.spacing.sm);
+    this.alpha = uiTokens.elevation.tooltipAlpha;
+    this.eventMode = "none";
+    this.tooltipText = new Text({ text: options.text, style: getUiTextStyle("Body") });
+    this.tooltipText.style.wordWrap = true;
+    this.tooltipText.style.wordWrapWidth = Math.max(1, this.panelSize.width - uiTokens.spacing.sm * 2);
+    this.tooltipText.position.set(uiTokens.spacing.sm, uiTokens.spacing.sm);
+    this.content.addChild(this.tooltipText);
+    this.visible = false;
+  }
+  /**
+   * Gets the text currently shown by the tooltip.
+   */
+  get text() {
+    return this.tooltipText.text;
+  }
+  /**
+   * Gets whether the tooltip is currently visible.
+   */
+  get isOpen() {
+    return this.open;
+  }
+  /**
+   * Updates the text without recreating the tooltip display tree.
+   */
+  setText(text) {
+    this.tooltipText.text = text;
+  }
+  /** Resizes the tooltip and wraps its text inside the updated content area. */
+  resize(width, height) {
+    super.resize(width, height);
+    this.tooltipText.style.wordWrapWidth = Math.max(1, this.panelSize.width - uiTokens.spacing.sm * 2);
+  }
+  /**
+   * Shows the tooltip beside the supplied scene-space anchor.
+   */
+  show(anchor) {
+    const position = this.getPosition(anchor);
+    this.position.set(position.x, position.y);
+    this.open = true;
+    this.visible = true;
+  }
+  /**
+   * Hides the tooltip while keeping its display tree available for later reuse.
+   */
+  hide() {
+    this.open = false;
+    this.visible = false;
+  }
+  getPosition(anchor) {
+    const x2 = normalizeCoordinate(anchor.x);
+    const y2 = normalizeCoordinate(anchor.y);
+    const width = normalizeSize(anchor.width);
+    const height = normalizeSize(anchor.height);
+    const tooltipSize = this.panelSize;
+    switch (this.placement) {
+      case "below":
+        return { x: x2 + (width - tooltipSize.width) / 2, y: y2 + height + this.gap };
+      case "left":
+        return { x: x2 - tooltipSize.width - this.gap, y: y2 + (height - tooltipSize.height) / 2 };
+      case "right":
+        return { x: x2 + width + this.gap, y: y2 + (height - tooltipSize.height) / 2 };
+      case "above":
+        return { x: x2 + (width - tooltipSize.width) / 2, y: y2 - tooltipSize.height - this.gap };
+    }
+  }
+};
+function getTextStyleOptions(kind) {
+  switch (kind) {
+    case "Button":
+      return uiTokens.typography.button;
+    case "PanelTitle":
+      return uiTokens.typography.panelTitle;
+    case "Body":
+      return uiTokens.typography.body;
+    case "Caption":
+      return uiTokens.typography.caption;
+    case "Intent":
+      return uiTokens.typography.intent;
+    case "CardTitle":
+      return uiTokens.typography.cardTitle;
+    case "CardEffect":
+      return uiTokens.typography.cardEffect;
+    case "EnemyName":
+      return uiTokens.typography.enemyName;
+    case "NumericResource":
+      return uiTokens.typography.numericResource;
+    case "EndTurn":
+      return uiTokens.typography.endTurn;
+    case "SecondaryHud":
+      return uiTokens.typography.secondaryHud;
+    case "RelicDetail":
+      return uiTokens.typography.relicDetail;
+  }
+}
+function normalizeSize(value) {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+function normalizeCoordinate(value) {
+  return Number.isFinite(value) ? value : 0;
+}
+
+// src/card-description.ts
+var keywords = {
+  aoe: "AoE",
+  attack: "Attack",
+  bleed: "Bleed",
+  block: "Block",
+  burn: "Burn",
+  chainattack: "Chain Attack",
+  chainskill: "Chain Skill",
+  chainspell: "Chain Spell",
+  chill: "Chill",
+  combo1: "Combo 1",
+  combo2: "Combo 2",
+  combo3: "Combo 3",
+  damage: "Damage",
+  discard: "Discard",
+  discardrandom: "Discard Random",
+  draw: "Draw",
+  drawrandom: "Draw Random",
+  execute: "Execute",
+  exhaust: "Exhaust",
+  health: "Health",
+  ritual: "Ritual",
+  skill: "Skill",
+  spell: "Spell",
+  stamina: "Stamina",
+  stealth: "Stealth",
+  status: "Status",
+  strength: "Strength",
+  unplayable: "Unplayable",
+  vulnerable: "Vulnerable",
+  weak: "Weak",
+  poison: "Poison",
+  shock: "Shock",
+  frail: "Frail",
+  reflect: "Reflect",
+  retain: "Retain",
+  chain: "Chain",
+  combo: "Combo",
+  exploit: "Exploit",
+  transmute: "Transmute",
+  heal: "Heal",
+  energy: "Energy",
+  mana: "Mana",
+  intangible: "Intangible",
+  slow: "Slow",
+  heavy: "Heavy",
+  fatigue: "Fatigue",
+  curing: "Curing",
+  guarding: "Guarding",
+  striking: "Striking",
+  toxic: "Toxic",
+  guarded: "Guarded",
+  endure: "Endure",
+  bloodcast: "Bloodcast",
+  whisper: "Whisper",
+  setup: "Setup",
+  fullblock: "Full Block",
+  perfectblock: "Perfect Block",
+  full: "Full",
+  perfect: "Perfect"
+};
+function cardDescriptionRuns(description) {
+  const normalized = description.replace(/\{newline\}|<br\s*\/?>/gi, "\n").replace(/\{([a-z0-9]+)\}/gi, (_token, key) => keywords[key.toLowerCase()] ?? key);
+  const fragments = normalized.split(/(\*\*|<\/?(?:b|strong)>)/gi);
+  const runs = [];
+  let emphasized = false;
+  for (const fragment8 of fragments) {
+    if (/^(?:\*\*|<\/?(?:b|strong)>)$/i.test(fragment8)) {
+      emphasized = fragment8.startsWith("</") ? false : fragment8.startsWith("<") ? true : !emphasized;
+      continue;
+    }
+    for (const match of fragment8.matchAll(/\n|[^\S\n]+|[^\s]+/g)) {
+      const text = match[0];
+      const word = text.replace(/^[^a-z]+|[^a-z]+$/gi, "").toLowerCase();
+      runs.push({ text, bold: emphasized || word in keywords, damage: false });
+    }
+  }
+  let primaryDamageFound = false;
+  return runs.map((run, index) => {
+    const following = runs.slice(index + 1).filter((next) => !/^\s+$/.test(next.text)).slice(0, 3).map((next) => next.text).join(" ");
+    const damage = !primaryDamageFound && /^\d+(?:[x×]\d+)?$/i.test(run.text) && /^(?:[x×]\s*\d+\s*)?damage\b/i.test(following);
+    primaryDamageFound ||= damage;
+    return { ...run, damage };
+  });
+}
+function plainCardDescription(description) {
+  return cardDescriptionRuns(description).map((run) => run.text).join("");
+}
+function withTargetDamage(description, damage) {
+  return damage === void 0 ? description : description.replace(/(?<![\d+-])\d+(?=(?:\*\*|<\/?(?:b|strong)>)*\s*(?:[x×]\s*\d+\s*)?(?:\*\*|<\/?(?:b|strong)>)*\s*(?:\*\*|<\/?(?:b|strong)>)*(?:\{damage\}|damage\b))/i, String(damage));
+}
+function damageTextColor(damage, baseDamage, normal) {
+  return damage === void 0 || baseDamage === void 0 || damage === baseDamage ? normal : damage > baseDamage ? 8315560 : 16744827;
+}
+
+// src/card-rules-view.ts
+init_lib();
+var CardRulesView = class extends Container {
+  labels = [];
+  /** Reuses text objects while fitting and centering styled rules inside the card's caption area. */
+  update(description, style, width, damage, baseDamage, height = Infinity) {
+    const fontSize = Number(style.fontSize) || 14;
+    const maxLines = Math.max(1, Math.floor(height / (fontSize * 1.22)));
+    const layout = this.layoutRuns(cardDescriptionRuns(description), style, width, fontSize, damage, baseDamage);
+    if (layout.lines.length > maxLines && fontSize > 12) {
+      this.update(description, new TextStyle({
+        fontFamily: style.fontFamily,
+        fontSize: fontSize - 1,
+        stroke: style.stroke,
+        fill: style.fill
+      }), width, damage, baseDamage, height);
+      return;
+    }
+    this.hideLines(layout.lines.slice(maxLines));
+    if (layout.lines.length > maxLines) this.ellipsize(layout.lines[maxLines - 1]?.labels ?? []);
+    this.centerLines(layout.lines.slice(0, maxLines), width);
+    this.labels.slice(layout.count).forEach((label) => {
+      label.visible = false;
+    });
+  }
+  /** Wraps styled words while retaining explicit line breaks. */
+  layoutRuns(runs, style, width, fontSize, damage, baseDamage) {
+    const lines = [{ labels: [], width: 0 }];
+    let count2 = 0;
+    for (const run of runs) {
+      let line = lines[lines.length - 1];
+      if (!line) continue;
+      if (run.text === "\n") {
+        lines.push({ labels: [], width: 0 });
+        continue;
+      }
+      if (/^\s+$/.test(run.text)) {
+        line.width += fontSize * 0.26;
+        continue;
+      }
+      const label = this.getLabel(count2, run, style, fontSize, damage, baseDamage);
+      const labelWidth = Number.isFinite(label.width) ? label.width : fontSize * 0.55 * run.text.length;
+      if (line.width + labelWidth > width && line.labels.length > 0) {
+        line = { labels: [], width: 0 };
+        lines.push(line);
+      }
+      label.position.set(line.width, (lines.length - 1) * fontSize * 1.22);
+      line.labels.push(label);
+      line.width += labelWidth;
+      count2++;
+    }
+    return { lines, count: count2 };
+  }
+  /** Reconciles one reusable word label from safe semantic rules text. */
+  getLabel(index, run, style, fontSize, damage, baseDamage) {
+    let label = this.labels[index];
+    if (!label) {
+      label = new Text({ text: "", style });
+      label.resolution = 2;
+      this.labels.push(label);
+      this.addChild(label);
+    }
+    label.text = run.text;
+    label.style = new TextStyle({
+      fontFamily: style.fontFamily,
+      fontSize,
+      stroke: style.stroke,
+      wordWrap: false,
+      fontWeight: run.bold ? "700" : "400",
+      fill: run.damage ? damageTextColor(damage, baseDamage, uiTokens.color.text) : style.fill
+    });
+    label.visible = true;
+    return label;
+  }
+  /** Centers independently wrapped lines inside the caption width. */
+  centerLines(lines, width) {
+    for (const line of lines) {
+      const offset = (width - line.width) / 2;
+      for (const label of line.labels) label.position.set(label.x + offset, label.y);
+    }
+  }
+  /** Hides words beyond the available caption height. */
+  hideLines(lines) {
+    for (const line of lines) {
+      for (const label of line.labels) label.visible = false;
+    }
+  }
+  /** Marks an overlong paragraph without drawing outside the card frame. */
+  ellipsize(labels) {
+    const last = labels[labels.length - 1];
+    if (last) last.text = "\u2026";
+  }
+};
+
+// src/card-placeholder-art.ts
+function drawCardPlaceholder(graphics, type, width, top, bottom) {
+  const x2 = width / 2;
+  const y2 = (top + bottom) / 2;
+  const size = Math.max(8, Math.min(width * 0.28, (bottom - top) * 0.42));
+  const colors2 = { Attack: 15837831, Spell: 10013439, Skill: 10477757, Ritual: 13481204 };
+  const color = colors2[type] ?? 12044248;
+  graphics.roundRect(x2 - size * 1.5, y2 - size * 1.5, size * 3, size * 3, size * 1.5).fill({ color, alpha: 0.06 });
+  if (type === "Attack") drawBlade(graphics, x2, y2, size, color);
+  else if (type === "Skill") drawShield(graphics, x2, y2, size, color);
+  else drawSigil(graphics, x2, y2, size, color, type === "Ritual");
+}
+function drawBlade(g2, x2, y2, s2, color) {
+  g2.rect(x2 - s2 * 0.15, y2 - s2, s2 * 0.3, s2 * 1.35).fill(color).rect(x2, y2 - s2, s2 * 0.07, s2 * 1.35).fill(16772562).roundRect(x2 - s2 * 0.65, y2 + s2 * 0.25, s2 * 1.3, s2 * 0.16, s2 * 0.08).fill(14393940).rect(x2 - s2 * 0.11, y2 + s2 * 0.4, s2 * 0.22, s2 * 0.5).fill(6440508).roundRect(x2 - s2 * 0.2, y2 + s2 * 0.9, s2 * 0.4, s2 * 0.2, s2 * 0.1).fill(color);
+  for (const offset of [-0.75, 0.75]) g2.rect(x2 + s2 * offset, y2 - s2 * 0.65, s2 * 0.08, s2 * 0.7).fill({ color, alpha: 0.3 });
+}
+function drawShield(g2, x2, y2, s2, color) {
+  g2.roundRect(x2 - s2 * 0.72, y2 - s2 * 0.9, s2 * 1.44, s2 * 1.8, s2 * 0.55).fill({ color, alpha: 0.75 }).roundRect(x2 - s2 * 0.55, y2 - s2 * 0.73, s2 * 1.1, s2 * 1.42, s2 * 0.42).fill(1588535).rect(x2 - s2 * 0.07, y2 - s2 * 0.5, s2 * 0.14, s2).fill(color).rect(x2 - s2 * 0.35, y2 - s2 * 0.14, s2 * 0.7, s2 * 0.14).fill(color);
+}
+function drawSigil(g2, x2, y2, s2, color, ritual) {
+  g2.roundRect(x2 - s2, y2 - s2, s2 * 2, s2 * 2, s2).stroke({ color, width: ritual ? 2 : 1, alpha: 0.8 }).roundRect(x2 - s2 * 0.7, y2 - s2 * 0.7, s2 * 1.4, s2 * 1.4, s2 * 0.7).fill({ color, alpha: 0.18 }).roundRect(x2 - s2 * 0.28, y2 - s2 * 0.28, s2 * 0.56, s2 * 0.56, ritual ? 2 : s2 * 0.28).fill(color);
+  for (let index = 0; index < 8; index++) {
+    const angle = index * Math.PI / 4;
+    const radius = s2 * (ritual ? 0.85 : 1.22);
+    g2.roundRect(x2 + Math.cos(angle) * radius - 2, y2 + Math.sin(angle) * radius - 2, 4, 4, 1).fill({ color, alpha: 0.9 });
+  }
+}
+
+// src/card-view.ts
+var defaultCardWidth = 180;
+var defaultCardHeight = 252;
+var textPadding = uiTokens.spacing.sm;
+var CardView = class extends Container {
+  frame = new Graphics();
+  artFallback = new Graphics();
+  artwork = new Sprite(Texture.EMPTY);
+  artMask = new Graphics();
+  textScrims = new Graphics();
+  costPlate = new Graphics();
+  energyCostPlate = new Graphics();
+  manaCostPlate = new Graphics();
+  stateOverlay = new Graphics();
+  playabilityOutline = new Graphics();
+  stateOutline = new Graphics();
+  stateBadge = new Text({ text: "", style: { ...uiTokens.typography.caption, fontSize: 12, fontWeight: "bold", fill: 1515819 } });
+  costStyle = new TextStyle({ ...uiTokens.typography.button, stroke: { color: uiTokens.color.panelShadow, width: 3 } });
+  nameStyle = new TextStyle({ ...uiTokens.typography.cardTitle, align: "center", fontSize: 20, stroke: { color: uiTokens.color.panelShadow, width: 4 }, wordWrap: true });
+  typeStyle = new TextStyle({ ...uiTokens.typography.body, align: "center", fontSize: 13, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true });
+  descriptionStyle = new TextStyle({ ...uiTokens.typography.cardEffect, align: "center", fontSize: 15, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true });
+  costLabel = new Text({ text: "", style: this.costStyle });
+  energyCostLabel = new Text({ text: "", style: this.costStyle });
+  manaCostLabel = new Text({ text: "", style: this.costStyle });
+  nameLabel = new Text({ text: "", style: this.nameStyle });
+  typeLabel = new Text({ text: "", style: this.typeStyle });
+  descriptionLabel = new Text({ text: "", style: this.descriptionStyle });
+  rules = new CardRulesView();
+  handPresentation;
+  rewardPresentation;
+  cardWidth;
+  cardHeight;
+  cardContent;
+  componentState;
+  componentLifecycleState = "active";
+  motionState;
+  playability;
+  statePresentationKey = "";
+  inspectionBinding;
+  /**
+   * Creates a stable card display tree from semantic display data.
+   */
+  constructor(options) {
+    super();
+    this.handPresentation = options.presentation === "hand";
+    this.rewardPresentation = options.presentation === "reward";
+    if (this.handPresentation || this.rewardPresentation) {
+      this.nameStyle.fontFamily = uiTokens.typography.button.fontFamily;
+      this.nameStyle.fontWeight = "700";
+      this.nameStyle.stroke = { color: uiTokens.color.panelShadow, width: 1 };
+      this.descriptionStyle.stroke = { color: uiTokens.color.panelShadow, width: 1 };
+      this.typeStyle.stroke = { color: uiTokens.color.panelShadow, width: 0 };
+    }
+    this.cardWidth = normalizeDimension2(options.width ?? defaultCardWidth, defaultCardWidth);
+    this.cardHeight = normalizeDimension2(options.height ?? defaultCardHeight, defaultCardHeight);
+    this.cardContent = toCardViewContent(options);
+    this.componentState = createUiComponentPresentationState({
+      size: { width: this.cardWidth, height: this.cardHeight },
+      ...options.enabled === void 0 ? {} : { enabled: options.enabled },
+      ...options.focused === void 0 ? {} : { focused: options.focused },
+      ...options.selected === void 0 ? {} : { selected: options.selected },
+      ...options.reducedMotion === void 0 ? {} : { reducedMotion: options.reducedMotion }
+    });
+    this.motionState = options.motionState ?? "idle";
+    this.playability = options.playability ?? "playable";
+    this.costLabel.anchor.set(0.5);
+    this.energyCostLabel.anchor.set(0.5);
+    this.manaCostLabel.anchor.set(0.5);
+    this.nameLabel.anchor.set(0.5, 0);
+    this.typeLabel.anchor.set(0.5, 0);
+    this.descriptionLabel.anchor.set(0.5, 0);
+    this.artwork.anchor.set(0.5, 0.5);
+    this.artwork.mask = this.artMask;
+    this.textScrims.mask = this.artMask;
+    for (const label of [this.costLabel, this.energyCostLabel, this.manaCostLabel, this.nameLabel, this.typeLabel, this.descriptionLabel]) {
+      label.resolution = 2;
+    }
+    this.addChild(
+      this.frame,
+      this.artFallback,
+      this.artwork,
+      this.artMask,
+      this.textScrims,
+      this.costPlate,
+      this.energyCostPlate,
+      this.manaCostPlate,
+      this.costLabel,
+      this.energyCostLabel,
+      this.manaCostLabel,
+      this.nameLabel,
+      this.typeLabel,
+      this.descriptionLabel,
+      this.stateOverlay,
+      this.playabilityOutline,
+      this.stateOutline,
+      this.rules,
+      this.stateBadge
+    );
+    this.redraw();
+    this.updateInspection();
+  }
+  /**
+   * Gets the semantic display data currently rendered by the card.
+   */
+  get content() {
+    return this.cardContent;
+  }
+  /**
+   * Gets the presentation state supplied by the owning scene.
+   */
+  get presentationState() {
+    return this.componentState;
+  }
+  /**
+   * Gets the lifecycle state managed by the owning scene or runtime.
+   */
+  get lifecycleState() {
+    return this.componentLifecycleState;
+  }
+  /**
+   * Gets the card's independent motion treatment.
+   */
+  get currentMotionState() {
+    return this.motionState;
+  }
+  /**
+   * Gets the card's independent playability treatment.
+   */
+  get currentPlayability() {
+    return this.playability;
+  }
+  /**
+   * Gets whether the intentional fallback-art treatment is visible.
+   */
+  get usesFallbackArt() {
+    return this.artFallback.visible;
+  }
+  /**
+   * Gets the current display dimensions.
+   */
+  get size() {
+    return { width: this.cardWidth, height: this.cardHeight };
+  }
+  /**
+   * Reconciles semantic display data without recreating the card display tree.
+   */
+  setContent(content) {
+    if (areCardContentsEqual(this.cardContent, content) && this.artwork.visible === isUsableCardTexture(content.artTexture)) {
+      return;
+    }
+    this.cardContent = content;
+    this.redraw();
+    this.updateInspection();
+  }
+  /**
+   * Applies the card's motion treatment without changing playability or accessibility state.
+   */
+  setMotionState(state) {
+    if (this.motionState === state) {
+      return;
+    }
+    this.motionState = state;
+    if (state === "dragging" || state === "resolving") this.inspectionBinding?.hide();
+    this.applyStatePresentation(getPalette(this.cardContent.rarity));
+  }
+  /**
+   * Applies playability without replacing hover, focus, selection, or motion presentation.
+   */
+  setPlayability(playability) {
+    if (this.playability === playability) {
+      return;
+    }
+    this.playability = playability;
+    this.applyStatePresentation(getPalette(this.cardContent.rarity));
+  }
+  /**
+   * Resizes the card while retaining its content, state, and display-object identity.
+   */
+  resize(size) {
+    const normalizedSize = createUiComponentPresentationState({
+      size,
+      ...this.componentState.interaction,
+      reducedMotion: this.componentState.reducedMotion
+    });
+    if (this.cardWidth === normalizedSize.size.width && this.cardHeight === normalizedSize.size.height) return;
+    this.componentState = normalizedSize;
+    this.cardWidth = normalizedSize.size.width;
+    this.cardHeight = normalizedSize.size.height;
+    this.redraw();
+    this.updateInspection();
+  }
+  /**
+   * Updates scene-owned enabled, focused, and selected state without changing playability.
+   */
+  setInteractionState(state) {
+    if (areInteractionStatesEqual(this.componentState.interaction, state)) {
+      return;
+    }
+    this.componentState = createUiComponentPresentationState({
+      size: this.componentState.size,
+      ...state,
+      reducedMotion: this.componentState.reducedMotion
+    });
+    this.inspectionBinding?.sync();
+    this.applyStatePresentation(getPalette(this.cardContent.rarity));
+  }
+  /**
+   * Updates reduced-motion presentation without changing card content or interaction state.
+   */
+  setReducedMotion(reducedMotion) {
+    if (this.componentState.reducedMotion === reducedMotion) return;
+    this.componentState = createUiComponentPresentationState({
+      size: this.componentState.size,
+      ...this.componentState.interaction,
+      reducedMotion
+    });
+    this.redraw();
+  }
+  /**
+   * Suspends display while keeping the reusable card available for a later resume.
+   */
+  suspend() {
+    this.componentLifecycleState = transitionUiComponentLifecycle(this.componentLifecycleState, "suspend");
+    this.visible = this.componentLifecycleState === "active";
+  }
+  /**
+   * Resumes display unless the card has been disposed.
+   */
+  resume() {
+    this.componentLifecycleState = transitionUiComponentLifecycle(this.componentLifecycleState, "resume");
+    this.visible = this.componentLifecycleState === "active";
+  }
+  /**
+   * Disposes the component and prevents later lifecycle transitions from reviving it.
+   */
+  dispose() {
+    if (this.componentLifecycleState === "disposed") {
+      return;
+    }
+    this.componentLifecycleState = transitionUiComponentLifecycle(this.componentLifecycleState, "dispose");
+    this.visible = false;
+    super.destroy();
+  }
+  updateInspection() {
+    const inspection = this.cardContent.inspection;
+    if (!inspection || !inspection.keywords.length && !inspection.references.length) {
+      this.inspectionBinding?.hide();
+      return;
+    }
+    this.eventMode = "static";
+    this.interactiveChildren = false;
+    this.hitArea = new Rectangle(0, 0, this.cardWidth, this.cardHeight);
+    this.inspectionBinding ??= new CardInspectionBinding(this);
+    this.inspectionBinding.sync();
+  }
+  redraw() {
+    const palette = getPalette(this.cardContent.rarity);
+    const artBounds = getArtBounds(this.cardWidth, this.cardHeight);
+    const header = this.updateLabels(palette);
+    this.frame.clear().roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: palette.frame }).roundRect(uiTokens.frame.borderWidth, uiTokens.frame.borderWidth, this.cardWidth - uiTokens.frame.borderWidth * 2, this.cardHeight - uiTokens.frame.borderWidth * 2, uiTokens.frame.panelCornerRadius - 1).fill({ color: uiTokens.color.panelFill });
+    this.drawFallbackArt(artBounds, palette, header);
+    this.artMask.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.frame.panelCornerRadius - 1).fill({ color: 16777215 });
+    this.updateArtwork(artBounds);
+    this.drawTextScrims(artBounds, palette, header);
+    this.descriptionLabel.visible = false;
+    this.rules.position.set(textPadding, this.descriptionLabel.y);
+    this.rules.update(
+      this.cardContent.description,
+      this.descriptionStyle,
+      this.cardWidth - textPadding * 2,
+      this.cardContent.damage,
+      this.cardContent.baseDamage,
+      this.cardHeight - this.descriptionLabel.y - 6
+    );
+    this.statePresentationKey = "";
+    this.applyStatePresentation(palette);
+  }
+  drawFallbackArt(artBounds, palette, header) {
+    const headerBottom = artBounds.y + header.height;
+    const typeFill = { Attack: 3416873, Spell: 2043978, Skill: 1653556, Ritual: 3417665 };
+    this.artFallback.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.spacing.xs).fill({ color: typeFill[this.cardContent.type] ?? palette.artFill }).roundRect(artBounds.x + 3, artBounds.y + 3, artBounds.width - 6, artBounds.height - 6, uiTokens.spacing.xs - 1).stroke({ color: palette.accent, width: 1, alpha: 0.72 }).rect(artBounds.x, artBounds.y + artBounds.height * 0.56, artBounds.width, artBounds.height * 0.44).fill({ color: palette.accent, alpha: 0.12 });
+    drawCardPlaceholder(this.artFallback, this.cardContent.type, this.cardWidth, headerBottom + 4, this.cardHeight * 0.58 - 4);
+    this.artFallback.visible = !isUsableCardTexture(this.cardContent.artTexture);
+  }
+  /** Reserves a translucent title zone and an opaque lower caption without covering the focal center of the art. */
+  drawTextScrims(artBounds, palette, header) {
+    const rulesY = this.cardHeight * (this.handPresentation ? 0.58 : 0.59);
+    this.textScrims.clear().rect(artBounds.x, artBounds.y, artBounds.width, header.height).fill({ color: uiTokens.color.panelShadow, alpha: 0.78 }).rect(artBounds.x, rulesY, artBounds.width, artBounds.y + artBounds.height - rulesY).fill({ color: uiTokens.color.panelShadow });
+    this.costPlate.clear();
+    this.energyCostPlate.clear();
+    this.manaCostPlate.clear();
+    if (header.hasLegacyCost) {
+      this.costPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.badgeWidth, header.badgeHeight, this.handPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.panelShadow, alpha: 0.94 }).stroke({ color: palette.accent, width: 2 });
+    }
+    if (header.hasEnergyCost) {
+      this.energyCostPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.energyBadgeWidth, header.badgeHeight, this.handPresentation || this.rewardPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.stamina, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
+    }
+    if (header.hasManaCost) {
+      this.manaCostPlate.roundRect(this.handPresentation || this.rewardPresentation ? artBounds.x + artBounds.width - header.manaBadgeWidth - 5 : artBounds.x + 9 + header.energyBadgeWidth, artBounds.y + 5, header.manaBadgeWidth, header.badgeHeight, this.handPresentation || this.rewardPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.mana, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
+    }
+  }
+  updateArtwork(artBounds) {
+    const texture = this.cardContent.artTexture;
+    this.artwork.visible = isUsableCardTexture(texture);
+    if (!texture || !this.artwork.visible) {
+      return;
+    }
+    this.artwork.texture = texture;
+    this.artwork.position.set(artBounds.x + artBounds.width / 2, artBounds.y + artBounds.height / 2);
+    const scale = Math.max(artBounds.width / texture.width, artBounds.height / texture.height);
+    this.artwork.width = texture.width * scale;
+    this.artwork.height = texture.height * scale;
+  }
+  updateLabels(palette) {
+    if (this.handPresentation) return this.updateHandLabels();
+    const textScale = Math.max(0.55, Math.min(this.cardWidth / defaultCardWidth, this.cardHeight / defaultCardHeight));
+    const badgeHeight = Math.min(38, Math.max(24, this.cardWidth * 0.21));
+    const rulesY = this.cardHeight * (this.handPresentation ? 0.65 : 0.59);
+    this.costStyle.fontSize = Math.max(12, 18 * textScale);
+    this.nameStyle.fontSize = Math.max(this.rewardPresentation ? 14 : 12, 18 * textScale);
+    this.typeStyle.fontSize = Math.max(10, 12 * textScale);
+    this.descriptionStyle.fontSize = Math.max(this.rewardPresentation ? 12 : 11, 14 * textScale);
+    const cost = this.cardContent.cost === void 0 ? "" : String(this.cardContent.cost).trim();
+    const energyCost = getVisibleResourceCost(this.cardContent.energyCost);
+    const manaCost = getVisibleResourceCost(this.cardContent.manaCost);
+    this.costLabel.text = cost;
+    this.energyCostLabel.text = energyCost === void 0 ? "" : this.rewardPresentation ? String(energyCost) : `\u26A1 ${energyCost}`;
+    this.manaCostLabel.text = manaCost === void 0 ? "" : this.rewardPresentation ? String(manaCost) : `\u2726 ${manaCost}`;
+    const hasLegacyCost = cost.length > 0;
+    const hasEnergyCost = energyCost !== void 0;
+    const hasManaCost = manaCost !== void 0;
+    const badgeWidth = hasLegacyCost ? Math.min(this.cardWidth - 14, Math.max(badgeHeight, this.costLabel.width + 14)) : 0;
+    const energyBadgeWidth = hasEnergyCost ? Math.max(badgeHeight, this.energyCostLabel.width + 14) : 0;
+    const manaBadgeWidth = hasManaCost ? Math.max(badgeHeight, this.manaCostLabel.width + 14) : 0;
+    const headerHeight = this.rewardPresentation ? Math.max(badgeHeight + 42, this.cardHeight * 0.25) : Math.max(82, this.cardHeight * 0.34);
+    this.costLabel.visible = hasLegacyCost;
+    this.energyCostLabel.visible = hasEnergyCost;
+    this.manaCostLabel.visible = hasManaCost;
+    this.costLabel.position.set(uiTokens.frame.borderWidth + 5 + badgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
+    this.energyCostLabel.position.set(uiTokens.frame.borderWidth + 5 + energyBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
+    this.manaCostLabel.position.set(this.rewardPresentation ? this.cardWidth - uiTokens.frame.borderWidth - 5 - manaBadgeWidth / 2 : uiTokens.frame.borderWidth + 9 + energyBadgeWidth + manaBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
+    this.nameLabel.text = this.cardContent.name;
+    this.nameLabel.position.set(this.cardWidth / 2, uiTokens.frame.borderWidth + badgeHeight + 11);
+    this.typeLabel.text = this.cardContent.type;
+    this.typeLabel.position.set(this.cardWidth / 2, rulesY + 8 * textScale);
+    this.descriptionLabel.text = plainCardDescription(this.cardContent.description);
+    this.descriptionLabel.position.set(this.cardWidth / 2, rulesY + 26 * textScale);
+    this.nameStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
+    this.typeStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
+    this.descriptionStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
+    if (this.rewardPresentation) {
+      fitTextToBox(this.nameLabel, this.nameStyle.wordWrapWidth, headerHeight - badgeHeight - 14, this.nameStyle.fontSize, 14);
+      fitTextToBox(
+        this.descriptionLabel,
+        this.descriptionStyle.wordWrapWidth,
+        this.cardHeight - this.descriptionLabel.y - 8,
+        this.descriptionStyle.fontSize,
+        12
+      );
+    }
+    this.costStyle.fill = this.rewardPresentation ? uiTokens.color.text : palette.accent;
+    return { badgeWidth, badgeHeight, hasLegacyCost, hasEnergyCost, hasManaCost, energyBadgeWidth, manaBadgeWidth, height: headerHeight };
+  }
+  /** Places readable names/effects below the illustration and resource costs in opposite corners. */
+  updateHandLabels() {
+    const scale = this.cardWidth / defaultCardWidth;
+    const badgeHeight = 38 * scale;
+    const rulesY = this.cardHeight * 0.58;
+    const energy = getVisibleResourceCost(this.cardContent.energyCost);
+    const mana = getVisibleResourceCost(this.cardContent.manaCost);
+    this.costStyle.fontSize = 30 * scale;
+    this.costStyle.fill = uiTokens.color.text;
+    this.costLabel.visible = false;
+    this.energyCostLabel.visible = energy !== void 0;
+    this.manaCostLabel.visible = mana !== void 0;
+    this.energyCostLabel.text = energy === void 0 ? "" : String(energy);
+    this.manaCostLabel.text = mana === void 0 ? "" : String(mana);
+    this.energyCostLabel.position.set(uiTokens.frame.borderWidth + 5 + badgeHeight / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
+    this.manaCostLabel.position.set(this.cardWidth - uiTokens.frame.borderWidth - 5 - badgeHeight / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
+    this.nameLabel.text = this.cardContent.name.toUpperCase();
+    this.nameStyle.wordWrap = true;
+    this.nameLabel.position.set(this.cardWidth / 2, rulesY + 5);
+    fitTextToBox(this.nameLabel, this.cardWidth - 16, 40 * scale, 24 * scale, 16 * scale);
+    this.typeLabel.visible = false;
+    this.descriptionLabel.text = plainCardDescription(this.cardContent.description);
+    const descriptionY = rulesY + 8 + Math.min(40 * scale, this.nameLabel.height || 24 * scale);
+    this.descriptionLabel.position.set(this.cardWidth / 2, descriptionY);
+    fitTextToBox(this.descriptionLabel, this.cardWidth - 16, this.cardHeight - descriptionY - 8, 19 * scale, 14 * scale);
+    return {
+      badgeWidth: 0,
+      badgeHeight,
+      hasLegacyCost: false,
+      hasEnergyCost: energy !== void 0,
+      hasManaCost: mana !== void 0,
+      energyBadgeWidth: energy === void 0 ? 0 : badgeHeight,
+      manaBadgeWidth: mana === void 0 ? 0 : badgeHeight,
+      height: 0
+    };
+  }
+  /** Applies mutable interaction state while caching the state graphics between semantic changes. */
+  applyStatePresentation(palette) {
+    const statePresentation = getStatePresentation(this.motionState, this.playability, this.componentState.interaction);
+    this.alpha = statePresentation.alpha;
+    const presentationKey = [
+      this.cardWidth,
+      this.cardHeight,
+      statePresentation.overlayAlpha,
+      statePresentation.overlayColor,
+      statePresentation.outlineColor ?? "",
+      this.playability,
+      this.componentState.interaction.selected === true,
+      this.cardContent.conditionalEffectActive === true,
+      palette.accent
+    ].join(":");
+    if (this.statePresentationKey === presentationKey) {
+      return;
+    }
+    this.statePresentationKey = presentationKey;
+    this.stateOverlay.clear();
+    this.playabilityOutline.clear();
+    this.stateOutline.clear();
+    const selected = this.componentState.interaction.selected === true;
+    const bonus = this.cardContent.conditionalEffectActive === true;
+    this.stateBadge.text = bonus ? "BONUS ACTIVE" : "";
+    this.stateBadge.visible = bonus;
+    this.stateBadge.anchor.set(0.5);
+    this.stateBadge.position.set(this.cardWidth / 2, this.cardHeight * 0.43);
+    if (bonus) {
+      this.stateOutline.roundRect(this.cardWidth / 2 - 52, this.cardHeight * 0.43 - 11, 104, 22, 5).fill({ color: 16766826 });
+    }
+    if (selected) {
+      this.stateOverlay.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiTokens.color.selected, alpha: 0.18 });
+    }
+    if (statePresentation.overlayAlpha > 0) {
+      this.stateOverlay.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: statePresentation.overlayColor, alpha: statePresentation.overlayAlpha });
+    }
+    if (this.playability === "playable") {
+      this.playabilityOutline.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).stroke({ color: this.cardContent.conditionalEffectActive ? 16766826 : palette.accent, width: this.cardContent.conditionalEffectActive ? 7 : uiTokens.frame.borderWidth });
+    }
+    if (statePresentation.outlineColor !== void 0) {
+      this.stateOutline.roundRect(uiTokens.frame.selectedInset, uiTokens.frame.selectedInset, this.cardWidth - uiTokens.frame.selectedInset * 2, this.cardHeight - uiTokens.frame.selectedInset * 2, uiTokens.frame.selectedCornerRadius).stroke({ color: statePresentation.outlineColor, width: selected ? 6 : uiTokens.frame.borderWidth + 1 });
+    }
+  }
+};
+function isUsableCardTexture(texture) {
+  if (!texture || texture === Texture.EMPTY) {
+    return false;
+  }
+  const width = texture.width;
+  const height = texture.height;
+  return Number.isFinite(width) && Number.isFinite(height) && width > 1 && height > 1;
+}
+function toCardViewContent(options) {
+  return {
+    ...options.conditionalEffectActive === void 0 ? {} : { conditionalEffectActive: options.conditionalEffectActive },
+    ...options.cost === void 0 ? {} : { cost: options.cost },
+    ...options.energyCost === void 0 ? {} : { energyCost: options.energyCost },
+    ...options.manaCost === void 0 ? {} : { manaCost: options.manaCost },
+    ...options.unavailableReason === void 0 ? {} : { unavailableReason: options.unavailableReason },
+    inspection: options.inspection ?? null,
+    name: options.name,
+    description: options.description,
+    damage: options.damage,
+    baseDamage: options.baseDamage,
+    type: options.type,
+    rarity: options.rarity,
+    ...options.artTexture === void 0 ? {} : { artTexture: options.artTexture }
+  };
+}
+function areCardContentsEqual(left, right) {
+  return left.inspection === right.inspection && left.conditionalEffectActive === right.conditionalEffectActive && left.cost === right.cost && left.energyCost === right.energyCost && left.manaCost === right.manaCost && left.unavailableReason === right.unavailableReason && left.name === right.name && left.description === right.description && left.damage === right.damage && left.baseDamage === right.baseDamage && left.type === right.type && left.rarity === right.rarity && left.artTexture === right.artTexture;
+}
+function getVisibleResourceCost(cost) {
+  return cost !== void 0 && Number.isFinite(cost) && cost > 0 ? cost : void 0;
+}
+function areInteractionStatesEqual(left, right) {
+  return left.enabled === right.enabled && left.focused === right.focused && left.selected === right.selected;
+}
+function getArtBounds(width, height) {
+  const x2 = uiTokens.frame.borderWidth;
+  const y2 = uiTokens.frame.borderWidth;
+  const artWidth = Math.max(0, width - uiTokens.frame.borderWidth * 2);
+  const artHeight = Math.max(0, height - uiTokens.frame.borderWidth * 2);
+  return { x: x2, y: y2, width: artWidth, height: artHeight };
+}
+function getPalette(rarity) {
+  switch (rarity) {
+    case "Common":
+      return { accent: 12044248, artFill: 4545394, frame: 9413302 };
+    case "Uncommon":
+      return { accent: 8115878, artFill: 3234638, frame: 5155449 };
+    case "Rare":
+      return { accent: 16765806, artFill: 6836268, frame: 14132535 };
+    case "Special":
+      return { accent: 13674495, artFill: 5060716, frame: 10318801 };
+  }
+}
+function getStatePresentation(motionState, playability, interaction) {
+  const basePresentation = motionState === "resolving" ? { alpha: 1, overlayAlpha: 0, overlayColor: 0 } : !interaction.enabled ? { alpha: uiTokens.interaction.disabledAlpha, overlayAlpha: 0.35, overlayColor: uiTokens.color.canvas } : playability === "unplayable" ? { alpha: 0.65, overlayAlpha: 0.3, overlayColor: uiTokens.color.surfaceRaised } : { alpha: 1, overlayAlpha: 0, overlayColor: 0 };
+  const dropOutlineColor = motionState === "valid-drop" || motionState === "invalid-drop" ? getMotionOutlineColor(motionState) : void 0;
+  const outlineColor = dropOutlineColor ?? (interaction.selected ? uiTokens.color.selected : interaction.focused ? uiTokens.color.focus : getMotionOutlineColor(motionState));
+  return { ...basePresentation, outlineColor };
+}
+function getMotionOutlineColor(state) {
+  switch (state) {
+    case "idle":
+      return void 0;
+    case "hovered":
+      return uiTokens.color.focus;
+    case "dragging":
+      return uiTokens.color.text;
+    case "valid-drop":
+      return uiTokens.color.valid;
+    case "invalid-drop":
+      return uiTokens.color.invalid;
+    case "returning":
+      return uiTokens.color.textMuted;
+    case "resolving":
+      return void 0;
+  }
+}
+function normalizeDimension2(value, fallback) {
+  return Number.isFinite(value) ? Math.max(1, value) : fallback;
+}
+
+// src/relic-view.ts
+init_lib();
+
+// src/collection-row-layout.ts
+function measureCollectionRow(text, textWidth) {
+  const nameHeight = Math.max(text.nameHeight ?? 0, estimateWrappedHeight(text.name, textWidth, 22, 9));
+  const detailHeight = text.detail ? Math.max(text.detailHeight ?? 0, estimateWrappedHeight(text.detail, textWidth, 19, 7)) + 3 : 0;
+  const descriptionHeight = Math.max(text.descriptionHeight ?? 0, estimateWrappedHeight(text.description, textWidth, 19, 7));
+  const detailY = 8 + nameHeight + 4;
+  const descriptionY = detailY + detailHeight;
+  return { detailY, descriptionY, height: Math.max(76, descriptionY + descriptionHeight + 12) };
+}
+function estimateWrappedHeight(value, width, lineHeight, characterWidth) {
+  const columns = Math.max(1, Math.floor(width / characterWidth));
+  return value.split("\n").reduce((lines, line) => lines + Math.max(1, Math.ceil(line.length / columns)), 0) * lineHeight;
+}
+
+// src/relic-view.ts
+var defaultHeight = 92;
+var defaultWidth = 184;
+var RelicView = class extends GamePanel {
+  descriptionTextStyle = new TextStyle({ ...uiTokens.typography.relicDetail, breakWords: true, wordWrap: true });
+  descriptionLabel = new Text({ text: "", style: this.descriptionTextStyle });
+  iconLabel = new Text({ text: "", style: getUiTextStyle("PanelTitle") });
+  nameTextStyle = new TextStyle({ ...uiTokens.typography.panelTitle, breakWords: true, wordWrap: true });
+  nameLabel = new Text({ text: "", style: this.nameTextStyle });
+  artwork = new Sprite(Texture.EMPTY);
+  selection = new Graphics();
+  selected = false;
+  relicContent;
+  /**
+   * Creates a reusable relic presentation surface.
+   */
+  constructor(options) {
+    super({ width: options.width ?? defaultWidth, height: options.height ?? defaultHeight });
+    this.relicContent = toContent(options);
+    this.iconLabel.anchor.set(0.5);
+    this.artwork.anchor.set(0.5);
+    this.content.addChild(this.iconLabel, this.artwork, this.nameLabel, this.descriptionLabel, this.selection);
+    this.redrawContent();
+  }
+  /**
+   * Gets the semantic relic data currently shown by the view.
+   */
+  get value() {
+    return this.relicContent;
+  }
+  /**
+   * Reconciles relic data without recreating the component's display objects.
+   */
+  setValue(content) {
+    this.relicContent = toContent(content);
+    this.redrawContent();
+  }
+  /**
+   * Resizes the surface while retaining its existing labels and semantic data.
+   */
+  resize(width, height) {
+    super.resize(width, height);
+    this.redrawContent();
+  }
+  /** Makes the chosen relic visible before touch or keyboard confirmation. */
+  setSelected(selected) {
+    this.selected = selected;
+    this.redrawContent();
+  }
+  /** Measures the complete effect text so scrollable reward rows keep readable font sizes. */
+  getReadableHeight(width) {
+    this.descriptionLabel.text = this.relicContent.description;
+    this.descriptionTextStyle.fontSize = 16;
+    this.descriptionTextStyle.wordWrapWidth = Math.max(1, width - 24);
+    const row = measureCollectionRow({
+      name: "",
+      detail: "",
+      description: this.relicContent.description,
+      descriptionHeight: this.descriptionLabel.height
+    }, width - 24);
+    return Math.max(120, Math.ceil(64 + row.height - row.descriptionY));
+  }
+  redrawContent() {
+    const size = this.panelSize;
+    const textOffsetX = 64;
+    const textWidth = Math.max(1, size.width - textOffsetX - 12);
+    this.nameTextStyle.wordWrapWidth = textWidth;
+    this.descriptionTextStyle.wordWrapWidth = textWidth;
+    this.iconLabel.text = this.relicContent.icon;
+    this.iconLabel.position.set(32, 32);
+    this.artwork.texture = this.relicContent.artTexture ?? Texture.EMPTY;
+    this.artwork.visible = this.relicContent.artTexture !== void 0;
+    this.iconLabel.visible = !this.artwork.visible;
+    const artSize = Math.max(this.artwork.texture.width || 1, this.artwork.texture.height || 1);
+    this.artwork.scale.set(44 / artSize);
+    this.artwork.position.set(32, 32);
+    this.nameLabel.text = this.relicContent.name;
+    this.nameLabel.position.set(textOffsetX, 12);
+    fitTextToBox(this.nameLabel, textWidth, 42, 18, 14);
+    this.descriptionLabel.text = this.relicContent.description;
+    this.descriptionLabel.position.set(12, 64);
+    fitTextToBox(this.descriptionLabel, Math.max(1, size.width - 24), Math.max(1, size.height - 76), 16, 13);
+    this.selection.clear();
+    if (this.selected) this.selection.roundRect(2, 2, size.width - 4, size.height - 4, 4).stroke({ color: 16766826, width: 3 });
+    this.selection.eventMode = "none";
+  }
+};
+function toContent(content) {
+  return {
+    description: content.description,
+    icon: content.icon,
+    name: content.name,
+    ...content.artTexture === void 0 ? {} : { artTexture: content.artTexture }
+  };
+}
+
+// src/inspection-tooltip.ts
+var viewports = /* @__PURE__ */ new WeakMap();
+function registerInspectionViewport(stage, viewport) {
+  viewports.set(stage, viewport);
+}
+var InspectionTooltip = class extends Container {
+  constructor() {
+    super();
+    this.eventMode = "none";
+    this.interactiveChildren = false;
+    this.visible = false;
+  }
+  /** Rebuilds a finite inspection; asynchronous art loads cannot revive a dismissed face. */
+  setInspection(inspection, maximumWidth = Number.POSITIVE_INFINITY) {
+    for (const child of this.removeChildren()) child.destroy({ children: true });
+    let x2 = 0;
+    let y2 = 0;
+    let rowHeight2 = 0;
+    for (const reference of inspection.references) {
+      const face = createReferenceFace(reference);
+      const width = reference.kind === "card" ? 160 : 240;
+      const height = face instanceof RelicView ? face.getReadableHeight(240) : 224;
+      if (x2 > 0 && x2 + width > maximumWidth) {
+        x2 = 0;
+        y2 += rowHeight2 + 10;
+        rowHeight2 = 0;
+      }
+      face.position.set(x2, y2);
+      this.addChild(face);
+      x2 += width + 10;
+      rowHeight2 = Math.max(rowHeight2, height);
+    }
+    if (x2 > 0 && x2 + 244 > maximumWidth) {
+      x2 = 0;
+      y2 += rowHeight2 + 10;
+    }
+    for (const keyword of inspection.keywords) {
+      const entry = new Container();
+      const text = new Text({ text: keyword, style: {
+        ...uiTokens.typography.body,
+        fontSize: 15,
+        lineHeight: 20,
+        wordWrap: true,
+        wordWrapWidth: 224,
+        breakWords: true
+      } });
+      text.position.set(10, 8);
+      const height = Math.max(44, text.height + 16);
+      entry.addChild(new Graphics().roundRect(0, 0, 244, height, 6).fill({ color: 530204, alpha: 0.98 }).stroke({ color: 13280860, width: 1 }), text);
+      entry.position.set(x2, y2);
+      this.addChild(entry);
+      y2 += height + 6;
+    }
+  }
+  /** Places all entries beside their anchor, fitting the complete group into the viewport. */
+  show(anchor, viewport) {
+    this.scale.set(1);
+    const bounds = this.getLocalBounds();
+    if (bounds.width <= 0 || bounds.height <= 0) {
+      this.hide();
+      return;
+    }
+    const scale = Math.min(1, Math.max(1, viewport.width - 16) / bounds.width, Math.max(1, viewport.height - 16) / bounds.height);
+    this.scale.set(scale);
+    const width = bounds.width * scale;
+    const height = bounds.height * scale;
+    const right = anchor.x + anchor.width + 10;
+    const left = anchor.x - width - 10;
+    const rightFits = right + width <= viewport.width - 8;
+    const leftFits = left >= 8;
+    const x2 = rightFits ? right : leftFits ? left : anchor.x;
+    const below = anchor.y + anchor.height + 10;
+    const fallbackY = below + height <= viewport.height - 8 ? below : anchor.y - height - 10;
+    this.position.set(
+      Math.max(8, Math.min(viewport.width - width - 8, x2)),
+      Math.max(8, Math.min(viewport.height - height - 8, rightFits || leftFits ? anchor.y : fallbackY))
+    );
+    this.visible = true;
+  }
+  /** Dismisses the inspection without releasing shared artwork textures. */
+  hide() {
+    this.visible = false;
+  }
+};
+var CardInspectionBinding = class {
+  constructor(card) {
+    this.card = card;
+    card.on("added", this.attach);
+    card.on("removed", this.detach);
+    card.on("destroyed", this.dispose);
+    this.attach();
+  }
+  card;
+  tooltip = new InspectionTooltip();
+  timer;
+  selected = false;
+  shownInspection;
+  hovered = false;
+  input;
+  stage;
+  /** Reconciles selection immediately; hover remains subject to the full delay. */
+  sync() {
+    const selected = this.card.presentationState.interaction.selected === true;
+    if (selected === this.selected) {
+      if (this.tooltip.visible && this.card.content.inspection !== this.shownInspection) this.show();
+      return;
+    }
+    this.selected = selected;
+    if (selected) this.show();
+    else this.hide();
+  }
+  /** Prevents a preview obscuring the battlefield while dragging or resolving a card. */
+  hide() {
+    if (this.timer !== void 0) clearTimeout(this.timer);
+    this.timer = void 0;
+    this.tooltip.hide();
+    this.tooltip.onRender = null;
+  }
+  attach = () => {
+    const input = this.card.parent?.interactiveChildren === false ? this.card.parent : this.card.parent ? this.card : void 0;
+    if (!input || input === this.input) return;
+    this.detach();
+    this.input = input;
+    input.on("pointerover", this.over);
+    input.on("pointerout", this.out);
+    input.on("pointerdown", this.hideOnPress);
+    if (this.selected) queueMicrotask(() => this.show());
+  };
+  detach = () => {
+    this.input?.off("pointerover", this.over);
+    this.input?.off("pointerout", this.out);
+    this.input?.off("pointerdown", this.hideOnPress);
+    this.input = void 0;
+    this.hovered = false;
+    this.hide();
+  };
+  over = (event) => {
+    if (event.pointerType === "touch" || this.hovered) return;
+    this.hovered = true;
+    if (this.selected) {
+      this.show();
+      return;
+    }
+    this.hide();
+    this.timer = setTimeout(() => {
+      this.timer = void 0;
+      this.show();
+    }, 1e3);
+  };
+  out = () => {
+    this.hovered = false;
+    if (!this.selected) this.hide();
+  };
+  hideOnPress = () => {
+    if (!this.selected) this.hide();
+  };
+  show() {
+    if (this.card.destroyed || this.card.currentMotionState === "dragging" || this.card.currentMotionState === "resolving") return;
+    const inspection = this.card.content.inspection;
+    if (!inspection || !inspection.keywords.length && !inspection.references.length) return;
+    let stage = this.card;
+    while (stage.parent) stage = stage.parent;
+    if (!viewports.has(stage)) return;
+    this.hide();
+    this.stage = stage;
+    this.shownInspection = inspection;
+    this.tooltip.setInspection(inspection, Math.max(1, (viewports.get(stage)?.().width ?? 960) - 16));
+    stage.addChild(this.tooltip);
+    this.update();
+    if (this.tooltip.visible) this.tooltip.onRender = this.update;
+  }
+  update = () => {
+    const stage = this.stage;
+    const viewport = stage ? viewports.get(stage)?.() : void 0;
+    let ancestor = this.card;
+    while (ancestor && ancestor !== stage && ancestor.visible) ancestor = ancestor.parent;
+    if (!stage || !viewport || ancestor !== stage || this.card.destroyed) {
+      this.hide();
+      return;
+    }
+    const bounds = this.card.getBounds();
+    if (bounds.maxY < 0 || bounds.minY > viewport.height) {
+      this.hide();
+      return;
+    }
+    this.tooltip.show({ x: bounds.minX, y: bounds.minY, width: bounds.width, height: bounds.height }, viewport);
+  };
+  dispose = () => {
+    this.detach();
+    this.tooltip.destroy({ children: true });
+  };
+};
+function createReferenceFace(reference) {
+  const face = reference.kind === "card" ? new CardView({
+    name: reference.name,
+    description: reference.description,
+    type: reference.cardType,
+    rarity: toRarity(reference.rarity),
+    energyCost: reference.energyCost,
+    manaCost: reference.manaCost,
+    width: 160,
+    height: 224,
+    presentation: "hand"
+  }) : new RelicView({ name: reference.name, description: plainCardDescription(reference.description), icon: "\u25C6", width: 240, height: 140 });
+  if (face instanceof RelicView) face.resize(240, face.getReadableHeight(240));
+  loadReferenceArt(face, reference.image);
+  return face;
+}
+function loadReferenceArt(face, path2) {
+  if (!path2 || !/^(\.\/|\/)?img\/[a-zA-Z0-9/_ .-]+$/.test(path2) || path2.includes("..")) return;
+  void Assets.load(path2).then((texture) => {
+    if (face.destroyed) return;
+    if (face instanceof CardView) face.setContent({ ...face.content, artTexture: texture });
+    else face.setValue({ ...face.value, artTexture: texture });
+  }).catch(() => void 0);
+}
+function toRarity(rarity) {
+  return rarity === "Uncommon" || rarity === "Rare" || rarity === "Special" ? rarity : "Common";
+}
+
 // src/canvas-presentation.ts
 init_lib();
 function refreshCanvasText(container) {
@@ -70176,6 +72301,7 @@ function refreshCanvasText(container) {
   for (const child of container.children) refreshCanvasText(child);
 }
 function installCanvasPresentationRecovery(application, canvas, beforeRender) {
+  registerInspectionViewport(application.stage, () => ({ width: application.screen.width, height: application.screen.height }));
   const ownerDocument = canvas.ownerDocument;
   const view = ownerDocument?.defaultView;
   let contextLost = false;
@@ -72526,1019 +74652,6 @@ var noOpAccessibilityOverlay = {
 
 // src/health-block-meter.ts
 init_lib();
-
-// src/menu-icons.ts
-init_lib();
-var stroke = { color: 13678460, width: 1.6 };
-var clock = (g2) => {
-  g2.circle(8, 8, 6).stroke(stroke).moveTo(8, 4).lineTo(8, 8).lineTo(11, 10).stroke(stroke);
-};
-var home = (g2) => {
-  g2.moveTo(1, 7).lineTo(8, 1).lineTo(15, 7).stroke(stroke).rect(4, 7, 8, 8).stroke(stroke);
-};
-var bag = (g2) => {
-  g2.roundRect(2, 5, 12, 10, 2).stroke(stroke).roundRect(5, 1, 6, 6, 2).stroke(stroke);
-};
-var sparkle = (g2) => {
-  g2.moveTo(8, 1).lineTo(11, 6).lineTo(15, 8).lineTo(11, 10).lineTo(8, 15).lineTo(5, 10).lineTo(1, 8).lineTo(5, 6).closePath().stroke(stroke);
-};
-var drawings = {
-  history: clock,
-  home,
-  rooms: home,
-  inventory: bag,
-  shop: bag,
-  remembrance: sparkle,
-  restart: (g2) => {
-    g2.moveTo(3, 5).lineTo(1, 5).lineTo(1, 1).moveTo(1, 5).lineTo(5, 5).stroke(stroke).moveTo(2, 5).lineTo(5, 2).lineTo(10, 2).lineTo(14, 6).lineTo(14, 10).lineTo(10, 14).lineTo(5, 14).lineTo(2, 11).stroke(stroke);
-  },
-  backpack: (g2) => {
-    g2.roundRect(3, 3, 10, 12, 2).stroke(stroke).roundRect(6, 1, 4, 3, 1).stroke(stroke).roundRect(5, 9, 6, 4, 1).stroke(stroke).moveTo(3, 7).lineTo(13, 7).moveTo(1, 7).lineTo(1, 13).moveTo(15, 7).lineTo(15, 13).stroke(stroke);
-  },
-  map: (g2) => {
-    g2.moveTo(1, 3).lineTo(5, 1).lineTo(11, 3).lineTo(15, 1).lineTo(15, 13).lineTo(11, 15).lineTo(5, 13).lineTo(1, 15).closePath().moveTo(5, 1).lineTo(5, 13).moveTo(11, 3).lineTo(11, 15).stroke(stroke);
-  },
-  items: (g2) => {
-    g2.rect(6, 1, 4, 3).stroke(stroke).moveTo(6, 4).lineTo(6, 6).lineTo(3, 10).lineTo(3, 13).lineTo(5, 15).lineTo(11, 15).lineTo(13, 13).lineTo(13, 10).lineTo(10, 6).lineTo(10, 4).closePath().stroke(stroke).moveTo(4, 10).lineTo(12, 10).stroke(stroke);
-  },
-  hand: (g2) => {
-    g2.moveTo(1, 6).lineTo(5, 4).lineTo(10, 13).lineTo(6, 15).closePath().stroke(stroke).moveTo(6, 3).lineTo(10, 2).lineTo(13, 12).lineTo(9, 13).stroke(stroke).moveTo(11, 1).lineTo(15, 1).lineTo(15, 11).lineTo(13, 11).stroke(stroke);
-  },
-  discard: (g2) => {
-    g2.rect(2, 1, 8, 10).stroke(stroke).moveTo(12, 5).lineTo(12, 13).moveTo(9, 10).lineTo(12, 13).lineTo(15, 10).moveTo(1, 14).lineTo(8, 14).stroke(stroke);
-  },
-  exhaust: (g2) => {
-    g2.moveTo(8, 1).lineTo(11, 7).lineTo(13, 5).lineTo(15, 10).lineTo(13, 14).lineTo(8, 15).lineTo(3, 13).lineTo(2, 9).lineTo(5, 4).lineTo(6, 8).closePath().stroke(stroke);
-  },
-  endTurn: (g2) => {
-    g2.moveTo(1, 8).lineTo(11, 8).moveTo(7, 4).lineTo(11, 8).lineTo(7, 12).moveTo(14, 2).lineTo(14, 14).stroke(stroke);
-  },
-  debug: (g2) => {
-    g2.roundRect(5, 5, 6, 9, 3).stroke(stroke).circle(8, 3, 2).stroke(stroke).moveTo(2, 5).lineTo(5, 7).moveTo(1, 10).lineTo(5, 10).moveTo(2, 15).lineTo(5, 12).moveTo(14, 5).lineTo(11, 7).moveTo(15, 10).lineTo(11, 10).moveTo(14, 15).lineTo(11, 12).moveTo(8, 6).lineTo(8, 13).stroke(stroke);
-  },
-  seed: (g2) => {
-    g2.roundRect(1, 4, 9, 11, 1).stroke(stroke).roundRect(5, 1, 9, 11, 1).stroke(stroke).moveTo(8, 9).lineTo(8, 6).lineTo(11, 4).lineTo(11, 7).lineTo(8, 9).stroke(stroke);
-  },
-  rewards: (g2) => {
-    g2.rect(2, 6, 12, 9).stroke(stroke).rect(1, 4, 14, 3).stroke(stroke).moveTo(8, 4).lineTo(8, 15).moveTo(8, 4).lineTo(3, 3).lineTo(4, 1).lineTo(8, 4).lineTo(12, 1).lineTo(13, 3).lineTo(8, 4).stroke(stroke);
-  },
-  training: (g2) => {
-    g2.moveTo(2, 14).lineTo(12, 4).lineTo(15, 1).lineTo(12, 1).lineTo(2, 11).moveTo(2, 9).lineTo(7, 14).moveTo(1, 15).lineTo(3, 13).stroke(stroke);
-  },
-  settings: (g2) => {
-    g2.circle(8, 8, 4).stroke(stroke).circle(8, 8, 1.5).stroke(stroke);
-    for (let i2 = 0; i2 < 8; i2++) {
-      const a2 = i2 * Math.PI / 4;
-      g2.moveTo(8 + Math.cos(a2) * 5, 8 + Math.sin(a2) * 5).lineTo(8 + Math.cos(a2) * 7, 8 + Math.sin(a2) * 7).stroke(stroke);
-    }
-  },
-  fullscreen: (g2) => {
-    for (const [x2, y2, dx, dy] of [[1, 1, 1, 1], [15, 1, -1, 1], [1, 15, 1, -1], [15, 15, -1, -1]]) g2.moveTo(x2 + dx * 4, y2).lineTo(x2, y2).lineTo(x2, y2 + dy * 4).stroke(stroke);
-  },
-  previous: (g2) => {
-    g2.moveTo(11, 2).lineTo(5, 8).lineTo(11, 14).stroke(stroke);
-  },
-  next: (g2) => {
-    g2.moveTo(5, 2).lineTo(11, 8).lineTo(5, 14).stroke(stroke);
-  },
-  menu: (g2) => {
-    for (const y2 of [3, 8, 13]) g2.moveTo(1, y2).lineTo(15, y2).stroke(stroke);
-  },
-  close: (g2) => {
-    g2.moveTo(3, 3).lineTo(13, 13).moveTo(13, 3).lineTo(3, 13).stroke(stroke);
-  },
-  cards: (g2) => {
-    g2.rect(1, 1, 9, 12).stroke(stroke).rect(5, 4, 9, 11).stroke(stroke);
-  },
-  equipment: (g2) => {
-    g2.moveTo(8, 1).lineTo(14, 4).lineTo(12, 11).lineTo(8, 15).lineTo(4, 11).lineTo(2, 4).closePath().stroke(stroke);
-  },
-  events: (g2) => {
-    g2.rect(3, 1, 10, 14).stroke(stroke).moveTo(6, 5).lineTo(10, 5).moveTo(6, 9).lineTo(10, 9).stroke(stroke);
-  },
-  rest: (g2) => {
-    g2.moveTo(2, 11).lineTo(14, 11).moveTo(4, 15).lineTo(4, 7).moveTo(12, 15).lineTo(12, 7).stroke(stroke);
-  }
-};
-function createMenuIcon(name) {
-  const g2 = new Graphics();
-  drawings[name](g2);
-  g2.eventMode = "none";
-  return g2;
-}
-
-// src/scroll-content-fade.ts
-init_lib();
-function hasFadedEdges(viewport) {
-  return viewport !== void 0 && [viewport.left, viewport.right, viewport.top, viewport.bottom].some(Boolean);
-}
-function fadeScrollContent(context2, bounds, resolution) {
-  context2.save();
-  context2.setTransform(resolution, 0, 0, resolution, 0, 0);
-  context2.globalCompositeOperation = "destination-out";
-  context2.globalAlpha = 1;
-  fadeHorizontalEdges(context2, bounds);
-  fadeVerticalEdges(context2, bounds);
-  context2.restore();
-}
-function fadeHorizontalEdges(context2, bounds) {
-  const width = Math.min(28, bounds.width / 4);
-  if (bounds.left) drawFade(context2, bounds.x, bounds.y, width, bounds.height, bounds.x, 0, bounds.x + width, 0);
-  if (bounds.right) drawFade(
-    context2,
-    bounds.x + bounds.width - width,
-    bounds.y,
-    width,
-    bounds.height,
-    bounds.x + bounds.width,
-    0,
-    bounds.x + bounds.width - width,
-    0
-  );
-}
-function fadeVerticalEdges(context2, bounds) {
-  const height = Math.min(20, bounds.height / 4);
-  if (bounds.top) drawFade(context2, bounds.x, bounds.y, bounds.width, height, 0, bounds.y, 0, bounds.y + height);
-  if (bounds.bottom) drawFade(
-    context2,
-    bounds.x,
-    bounds.y + bounds.height - height,
-    bounds.width,
-    height,
-    0,
-    bounds.y + bounds.height,
-    0,
-    bounds.y + bounds.height - height
-  );
-}
-function drawFade(context2, x2, y2, width, height, startX, startY, endX, endY) {
-  const gradient = context2.createLinearGradient(startX, startY, endX, endY);
-  gradient.addColorStop(0, "rgba(0,0,0,1)");
-  gradient.addColorStop(0.5, "rgba(0,0,0,0.25)");
-  gradient.addColorStop(1, "rgba(0,0,0,0)");
-  context2.fillStyle = gradient;
-  context2.fillRect(x2, y2, width, height);
-}
-var ScrollContentFade = class extends Container {
-  content;
-  viewport;
-  coordinates;
-  surface;
-  originalContext;
-  /** Wraps existing content without changing its controls, masks, or input ownership. */
-  constructor(content = new Container()) {
-    super();
-    this.content = content;
-    this.coordinates = this;
-    const begin3 = new RenderContainer((renderer) => this.begin(renderer));
-    const end = new RenderContainer((renderer) => this.end(renderer));
-    begin3.eventMode = end.eventMode = "none";
-    this.addChild(begin3, content, end);
-  }
-  /** Updates clipping-edge feedback in the coordinate system of its viewport owner. */
-  setViewport(viewport, coordinates = this) {
-    this.viewport = viewport;
-    this.coordinates = coordinates;
-  }
-  /** Redirects just this layer's draw calls into a reusable transparent surface. */
-  begin(renderer) {
-    const viewport = this.viewport;
-    if (!(renderer instanceof CanvasRenderer) || !hasFadedEdges(viewport)) return;
-    this.surface ??= document.createElement("canvas");
-    const original = renderer.canvasContext.activeContext;
-    if (this.surface.width !== renderer.canvas.width) this.surface.width = renderer.canvas.width;
-    if (this.surface.height !== renderer.canvas.height) this.surface.height = renderer.canvas.height;
-    const context2 = this.surface.getContext("2d");
-    if (!context2) return;
-    context2.setTransform(1, 0, 0, 1, 0, 0);
-    context2.clearRect(0, 0, this.surface.width, this.surface.height);
-    context2.globalCompositeOperation = "source-over";
-    context2.imageSmoothingEnabled = original.imageSmoothingEnabled;
-    this.originalContext = original;
-    renderer.canvasContext.activeContext = context2;
-    renderer.canvasContext.setBlendMode("normal");
-  }
-  /** Masks the isolated pixels and composites them before subsequent scene overlays draw. */
-  end(renderer) {
-    if (!(renderer instanceof CanvasRenderer) || !this.originalContext || !this.surface || !this.viewport) return;
-    const original = this.originalContext;
-    this.originalContext = void 0;
-    const context2 = this.surface.getContext("2d");
-    renderer.canvasContext.activeContext = original;
-    if (!context2) return;
-    const origin = this.coordinates.toGlobal({ x: this.viewport.x, y: this.viewport.y });
-    fadeScrollContent(context2, { ...this.viewport, x: origin.x, y: origin.y }, renderer.canvasContext.activeResolution);
-    original.save();
-    original.setTransform(1, 0, 0, 1, 0, 0);
-    original.globalCompositeOperation = "source-over";
-    original.globalAlpha = 1;
-    original.drawImage(this.surface, 0, 0);
-    original.restore();
-    renderer.canvasContext.setBlendMode("normal");
-    original.globalCompositeOperation = "source-over";
-  }
-  /** Releases the offscreen pixel allocation with its owning scene. */
-  destroy(options) {
-    if (this.surface) this.surface.width = this.surface.height = 0;
-    this.surface = void 0;
-    super.destroy(options);
-  }
-};
-
-// src/ui-primitives.ts
-init_lib();
-
-// src/text-fit.ts
-function fitTextToBox(text, width, height, preferredSize, minimumSize) {
-  const availableWidth = Math.max(1, width);
-  const availableHeight = Math.max(1, height);
-  text.style.fontSize = preferredSize;
-  text.style.wordWrapWidth = availableWidth;
-  text.style.breakWords = true;
-  const exceedsBounds = () => text.width > availableWidth || text.height > availableHeight;
-  while (exceedsBounds() && Number(text.style.fontSize) > minimumSize) {
-    text.style.fontSize = Math.max(minimumSize, Number(text.style.fontSize) - 1);
-  }
-  const fullText = text.text;
-  for (let length2 = fullText.length - 1; length2 >= 0 && exceedsBounds(); length2--) {
-    text.text = fullText.slice(0, length2).trimEnd() + "\u2026";
-  }
-  if (exceedsBounds()) text.text = "";
-}
-
-// src/ui-primitives.ts
-var uiTokens = {
-  color: {
-    canvas: 1186592,
-    surface: 1845293,
-    surfaceRaised: 2503738,
-    text: 15920868,
-    textMuted: 12897224,
-    health: 14844014,
-    stamina: 9488295,
-    mana: 9685480,
-    block: 13678460,
-    dangerIntent: 14844014,
-    focus: 15920868,
-    selected: 6543598,
-    valid: 9488295,
-    invalid: 14844014,
-    disabled: 12897224,
-    panelFill: 1845293,
-    panelStroke: 7439754,
-    panelShadow: 594197,
-    panelInset: 1186592,
-    panelOrnament: 13678460,
-    buttonFocus: 15920868,
-    buttonSelected: 13678460,
-    progressFill: 9488295,
-    progressBackground: 2503738,
-    buttonText: 15920868,
-    panelTitleText: 15920868,
-    bodyText: 12897224
-  },
-  typography: {
-    button: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 16, fontWeight: "600", letterSpacing: 1.1, align: "center" },
-    panelTitle: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "700" },
-    body: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 14 },
-    caption: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 12 },
-    intent: { fill: 15920868, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 13, fontWeight: "700" },
-    cardTitle: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "600" },
-    cardEffect: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 14 },
-    enemyName: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "700" },
-    numericResource: { fill: 15920868, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 16, fontWeight: "700", padding: 2 },
-    endTurn: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 16, fontWeight: "600", letterSpacing: 1.1, align: "center" },
-    secondaryHud: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 12, fontWeight: "600" },
-    relicDetail: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 13 }
-  },
-  spacing: {
-    xs: 4,
-    sm: 8,
-    md: 12,
-    lg: 16
-  },
-  safeArea: {
-    edge: 8,
-    compactEdge: 4,
-    controlGap: 8
-  },
-  frame: {
-    panelCornerRadius: 10,
-    borderWidth: 2,
-    innerInset: 5,
-    ornamentLength: 18,
-    ornamentThickness: 3,
-    selectedInset: 2,
-    focusInset: 5,
-    selectedCornerRadius: 8,
-    focusCornerRadius: 6
-  },
-  elevation: {
-    overlayAlpha: 0.72,
-    tooltipAlpha: 0.96
-  },
-  motion: {
-    controlTransitionMs: 140,
-    tooltipDelayMs: 250,
-    reducedMotionDurationMs: 0
-  },
-  interaction: {
-    disabledAlpha: 0.5
-  }
-};
-var semanticColors = {
-  canvas: uiTokens.color.canvas,
-  surface: uiTokens.color.surface,
-  surfaceRaised: uiTokens.color.surfaceRaised,
-  text: uiTokens.color.text,
-  textMuted: uiTokens.color.textMuted,
-  health: uiTokens.color.health,
-  stamina: uiTokens.color.stamina,
-  mana: uiTokens.color.mana,
-  block: uiTokens.color.block,
-  dangerIntent: uiTokens.color.dangerIntent,
-  focus: uiTokens.color.focus,
-  selected: uiTokens.color.selected,
-  valid: uiTokens.color.valid,
-  invalid: uiTokens.color.invalid,
-  disabled: uiTokens.color.disabled
-};
-var areaAtmospheres = {
-  neutral: {
-    canvas: uiTokens.color.canvas,
-    distantSurface: 2503738,
-    architecture: 1581864,
-    floor: 1516842,
-    line: 7439754,
-    platform: 4810077
-  },
-  "pale-reach": {
-    canvas: 1380891,
-    distantSurface: 3681087,
-    architecture: 2432557,
-    floor: 2103589,
-    line: 10060187,
-    platform: 6836847
-  }
-};
-function getAreaAtmosphere(name) {
-  return name === "pale-reach" ? areaAtmospheres["pale-reach"] : areaAtmospheres.neutral;
-}
-var uiColors = {
-  panelFill: uiTokens.color.panelFill,
-  panelStroke: uiTokens.color.panelStroke,
-  panelShadow: uiTokens.color.panelShadow,
-  panelInset: uiTokens.color.panelInset,
-  panelOrnament: uiTokens.color.panelOrnament,
-  buttonFocus: uiTokens.color.buttonFocus,
-  buttonSelected: uiTokens.color.buttonSelected,
-  progressFill: uiTokens.color.progressFill,
-  progressBackground: uiTokens.color.progressBackground,
-  buttonText: uiTokens.color.buttonText,
-  panelTitleText: uiTokens.color.panelTitleText,
-  bodyText: uiTokens.color.bodyText
-};
-var textStyles = /* @__PURE__ */ new Map();
-function getUiTextStyle(kind) {
-  const existing = textStyles.get(kind);
-  if (existing) {
-    return existing;
-  }
-  const style = new TextStyle(getTextStyleOptions(kind));
-  textStyles.set(kind, style);
-  return style;
-}
-function getUiPrimitiveDiagnostics() {
-  return { textStyleCacheCount: textStyles.size };
-}
-var GamePanel = class extends Container {
-  shadow = new Graphics();
-  background = new Graphics();
-  innerFrame = new Graphics();
-  ornaments = new Graphics();
-  panelContent = new Container();
-  fill;
-  stroke;
-  cornerRadius;
-  surface;
-  panelWidth;
-  panelHeight;
-  /**
-   * Creates a panel and its dedicated content layer.
-   */
-  constructor(options) {
-    super();
-    this.fill = options.fill ?? (options.surface === "button" ? 1058092 : uiColors.panelFill);
-    this.stroke = options.stroke ?? uiColors.panelStroke;
-    this.cornerRadius = Math.max(0, options.cornerRadius ?? (options.surface === "button" ? 3 : 4));
-    this.surface = options.surface ?? "panel";
-    this.panelWidth = normalizeSize(options.width);
-    this.panelHeight = normalizeSize(options.height);
-    this.addChild(this.shadow, this.background, this.innerFrame, this.ornaments, this.panelContent);
-    this.redraw();
-  }
-  /**
-   * Gets the layer intended for content placed inside this panel.
-   */
-  get content() {
-    return this.panelContent;
-  }
-  /**
-   * Gets the current panel width.
-   */
-  get panelSize() {
-    return { width: this.panelWidth, height: this.panelHeight };
-  }
-  /**
-   * Updates panel dimensions and redraws the panel chrome.
-   */
-  resize(width, height) {
-    this.panelWidth = normalizeSize(width);
-    this.panelHeight = normalizeSize(height);
-    this.redraw();
-  }
-  redraw() {
-    if (this.surface === "toolbar") {
-      this.shadow.clear();
-      this.background.clear().roundRect(0, 0, this.panelWidth, this.panelHeight, 6).fill(2307644);
-      this.innerFrame.clear();
-      this.ornaments.clear();
-      return;
-    }
-    if (this.surface === "button") {
-      this.shadow.clear();
-      drawButtonSurface(this.background, this.panelWidth, this.panelHeight, this.fill, this.stroke);
-      this.innerFrame.clear();
-      this.ornaments.clear();
-      return;
-    }
-    this.shadow.clear().roundRect(2, 4, Math.max(0, this.panelWidth - 2), Math.max(0, this.panelHeight - 2), this.cornerRadius).fill({ color: uiColors.panelShadow, alpha: 0.3 });
-    this.background.clear().roundRect(0, 0, this.panelWidth, this.panelHeight, this.cornerRadius).fill({ color: this.fill }).stroke({ color: this.stroke, width: 1 });
-    this.innerFrame.clear();
-    this.ornaments.clear();
-  }
-};
-var GameButton = class extends GamePanel {
-  labelText;
-  navigationIcon;
-  navigationIconName;
-  fullLabel;
-  iconOnly = false;
-  onPress;
-  stateOutline = new Graphics();
-  isEnabled;
-  isFocused;
-  isSelected;
-  toolbarAppearance;
-  /**
-   * Creates an interactive button.
-   */
-  constructor(options) {
-    super({ ...options, surface: options.appearance === "toolbar" ? "toolbar" : "button" });
-    this.toolbarAppearance = options.appearance === "toolbar";
-    this.onPress = options.onPress;
-    this.isEnabled = options.enabled ?? true;
-    this.isFocused = this.isEnabled && (options.focused ?? false);
-    this.isSelected = this.isEnabled && (options.selected ?? false);
-    this.navigationIconName = options.menuIcon;
-    this.content.addChild(this.stateOutline);
-    this.navigationIcon = options.menuIcon ? createMenuIcon(options.menuIcon) : void 0;
-    if (this.navigationIcon) this.content.addChild(this.navigationIcon);
-    this.fullLabel = options.label;
-    this.labelText = new Text({ text: options.label, style: new TextStyle(getTextStyleOptions(options.labelStyle ?? "Button")) });
-    this.labelText.resolution = Math.max(2, typeof window === "undefined" ? 2 : window.devicePixelRatio || 1);
-    this.labelText.anchor.set(0.5);
-    this.labelText.position.set(this.panelSize.width / 2, this.panelSize.height / 2);
-    this.content.addChild(this.labelText);
-    this.fitLabel();
-    this.on("pointertap", () => this.press());
-    this.updatePresentation();
-  }
-  /**
-   * Gets the current button label.
-   */
-  get label() {
-    return this.fullLabel;
-  }
-  /**
-   * Updates the visible button label.
-   */
-  set label(value) {
-    this.fullLabel = value;
-    this.fitLabel();
-  }
-  /**
-   * Gets whether pointer input can activate the button.
-   */
-  get enabled() {
-    return this.isEnabled;
-  }
-  /**
-   * Gets whether the button is the current keyboard-focus target.
-   */
-  get focused() {
-    return this.isFocused;
-  }
-  /**
-   * Gets whether the button represents the current selection.
-   */
-  get selected() {
-    return this.isSelected;
-  }
-  /**
-   * Gets the highest-priority visual interaction state for this button.
-   */
-  get controlState() {
-    if (!this.isEnabled) {
-      return "disabled";
-    }
-    if (this.isFocused) {
-      return "focused";
-    }
-    return this.isSelected ? "selected" : "default";
-  }
-  /**
-   * Enables or disables pointer interaction while retaining the button's visual position.
-   */
-  setEnabled(enabled) {
-    this.isEnabled = enabled;
-    if (!enabled) {
-      this.isFocused = false;
-      this.isSelected = false;
-    }
-    this.updatePresentation();
-  }
-  /**
-   * Sets whether the button should display keyboard focus.
-   *
-   * Disabled buttons cannot receive focus.
-   */
-  setFocused(focused) {
-    this.isFocused = this.isEnabled && focused;
-    this.updatePresentation();
-  }
-  /**
-   * Sets whether the button should display selection.
-   *
-   * Disabled buttons cannot remain selected.
-   */
-  setSelected(selected) {
-    this.isSelected = this.isEnabled && selected;
-    this.updatePresentation();
-  }
-  /**
-   * Activates the button when enabled.
-   */
-  press() {
-    if (this.isEnabled) {
-      this.onPress?.();
-    }
-  }
-  /**
-   * Keeps the cached label centered when this button changes size.
-   */
-  resize(width, height) {
-    super.resize(width, height);
-    this.labelText.position.set(this.panelSize.width / 2, this.panelSize.height / 2);
-    this.fitLabel();
-    this.updatePresentation();
-  }
-  /** Updates a retained button when its semantic action changes, such as Items versus Hand. */
-  setMenuIcon(name) {
-    if (name === this.navigationIconName) return;
-    this.navigationIcon?.destroy();
-    this.navigationIconName = name;
-    this.navigationIcon = name ? createMenuIcon(name) : void 0;
-    if (this.navigationIcon) this.content.addChild(this.navigationIcon);
-    this.fitLabel();
-  }
-  /** Switches compact navigation to icons while preserving its accessible title. */
-  setIconOnly(value) {
-    this.iconOnly = value && this.navigationIcon !== void 0;
-    this.fitLabel();
-  }
-  /** Fits each label independently to the control's inset without stretching its glyphs. */
-  fitLabel() {
-    this.labelText.text = this.fullLabel;
-    this.accessibleTitle = this.fullLabel;
-    this.labelText.style.wordWrap = false;
-    this.labelText.visible = !this.iconOnly;
-    const inset = this.navigationIcon ? 32 : 0;
-    if (this.navigationIcon) this.navigationIcon.position.set(this.iconOnly ? (this.panelSize.width - 16) / 2 : 10, (this.panelSize.height - 16) / 2);
-    this.labelText.position.set((this.panelSize.width + inset) / 2, this.panelSize.height / 2);
-    fitTextToBox(this.labelText, this.panelSize.width - 16 - inset, this.panelSize.height - 12, 16, 11);
-  }
-  updatePresentation() {
-    this.eventMode = this.isEnabled ? "static" : "none";
-    this.cursor = this.isEnabled ? "pointer" : "default";
-    this.alpha = this.isEnabled ? 1 : this.toolbarAppearance ? 0.5 : uiTokens.interaction.disabledAlpha;
-    this.redrawStateOutline();
-  }
-  redrawStateOutline() {
-    const { width, height } = this.panelSize;
-    this.stateOutline.clear();
-    if (!this.isEnabled) {
-      return;
-    }
-    if (this.isSelected) {
-      this.stateOutline.roundRect(0, 0, width, height, this.toolbarAppearance ? 6 : 8).fill({ color: uiColors.buttonSelected, alpha: 0.08 }).stroke({ color: uiColors.buttonSelected, width: 1 });
-    }
-    if (this.isFocused) {
-      if (this.toolbarAppearance) {
-        this.stateOutline.roundRect(0, 0, width, height, 6).fill(3163982);
-      }
-      this.stateOutline.roundRect(1, 1, width - 2, height - 2, this.toolbarAppearance ? 6 : 8).stroke({ color: this.toolbarAppearance ? 16044939 : uiColors.buttonFocus, width: 1.5 });
-    }
-  }
-};
-function drawButtonSurface(graphics, width, height, fill = 1058092, stroke2 = 5467506) {
-  graphics.clear().roundRect(0, 0, width, height, 8).fill({ color: fill }).stroke({ color: stroke2, width: 1 });
-}
-var SceneTitle = class extends Container {
-  titleText;
-  subtitleText;
-  titleStyle;
-  titleWidth;
-  /**
-   * Creates a scene heading.
-   */
-  constructor(options) {
-    super();
-    this.titleWidth = normalizeSize(options.width);
-    this.titleStyle = new TextStyle(getTextStyleOptions("PanelTitle"));
-    this.titleText = new Text({ text: options.title, style: this.titleStyle });
-    this.titleText.anchor.set(0.5, 0);
-    this.addChild(this.titleText);
-    if (options.subtitle !== void 0) {
-      this.subtitleText = new Text({ text: options.subtitle, style: getUiTextStyle("Body") });
-      this.subtitleText.anchor.set(0.5, 0);
-      this.addChild(this.subtitleText);
-    }
-    this.layout();
-  }
-  /**
-   * Gets the main heading text.
-   */
-  get title() {
-    return this.titleText.text;
-  }
-  /**
-   * Updates the main heading text.
-   */
-  set title(value) {
-    this.titleText.text = value;
-  }
-  /**
-   * Gets the optional subtitle text.
-   */
-  get subtitle() {
-    return this.subtitleText?.text;
-  }
-  /**
-   * Updates the layout width used to center heading text.
-   */
-  resize(width) {
-    this.titleWidth = normalizeSize(width);
-    this.layout();
-  }
-  layout() {
-    const centerX = this.titleWidth / 2;
-    this.titleStyle.wordWrap = true;
-    this.titleStyle.breakWords = true;
-    this.titleStyle.wordWrapWidth = this.titleWidth;
-    this.titleText.position.set(centerX, 0);
-    const titleHeight = Number.isFinite(this.titleText.height) ? this.titleText.height : 20;
-    this.subtitleText?.position.set(centerX, Math.max(24, titleHeight + uiTokens.spacing.xs));
-  }
-};
-var ResourceCounter = class extends Container {
-  valueText;
-  resourceValue;
-  /**
-   * Creates a resource counter.
-   */
-  constructor(options) {
-    super();
-    this.resourceValue = options.value;
-    const resolution = Math.max(2, typeof window === "undefined" ? 2 : window.devicePixelRatio || 1);
-    let offsetX = 0;
-    if (options.icon !== void 0) {
-      const icon = typeof options.icon === "string" ? new Text({ text: options.icon, style: getUiTextStyle("Button") }) : options.icon;
-      if (icon instanceof Text) icon.resolution = resolution;
-      icon.position.set(0, 2);
-      this.addChild(icon);
-      offsetX = 26;
-    }
-    const labelText = new Text({ text: options.label, style: getUiTextStyle("Body") });
-    labelText.resolution = resolution;
-    labelText.position.set(offsetX, 0);
-    this.valueText = new Text({ text: String(options.value), style: getUiTextStyle("NumericResource") });
-    this.valueText.resolution = resolution;
-    const valueX = offsetX + (options.label && options.valueLayout === "inline" ? labelText.width + 8 : 0);
-    this.valueText.position.set(options.valueOffsetX ?? valueX, options.valueLayout === "inline" ? 0 : 18);
-    if (options.valueLayout === "inline") {
-      labelText.anchor.set(0, 0.5);
-      labelText.position.set(offsetX, 12);
-      this.valueText.anchor.set(0, 0.5);
-      this.valueText.position.set(options.valueOffsetX ?? valueX, 12);
-    }
-    if (options.label) {
-      this.addChild(labelText);
-    }
-    this.addChild(this.valueText);
-  }
-  /**
-   * Gets the resource value displayed by this counter.
-   */
-  get value() {
-    return this.resourceValue;
-  }
-  /**
-   * Updates the resource value displayed by this counter.
-   */
-  setValue(value) {
-    this.resourceValue = value;
-    this.valueText.text = String(value);
-  }
-};
-var ProgressIndicator = class extends Container {
-  backgroundGraphic = new Graphics();
-  progressGraphic = new Graphics();
-  fill;
-  background;
-  indicatorWidth;
-  indicatorHeight;
-  currentValue;
-  maximumValue;
-  /**
-   * Creates a progress indicator.
-   */
-  constructor(options) {
-    super();
-    this.indicatorWidth = normalizeSize(options.width);
-    this.indicatorHeight = normalizeSize(options.height);
-    this.currentValue = options.value;
-    this.maximumValue = options.maximum;
-    this.fill = options.fill ?? uiColors.progressFill;
-    this.background = options.background ?? uiColors.progressBackground;
-    this.addChild(this.backgroundGraphic, this.progressGraphic);
-    this.redraw();
-  }
-  /**
-   * Gets the current value used to calculate progress.
-   */
-  get value() {
-    return this.currentValue;
-  }
-  /**
-   * Gets the maximum value used to calculate progress.
-   */
-  get maximum() {
-    return this.maximumValue;
-  }
-  /**
-   * Gets the normalized fill amount in the inclusive range from zero to one.
-   */
-  get progress() {
-    if (!Number.isFinite(this.currentValue) || !Number.isFinite(this.maximumValue) || this.maximumValue <= 0) {
-      return 0;
-    }
-    return Math.min(1, Math.max(0, this.currentValue / this.maximumValue));
-  }
-  /**
-   * Updates the values used to calculate and draw the filled portion.
-   */
-  setProgress(value, maximum) {
-    this.currentValue = value;
-    this.maximumValue = maximum;
-    this.redraw();
-  }
-  /**
-   * Updates indicator dimensions while retaining its current progress values.
-   */
-  resize(width, height) {
-    this.indicatorWidth = normalizeSize(width);
-    this.indicatorHeight = normalizeSize(height);
-    this.redraw();
-  }
-  redraw() {
-    this.backgroundGraphic.clear().rect(0, 0, this.indicatorWidth, this.indicatorHeight).fill({ color: this.background });
-    this.progressGraphic.clear().rect(0, 0, this.indicatorWidth * this.progress, this.indicatorHeight).fill({ color: this.fill });
-  }
-};
-var ScrollContainer = class extends Container {
-  viewport = new Container();
-  viewportMask = new Graphics();
-  contentLayer = new Container();
-  contentFade;
-  viewportWidth;
-  viewportHeight;
-  totalContentHeight;
-  offset = 0;
-  /**
-   * Creates a clipped viewport and its dedicated scrollable content layer.
-   */
-  constructor(options) {
-    super();
-    this.viewportWidth = normalizeSize(options.width);
-    this.viewportHeight = normalizeSize(options.height);
-    this.totalContentHeight = normalizeSize(options.contentHeight ?? options.height);
-    this.contentFade = options.fadeEdges ? new ScrollContentFade(this.contentLayer) : void 0;
-    this.viewport.addChild(this.viewportMask, this.contentFade ?? this.contentLayer);
-    this.viewport.mask = this.viewportMask;
-    this.addChild(this.viewport);
-    this.redrawViewport();
-    this.updateContentPosition();
-  }
-  /**
-   * Gets the layer intended for scrollable scene-specific children.
-   */
-  get content() {
-    return this.contentLayer;
-  }
-  /**
-   * Gets the current viewport dimensions.
-   */
-  get viewportSize() {
-    return { width: this.viewportWidth, height: this.viewportHeight };
-  }
-  /**
-   * Gets the total scrollable content height.
-   */
-  get contentHeight() {
-    return this.totalContentHeight;
-  }
-  /**
-   * Gets the current vertical offset from the top of the content.
-   */
-  get scrollOffset() {
-    return this.offset;
-  }
-  /**
-   * Gets the maximum allowed vertical offset from the top of the content.
-   */
-  get maximumScrollOffset() {
-    return Math.max(0, this.totalContentHeight - this.viewportHeight);
-  }
-  /**
-   * Updates the viewport dimensions while retaining the closest valid scroll offset.
-   */
-  resize(width, height) {
-    this.viewportWidth = normalizeSize(width);
-    this.viewportHeight = normalizeSize(height);
-    this.redrawViewport();
-    this.setScrollOffset(this.offset);
-  }
-  /**
-   * Updates the scrollable content height while retaining the closest valid scroll offset.
-   */
-  setContentHeight(height) {
-    this.totalContentHeight = normalizeSize(height);
-    this.setScrollOffset(this.offset);
-  }
-  /**
-   * Sets the vertical content offset, clamped to the available scroll range.
-   */
-  setScrollOffset(offset) {
-    const normalizedOffset = Number.isFinite(offset) ? offset : 0;
-    this.offset = Math.min(this.maximumScrollOffset, Math.max(0, normalizedOffset));
-    this.updateContentPosition();
-  }
-  /**
-   * Moves the vertical content offset by the supplied amount.
-   */
-  scrollBy(amount) {
-    this.setScrollOffset(this.offset + amount);
-  }
-  redrawViewport() {
-    this.viewportMask.clear().rect(0, 0, this.viewportWidth, this.viewportHeight).fill({ color: 16777215 });
-  }
-  updateContentPosition() {
-    this.contentLayer.position.set(0, -this.offset);
-    this.contentFade?.setViewport({
-      x: 0,
-      y: 0,
-      width: this.viewportWidth,
-      height: this.viewportHeight,
-      top: this.offset > 0,
-      bottom: this.offset < this.maximumScrollOffset
-    }, this.viewport);
-  }
-};
-var Tooltip = class extends GamePanel {
-  tooltipText;
-  placement;
-  gap;
-  open = false;
-  /**
-   * Creates a hidden, non-interactive tooltip surface.
-   */
-  constructor(options) {
-    super(options);
-    this.placement = options.placement ?? "above";
-    this.gap = normalizeSize(options.gap ?? uiTokens.spacing.sm);
-    this.alpha = uiTokens.elevation.tooltipAlpha;
-    this.eventMode = "none";
-    this.tooltipText = new Text({ text: options.text, style: getUiTextStyle("Body") });
-    this.tooltipText.style.wordWrap = true;
-    this.tooltipText.style.wordWrapWidth = Math.max(1, this.panelSize.width - uiTokens.spacing.sm * 2);
-    this.tooltipText.position.set(uiTokens.spacing.sm, uiTokens.spacing.sm);
-    this.content.addChild(this.tooltipText);
-    this.visible = false;
-  }
-  /**
-   * Gets the text currently shown by the tooltip.
-   */
-  get text() {
-    return this.tooltipText.text;
-  }
-  /**
-   * Gets whether the tooltip is currently visible.
-   */
-  get isOpen() {
-    return this.open;
-  }
-  /**
-   * Updates the text without recreating the tooltip display tree.
-   */
-  setText(text) {
-    this.tooltipText.text = text;
-  }
-  /** Resizes the tooltip and wraps its text inside the updated content area. */
-  resize(width, height) {
-    super.resize(width, height);
-    this.tooltipText.style.wordWrapWidth = Math.max(1, this.panelSize.width - uiTokens.spacing.sm * 2);
-  }
-  /**
-   * Shows the tooltip beside the supplied scene-space anchor.
-   */
-  show(anchor) {
-    const position = this.getPosition(anchor);
-    this.position.set(position.x, position.y);
-    this.open = true;
-    this.visible = true;
-  }
-  /**
-   * Hides the tooltip while keeping its display tree available for later reuse.
-   */
-  hide() {
-    this.open = false;
-    this.visible = false;
-  }
-  getPosition(anchor) {
-    const x2 = normalizeCoordinate(anchor.x);
-    const y2 = normalizeCoordinate(anchor.y);
-    const width = normalizeSize(anchor.width);
-    const height = normalizeSize(anchor.height);
-    const tooltipSize = this.panelSize;
-    switch (this.placement) {
-      case "below":
-        return { x: x2 + (width - tooltipSize.width) / 2, y: y2 + height + this.gap };
-      case "left":
-        return { x: x2 - tooltipSize.width - this.gap, y: y2 + (height - tooltipSize.height) / 2 };
-      case "right":
-        return { x: x2 + width + this.gap, y: y2 + (height - tooltipSize.height) / 2 };
-      case "above":
-        return { x: x2 + (width - tooltipSize.width) / 2, y: y2 - tooltipSize.height - this.gap };
-    }
-  }
-};
-function getTextStyleOptions(kind) {
-  switch (kind) {
-    case "Button":
-      return uiTokens.typography.button;
-    case "PanelTitle":
-      return uiTokens.typography.panelTitle;
-    case "Body":
-      return uiTokens.typography.body;
-    case "Caption":
-      return uiTokens.typography.caption;
-    case "Intent":
-      return uiTokens.typography.intent;
-    case "CardTitle":
-      return uiTokens.typography.cardTitle;
-    case "CardEffect":
-      return uiTokens.typography.cardEffect;
-    case "EnemyName":
-      return uiTokens.typography.enemyName;
-    case "NumericResource":
-      return uiTokens.typography.numericResource;
-    case "EndTurn":
-      return uiTokens.typography.endTurn;
-    case "SecondaryHud":
-      return uiTokens.typography.secondaryHud;
-    case "RelicDetail":
-      return uiTokens.typography.relicDetail;
-  }
-}
-function normalizeSize(value) {
-  return Number.isFinite(value) ? Math.max(0, value) : 0;
-}
-function normalizeCoordinate(value) {
-  return Number.isFinite(value) ? value : 0;
-}
-
-// src/health-block-meter.ts
 var healthBlockMeterColors = {
   health: uiTokens.color.health,
   block: uiTokens.color.block,
@@ -73851,8 +74964,8 @@ function describeViewport(viewport, options = {}) {
   });
 }
 function getViewportOrientation(viewport) {
-  const width = normalizeDimension(viewport.width);
-  const height = normalizeDimension(viewport.height);
+  const width = normalizeDimension3(viewport.width);
+  const height = normalizeDimension3(viewport.height);
   if (width === height) {
     return "Square";
   }
@@ -73862,8 +74975,8 @@ function getViewportDensity(devicePixelRatio) {
   return normalizeDevicePixelRatio(devicePixelRatio) > 1 ? "High" : "Standard";
 }
 function getViewportLayoutMode(viewport) {
-  const width = normalizeDimension(viewport.width);
-  const height = normalizeDimension(viewport.height);
+  const width = normalizeDimension3(viewport.width);
+  const height = normalizeDimension3(viewport.height);
   if (getViewportOrientation({ width, height }) === "Portrait" && width <= mobilePortraitMaximumWidth) {
     return "MobilePortrait";
   }
@@ -73896,15 +75009,15 @@ function planViewportUpdate(previous, viewport, options = {}) {
 }
 function normalizeViewport(viewport) {
   return {
-    width: normalizeDimension(viewport.width),
-    height: normalizeDimension(viewport.height)
+    width: normalizeDimension3(viewport.width),
+    height: normalizeDimension3(viewport.height)
   };
 }
 function normalizeSafeArea(safeArea, viewport) {
-  const top = Math.min(normalizeDimension(safeArea.top), viewport.height);
-  const bottom = Math.min(normalizeDimension(safeArea.bottom), Math.max(0, viewport.height - top));
-  const left = Math.min(normalizeDimension(safeArea.left), viewport.width);
-  const right = Math.min(normalizeDimension(safeArea.right), Math.max(0, viewport.width - left));
+  const top = Math.min(normalizeDimension3(safeArea.top), viewport.height);
+  const bottom = Math.min(normalizeDimension3(safeArea.bottom), Math.max(0, viewport.height - top));
+  const left = Math.min(normalizeDimension3(safeArea.left), viewport.width);
+  const right = Math.min(normalizeDimension3(safeArea.right), Math.max(0, viewport.width - left));
   return { top, right, bottom, left };
 }
 function calculateContentBounds(viewport, safeArea) {
@@ -73916,14 +75029,14 @@ function calculateContentBounds(viewport, safeArea) {
   };
 }
 function calculateAspectRatio(viewport) {
-  const width = normalizeDimension(viewport.width);
-  const height = normalizeDimension(viewport.height);
+  const width = normalizeDimension3(viewport.width);
+  const height = normalizeDimension3(viewport.height);
   return height === 0 ? 0 : width / height;
 }
 function normalizeDevicePixelRatio(value) {
   return value !== void 0 && Number.isFinite(value) && value > 0 ? value : 1;
 }
-function normalizeDimension(value) {
+function normalizeDimension3(value) {
   return Number.isFinite(value) ? Math.max(0, value) : 0;
 }
 
@@ -74503,765 +75616,6 @@ var EncounterBackdrop = class extends Container {
     }
   }
 };
-
-// src/card-view.ts
-init_lib();
-
-// src/ui-component-contract.ts
-function normalizeUiComponentSize(size) {
-  return {
-    width: normalizeDimension2(size.width),
-    height: normalizeDimension2(size.height)
-  };
-}
-function createUiComponentPresentationState(options) {
-  const enabled = options.enabled ?? true;
-  return {
-    size: normalizeUiComponentSize(options.size),
-    interaction: {
-      enabled,
-      focused: enabled && (options.focused ?? false),
-      selected: enabled && (options.selected ?? false)
-    },
-    reducedMotion: options.reducedMotion ?? false
-  };
-}
-function transitionUiComponentLifecycle(state, event) {
-  if (state === "disposed" || event === "dispose") {
-    return "disposed";
-  }
-  if (event === "suspend") {
-    return "suspended";
-  }
-  return "active";
-}
-function normalizeDimension2(value) {
-  return Number.isFinite(value) ? Math.max(0, value) : 0;
-}
-
-// src/card-description.ts
-var keywords = {
-  aoe: "AoE",
-  attack: "Attack",
-  bleed: "Bleed",
-  block: "Block",
-  burn: "Burn",
-  chainattack: "Chain Attack",
-  chainskill: "Chain Skill",
-  chainspell: "Chain Spell",
-  chill: "Chill",
-  combo1: "Combo 1",
-  combo2: "Combo 2",
-  combo3: "Combo 3",
-  damage: "Damage",
-  discard: "Discard",
-  discardrandom: "Discard Random",
-  draw: "Draw",
-  drawrandom: "Draw Random",
-  execute: "Execute",
-  exhaust: "Exhaust",
-  health: "Health",
-  ritual: "Ritual",
-  skill: "Skill",
-  spell: "Spell",
-  stamina: "Stamina",
-  stealth: "Stealth",
-  status: "Status",
-  strength: "Strength",
-  unplayable: "Unplayable",
-  vulnerable: "Vulnerable",
-  weak: "Weak",
-  poison: "Poison",
-  shock: "Shock",
-  frail: "Frail",
-  reflect: "Reflect",
-  retain: "Retain",
-  chain: "Chain",
-  combo: "Combo",
-  exploit: "Exploit",
-  transmute: "Transmute",
-  heal: "Heal",
-  energy: "Energy",
-  mana: "Mana",
-  intangible: "Intangible",
-  slow: "Slow",
-  heavy: "Heavy",
-  fatigue: "Fatigue",
-  curing: "Curing",
-  guarding: "Guarding",
-  striking: "Striking",
-  toxic: "Toxic",
-  guarded: "Guarded",
-  endure: "Endure",
-  bloodcast: "Bloodcast",
-  whisper: "Whisper",
-  setup: "Setup",
-  fullblock: "Full Block",
-  perfectblock: "Perfect Block",
-  full: "Full",
-  perfect: "Perfect"
-};
-function cardDescriptionRuns(description) {
-  const normalized = description.replace(/\{newline\}|<br\s*\/?>/gi, "\n").replace(/\{([a-z0-9]+)\}/gi, (_token, key) => keywords[key.toLowerCase()] ?? key);
-  const fragments = normalized.split(/(\*\*|<\/?(?:b|strong)>)/gi);
-  const runs = [];
-  let emphasized = false;
-  for (const fragment8 of fragments) {
-    if (/^(?:\*\*|<\/?(?:b|strong)>)$/i.test(fragment8)) {
-      emphasized = fragment8.startsWith("</") ? false : fragment8.startsWith("<") ? true : !emphasized;
-      continue;
-    }
-    for (const match of fragment8.matchAll(/\n|[^\S\n]+|[^\s]+/g)) {
-      const text = match[0];
-      const word = text.replace(/^[^a-z]+|[^a-z]+$/gi, "").toLowerCase();
-      runs.push({ text, bold: emphasized || word in keywords, damage: false });
-    }
-  }
-  let primaryDamageFound = false;
-  return runs.map((run, index) => {
-    const following = runs.slice(index + 1).filter((next) => !/^\s+$/.test(next.text)).slice(0, 3).map((next) => next.text).join(" ");
-    const damage = !primaryDamageFound && /^\d+(?:[x×]\d+)?$/i.test(run.text) && /^(?:[x×]\s*\d+\s*)?damage\b/i.test(following);
-    primaryDamageFound ||= damage;
-    return { ...run, damage };
-  });
-}
-function plainCardDescription(description) {
-  return cardDescriptionRuns(description).map((run) => run.text).join("");
-}
-function withTargetDamage(description, damage) {
-  return damage === void 0 ? description : description.replace(/(?<![\d+-])\d+(?=(?:\*\*|<\/?(?:b|strong)>)*\s*(?:[x×]\s*\d+\s*)?(?:\*\*|<\/?(?:b|strong)>)*\s*(?:\*\*|<\/?(?:b|strong)>)*(?:\{damage\}|damage\b))/i, String(damage));
-}
-function damageTextColor(damage, baseDamage, normal) {
-  return damage === void 0 || baseDamage === void 0 || damage === baseDamage ? normal : damage > baseDamage ? 8315560 : 16744827;
-}
-
-// src/card-rules-view.ts
-init_lib();
-var CardRulesView = class extends Container {
-  labels = [];
-  /** Reuses text objects while fitting and centering styled rules inside the card's caption area. */
-  update(description, style, width, damage, baseDamage, height = Infinity) {
-    const fontSize = Number(style.fontSize) || 14;
-    const maxLines = Math.max(1, Math.floor(height / (fontSize * 1.22)));
-    const layout = this.layoutRuns(cardDescriptionRuns(description), style, width, fontSize, damage, baseDamage);
-    if (layout.lines.length > maxLines && fontSize > 12) {
-      this.update(description, new TextStyle({
-        fontFamily: style.fontFamily,
-        fontSize: fontSize - 1,
-        stroke: style.stroke,
-        fill: style.fill
-      }), width, damage, baseDamage, height);
-      return;
-    }
-    this.hideLines(layout.lines.slice(maxLines));
-    if (layout.lines.length > maxLines) this.ellipsize(layout.lines[maxLines - 1]?.labels ?? []);
-    this.centerLines(layout.lines.slice(0, maxLines), width);
-    this.labels.slice(layout.count).forEach((label) => {
-      label.visible = false;
-    });
-  }
-  /** Wraps styled words while retaining explicit line breaks. */
-  layoutRuns(runs, style, width, fontSize, damage, baseDamage) {
-    const lines = [{ labels: [], width: 0 }];
-    let count2 = 0;
-    for (const run of runs) {
-      let line = lines[lines.length - 1];
-      if (!line) continue;
-      if (run.text === "\n") {
-        lines.push({ labels: [], width: 0 });
-        continue;
-      }
-      if (/^\s+$/.test(run.text)) {
-        line.width += fontSize * 0.26;
-        continue;
-      }
-      const label = this.getLabel(count2, run, style, fontSize, damage, baseDamage);
-      const labelWidth = Number.isFinite(label.width) ? label.width : fontSize * 0.55 * run.text.length;
-      if (line.width + labelWidth > width && line.labels.length > 0) {
-        line = { labels: [], width: 0 };
-        lines.push(line);
-      }
-      label.position.set(line.width, (lines.length - 1) * fontSize * 1.22);
-      line.labels.push(label);
-      line.width += labelWidth;
-      count2++;
-    }
-    return { lines, count: count2 };
-  }
-  /** Reconciles one reusable word label from safe semantic rules text. */
-  getLabel(index, run, style, fontSize, damage, baseDamage) {
-    let label = this.labels[index];
-    if (!label) {
-      label = new Text({ text: "", style });
-      label.resolution = 2;
-      this.labels.push(label);
-      this.addChild(label);
-    }
-    label.text = run.text;
-    label.style = new TextStyle({
-      fontFamily: style.fontFamily,
-      fontSize,
-      stroke: style.stroke,
-      wordWrap: false,
-      fontWeight: run.bold ? "700" : "400",
-      fill: run.damage ? damageTextColor(damage, baseDamage, uiTokens.color.text) : style.fill
-    });
-    label.visible = true;
-    return label;
-  }
-  /** Centers independently wrapped lines inside the caption width. */
-  centerLines(lines, width) {
-    for (const line of lines) {
-      const offset = (width - line.width) / 2;
-      for (const label of line.labels) label.position.set(label.x + offset, label.y);
-    }
-  }
-  /** Hides words beyond the available caption height. */
-  hideLines(lines) {
-    for (const line of lines) {
-      for (const label of line.labels) label.visible = false;
-    }
-  }
-  /** Marks an overlong paragraph without drawing outside the card frame. */
-  ellipsize(labels) {
-    const last = labels[labels.length - 1];
-    if (last) last.text = "\u2026";
-  }
-};
-
-// src/card-placeholder-art.ts
-function drawCardPlaceholder(graphics, type, width, top, bottom) {
-  const x2 = width / 2;
-  const y2 = (top + bottom) / 2;
-  const size = Math.max(8, Math.min(width * 0.28, (bottom - top) * 0.42));
-  const colors2 = { Attack: 15837831, Spell: 10013439, Skill: 10477757, Ritual: 13481204 };
-  const color = colors2[type] ?? 12044248;
-  graphics.roundRect(x2 - size * 1.5, y2 - size * 1.5, size * 3, size * 3, size * 1.5).fill({ color, alpha: 0.06 });
-  if (type === "Attack") drawBlade(graphics, x2, y2, size, color);
-  else if (type === "Skill") drawShield(graphics, x2, y2, size, color);
-  else drawSigil(graphics, x2, y2, size, color, type === "Ritual");
-}
-function drawBlade(g2, x2, y2, s2, color) {
-  g2.rect(x2 - s2 * 0.15, y2 - s2, s2 * 0.3, s2 * 1.35).fill(color).rect(x2, y2 - s2, s2 * 0.07, s2 * 1.35).fill(16772562).roundRect(x2 - s2 * 0.65, y2 + s2 * 0.25, s2 * 1.3, s2 * 0.16, s2 * 0.08).fill(14393940).rect(x2 - s2 * 0.11, y2 + s2 * 0.4, s2 * 0.22, s2 * 0.5).fill(6440508).roundRect(x2 - s2 * 0.2, y2 + s2 * 0.9, s2 * 0.4, s2 * 0.2, s2 * 0.1).fill(color);
-  for (const offset of [-0.75, 0.75]) g2.rect(x2 + s2 * offset, y2 - s2 * 0.65, s2 * 0.08, s2 * 0.7).fill({ color, alpha: 0.3 });
-}
-function drawShield(g2, x2, y2, s2, color) {
-  g2.roundRect(x2 - s2 * 0.72, y2 - s2 * 0.9, s2 * 1.44, s2 * 1.8, s2 * 0.55).fill({ color, alpha: 0.75 }).roundRect(x2 - s2 * 0.55, y2 - s2 * 0.73, s2 * 1.1, s2 * 1.42, s2 * 0.42).fill(1588535).rect(x2 - s2 * 0.07, y2 - s2 * 0.5, s2 * 0.14, s2).fill(color).rect(x2 - s2 * 0.35, y2 - s2 * 0.14, s2 * 0.7, s2 * 0.14).fill(color);
-}
-function drawSigil(g2, x2, y2, s2, color, ritual) {
-  g2.roundRect(x2 - s2, y2 - s2, s2 * 2, s2 * 2, s2).stroke({ color, width: ritual ? 2 : 1, alpha: 0.8 }).roundRect(x2 - s2 * 0.7, y2 - s2 * 0.7, s2 * 1.4, s2 * 1.4, s2 * 0.7).fill({ color, alpha: 0.18 }).roundRect(x2 - s2 * 0.28, y2 - s2 * 0.28, s2 * 0.56, s2 * 0.56, ritual ? 2 : s2 * 0.28).fill(color);
-  for (let index = 0; index < 8; index++) {
-    const angle = index * Math.PI / 4;
-    const radius = s2 * (ritual ? 0.85 : 1.22);
-    g2.roundRect(x2 + Math.cos(angle) * radius - 2, y2 + Math.sin(angle) * radius - 2, 4, 4, 1).fill({ color, alpha: 0.9 });
-  }
-}
-
-// src/card-view.ts
-var defaultCardWidth = 180;
-var defaultCardHeight = 252;
-var textPadding = uiTokens.spacing.sm;
-var CardView = class extends Container {
-  frame = new Graphics();
-  artFallback = new Graphics();
-  artwork = new Sprite(Texture.EMPTY);
-  artMask = new Graphics();
-  textScrims = new Graphics();
-  costPlate = new Graphics();
-  energyCostPlate = new Graphics();
-  manaCostPlate = new Graphics();
-  stateOverlay = new Graphics();
-  playabilityOutline = new Graphics();
-  stateOutline = new Graphics();
-  stateBadge = new Text({ text: "", style: { ...uiTokens.typography.caption, fontSize: 12, fontWeight: "bold", fill: 1515819 } });
-  costStyle = new TextStyle({ ...uiTokens.typography.button, stroke: { color: uiTokens.color.panelShadow, width: 3 } });
-  nameStyle = new TextStyle({ ...uiTokens.typography.cardTitle, align: "center", fontSize: 20, stroke: { color: uiTokens.color.panelShadow, width: 4 }, wordWrap: true });
-  typeStyle = new TextStyle({ ...uiTokens.typography.body, align: "center", fontSize: 13, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true });
-  descriptionStyle = new TextStyle({ ...uiTokens.typography.cardEffect, align: "center", fontSize: 15, stroke: { color: uiTokens.color.panelShadow, width: 3 }, wordWrap: true });
-  costLabel = new Text({ text: "", style: this.costStyle });
-  energyCostLabel = new Text({ text: "", style: this.costStyle });
-  manaCostLabel = new Text({ text: "", style: this.costStyle });
-  nameLabel = new Text({ text: "", style: this.nameStyle });
-  typeLabel = new Text({ text: "", style: this.typeStyle });
-  descriptionLabel = new Text({ text: "", style: this.descriptionStyle });
-  rules = new CardRulesView();
-  handPresentation;
-  rewardPresentation;
-  cardWidth;
-  cardHeight;
-  cardContent;
-  componentState;
-  componentLifecycleState = "active";
-  motionState;
-  playability;
-  statePresentationKey = "";
-  /**
-   * Creates a stable card display tree from semantic display data.
-   */
-  constructor(options) {
-    super();
-    this.handPresentation = options.presentation === "hand";
-    this.rewardPresentation = options.presentation === "reward";
-    if (this.handPresentation || this.rewardPresentation) {
-      this.nameStyle.fontFamily = uiTokens.typography.button.fontFamily;
-      this.nameStyle.fontWeight = "700";
-      this.nameStyle.stroke = { color: uiTokens.color.panelShadow, width: 1 };
-      this.descriptionStyle.stroke = { color: uiTokens.color.panelShadow, width: 1 };
-      this.typeStyle.stroke = { color: uiTokens.color.panelShadow, width: 0 };
-    }
-    this.cardWidth = normalizeDimension3(options.width ?? defaultCardWidth, defaultCardWidth);
-    this.cardHeight = normalizeDimension3(options.height ?? defaultCardHeight, defaultCardHeight);
-    this.cardContent = toCardViewContent(options);
-    this.componentState = createUiComponentPresentationState({
-      size: { width: this.cardWidth, height: this.cardHeight },
-      ...options.enabled === void 0 ? {} : { enabled: options.enabled },
-      ...options.focused === void 0 ? {} : { focused: options.focused },
-      ...options.selected === void 0 ? {} : { selected: options.selected },
-      ...options.reducedMotion === void 0 ? {} : { reducedMotion: options.reducedMotion }
-    });
-    this.motionState = options.motionState ?? "idle";
-    this.playability = options.playability ?? "playable";
-    this.costLabel.anchor.set(0.5);
-    this.energyCostLabel.anchor.set(0.5);
-    this.manaCostLabel.anchor.set(0.5);
-    this.nameLabel.anchor.set(0.5, 0);
-    this.typeLabel.anchor.set(0.5, 0);
-    this.descriptionLabel.anchor.set(0.5, 0);
-    this.artwork.anchor.set(0.5, 0.5);
-    this.artwork.mask = this.artMask;
-    this.textScrims.mask = this.artMask;
-    for (const label of [this.costLabel, this.energyCostLabel, this.manaCostLabel, this.nameLabel, this.typeLabel, this.descriptionLabel]) {
-      label.resolution = 2;
-    }
-    this.addChild(
-      this.frame,
-      this.artFallback,
-      this.artwork,
-      this.artMask,
-      this.textScrims,
-      this.costPlate,
-      this.energyCostPlate,
-      this.manaCostPlate,
-      this.costLabel,
-      this.energyCostLabel,
-      this.manaCostLabel,
-      this.nameLabel,
-      this.typeLabel,
-      this.descriptionLabel,
-      this.stateOverlay,
-      this.playabilityOutline,
-      this.stateOutline,
-      this.rules,
-      this.stateBadge
-    );
-    this.redraw();
-  }
-  /**
-   * Gets the semantic display data currently rendered by the card.
-   */
-  get content() {
-    return this.cardContent;
-  }
-  /**
-   * Gets the presentation state supplied by the owning scene.
-   */
-  get presentationState() {
-    return this.componentState;
-  }
-  /**
-   * Gets the lifecycle state managed by the owning scene or runtime.
-   */
-  get lifecycleState() {
-    return this.componentLifecycleState;
-  }
-  /**
-   * Gets the card's independent motion treatment.
-   */
-  get currentMotionState() {
-    return this.motionState;
-  }
-  /**
-   * Gets the card's independent playability treatment.
-   */
-  get currentPlayability() {
-    return this.playability;
-  }
-  /**
-   * Gets whether the intentional fallback-art treatment is visible.
-   */
-  get usesFallbackArt() {
-    return this.artFallback.visible;
-  }
-  /**
-   * Gets the current display dimensions.
-   */
-  get size() {
-    return { width: this.cardWidth, height: this.cardHeight };
-  }
-  /**
-   * Reconciles semantic display data without recreating the card display tree.
-   */
-  setContent(content) {
-    if (areCardContentsEqual(this.cardContent, content) && this.artwork.visible === isUsableCardTexture(content.artTexture)) {
-      return;
-    }
-    this.cardContent = content;
-    this.redraw();
-  }
-  /**
-   * Applies the card's motion treatment without changing playability or accessibility state.
-   */
-  setMotionState(state) {
-    if (this.motionState === state) {
-      return;
-    }
-    this.motionState = state;
-    this.applyStatePresentation(getPalette(this.cardContent.rarity));
-  }
-  /**
-   * Applies playability without replacing hover, focus, selection, or motion presentation.
-   */
-  setPlayability(playability) {
-    if (this.playability === playability) {
-      return;
-    }
-    this.playability = playability;
-    this.applyStatePresentation(getPalette(this.cardContent.rarity));
-  }
-  /**
-   * Resizes the card while retaining its content, state, and display-object identity.
-   */
-  resize(size) {
-    const normalizedSize = createUiComponentPresentationState({
-      size,
-      ...this.componentState.interaction,
-      reducedMotion: this.componentState.reducedMotion
-    });
-    if (this.cardWidth === normalizedSize.size.width && this.cardHeight === normalizedSize.size.height) return;
-    this.componentState = normalizedSize;
-    this.cardWidth = normalizedSize.size.width;
-    this.cardHeight = normalizedSize.size.height;
-    this.redraw();
-  }
-  /**
-   * Updates scene-owned enabled, focused, and selected state without changing playability.
-   */
-  setInteractionState(state) {
-    if (areInteractionStatesEqual(this.componentState.interaction, state)) {
-      return;
-    }
-    this.componentState = createUiComponentPresentationState({
-      size: this.componentState.size,
-      ...state,
-      reducedMotion: this.componentState.reducedMotion
-    });
-    this.applyStatePresentation(getPalette(this.cardContent.rarity));
-  }
-  /**
-   * Updates reduced-motion presentation without changing card content or interaction state.
-   */
-  setReducedMotion(reducedMotion) {
-    if (this.componentState.reducedMotion === reducedMotion) return;
-    this.componentState = createUiComponentPresentationState({
-      size: this.componentState.size,
-      ...this.componentState.interaction,
-      reducedMotion
-    });
-    this.redraw();
-  }
-  /**
-   * Suspends display while keeping the reusable card available for a later resume.
-   */
-  suspend() {
-    this.componentLifecycleState = transitionUiComponentLifecycle(this.componentLifecycleState, "suspend");
-    this.visible = this.componentLifecycleState === "active";
-  }
-  /**
-   * Resumes display unless the card has been disposed.
-   */
-  resume() {
-    this.componentLifecycleState = transitionUiComponentLifecycle(this.componentLifecycleState, "resume");
-    this.visible = this.componentLifecycleState === "active";
-  }
-  /**
-   * Disposes the component and prevents later lifecycle transitions from reviving it.
-   */
-  dispose() {
-    if (this.componentLifecycleState === "disposed") {
-      return;
-    }
-    this.componentLifecycleState = transitionUiComponentLifecycle(this.componentLifecycleState, "dispose");
-    this.visible = false;
-    super.destroy();
-  }
-  redraw() {
-    const palette = getPalette(this.cardContent.rarity);
-    const artBounds = getArtBounds(this.cardWidth, this.cardHeight);
-    const header = this.updateLabels(palette);
-    this.frame.clear().roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: palette.frame }).roundRect(uiTokens.frame.borderWidth, uiTokens.frame.borderWidth, this.cardWidth - uiTokens.frame.borderWidth * 2, this.cardHeight - uiTokens.frame.borderWidth * 2, uiTokens.frame.panelCornerRadius - 1).fill({ color: uiTokens.color.panelFill });
-    this.drawFallbackArt(artBounds, palette, header);
-    this.artMask.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.frame.panelCornerRadius - 1).fill({ color: 16777215 });
-    this.updateArtwork(artBounds);
-    this.drawTextScrims(artBounds, palette, header);
-    this.descriptionLabel.visible = false;
-    this.rules.position.set(textPadding, this.descriptionLabel.y);
-    this.rules.update(
-      this.cardContent.description,
-      this.descriptionStyle,
-      this.cardWidth - textPadding * 2,
-      this.cardContent.damage,
-      this.cardContent.baseDamage,
-      this.cardHeight - this.descriptionLabel.y - 6
-    );
-    this.statePresentationKey = "";
-    this.applyStatePresentation(palette);
-  }
-  drawFallbackArt(artBounds, palette, header) {
-    const headerBottom = artBounds.y + header.height;
-    const typeFill = { Attack: 3416873, Spell: 2043978, Skill: 1653556, Ritual: 3417665 };
-    this.artFallback.clear().roundRect(artBounds.x, artBounds.y, artBounds.width, artBounds.height, uiTokens.spacing.xs).fill({ color: typeFill[this.cardContent.type] ?? palette.artFill }).roundRect(artBounds.x + 3, artBounds.y + 3, artBounds.width - 6, artBounds.height - 6, uiTokens.spacing.xs - 1).stroke({ color: palette.accent, width: 1, alpha: 0.72 }).rect(artBounds.x, artBounds.y + artBounds.height * 0.56, artBounds.width, artBounds.height * 0.44).fill({ color: palette.accent, alpha: 0.12 });
-    drawCardPlaceholder(this.artFallback, this.cardContent.type, this.cardWidth, headerBottom + 4, this.cardHeight * 0.58 - 4);
-    this.artFallback.visible = !isUsableCardTexture(this.cardContent.artTexture);
-  }
-  /** Reserves a translucent title zone and an opaque lower caption without covering the focal center of the art. */
-  drawTextScrims(artBounds, palette, header) {
-    const rulesY = this.cardHeight * (this.handPresentation ? 0.58 : 0.59);
-    this.textScrims.clear().rect(artBounds.x, artBounds.y, artBounds.width, header.height).fill({ color: uiTokens.color.panelShadow, alpha: 0.78 }).rect(artBounds.x, rulesY, artBounds.width, artBounds.y + artBounds.height - rulesY).fill({ color: uiTokens.color.panelShadow });
-    this.costPlate.clear();
-    this.energyCostPlate.clear();
-    this.manaCostPlate.clear();
-    if (header.hasLegacyCost) {
-      this.costPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.badgeWidth, header.badgeHeight, this.handPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.panelShadow, alpha: 0.94 }).stroke({ color: palette.accent, width: 2 });
-    }
-    if (header.hasEnergyCost) {
-      this.energyCostPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.energyBadgeWidth, header.badgeHeight, this.handPresentation || this.rewardPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.stamina, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
-    }
-    if (header.hasManaCost) {
-      this.manaCostPlate.roundRect(this.handPresentation || this.rewardPresentation ? artBounds.x + artBounds.width - header.manaBadgeWidth - 5 : artBounds.x + 9 + header.energyBadgeWidth, artBounds.y + 5, header.manaBadgeWidth, header.badgeHeight, this.handPresentation || this.rewardPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.mana, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
-    }
-  }
-  updateArtwork(artBounds) {
-    const texture = this.cardContent.artTexture;
-    this.artwork.visible = isUsableCardTexture(texture);
-    if (!texture || !this.artwork.visible) {
-      return;
-    }
-    this.artwork.texture = texture;
-    this.artwork.position.set(artBounds.x + artBounds.width / 2, artBounds.y + artBounds.height / 2);
-    const scale = Math.max(artBounds.width / texture.width, artBounds.height / texture.height);
-    this.artwork.width = texture.width * scale;
-    this.artwork.height = texture.height * scale;
-  }
-  updateLabels(palette) {
-    if (this.handPresentation) return this.updateHandLabels();
-    const textScale = Math.max(0.55, Math.min(this.cardWidth / defaultCardWidth, this.cardHeight / defaultCardHeight));
-    const badgeHeight = Math.min(38, Math.max(24, this.cardWidth * 0.21));
-    const rulesY = this.cardHeight * (this.handPresentation ? 0.65 : 0.59);
-    this.costStyle.fontSize = Math.max(12, 18 * textScale);
-    this.nameStyle.fontSize = Math.max(this.rewardPresentation ? 14 : 12, 18 * textScale);
-    this.typeStyle.fontSize = Math.max(10, 12 * textScale);
-    this.descriptionStyle.fontSize = Math.max(this.rewardPresentation ? 12 : 11, 14 * textScale);
-    const cost = this.cardContent.cost === void 0 ? "" : String(this.cardContent.cost).trim();
-    const energyCost = getVisibleResourceCost(this.cardContent.energyCost);
-    const manaCost = getVisibleResourceCost(this.cardContent.manaCost);
-    this.costLabel.text = cost;
-    this.energyCostLabel.text = energyCost === void 0 ? "" : this.rewardPresentation ? String(energyCost) : `\u26A1 ${energyCost}`;
-    this.manaCostLabel.text = manaCost === void 0 ? "" : this.rewardPresentation ? String(manaCost) : `\u2726 ${manaCost}`;
-    const hasLegacyCost = cost.length > 0;
-    const hasEnergyCost = energyCost !== void 0;
-    const hasManaCost = manaCost !== void 0;
-    const badgeWidth = hasLegacyCost ? Math.min(this.cardWidth - 14, Math.max(badgeHeight, this.costLabel.width + 14)) : 0;
-    const energyBadgeWidth = hasEnergyCost ? Math.max(badgeHeight, this.energyCostLabel.width + 14) : 0;
-    const manaBadgeWidth = hasManaCost ? Math.max(badgeHeight, this.manaCostLabel.width + 14) : 0;
-    const headerHeight = this.rewardPresentation ? Math.max(badgeHeight + 42, this.cardHeight * 0.25) : Math.max(82, this.cardHeight * 0.34);
-    this.costLabel.visible = hasLegacyCost;
-    this.energyCostLabel.visible = hasEnergyCost;
-    this.manaCostLabel.visible = hasManaCost;
-    this.costLabel.position.set(uiTokens.frame.borderWidth + 5 + badgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
-    this.energyCostLabel.position.set(uiTokens.frame.borderWidth + 5 + energyBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
-    this.manaCostLabel.position.set(this.rewardPresentation ? this.cardWidth - uiTokens.frame.borderWidth - 5 - manaBadgeWidth / 2 : uiTokens.frame.borderWidth + 9 + energyBadgeWidth + manaBadgeWidth / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
-    this.nameLabel.text = this.cardContent.name;
-    this.nameLabel.position.set(this.cardWidth / 2, uiTokens.frame.borderWidth + badgeHeight + 11);
-    this.typeLabel.text = this.cardContent.type;
-    this.typeLabel.position.set(this.cardWidth / 2, rulesY + 8 * textScale);
-    this.descriptionLabel.text = plainCardDescription(this.cardContent.description);
-    this.descriptionLabel.position.set(this.cardWidth / 2, rulesY + 26 * textScale);
-    this.nameStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
-    this.typeStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
-    this.descriptionStyle.wordWrapWidth = Math.max(0, this.cardWidth - textPadding * 2);
-    if (this.rewardPresentation) {
-      fitTextToBox(this.nameLabel, this.nameStyle.wordWrapWidth, headerHeight - badgeHeight - 14, this.nameStyle.fontSize, 14);
-      fitTextToBox(
-        this.descriptionLabel,
-        this.descriptionStyle.wordWrapWidth,
-        this.cardHeight - this.descriptionLabel.y - 8,
-        this.descriptionStyle.fontSize,
-        12
-      );
-    }
-    this.costStyle.fill = this.rewardPresentation ? uiTokens.color.text : palette.accent;
-    return { badgeWidth, badgeHeight, hasLegacyCost, hasEnergyCost, hasManaCost, energyBadgeWidth, manaBadgeWidth, height: headerHeight };
-  }
-  /** Places readable names/effects below the illustration and resource costs in opposite corners. */
-  updateHandLabels() {
-    const scale = this.cardWidth / defaultCardWidth;
-    const badgeHeight = 38 * scale;
-    const rulesY = this.cardHeight * 0.58;
-    const energy = getVisibleResourceCost(this.cardContent.energyCost);
-    const mana = getVisibleResourceCost(this.cardContent.manaCost);
-    this.costStyle.fontSize = 30 * scale;
-    this.costStyle.fill = uiTokens.color.text;
-    this.costLabel.visible = false;
-    this.energyCostLabel.visible = energy !== void 0;
-    this.manaCostLabel.visible = mana !== void 0;
-    this.energyCostLabel.text = energy === void 0 ? "" : String(energy);
-    this.manaCostLabel.text = mana === void 0 ? "" : String(mana);
-    this.energyCostLabel.position.set(uiTokens.frame.borderWidth + 5 + badgeHeight / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
-    this.manaCostLabel.position.set(this.cardWidth - uiTokens.frame.borderWidth - 5 - badgeHeight / 2, uiTokens.frame.borderWidth + 5 + badgeHeight / 2);
-    this.nameLabel.text = this.cardContent.name.toUpperCase();
-    this.nameStyle.wordWrap = true;
-    this.nameLabel.position.set(this.cardWidth / 2, rulesY + 5);
-    fitTextToBox(this.nameLabel, this.cardWidth - 16, 40 * scale, 24 * scale, 16 * scale);
-    this.typeLabel.visible = false;
-    this.descriptionLabel.text = plainCardDescription(this.cardContent.description);
-    const descriptionY = rulesY + 8 + Math.min(40 * scale, this.nameLabel.height || 24 * scale);
-    this.descriptionLabel.position.set(this.cardWidth / 2, descriptionY);
-    fitTextToBox(this.descriptionLabel, this.cardWidth - 16, this.cardHeight - descriptionY - 8, 19 * scale, 14 * scale);
-    return {
-      badgeWidth: 0,
-      badgeHeight,
-      hasLegacyCost: false,
-      hasEnergyCost: energy !== void 0,
-      hasManaCost: mana !== void 0,
-      energyBadgeWidth: energy === void 0 ? 0 : badgeHeight,
-      manaBadgeWidth: mana === void 0 ? 0 : badgeHeight,
-      height: 0
-    };
-  }
-  /** Applies mutable interaction state while caching the state graphics between semantic changes. */
-  applyStatePresentation(palette) {
-    const statePresentation = getStatePresentation(this.motionState, this.playability, this.componentState.interaction);
-    this.alpha = statePresentation.alpha;
-    const presentationKey = [
-      this.cardWidth,
-      this.cardHeight,
-      statePresentation.overlayAlpha,
-      statePresentation.overlayColor,
-      statePresentation.outlineColor ?? "",
-      this.playability,
-      this.componentState.interaction.selected === true,
-      this.cardContent.conditionalEffectActive === true,
-      palette.accent
-    ].join(":");
-    if (this.statePresentationKey === presentationKey) {
-      return;
-    }
-    this.statePresentationKey = presentationKey;
-    this.stateOverlay.clear();
-    this.playabilityOutline.clear();
-    this.stateOutline.clear();
-    const selected = this.componentState.interaction.selected === true;
-    const bonus = this.cardContent.conditionalEffectActive === true;
-    this.stateBadge.text = bonus ? "BONUS ACTIVE" : "";
-    this.stateBadge.visible = bonus;
-    this.stateBadge.anchor.set(0.5);
-    this.stateBadge.position.set(this.cardWidth / 2, this.cardHeight * 0.43);
-    if (bonus) {
-      this.stateOutline.roundRect(this.cardWidth / 2 - 52, this.cardHeight * 0.43 - 11, 104, 22, 5).fill({ color: 16766826 });
-    }
-    if (selected) {
-      this.stateOverlay.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiTokens.color.selected, alpha: 0.18 });
-    }
-    if (statePresentation.overlayAlpha > 0) {
-      this.stateOverlay.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).fill({ color: statePresentation.overlayColor, alpha: statePresentation.overlayAlpha });
-    }
-    if (this.playability === "playable") {
-      this.playabilityOutline.roundRect(0, 0, this.cardWidth, this.cardHeight, uiTokens.frame.panelCornerRadius).stroke({ color: this.cardContent.conditionalEffectActive ? 16766826 : palette.accent, width: this.cardContent.conditionalEffectActive ? 7 : uiTokens.frame.borderWidth });
-    }
-    if (statePresentation.outlineColor !== void 0) {
-      this.stateOutline.roundRect(uiTokens.frame.selectedInset, uiTokens.frame.selectedInset, this.cardWidth - uiTokens.frame.selectedInset * 2, this.cardHeight - uiTokens.frame.selectedInset * 2, uiTokens.frame.selectedCornerRadius).stroke({ color: statePresentation.outlineColor, width: selected ? 6 : uiTokens.frame.borderWidth + 1 });
-    }
-  }
-};
-function isUsableCardTexture(texture) {
-  if (!texture || texture === Texture.EMPTY) {
-    return false;
-  }
-  const width = texture.width;
-  const height = texture.height;
-  return Number.isFinite(width) && Number.isFinite(height) && width > 1 && height > 1;
-}
-function toCardViewContent(options) {
-  return {
-    ...options.conditionalEffectActive === void 0 ? {} : { conditionalEffectActive: options.conditionalEffectActive },
-    ...options.cost === void 0 ? {} : { cost: options.cost },
-    ...options.energyCost === void 0 ? {} : { energyCost: options.energyCost },
-    ...options.manaCost === void 0 ? {} : { manaCost: options.manaCost },
-    ...options.unavailableReason === void 0 ? {} : { unavailableReason: options.unavailableReason },
-    name: options.name,
-    description: options.description,
-    damage: options.damage,
-    baseDamage: options.baseDamage,
-    type: options.type,
-    rarity: options.rarity,
-    ...options.artTexture === void 0 ? {} : { artTexture: options.artTexture }
-  };
-}
-function areCardContentsEqual(left, right) {
-  return left.conditionalEffectActive === right.conditionalEffectActive && left.cost === right.cost && left.energyCost === right.energyCost && left.manaCost === right.manaCost && left.unavailableReason === right.unavailableReason && left.name === right.name && left.description === right.description && left.damage === right.damage && left.baseDamage === right.baseDamage && left.type === right.type && left.rarity === right.rarity && left.artTexture === right.artTexture;
-}
-function getVisibleResourceCost(cost) {
-  return cost !== void 0 && Number.isFinite(cost) && cost > 0 ? cost : void 0;
-}
-function areInteractionStatesEqual(left, right) {
-  return left.enabled === right.enabled && left.focused === right.focused && left.selected === right.selected;
-}
-function getArtBounds(width, height) {
-  const x2 = uiTokens.frame.borderWidth;
-  const y2 = uiTokens.frame.borderWidth;
-  const artWidth = Math.max(0, width - uiTokens.frame.borderWidth * 2);
-  const artHeight = Math.max(0, height - uiTokens.frame.borderWidth * 2);
-  return { x: x2, y: y2, width: artWidth, height: artHeight };
-}
-function getPalette(rarity) {
-  switch (rarity) {
-    case "Common":
-      return { accent: 12044248, artFill: 4545394, frame: 9413302 };
-    case "Uncommon":
-      return { accent: 8115878, artFill: 3234638, frame: 5155449 };
-    case "Rare":
-      return { accent: 16765806, artFill: 6836268, frame: 14132535 };
-    case "Special":
-      return { accent: 13674495, artFill: 5060716, frame: 10318801 };
-  }
-}
-function getStatePresentation(motionState, playability, interaction) {
-  const basePresentation = motionState === "resolving" ? { alpha: 1, overlayAlpha: 0, overlayColor: 0 } : !interaction.enabled ? { alpha: uiTokens.interaction.disabledAlpha, overlayAlpha: 0.35, overlayColor: uiTokens.color.canvas } : playability === "unplayable" ? { alpha: 0.65, overlayAlpha: 0.3, overlayColor: uiTokens.color.surfaceRaised } : { alpha: 1, overlayAlpha: 0, overlayColor: 0 };
-  const dropOutlineColor = motionState === "valid-drop" || motionState === "invalid-drop" ? getMotionOutlineColor(motionState) : void 0;
-  const outlineColor = dropOutlineColor ?? (interaction.selected ? uiTokens.color.selected : interaction.focused ? uiTokens.color.focus : getMotionOutlineColor(motionState));
-  return { ...basePresentation, outlineColor };
-}
-function getMotionOutlineColor(state) {
-  switch (state) {
-    case "idle":
-      return void 0;
-    case "hovered":
-      return uiTokens.color.focus;
-    case "dragging":
-      return uiTokens.color.text;
-    case "valid-drop":
-      return uiTokens.color.valid;
-    case "invalid-drop":
-      return uiTokens.color.invalid;
-    case "returning":
-      return uiTokens.color.textMuted;
-    case "resolving":
-      return void 0;
-  }
-}
-function normalizeDimension3(value, fallback) {
-  return Number.isFinite(value) ? Math.max(1, value) : fallback;
-}
 
 // src/input-policy.ts
 var pointerDragSlopPixels = 8;
@@ -77063,6 +77417,7 @@ var EncounterScene = class {
     const cardView = new CardView({
       presentation: "hand",
       ...isCardPresentationState2(entry) ? {
+        inspection: entry.inspection ?? null,
         energyCost: entry.energyCost,
         manaCost: entry.manaCost,
         name: entry.name,
@@ -77106,6 +77461,7 @@ var EncounterScene = class {
     cardView.setContent({
       energyCost: entry.energyCost,
       manaCost: entry.manaCost,
+      inspection: entry.inspection ?? null,
       name: entry.name,
       description: withTargetDamage(entry.description, this.getPreviewDamage(entry)) + (unavailableReason ? `
 ${unavailableReason}` : ""),
@@ -77200,7 +77556,7 @@ ${unavailableReason}` : ""),
     }
     if (drag.state === "tracking") {
       this.handLayer.addChild(drag.tile.container);
-      const matchingTapMayFollow = event.target === void 0 || event.target === drag.tile.container;
+      const matchingTapMayFollow = event.target === void 0 || event.target === drag.tile.container || event.target === drag.tile.cardView;
       if (!drag.selectionWasActive && matchingTapMayFollow) {
         this.ignoredPointerTapEntryId = drag.entry.id;
       }
@@ -77998,7 +78354,7 @@ ${unavailableReason}` : ""),
     const id = this.focusedEntryId ?? this.selectedEntryId ?? this.hoveredEntryId;
     const entry = id ? this.selectableEntries.get(id) : void 0;
     const tile = tileId ? this.handTiles.get(tileId) : void 0;
-    const descriptions = entry && "cardType" in entry ? entry.enchantmentDescriptions : void 0;
+    const descriptions = entry && "cardType" in entry && !entry.inspection ? entry.enchantmentDescriptions : void 0;
     if (!tile || !this.viewport || !descriptions?.length) {
       if (!this.inspectionPinned) this.inspectionTooltip.hide();
       return;
@@ -79156,119 +79512,6 @@ init_lib();
 // src/reward-scene.ts
 init_lib();
 
-// src/relic-view.ts
-init_lib();
-
-// src/collection-row-layout.ts
-function measureCollectionRow(text, textWidth) {
-  const nameHeight = Math.max(text.nameHeight ?? 0, estimateWrappedHeight(text.name, textWidth, 22, 9));
-  const detailHeight = text.detail ? Math.max(text.detailHeight ?? 0, estimateWrappedHeight(text.detail, textWidth, 19, 7)) + 3 : 0;
-  const descriptionHeight = Math.max(text.descriptionHeight ?? 0, estimateWrappedHeight(text.description, textWidth, 19, 7));
-  const detailY = 8 + nameHeight + 4;
-  const descriptionY = detailY + detailHeight;
-  return { detailY, descriptionY, height: Math.max(76, descriptionY + descriptionHeight + 12) };
-}
-function estimateWrappedHeight(value, width, lineHeight, characterWidth) {
-  const columns = Math.max(1, Math.floor(width / characterWidth));
-  return value.split("\n").reduce((lines, line) => lines + Math.max(1, Math.ceil(line.length / columns)), 0) * lineHeight;
-}
-
-// src/relic-view.ts
-var defaultHeight = 92;
-var defaultWidth = 184;
-var RelicView = class extends GamePanel {
-  descriptionTextStyle = new TextStyle({ ...uiTokens.typography.relicDetail, breakWords: true, wordWrap: true });
-  descriptionLabel = new Text({ text: "", style: this.descriptionTextStyle });
-  iconLabel = new Text({ text: "", style: getUiTextStyle("PanelTitle") });
-  nameTextStyle = new TextStyle({ ...uiTokens.typography.panelTitle, breakWords: true, wordWrap: true });
-  nameLabel = new Text({ text: "", style: this.nameTextStyle });
-  artwork = new Sprite(Texture.EMPTY);
-  selection = new Graphics();
-  selected = false;
-  relicContent;
-  /**
-   * Creates a reusable relic presentation surface.
-   */
-  constructor(options) {
-    super({ width: options.width ?? defaultWidth, height: options.height ?? defaultHeight });
-    this.relicContent = toContent(options);
-    this.iconLabel.anchor.set(0.5);
-    this.artwork.anchor.set(0.5);
-    this.content.addChild(this.iconLabel, this.artwork, this.nameLabel, this.descriptionLabel, this.selection);
-    this.redrawContent();
-  }
-  /**
-   * Gets the semantic relic data currently shown by the view.
-   */
-  get value() {
-    return this.relicContent;
-  }
-  /**
-   * Reconciles relic data without recreating the component's display objects.
-   */
-  setValue(content) {
-    this.relicContent = toContent(content);
-    this.redrawContent();
-  }
-  /**
-   * Resizes the surface while retaining its existing labels and semantic data.
-   */
-  resize(width, height) {
-    super.resize(width, height);
-    this.redrawContent();
-  }
-  /** Makes the chosen relic visible before touch or keyboard confirmation. */
-  setSelected(selected) {
-    this.selected = selected;
-    this.redrawContent();
-  }
-  /** Measures the complete effect text so scrollable reward rows keep readable font sizes. */
-  getReadableHeight(width) {
-    this.descriptionLabel.text = this.relicContent.description;
-    this.descriptionTextStyle.fontSize = 16;
-    this.descriptionTextStyle.wordWrapWidth = Math.max(1, width - 24);
-    const row = measureCollectionRow({
-      name: "",
-      detail: "",
-      description: this.relicContent.description,
-      descriptionHeight: this.descriptionLabel.height
-    }, width - 24);
-    return Math.max(120, Math.ceil(64 + row.height - row.descriptionY));
-  }
-  redrawContent() {
-    const size = this.panelSize;
-    const textOffsetX = 64;
-    const textWidth = Math.max(1, size.width - textOffsetX - 12);
-    this.nameTextStyle.wordWrapWidth = textWidth;
-    this.descriptionTextStyle.wordWrapWidth = textWidth;
-    this.iconLabel.text = this.relicContent.icon;
-    this.iconLabel.position.set(32, 32);
-    this.artwork.texture = this.relicContent.artTexture ?? Texture.EMPTY;
-    this.artwork.visible = this.relicContent.artTexture !== void 0;
-    this.iconLabel.visible = !this.artwork.visible;
-    const artSize = Math.max(this.artwork.texture.width || 1, this.artwork.texture.height || 1);
-    this.artwork.scale.set(44 / artSize);
-    this.artwork.position.set(32, 32);
-    this.nameLabel.text = this.relicContent.name;
-    this.nameLabel.position.set(textOffsetX, 12);
-    fitTextToBox(this.nameLabel, textWidth, 42, 18, 14);
-    this.descriptionLabel.text = this.relicContent.description;
-    this.descriptionLabel.position.set(12, 64);
-    fitTextToBox(this.descriptionLabel, Math.max(1, size.width - 24), Math.max(1, size.height - 76), 16, 13);
-    this.selection.clear();
-    if (this.selected) this.selection.roundRect(2, 2, size.width - 4, size.height - 4, 4).stroke({ color: 16766826, width: 3 });
-    this.selection.eventMode = "none";
-  }
-};
-function toContent(content) {
-  return {
-    description: content.description,
-    icon: content.icon,
-    name: content.name,
-    ...content.artTexture === void 0 ? {} : { artTexture: content.artTexture }
-  };
-}
-
 // src/run-scene-protocol.ts
 var runSceneProtocolVersion = 2;
 
@@ -79741,6 +79984,10 @@ var RewardScene = class {
   /** Shows details on mouse hover without selecting or collecting the reward. */
   hoverChoice(choice, view, event) {
     if (!view || event?.pointerType !== "mouse" || this.pendingAction) return;
+    if (choice.kind === "card" && view instanceof RewardOptionView) {
+      this.tooltip.hide();
+      return;
+    }
     this.confirmationRequired = false;
     this.takeButton.visible = false;
     const x2 = view.x + (this.optionScroll.visible && view.parent === this.optionScroll.content ? this.optionScroll.x : 0);
@@ -80026,6 +80273,7 @@ var RewardOptionView = class extends Container {
         cost: "",
         energyCost: choice.cardEnergyCost ?? 0,
         manaCost: choice.cardManaCost ?? 0,
+        inspection: choice.inspection ?? null,
         name: choice.name,
         description: choice.description,
         type: choice.cardType ?? "Card",
@@ -80062,7 +80310,7 @@ var RewardOptionView = class extends Container {
   setChoice(choice) {
     this.choice = choice;
     if (this.card !== void 0) {
-      this.card.setContent({ cost: "", energyCost: choice.cardEnergyCost ?? 0, manaCost: choice.cardManaCost ?? 0, name: choice.name, description: choice.description, type: choice.cardType ?? "Card", rarity: toCardRarity(choice.rarity), ...this.artTexture ? { artTexture: this.artTexture } : {} });
+      this.card.setContent({ inspection: choice.inspection ?? null, cost: "", energyCost: choice.cardEnergyCost ?? 0, manaCost: choice.cardManaCost ?? 0, name: choice.name, description: choice.description, type: choice.cardType ?? "Card", rarity: toCardRarity(choice.rarity), ...this.artTexture ? { artTexture: this.artTexture } : {} });
     }
     if (this.relic !== void 0) {
       this.relic.setValue({ icon: choice.kind === "relic" ? "\u25C6" : "\u2022", name: choice.name, description: choice.description, ...this.artTexture ? { artTexture: this.artTexture } : {} });
@@ -80586,7 +80834,7 @@ async function createEventRenderer(canvas, sink) {
   const choiceScroll = new ScrollContainer({ width: 1, height: 1 });
   const choiceLayer = choiceScroll.content;
   const controlLayer = new Container();
-  const tooltip = new Tooltip({ text: "", width: 272, height: 96, placement: "left" });
+  const referenceTooltip = new InspectionTooltip();
   const nestedOverlay = new ModalOverlay({ sceneWidth: 0, sceneHeight: 0, width: 360, height: 320 });
   const nestedTitle = new Text({ text: "", style: new TextStyle(contextTitleStyle) });
   const nestedDetails = new Text({ text: "", style: new TextStyle(contextBodyStyle) });
@@ -80595,7 +80843,7 @@ async function createEventRenderer(canvas, sink) {
   const nestedRows = /* @__PURE__ */ new Map();
   const nestedControlLayer = new Container();
   nestedOverlay.content.addChild(nestedTitle, nestedDetails, nestedChoiceScroll, nestedControlLayer);
-  root.addChild(background, focal, title, narrative, choiceScroll, contextPanel, contextTitle, contextDetails, controlLayer, feedback, tooltip, nestedOverlay);
+  root.addChild(background, focal, title, narrative, choiceScroll, contextPanel, contextTitle, contextDetails, controlLayer, feedback, referenceTooltip, nestedOverlay);
   application.stage.addChild(root);
   let state;
   let sequence = 0;
@@ -80630,14 +80878,15 @@ async function createEventRenderer(canvas, sink) {
       clearTimeout(tooltipDelay);
       tooltipDelay = void 0;
     }
-    tooltip.hide();
+    referenceTooltip.hide();
   };
-  const scheduleTooltip = (text, anchor, delayMs) => {
+  const scheduleReferenceTooltip = (references, anchor, delayMs) => {
     hideTooltip();
-    if (!text) return;
+    if (!references?.length) return;
     tooltipDelay = setTimeout(() => {
       tooltipDelay = void 0;
-      showTooltip(text, anchor);
+      referenceTooltip.setInspection({ keywords: [], references }, Math.max(1, application.renderer.width - 16));
+      referenceTooltip.show(anchor, { width: application.renderer.width, height: application.renderer.height });
     }, delayMs);
   };
   const resize = () => {
@@ -80872,7 +81121,7 @@ async function createEventRenderer(canvas, sink) {
         (isTouch, pointerId) => {
           if (!isTouch || !choiceScrollInput.suppressesTap(pointerId)) pressOption(option);
         },
-        () => scheduleTooltip(getOptionContextDetails(option), { x: choiceX, y: choiceTop + choice.layoutTop - choiceScroll.scrollOffset, width: choiceWidth, height: choice.layoutHeight }, 0),
+        () => scheduleReferenceTooltip(option.references, { x: choiceX, y: choiceTop + choice.layoutTop - choiceScroll.scrollOffset, width: choiceWidth, height: choice.layoutHeight }, 0),
         hideTooltip,
         option.effects ?? []
       );
@@ -80883,6 +81132,17 @@ async function createEventRenderer(canvas, sink) {
       choiceY += choice.layoutHeight + choiceGap;
     });
     choiceScroll.setContentHeight(Math.max(0, choiceY - choiceGap));
+    const inspected = choices.find((option) => option.id === selectedOptionId);
+    const inspectedIndex = choices.findIndex((option) => option.id === selectedOptionId);
+    const inspectedChoice = choiceLayer.children[inspectedIndex];
+    if (!pending && !nested && inspected && inspectedChoice instanceof EventChoice) {
+      scheduleReferenceTooltip(inspected.references, {
+        x: choiceX,
+        y: choiceTop + inspectedChoice.layoutTop - choiceScroll.scrollOffset,
+        width: choiceWidth,
+        height: inspectedChoice.layoutHeight
+      }, 0);
+    }
   }
   function scrollSelectedChoiceIntoView() {
     const index = state?.options.findIndex((option) => option.id === selectedOptionId) ?? -1;
@@ -81017,17 +81277,6 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
     control.resize(width, 40);
     control.position.set(x2, y2);
     nestedControlLayer.addChild(control);
-  }
-  function showTooltip(text, anchor) {
-    const tooltipWidth = Math.min(272, Math.max(180, application.renderer.width - 24));
-    const estimatedLines = text.split("\n").reduce((count2, line) => count2 + Math.max(1, Math.ceil(line.length / 34)), 0);
-    const tooltipHeight = Math.min(224, Math.max(54, estimatedLines * 19 + 16));
-    tooltip.setText(text);
-    tooltip.resize(tooltipWidth, tooltipHeight);
-    tooltip.show(anchor);
-    const x2 = application.renderer.width > 600 ? Math.max(12, anchor.x - tooltipWidth - 8) : Math.max(12, Math.min(application.renderer.width - tooltipWidth - 12, anchor.x + anchor.width - tooltipWidth));
-    const y2 = Math.max(12, Math.min(application.renderer.height - tooltipHeight - 12, anchor.y + (anchor.height - tooltipHeight) / 2));
-    tooltip.position.set(x2, y2);
   }
   resize();
   return {
@@ -81804,6 +82053,10 @@ async function createShopRenderer(canvas, sink) {
     if (selected && showSelectedTooltip && !pending) showMerchandiseTooltip(selected);
   }
   function showMerchandiseTooltip(entry) {
+    if (entry.isCard) {
+      tooltip.hide();
+      return;
+    }
     const { width, height } = application.renderer;
     const merchandiseLayout = createMerchandiseLayout(width, height, state?.merchandise ?? []);
     const placement = merchandiseLayout.placements.get(entry.id);
@@ -81997,6 +82250,7 @@ var ShopMerchandiseCard = class extends Container {
         presentation: "hand",
         energyCost: merchandise.cardEnergyCost ?? 0,
         manaCost: merchandise.cardManaCost ?? 0,
+        inspection: merchandise.inspection ?? null,
         name: merchandise.name,
         description: merchandise.description,
         type: merchandise.cardType ?? "Card",
@@ -83841,6 +84095,7 @@ function createCollectionCard(entry) {
   if (entry.kind === "item") return new CardView({ presentation: "hand", ...itemCardContent(entry.name, entry.description, entry.detail), enabled: true });
   return new CardView({
     presentation: "hand",
+    inspection: entry.inspection ?? null,
     name: entry.name,
     description: entry.description,
     type: entry.cardType ?? "Card",
@@ -83934,7 +84189,8 @@ async function createCollectionRenderer(canvas, sink) {
   };
   const selectedEntry = () => state?.tabs[state.activeTabIndex]?.entries[selectedIndex];
   const showEnchantmentTooltip = () => {
-    const descriptions = selectedEntry()?.enchantmentDescriptions;
+    const entry = selectedEntry();
+    const descriptions = entry?.inspection ? void 0 : entry?.enchantmentDescriptions;
     const card = entriesLayer.children[selectedIndex];
     if (descriptions?.length && card)
       keywordTooltip.show(descriptions.join("\n"), card.getBounds(), { width: host?.width() ?? application.renderer.width, height: host?.height() ?? application.renderer.height });
@@ -85407,7 +85663,7 @@ async function createCardChoiceRenderer(canvas, sink) {
     cancel.position.set(width - 124, 12);
     const inspected = state?.cards.find((card) => card.id === selectedCardId);
     const button = entries.find((entry) => entry.cardId === selectedCardId);
-    if (inspected?.enchantmentDescriptions?.length && button)
+    if (!inspected?.inspection && inspected?.enchantmentDescriptions?.length && button)
       keywordTooltip.show(inspected.enchantmentDescriptions.join("\n"), button.getBounds(), { width, height });
     else keywordTooltip.hide();
   };
@@ -85570,8 +85826,8 @@ var CardChoiceButton = class extends Container {
     super();
     this.cardId = card.id;
     this.face = createCardChoiceFace(card);
-    this.addChild(this.face);
     this.interactiveChildren = false;
+    this.addChild(this.face);
     this.eventMode = "static";
     this.cursor = "pointer";
     this.on("pointertap", onPress);
@@ -85999,6 +86255,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     preference: "canvas"
   });
   canvas.tabIndex = 0;
+  registerInspectionViewport(application.stage, () => ({ width: application.screen.width, height: application.screen.height }));
   application.renderer.events.features.globalMove = true;
   const assetLoader = new EncounterAssetLoader();
   let encounterAssets;
