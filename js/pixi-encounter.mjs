@@ -70236,7 +70236,7 @@ function isRitualPresentationState(value) {
   return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.image);
 }
 function isCardPresentationState(value) {
-  return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.description) && isString(value.image) && isString(value.cardType) && isString(value.rarity) && isString(value.character) && isCardTargetMode(value.targetMode) && isFiniteNumber(value.energyCost) && isFiniteNumber(value.manaCost) && typeof value.isDraggable === "boolean" && typeof value.isInteractionLocked === "boolean" && typeof value.isQueued === "boolean" && (value.unavailableReason === void 0 || value.unavailableReason === null || isString(value.unavailableReason)) && (value.isConditionalEffectActive === void 0 || typeof value.isConditionalEffectActive === "boolean") && isOptionalNumber(value.baseDamage) && isOptionalNumber(value.damage) && (value.targetDamage === void 0 || value.targetDamage === null || isRecord(value.targetDamage) && Object.values(value.targetDamage).every(isFiniteNumber));
+  return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.description) && isString(value.image) && isString(value.cardType) && isString(value.rarity) && isString(value.character) && isCardTargetMode(value.targetMode) && isFiniteNumber(value.energyCost) && isFiniteNumber(value.manaCost) && typeof value.isDraggable === "boolean" && typeof value.isInteractionLocked === "boolean" && typeof value.isQueued === "boolean" && (value.unavailableReason === void 0 || value.unavailableReason === null || isString(value.unavailableReason)) && (value.isConditionalEffectActive === void 0 || typeof value.isConditionalEffectActive === "boolean") && (value.enchantmentDescriptions === void 0 || value.enchantmentDescriptions === null || isArrayOf(value.enchantmentDescriptions, isString)) && isOptionalNumber(value.baseDamage) && isOptionalNumber(value.damage) && (value.targetDamage === void 0 || value.targetDamage === null || isRecord(value.targetDamage) && Object.values(value.targetDamage).every(isFiniteNumber));
 }
 function isOptionalNumber(value) {
   return value === void 0 || value === null || isFiniteNumber(value);
@@ -74587,6 +74587,10 @@ var keywords = {
   slow: "Slow",
   heavy: "Heavy",
   fatigue: "Fatigue",
+  curing: "Curing",
+  guarding: "Guarding",
+  striking: "Striking",
+  toxic: "Toxic",
   guarded: "Guarded",
   endure: "Endure",
   bloodcast: "Bloodcast",
@@ -76501,6 +76505,7 @@ var EncounterScene = class {
       this.hoveredEntryId = void 0;
     }
     this.prioritizeInspectedHandTile();
+    this.showEnchantmentInspection();
   }
   updateEntityTile(id, entity, layer, position) {
     this.restoreRetiredTile(id);
@@ -77985,6 +77990,22 @@ ${unavailableReason}` : ""),
     }
     this.refreshHandLayoutTransforms();
     this.prioritizeInspectedHandTile();
+    this.showEnchantmentInspection();
+  }
+  /** Shows authoritative enchantment rules beside the card being inspected. */
+  showEnchantmentInspection() {
+    const tileId = this.getFocusedHandTileId() ?? this.getSelectedHandTileId() ?? this.getHoveredHandTileId();
+    const id = this.focusedEntryId ?? this.selectedEntryId ?? this.hoveredEntryId;
+    const entry = id ? this.selectableEntries.get(id) : void 0;
+    const tile = tileId ? this.handTiles.get(tileId) : void 0;
+    const descriptions = entry && "cardType" in entry ? entry.enchantmentDescriptions : void 0;
+    if (!tile || !this.viewport || !descriptions?.length) {
+      if (!this.inspectionPinned) this.inspectionTooltip.hide();
+      return;
+    }
+    const bounds = tile.container.getBounds();
+    this.inspectionPinned = false;
+    this.inspectionTooltip.show(descriptions.join("\n"), bounds, this.viewport);
   }
   /**
    * Reapplies focus-aware hand transforms without disturbing cards owned by drag or animation motion.
@@ -79258,7 +79279,7 @@ function isRewardPresentationSnapshot(value) {
   return isRecord3(value) && value.protocolVersion === rewardRendererProtocolVersion && value.sceneId === rewardSceneId && isFiniteNumber3(value.sequence) && isString3(value.title) && isFiniteNumber3(value.currency) && typeof value.canSkip === "boolean" && isArrayOf2(value.choices, isRewardChoicePresentationState);
 }
 function isRewardChoicePresentationState(value) {
-  return isRecord3(value) && isString3(value.id) && isString3(value.kind) && isString3(value.name) && isString3(value.description) && isString3(value.image) && isString3(value.rarity) && typeof value.isAvailable === "boolean" && isOptionalCost(value.cardEnergyCost) && isOptionalCost(value.cardManaCost) && (value.cardType === void 0 || value.cardType === null || isString3(value.cardType)) && (value.options === void 0 || value.options === null || isArrayOf2(value.options, isRewardChoicePresentationState));
+  return isRecord3(value) && isString3(value.id) && isString3(value.kind) && isString3(value.name) && isString3(value.description) && isString3(value.image) && isString3(value.rarity) && typeof value.isAvailable === "boolean" && isOptionalCost(value.cardEnergyCost) && isOptionalCost(value.cardManaCost) && (value.cardType === void 0 || value.cardType === null || isString3(value.cardType)) && (value.enchantmentDescriptions === void 0 || value.enchantmentDescriptions === null || isArrayOf2(value.enchantmentDescriptions, isString3)) && (value.options === void 0 || value.options === null || isArrayOf2(value.options, isRewardChoicePresentationState));
 }
 function isRecord3(value) {
   return typeof value === "object" && value !== null;
@@ -79725,7 +79746,7 @@ var RewardScene = class {
     const x2 = view.x + (this.optionScroll.visible && view.parent === this.optionScroll.content ? this.optionScroll.x : 0);
     const y2 = view.y + (this.optionScroll.visible && view.parent === this.optionScroll.content ? this.optionScroll.y - this.optionScroll.scrollOffset : 0);
     this.tooltip.show(`${choice.name}
-${choice.description}`, { x: x2, y: y2, width: view.width, height: view.height }, this.viewport);
+${choice.description}${choice.enchantmentDescriptions?.length ? "\n\n" + choice.enchantmentDescriptions.join("\n") : ""}`, { x: x2, y: y2, width: view.width, height: view.height }, this.viewport);
   }
   returnToRewards() {
     if (this.pendingAction || (this.selectedReward?.options?.length ?? 0) === 0) {
@@ -82140,7 +82161,7 @@ function getMerchandiseCardText(merchandise) {
   return merchandise.description;
 }
 function getMerchandiseSummary(merchandise) {
-  return `${merchandise.description} ${merchandise.isSold ? "Sold." : merchandise.isAffordable ? `Costs ${merchandise.price} gold.` : merchandise.disabledReason ?? "Unavailable."}`;
+  return `${merchandise.description}${merchandise.enchantmentDescriptions?.length ? "\n\n" + merchandise.enchantmentDescriptions.join("\n") : ""} ${merchandise.isSold ? "Sold." : merchandise.isAffordable ? `Costs ${merchandise.price} gold.` : merchandise.disabledReason ?? "Unavailable."}`;
 }
 function getAcceptedMessage(name) {
   return name === "purchase" ? "Purchase accepted." : name === "leave" ? "Leaving the shop." : "Merchandise inspected.";
@@ -83897,8 +83918,9 @@ async function createCollectionRenderer(canvas, sink) {
   } });
   const content = new Container();
   const details = new Container();
+  const keywordTooltip = new ChoiceTooltip();
   content.addChild(title, tabLayer, entriesFade, listMask, empty, compactDetail, close, details);
-  root.addChild(background, content);
+  root.addChild(background, content, keywordTooltip);
   entriesLayer.mask = listMask;
   (host?.layer ?? application.stage).addChild(root);
   title.anchor.set(0.5, 0);
@@ -83921,6 +83943,13 @@ async function createCollectionRenderer(canvas, sink) {
     for (const child of layer.removeChildren()) child.destroy({ children: true });
   };
   const selectedEntry = () => state?.tabs[state.activeTabIndex]?.entries[selectedIndex];
+  const showEnchantmentTooltip = () => {
+    const descriptions = selectedEntry()?.enchantmentDescriptions;
+    const card = entriesLayer.children[selectedIndex];
+    if (descriptions?.length && card)
+      keywordTooltip.show(descriptions.join("\n"), card.getBounds(), { width: host?.width() ?? application.renderer.width, height: host?.height() ?? application.renderer.height });
+    else keywordTooltip.hide();
+  };
   const rebuildDetails = () => {
     destroyChildren(details);
     const entry = selectedEntry();
@@ -83959,6 +83988,7 @@ async function createCollectionRenderer(canvas, sink) {
     if (bottom > scrollOffset + viewportHeight) scrollOffset = Math.max(top, bottom - viewportHeight);
     rebuildDetails();
     layout();
+    showEnchantmentTooltip();
   };
   const rebuild = () => {
     generation++;
@@ -84201,6 +84231,7 @@ async function createCollectionRenderer(canvas, sink) {
     return Boolean(entries?.length && entries.every((entry) => entry.kind === "card" || entry.kind === "item"));
   };
   const scroll = (amount) => {
+    keywordTooltip.hide();
     const previousOffset = scrollOffset;
     scrollOffset = Math.max(0, Math.min(Math.max(0, totalRowHeight - viewportHeight), scrollOffset + amount));
     if (previousOffset === scrollOffset || !scrollLayout) return;
@@ -84304,6 +84335,7 @@ async function createCollectionRenderer(canvas, sink) {
     }
     rebuild();
     layout();
+    showEnchantmentTooltip();
     return true;
   }, dispose() {
     if (disposed) return;
@@ -85304,6 +85336,7 @@ async function createCardChoiceRenderer(canvas, sink) {
   const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
   canvas.tabIndex = 0;
   const root = new Container();
+  const keywordTooltip = new ChoiceTooltip();
   const panel = new GamePanel({ width: 1, height: 1, fill: uiColors.panelFill, stroke: uiColors.panelStroke });
   panel.alpha = 0.94;
   const title = new SceneTitle({ title: "Choose a card", width: 1 });
@@ -85320,7 +85353,7 @@ async function createCardChoiceRenderer(canvas, sink) {
   const cancel = new GameButton({ width: 1, height: 1, label: "Cancel", onPress: () => {
     void submit("cancel");
   } });
-  root.addChild(panel, title, cardLayer, cardMask, selection, primaryConfirm, dangerConfirm, cancel);
+  root.addChild(panel, title, cardLayer, cardMask, selection, primaryConfirm, dangerConfirm, cancel, keywordTooltip);
   application.stage.addChild(root);
   let state;
   let selectedCardId;
@@ -85364,11 +85397,11 @@ async function createCardChoiceRenderer(canvas, sink) {
     const { columns, cardWidth, cardHeight, rowHeight: rowHeight2, listTop, viewportHeight, controlsY, detailHeight } = plan;
     scrollOffset = Math.max(0, Math.min(plan.maximumScroll, scrollOffset));
     cardMask.clear().rect(32, listTop, width - 64, viewportHeight).fill(16777215);
-    entries.forEach((button, index) => {
+    entries.forEach((button2, index) => {
       const y2 = listTop + Math.floor(index / columns) * rowHeight2 - scrollOffset;
-      button.resize(cardWidth, cardHeight);
-      button.position.set(plan.left + index % columns * (cardWidth + 12), y2);
-      button.visible = y2 + cardHeight >= listTop && y2 <= listTop + viewportHeight;
+      button2.resize(cardWidth, cardHeight);
+      button2.position.set(plan.left + index % columns * (cardWidth + 12), y2);
+      button2.visible = y2 + cardHeight >= listTop && y2 <= listTop + viewportHeight;
     });
     selection.visible = detailHeight > 0;
     selection.style.wordWrapWidth = Math.max(1, width - 64);
@@ -85382,6 +85415,11 @@ async function createCardChoiceRenderer(canvas, sink) {
     cancel.visible = state?.allowCancel === true;
     cancel.resize(104, 44);
     cancel.position.set(width - 124, 12);
+    const inspected = state?.cards.find((card) => card.id === selectedCardId);
+    const button = entries.find((entry) => entry.cardId === selectedCardId);
+    if (inspected?.enchantmentDescriptions?.length && button)
+      keywordTooltip.show(inspected.enchantmentDescriptions.join("\n"), button.getBounds(), { width, height });
+    else keywordTooltip.hide();
   };
   const scroll = (amount) => {
     scrollOffset += amount;
