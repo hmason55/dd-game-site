@@ -70466,6 +70466,7 @@ var uiTokens = {
     panelShadow: 594197,
     panelInset: 1186592,
     panelOrnament: 13678460,
+    buttonFill: 2307644,
     buttonFocus: 15920868,
     buttonSelected: 13678460,
     progressFill: 9488295,
@@ -70605,7 +70606,7 @@ var GamePanel = class extends Container {
    */
   constructor(options) {
     super();
-    this.fill = options.fill ?? (options.surface === "button" ? 1058092 : uiColors.panelFill);
+    this.fill = options.fill ?? (options.surface === "button" || options.surface === "toolbar" ? uiTokens.color.buttonFill : uiColors.panelFill);
     this.stroke = options.stroke ?? uiColors.panelStroke;
     this.cornerRadius = Math.max(0, options.cornerRadius ?? (options.surface === "button" ? 3 : 4));
     this.surface = options.surface ?? "panel";
@@ -70635,16 +70636,9 @@ var GamePanel = class extends Container {
     this.redraw();
   }
   redraw() {
-    if (this.surface === "toolbar") {
+    if (this.surface === "button" || this.surface === "toolbar") {
       this.shadow.clear();
-      this.background.clear().roundRect(0, 0, this.panelWidth, this.panelHeight, 6).fill(2307644);
-      this.innerFrame.clear();
-      this.ornaments.clear();
-      return;
-    }
-    if (this.surface === "button") {
-      this.shadow.clear();
-      drawButtonSurface(this.background, this.panelWidth, this.panelHeight, this.fill, this.stroke);
+      drawButtonSurface(this.background, this.panelWidth, this.panelHeight, this.fill);
       this.innerFrame.clear();
       this.ornaments.clear();
       return;
@@ -70667,13 +70661,11 @@ var GameButton = class extends GamePanel {
   isEnabled;
   isFocused;
   isSelected;
-  toolbarAppearance;
   /**
    * Creates an interactive button.
    */
   constructor(options) {
     super({ ...options, surface: options.appearance === "toolbar" ? "toolbar" : "button" });
-    this.toolbarAppearance = options.appearance === "toolbar";
     this.onPress = options.onPress;
     this.isEnabled = options.enabled ?? true;
     this.isFocused = this.isEnabled && (options.focused ?? false);
@@ -70820,7 +70812,7 @@ var GameButton = class extends GamePanel {
   updatePresentation() {
     this.eventMode = this.isEnabled ? "static" : "none";
     this.cursor = this.isEnabled ? "pointer" : "default";
-    this.alpha = this.isEnabled ? 1 : this.toolbarAppearance ? 0.5 : uiTokens.interaction.disabledAlpha;
+    this.alpha = this.isEnabled ? 1 : uiTokens.interaction.disabledAlpha;
     this.redrawStateOutline();
   }
   redrawStateOutline() {
@@ -70830,18 +70822,18 @@ var GameButton = class extends GamePanel {
       return;
     }
     if (this.isSelected) {
-      this.stateOutline.roundRect(0, 0, width, height, this.toolbarAppearance ? 6 : 8).fill({ color: uiColors.buttonSelected, alpha: 0.08 }).stroke({ color: uiColors.buttonSelected, width: 1 });
+      drawButtonSelection(this.stateOutline, width, height);
     }
     if (this.isFocused) {
-      if (this.toolbarAppearance) {
-        this.stateOutline.roundRect(0, 0, width, height, 6).fill(3163982);
-      }
-      this.stateOutline.roundRect(1, 1, width - 2, height - 2, this.toolbarAppearance ? 6 : 8).stroke({ color: this.toolbarAppearance ? 16044939 : uiColors.buttonFocus, width: 1.5 });
+      this.stateOutline.roundRect(1, 1, width - 2, height - 2, 6).stroke({ color: 16044939, width: 1.5 });
     }
   }
 };
-function drawButtonSurface(graphics, width, height, fill = 1058092, stroke2 = 5467506) {
-  graphics.clear().roundRect(0, 0, width, height, 8).fill({ color: fill }).stroke({ color: stroke2, width: 1 });
+function drawButtonSurface(graphics, width, height, fill = uiTokens.color.buttonFill) {
+  graphics.clear().roundRect(0, 0, width, height, 6).fill({ color: fill });
+}
+function drawButtonSelection(graphics, width, height, color = uiColors.buttonSelected) {
+  graphics.roundRect(0, 0, width, height, 6).fill({ color, alpha: 0.16 }).rect(10, height - 3, Math.max(0, width - 20), 2).fill(color);
 }
 var SceneTitle = class extends Container {
   titleText;
@@ -79903,14 +79895,14 @@ var RewardScene = class {
     if (this.selectedReward?.options?.every((option) => option.kind === "relic")) return "Choose a relic";
     return this.selectedReward?.options?.every((option) => option.kind === "card") ? "Choose a card" : "Choose a reward";
   }
-  /** Keeps optional instructions clear of the return control. */
+  /** Shows details for individual rewards without repeating instructions over the option grid. */
   layoutSubtitle(panel, short, hasOptions) {
     const showSelectedDetails = this.confirmationRequired && this.selectedReward !== void 0 && !hasOptions;
-    this.subtitle.text = hasOptions || showSelectedDetails ? this.selectedReward?.description ?? "" : "";
-    this.subtitle.visible = !short || showSelectedDetails;
-    fitTextToBox(this.subtitle, panel.width - (this.backButton.visible ? 144 : 32), short ? 18 : 32, 15, 12);
+    this.subtitle.text = showSelectedDetails ? this.selectedReward?.description ?? "" : "";
+    this.subtitle.visible = showSelectedDetails;
+    fitTextToBox(this.subtitle, panel.width - 32, short ? 18 : 32, 15, 12);
     this.subtitle.anchor.set(0.5, 0);
-    this.subtitle.position.set(this.viewport.width / 2 + (this.backButton.visible ? 48 : 0), panel.y + (short ? 38 : 46));
+    this.subtitle.position.set(this.viewport.width / 2, panel.y + (short ? 38 : 46));
   }
   /** Shows confirmation for touch and keyboard selection while keeping mouse actions direct. */
   layoutControls(panel, footerY, mobile, hasOptions) {
@@ -81450,7 +81442,8 @@ var EventChoice = class extends Container {
   resize(width, height) {
     height = Math.max(height, this.layoutEffects(width));
     this.layoutHeight = height;
-    drawButtonSurface(this.frame, width, height, 1058092, this.selected ? uiTokens.color.selected : 5467506);
+    drawButtonSurface(this.frame, width, height);
+    if (this.selected) drawButtonSelection(this.frame, width, height, uiTokens.color.selected);
     fitTextToBox(this.heading, width - 32, height < 54 ? height - 16 : 24, height < 54 ? 15 : 18, 14);
     this.heading.position.set(16, 8);
     this.hint.style.wordWrapWidth = Math.max(1, width - 32);
@@ -81786,7 +81779,8 @@ var RestButton = class extends Container {
   heading = new Text({ text: "", style: new TextStyle(buttonHeadingStyle) });
   description = new Text({ text: "", style: new TextStyle(buttonBodyStyle) });
   resize(width, height) {
-    this.background.clear().roundRect(0, 0, width, height, 3).fill({ color: this.heading.text === "Confirm" ? 10241074 : 1058092 }).stroke({ color: this.selected ? 13678460 : 5467506, width: 1 });
+    drawButtonSurface(this.background, width, height, this.heading.text === "Confirm" ? 10241074 : uiTokens.color.buttonFill);
+    if (this.selected) drawButtonSelection(this.background, width, height);
     this.heading.style.fontSize = width < 110 ? 13 : width < 180 ? 17 : 20;
     this.heading.style.wordWrap = true;
     this.heading.style.wordWrapWidth = width - 28;
@@ -82373,7 +82367,7 @@ var ShopMerchandiseCard = class extends Container {
   resize(width, height) {
     if (this.isControl) {
       const primary = this.heading.text.startsWith("Buy");
-      drawButtonSurface(this.frame, width, height, primary ? 10241074 : 1058092, primary ? 14974298 : 5467506);
+      drawButtonSurface(this.frame, width, height, primary ? 10241074 : uiTokens.color.buttonFill);
       Object.assign(this.heading.style, uiTokens.typography.button, { wordWrap: false });
       fitTextToBox(this.heading, width - 24, height - 12, 16, 12);
       this.heading.anchor.set(0.5);
@@ -83466,7 +83460,7 @@ var MapControl = class extends Container {
     super();
     this.caption.text = label;
     this.addChild(this.frame, this.caption);
-    drawButtonSurface(this.frame, width, 42, enabled && label === "Travel" ? 10241074 : 1058092, enabled && label === "Travel" ? 14974298 : 5467506);
+    drawButtonSurface(this.frame, width, 42, enabled && label === "Travel" ? 10241074 : uiTokens.color.buttonFill);
     this.alpha = enabled ? 1 : 0.5;
     this.caption.style.wordWrap = false;
     fitTextToBox(this.caption, width - 24, 26, 16, 12);
@@ -85062,7 +85056,8 @@ init_lib();
 var SettingsSwitch = class extends Container {
   constructor(label, checked, width, height, focused, onPress) {
     super();
-    const background = new Graphics().roundRect(0, 0, width, height, 8).fill({ color: uiTokens.color.panelInset }).stroke({ color: focused ? uiTokens.color.focus : uiTokens.color.panelStroke, width: 1, alpha: focused ? 1 : 0.4 });
+    const background = new Graphics().roundRect(0, 0, width, height, 6).fill({ color: uiTokens.color.panelInset });
+    if (focused) background.stroke({ color: uiTokens.color.focus, width: 1.5 });
     const text = new Text({ text: label, style: {
       ...uiTokens.typography.body,
       fill: uiTokens.color.text,
@@ -85305,6 +85300,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
   let state;
   let controls = [];
   let selectedIndex = 0;
+  let keyboardFocusVisible = false;
   let pending = false;
   let disposed = false;
   let historyPage = 0;
@@ -85381,7 +85377,8 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const activeSection = action === `history:section:${state?.history?.selectedSectionIndex}` || action === `history:run:${state?.history?.selectedRunId}`;
     const activeTab = action.startsWith("tab:") && state?.settings?.tabIndex === Number(action.slice(4));
     const primaryColors = action === "save" || action.startsWith("outcome:") ? { fill: 3627602, stroke: 9488295 } : {};
-    const button = new GameButton({ ...primaryColors, ...settingsActionColors(action), menuIcon: icon, width: buttonWidth, height: buttonHeight2, label, enabled, selected: activeTab || activeSection || action === `particle:${state?.settings?.particleLevel}`, focused: index === selectedIndex, onPress: () => {
+    const button = new GameButton({ ...primaryColors, ...settingsActionColors(action), menuIcon: icon, width: buttonWidth, height: buttonHeight2, label, enabled, selected: activeTab || activeSection || action === `particle:${state?.settings?.particleLevel}`, focused: keyboardFocusVisible && index === selectedIndex, onPress: () => {
+      keyboardFocusVisible = false;
       selectedIndex = index;
       void submit(action);
     } });
@@ -85403,7 +85400,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const trackWidth = Math.max(40, width - trackX - 112);
     content.addChild(new Graphics().roundRect(24, y2, width - 48, rowHeight2, 8).fill({ color: uiTokens.color.panelInset, alpha: 0.7 }));
     const sliderLabel = addText(slider.label, 36, y2 + 8, 16, labelWidth);
-    if (controls.length === selectedIndex) sliderLabel.style.fill = 16113563;
+    if (keyboardFocusVisible && controls.length === selectedIndex) sliderLabel.style.fill = 16113563;
     const track = new Graphics();
     track.eventMode = "static";
     track.cursor = "pointer";
@@ -85465,8 +85462,9 @@ async function createMenuOverlayRenderer(canvas, sink) {
       checked,
       controlWidth,
       controlHeight,
-      index === selectedIndex,
+      keyboardFocusVisible && index === selectedIndex,
       () => {
+        keyboardFocusVisible = false;
         selectedIndex = index;
         void submit(action);
       }
@@ -85815,6 +85813,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
       return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      keyboardFocusVisible = true;
       selectedIndex = nextEnabledControlIndex(controls, selectedIndex, event.key === "ArrowDown" ? 1 : -1, false);
       layout();
       controls[selectedIndex]?.focus?.();
