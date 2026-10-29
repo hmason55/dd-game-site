@@ -72099,6 +72099,7 @@ function registerInspectionViewport(stage, viewport) {
   viewports.set(stage, viewport);
 }
 var InspectionTooltip = class extends Container {
+  entries = [];
   constructor() {
     super();
     this.eventMode = "none";
@@ -72108,6 +72109,7 @@ var InspectionTooltip = class extends Container {
   /** Rebuilds a finite inspection; asynchronous art loads cannot revive a dismissed face. */
   setInspection(inspection, maximumWidth = Number.POSITIVE_INFINITY) {
     for (const child of this.removeChildren()) child.destroy({ children: true });
+    this.entries = [];
     let x2 = 0;
     let y2 = 0;
     let rowHeight2 = 0;
@@ -72122,6 +72124,7 @@ var InspectionTooltip = class extends Container {
       }
       face.position.set(x2, y2);
       this.addChild(face);
+      this.entries.push({ view: face, x: x2, y: y2, width, height, reference: true });
       x2 += width + 10;
       rowHeight2 = Math.max(rowHeight2, height);
     }
@@ -72144,12 +72147,14 @@ var InspectionTooltip = class extends Container {
       entry.addChild(new Graphics().roundRect(0, 0, 244, height, 6).fill({ color: 530204, alpha: 0.98 }).stroke({ color: 13280860, width: 1 }), text);
       entry.position.set(x2, y2);
       this.addChild(entry);
+      this.entries.push({ view: entry, x: x2, y: y2, width: 244, height, reference: false });
       y2 += height + 6;
     }
   }
   /** Places all entries beside their anchor, fitting the complete group into the viewport. */
   show(anchor, viewport) {
     this.scale.set(1);
+    for (const entry of this.entries) entry.view.position.set(entry.x, entry.y);
     const bounds = this.getLocalBounds();
     if (bounds.width <= 0 || bounds.height <= 0) {
       this.hide();
@@ -72166,11 +72171,47 @@ var InspectionTooltip = class extends Container {
     const x2 = rightFits ? right : leftFits ? left : anchor.x;
     const below = anchor.y + anchor.height + 10;
     const fallbackY = below + height <= viewport.height - 8 ? below : anchor.y - height - 10;
+    if (!rightFits && !leftFits && below + height > viewport.height - 8 && anchor.y - height - 10 < 8 && this.showSplit(anchor, viewport)) return;
     this.position.set(
       Math.max(8, Math.min(viewport.width - width - 8, x2)),
       Math.max(8, Math.min(viewport.height - height - 8, rightFits || leftFits ? anchor.y : fallbackY))
     );
     this.visible = true;
+  }
+  /** Uses both sides of a card on short canvases instead of covering its face. */
+  showSplit(anchor, viewport) {
+    const references = this.entries.filter((entry) => entry.reference);
+    const keywords2 = this.entries.filter((entry) => !entry.reference);
+    if (!references.length || !keywords2.length) return false;
+    const leftSpace = anchor.x - 18;
+    const rightSpace = viewport.width - anchor.x - anchor.width - 18;
+    const referenceWidth = Math.max(...references.map((entry) => entry.width));
+    const keywordWidth = 244;
+    const groupHeight = (group) => group.reduce((sum, entry) => sum + entry.height + 6, -6);
+    const referencesLeft = Math.min(leftSpace / referenceWidth, rightSpace / keywordWidth);
+    const keywordsLeft = Math.min(leftSpace / keywordWidth, rightSpace / referenceWidth);
+    const scale = Math.min(
+      1,
+      Math.max(referencesLeft, keywordsLeft),
+      (viewport.height - 16) / Math.max(groupHeight(references), groupHeight(keywords2))
+    );
+    if (scale < 0.85) return false;
+    const left = referencesLeft >= keywordsLeft ? references : keywords2;
+    const right = referencesLeft >= keywordsLeft ? keywords2 : references;
+    const place = (group, onLeft) => {
+      let y2 = Math.max(8, Math.min(anchor.y, viewport.height - groupHeight(group) * scale - 8));
+      for (const entry of group) {
+        const x2 = onLeft ? anchor.x - 10 - entry.width * scale : anchor.x + anchor.width + 10;
+        entry.view.position.set(x2 / scale, y2 / scale);
+        y2 += (entry.height + 6) * scale;
+      }
+    };
+    this.scale.set(scale);
+    this.position.set(0, 0);
+    place(left, true);
+    place(right, false);
+    this.visible = true;
+    return true;
   }
   /** Dismisses the inspection without releasing shared artwork textures. */
   hide() {
