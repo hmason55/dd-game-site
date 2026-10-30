@@ -74629,29 +74629,38 @@ function createEncounterAccessibilityOverlay(canvas) {
   if (!parent || !ownerDocument) {
     return noOpAccessibilityOverlay;
   }
+  const overlay = ownerDocument.createElement("div");
+  overlay.className = "pixi-encounter-accessibility-overlay";
   const summary = ownerDocument.createElement("div");
-  summary.className = "pixi-encounter-accessibility-overlay";
   summary.setAttribute("aria-live", "polite");
   summary.setAttribute("role", "status");
-  parent.appendChild(summary);
+  overlay.appendChild(summary);
+  const announcement = ownerDocument.createElement("div");
+  announcement.setAttribute("role", "status");
+  announcement.setAttribute("aria-live", "polite");
+  overlay.appendChild(announcement);
+  parent.appendChild(overlay);
   return {
     update(snapshot) {
       summary.textContent = describeEncounter(snapshot);
     },
     announce(message) {
-      summary.textContent = message;
+      announcement.textContent = message;
     },
     dispose() {
-      summary.remove();
+      overlay.remove();
     }
   };
 }
 function describeEncounter(snapshot) {
   const player = describeCombatant(snapshot.player);
   const enemies = snapshot.enemies.map(describeCombatant).join(" ");
-  const entries = snapshot.inventoryMode ? snapshot.items.map((item) => `${item.name}: ${item.uses} uses. ${expandKeywords(item.description)}.`).join(" ") : snapshot.hand.map((card) => `${card.name}: ${expandKeywords(card.description)}${card.unavailableReason ? ` ${card.unavailableReason}` : ""}.`).join(" ");
+  const entries = snapshot.inventoryMode ? snapshot.items.map((item) => `${item.name}: ${item.uses} uses. ${expandKeywords(item.description)}.`).join(" ") : snapshot.hand.map(describeCard).join(" ");
   const entryLabel = snapshot.inventoryMode ? "Items" : "Cards";
-  return `${describeTurnPhase(snapshot.phase)}. ${player} ${enemies} ${entryLabel}: ${entries}`.trim();
+  return `${describeTurnPhase(snapshot.phase)}. Stamina ${snapshot.player.energy}. Mana ${snapshot.player.mana}. ${player} ${enemies} ${entryLabel}: ${entries}`.trim();
+}
+function describeCard(card) {
+  return `${card.name}: costs ${card.energyCost} Stamina and ${card.manaCost} Mana. ${expandKeywords(card.description)}${card.unavailableReason ? ` ${card.unavailableReason}` : ""}.`;
 }
 function describeCombatant(entity) {
   const statuses = describeStatuses(entity.statuses);
@@ -78491,7 +78500,7 @@ ${unavailableReason}` : ""),
     this.focusedEntryId = focusedEntryId;
     this.focusedEntityId = void 0;
     const entry = this.selectableEntries.get(this.focusedEntryId);
-    this.announceInteraction?.(`Focused ${entry?.name ?? "card"}. Press Enter to select it.`);
+    this.announceInteraction?.(`Focused ${entry && "energyCost" in entry ? describeCard(entry) : `${entry?.name ?? "card"}.`} Press Enter to select it.`);
     this.refreshHandInspection(previousFocusedTileId);
     this.refreshSelectionHighlights();
   }
@@ -83792,8 +83801,11 @@ Milestones reached: ${reached}`;
 // src/pixi-character-select.ts
 var characterGroupId = 0;
 async function createCharacterSelectRenderer(canvas, sink, initialState) {
+  const originalHeight = canvas.style.height;
+  const originalOverflow = canvas.parentElement?.style.overflowY;
   const application = new Application();
   await application.init({ antialias: true, autoDensity: true, background: 529183, canvas, preference: "canvas" });
+  if (canvas.parentElement) canvas.parentElement.style.overflowY = "auto";
   const restoreCanvasPresentation = installCanvasPresentationRecovery(application, canvas);
   canvas.tabIndex = 0;
   const root = new Container();
@@ -83972,7 +83984,8 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
   const layout = () => {
     if (disposed) return;
     const width = Math.max(1, canvas.parentElement?.clientWidth || canvas.clientWidth || 640);
-    const height = Math.max(1, canvas.parentElement?.clientHeight || canvas.clientHeight || 560);
+    const height = Math.max(440, canvas.parentElement?.clientHeight || canvas.clientHeight || 560);
+    canvas.style.height = `${height}px`;
     application.renderer.resize(width, height);
     const panelWidth = Math.min(width - 28, 430);
     const panelHeight = Math.min(height - 28, 600);
@@ -83980,7 +83993,7 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
     const y2 = (height - panelHeight) / 2;
     drawMenuBackdrop(background, width, height, "hall");
     panel.clear().roundRect(x2, y2, panelWidth, panelHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill, alpha: 0.9 }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
-    const compact = panelHeight < 420;
+    const compact = panelHeight < 500;
     const headingY = y2 + 12;
     heading.style.fontSize = compact ? 20 : 24;
     const columns = compact ? 2 : 1;
@@ -84010,7 +84023,13 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
     semanticControls?.setAttribute("aria-label", seedLabel.text);
     const controlWidth = (panelWidth - 72) / 3;
     const controlHeight = Math.max(28, Math.min(46, panelHeight * 0.12));
-    const controlY = y2 + panelHeight - controlHeight - Math.max(12, panelHeight * 0.06);
+    const controlY = Math.max(progressY + 24, y2 + panelHeight - controlHeight - Math.max(12, panelHeight * 0.06));
+    const panelBottom = Math.max(y2 + panelHeight, controlY + controlHeight + 12);
+    const contentHeight = Math.max(height, panelBottom + y2);
+    canvas.style.height = `${contentHeight}px`;
+    application.renderer.resize(width, contentHeight);
+    drawMenuBackdrop(background, width, contentHeight, "hall");
+    panel.clear().roundRect(x2, y2, panelWidth, panelBottom - y2, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill, alpha: 0.9 }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
     seedLabel.position.set(width / 2, controlY - 24);
     seedButtons.forEach((button, index) => {
       button.resize(controlWidth, controlHeight);
@@ -84051,6 +84070,8 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
       window.removeEventListener("resize", layout);
       canvas.removeEventListener("keydown", keydown);
       semanticControls?.remove();
+      canvas.style.height = originalHeight;
+      if (canvas.parentElement) canvas.parentElement.style.overflowY = originalOverflow ?? "";
       restoreCanvasPresentation();
       application.destroy({ removeView: false }, { children: true });
     }
