@@ -72136,7 +72136,7 @@ var InspectionTooltip = class extends Container {
       } });
       text.position.set(10, 8);
       const height = Math.max(44, text.height + 16);
-      entry.addChild(new Graphics().roundRect(0, 0, 244, height, 6).fill({ color: 530204, alpha: 0.98 }).stroke({ color: 13280860, width: 1 }), text);
+      entry.addChild(new Graphics().roundRect(0, 0, 244, height, 6).fill({ color: 1256245, alpha: 0.98 }).stroke({ color: 9549501, width: 1.5 }), text);
       entry.position.set(x2, y2);
       this.addChild(entry);
       this.entries.push({ view: entry, x: x2, y: y2, width: 244, height, reference: false });
@@ -72273,7 +72273,7 @@ var CardInspectionBinding = class {
     this.timer = setTimeout(() => {
       this.timer = void 0;
       this.show();
-    }, 1e3);
+    }, 500);
   };
   out = () => {
     this.hovered = false;
@@ -72885,7 +72885,7 @@ function createResourceIcon(kind, color) {
       break;
     case "stamina":
     case "mana":
-      traceResourceShape(icon, kind, 0, 0, 20, 20).fill({ color });
+      traceResourceShape(icon, kind, 0, 0, 20, 20).fill({ color }).stroke({ color: kind === "mana" ? 3232890 : 8414498, width: 1.5 });
       break;
   }
   icon.eventMode = "none";
@@ -73534,7 +73534,7 @@ var ParticleEffectManager = class {
   }
   /** Bakes Canvas text color into its raster so recycled textures cannot reuse stale tinted glyphs. */
   renderText(display, options, ageMs, color) {
-    const pop = this.reducedMotion || options.effectDefinition === "resource-gain" ? 1 : 1 + 0.25 * (1 - clampUnit(ageMs / 500));
+    const pop = this.reducedMotion || options.effectDefinition === "resource-gain" ? 1 : 1 + 0.25 * (1 - clampUnit(Math.max(0, ageMs - 180) / 650));
     display.scale.set(pop);
     if (this.rendererBackend === "canvas") {
       display.style.fill = color;
@@ -76295,7 +76295,7 @@ var ChoiceTooltip = class extends Container {
     this.body.text = text;
     fitTextToBox(this.body, width - 24, maximumHeight - 24, 16, 14);
     const height = Math.min(maximumHeight, Math.max(64, this.body.height + 24));
-    this.frame.clear().roundRect(0, 0, width, height, 6).fill({ color: 530204, alpha: 0.98 }).stroke({ color: 13280860, width: 1 });
+    this.frame.clear().roundRect(0, 0, width, height, 6).fill({ color: 1256245, alpha: 0.98 }).stroke({ color: 9549501, width: 1.5 });
     this.body.position.set(12, 12);
     const above = anchor.y - height - 8;
     const y2 = above >= 12 ? above : anchor.y + anchor.height + 8;
@@ -80386,6 +80386,7 @@ var RewardOptionView = class extends Container {
     this.cursor = enabled ? "pointer" : "default";
     this.alpha = this.choice.isAvailable ? 1 : uiTokens.interaction.disabledAlpha;
     this.card?.setInteractionState({ enabled: this.choice.isAvailable, focused: false, selected: this.selected });
+    if (this.card) this.card.cursor = enabled && this.choice.isAvailable ? "pointer" : "default";
   }
   setSelected(selected) {
     this.selected = selected;
@@ -83469,7 +83470,7 @@ var MapControl = class extends Container {
     super();
     this.caption.text = label;
     this.addChild(this.frame, this.caption);
-    drawButtonSurface(this.frame, width, 42, enabled && label === "Travel" ? 10241074 : uiTokens.color.buttonFill);
+    drawButtonSurface(this.frame, width, 42, enabled && label === "Travel" ? 2520427 : uiTokens.color.buttonFill);
     this.alpha = enabled ? 1 : 0.5;
     this.caption.style.wordWrap = false;
     fitTextToBox(this.caption, width - 24, 26, 16, 12);
@@ -84157,7 +84158,7 @@ var firstNodeY = 88;
 function progressionNodeDetail(node) {
   const requirement = node.prerequisites.length > 0 ? `Requires ${node.prerequisites.join(node.requireAllPrerequisites ? " and " : " or ")}.` : "Start of this path.";
   return `${node.name}: ${node.description}
-${node.isUnlocked ? "Allocated" : `${node.cost} XP \xB7 ${node.status}`} \xB7 ${requirement}`;
+${node.isUnlocked ? "Allocated" : `Requires ${node.cost} XP \xB7 ${node.status}`} \xB7 ${requirement}`;
 }
 var ProgressionGraph = class extends Container {
   scroll;
@@ -84301,7 +84302,7 @@ var ProgressionGraph = class extends Container {
       uiTokens.color.textMuted
     );
     this.addLabel(
-      node.isUnlocked ? "\u2713 Allocated" : `${node.cost} XP \xB7 ${node.status}`,
+      node.isUnlocked ? "\u2713 Allocated" : `Requires ${node.cost} XP \xB7 ${node.status}`,
       x2,
       y2 + 103,
       this.graphWidth < 480 ? 10 : 12,
@@ -84608,6 +84609,15 @@ async function createCollectionRenderer(canvas, sink) {
         if (!suppressedTap) selectEntry(index);
       });
       card.addChild(name, detail, description);
+      if (tab.label === "Stats") {
+        const kinds = { Health: "health", "Max Health": "health", Block: "block", Energy: "stamina", Stamina: "stamina", Mana: "mana", Gold: "currency", Experience: "experience" };
+        const kind = kinds[entry.name];
+        if (kind) {
+          const icon = createResourceIcon(kind, uiTokens.color.selected);
+          icon.label = "stat-resource-icon";
+          card.addChild(icon);
+        }
+      }
       if (artworkPath(entry) && isSafeImagePath(artworkPath(entry))) {
         const image = new Sprite(Texture.EMPTY);
         card.addChild(image);
@@ -84655,20 +84665,21 @@ async function createCollectionRenderer(canvas, sink) {
       descriptionHeight: description?.height ?? 0
     }, textWidth);
     if (stats) {
+      child.children.find((entry) => entry.label === "stat-resource-icon")?.position.set(36, y2 + 8);
       const valueWidth = Math.min(140, tileWidth * 0.3);
-      const labelWidth = Math.max(1, tileWidth - valueWidth - 44);
+      const labelWidth = Math.max(1, tileWidth - valueWidth - 68);
       if (name) {
         name.style.fontSize = 16;
         name.style.lineHeight = 20;
         name.style.wordWrapWidth = labelWidth;
-        name.position.set(40, y2 + 8);
+        name.position.set(64, y2 + 8);
       }
       if (detail) {
         detail.style.fontSize = 12;
         detail.style.lineHeight = 16;
         detail.style.fill = uiTokens.color.textMuted;
         detail.style.wordWrapWidth = labelWidth;
-        detail.position.set(40, y2 + 10 + (name?.height ?? 20));
+        detail.position.set(64, y2 + 10 + (name?.height ?? 20));
       }
       if (description) {
         description.style.wordWrapWidth = valueWidth;
@@ -85045,8 +85056,6 @@ function toCardRarity3(value) {
 function compactTabLabel(label) {
   if (label === "Equipment") return "Gear";
   if (label === "Training") return "Train";
-  if (label === "Discard") return "Used";
-  if (label === "Exhaust") return "Gone";
   return label;
 }
 function isSafeImagePath(path2) {
