@@ -70220,6 +70220,21 @@ var sparkle = (g2) => {
   g2.moveTo(8, 1).lineTo(11, 6).lineTo(15, 8).lineTo(11, 10).lineTo(8, 15).lineTo(5, 10).lineTo(1, 8).lineTo(5, 6).closePath().stroke(stroke);
 };
 var drawings = {
+  audio: (g2) => {
+    g2.moveTo(1, 6).lineTo(4, 6).lineTo(8, 2).lineTo(8, 14).lineTo(4, 10).lineTo(1, 10).closePath().stroke(stroke).arc(8, 8, 4, -Math.PI / 3, Math.PI / 3).stroke(stroke).arc(8, 8, 7, -Math.PI / 3, Math.PI / 3).stroke(stroke);
+  },
+  music: (g2) => {
+    g2.moveTo(6, 12).lineTo(6, 3).lineTo(14, 1).lineTo(14, 10).moveTo(6, 6).lineTo(14, 4).stroke(stroke).ellipse(3, 12, 3, 2).stroke(stroke).ellipse(11, 10, 3, 2).stroke(stroke);
+  },
+  speed: (g2) => {
+    g2.moveTo(1, 3).lineTo(7, 8).lineTo(1, 13).closePath().stroke(stroke).moveTo(8, 3).lineTo(14, 8).lineTo(8, 13).closePath().stroke(stroke);
+  },
+  save: (g2) => {
+    g2.moveTo(2, 1).lineTo(12, 1).lineTo(15, 4).lineTo(15, 15).lineTo(1, 15).lineTo(1, 1).closePath().stroke(stroke).rect(4, 1, 6, 5).stroke(stroke).rect(4, 10, 8, 5).stroke(stroke);
+  },
+  trash: (g2) => {
+    g2.moveTo(1, 4).lineTo(15, 4).moveTo(5, 4).lineTo(5, 1).lineTo(11, 1).lineTo(11, 4).moveTo(3, 4).lineTo(4, 15).lineTo(12, 15).lineTo(13, 4).moveTo(6, 7).lineTo(6, 12).moveTo(10, 7).lineTo(10, 12).stroke(stroke);
+  },
   history: clock,
   home,
   rooms: home,
@@ -70481,7 +70496,7 @@ var uiTokens = {
     body: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 14 },
     caption: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 12 },
     intent: { fill: 15920868, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 13, fontWeight: "700" },
-    cardTitle: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "600" },
+    cardTitle: { fill: 16113563, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "600" },
     cardEffect: { fill: 12897224, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 14 },
     enemyName: { fill: 15920868, fontFamily: "Alegreya, Georgia, serif", fontSize: 18, fontWeight: "700" },
     numericResource: { fill: 15920868, fontFamily: "Atkinson Hyperlegible Next, Arial, sans-serif", fontSize: 16, fontWeight: "700", padding: 2 },
@@ -85429,7 +85444,10 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const trackX = labelWidth + 32;
     const trackWidth = Math.max(40, width - trackX - 112);
     content.addChild(new Graphics().roundRect(24, y2, width - 48, rowHeight2, 8).fill({ color: uiTokens.color.panelInset, alpha: 0.7 }));
-    const sliderLabel = addText(slider.label, 36, y2 + 8, 16, labelWidth);
+    const icon = createMenuIcon(slider.key === "speed" ? "speed" : slider.key === "music" ? "music" : slider.key === "ambient" ? "rest" : "audio");
+    icon.position.set(32, y2 + 14);
+    content.addChild(icon);
+    const sliderLabel = addText(slider.label, 56, y2 + 8, 16, labelWidth - 20);
     if (keyboardFocusVisible && controls.length === selectedIndex) sliderLabel.style.fill = 16113563;
     const track = new Graphics();
     track.eventMode = "static";
@@ -85518,9 +85536,9 @@ async function createMenuOverlayRenderer(canvas, sink) {
     settingsBottom = footerY - 16;
     styleDialogTitle(addText("Settings", 24, 12), width);
     const tabWidth = (width - 64) / 3;
-    addButton("Audio", "tab:0", 24, 60, tabWidth, 38);
-    addButton("Gameplay", "tab:1", 32 + tabWidth, 60, tabWidth, 38);
-    addButton(width < 520 ? "Damage" : "Damage text", "tab:2", 40 + tabWidth * 2, 60, tabWidth, 38);
+    addButton("Audio", "tab:0", 24, 60, tabWidth, 38, true, "audio");
+    addButton("Gameplay", "tab:1", 32 + tabWidth, 60, tabWidth, 38, true, "settings");
+    addButton(width < 520 ? "Damage" : "Damage text", "tab:2", 40 + tabWidth * 2, 60, tabWidth, 38, true, "training");
     const section = settings.tabIndex === 0 ? "VOLUME MIXER" : settings.tabIndex === 2 ? "FLOATING DAMAGE TEXT" : debugSettingsOpen ? "DEBUG PROGRESSION" : "PACE & EFFECTS";
     addText(section, 24, top - 25, 12, width - 48).style.fill = uiTokens.color.panelOrnament;
     const bodyStart = content.children.length;
@@ -85611,7 +85629,9 @@ async function createMenuOverlayRenderer(canvas, sink) {
       24,
       feedbackY + rowHeight2 * (narrow ? 2 : 1),
       Math.min(240, width - 48),
-      controlHeight
+      controlHeight,
+      true,
+      "debug"
     );
   };
   const layoutSettingsFooter = (footerY, short) => {
@@ -85619,7 +85639,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const buttonWidth = twoRows ? (width - 56) / 2 : (width - 72) / 4;
     content.addChild(new Graphics().moveTo(24, footerY - 12).lineTo(width - 24, footerY - 12).stroke({ color: uiTokens.color.panelStroke, alpha: 0.45, width: 1 }));
     const footer = [["Defaults", "defaults"], ["Clear data", "clear"], ["Cancel", "cancel"], ["Save", "save"]];
-    footer.forEach(([label, action], index) => addButton(label, action, 24 + index % (twoRows ? 2 : 4) * (buttonWidth + 8), footerY + (twoRows ? Math.floor(index / 2) * 48 : 0), buttonWidth, 40));
+    footer.forEach(([label, action], index) => addButton(label, action, 24 + index % (twoRows ? 2 : 4) * (buttonWidth + 8), footerY + (twoRows ? Math.floor(index / 2) * 48 : 0), buttonWidth, 40, true, { defaults: "restart", clear: "trash", cancel: "close", save: "save" }[action]));
   };
   const layoutDebugSettings = (settings, top, rowHeight2) => {
     addText(`Character: ${settings.metaExperience} points \xB7 ${settings.unlockedMetaRewards} milestones`, 24, top, 13, width - 48);
