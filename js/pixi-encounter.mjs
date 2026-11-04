@@ -71296,7 +71296,14 @@ var keywords = {
   full: "Full",
   perfect: "Perfect"
 };
-function cardDescriptionRuns(description) {
+function cardDescriptionRuns(description, clauses) {
+  if (clauses?.length) return clauses.flatMap((clause) => cardDescriptionRuns(clause.text).map((run) => ({
+    ...run,
+    damage: run.damage && clause.primaryDamage === true,
+    conditional: clause.isConditional,
+    active: clause.active === true,
+    clauseId: clause.id
+  })));
   const normalized = description.replace(/\{newline\}|<br\s*\/?>/gi, "\n").replace(/\{([a-z0-9]+)\}/gi, (_token, key) => keywords[key.toLowerCase()] ?? key);
   const fragments = normalized.split(/(\*\*|<\/?(?:b|strong)>)/gi);
   const runs = [];
@@ -71309,7 +71316,7 @@ function cardDescriptionRuns(description) {
     for (const match of fragment8.matchAll(/\n|[^\S\n]+|[^\s]+/g)) {
       const text = match[0];
       const word = text.replace(/^[^a-z]+|[^a-z]+$/gi, "").toLowerCase();
-      runs.push({ text, bold: emphasized || word in keywords, damage: false });
+      runs.push({ text, bold: emphasized || word in keywords, keyword: word in keywords, damage: false });
     }
   }
   let primaryDamageFound = false;
@@ -71335,17 +71342,17 @@ init_lib();
 var CardRulesView = class extends Container {
   labels = [];
   /** Reuses text objects while fitting and centering styled rules inside the card's caption area. */
-  update(description, style, width, damage, baseDamage, height = Infinity) {
+  update(description, style, width, damage, baseDamage, height = Infinity, clauses) {
     const fontSize = Number(style.fontSize) || 14;
     const maxLines = Math.max(1, Math.floor(height / (fontSize * 1.22)));
-    const layout = this.layoutRuns(cardDescriptionRuns(description), style, width, fontSize, damage, baseDamage);
+    const layout = this.layoutRuns(cardDescriptionRuns(description, clauses), style, width, fontSize, damage, baseDamage);
     if (layout.lines.length > maxLines && fontSize > 12) {
       this.update(description, new TextStyle({
         fontFamily: style.fontFamily,
         fontSize: fontSize - 1,
         stroke: style.stroke,
         fill: style.fill
-      }), width, damage, baseDamage, height);
+      }), width, damage, baseDamage, height, clauses);
       return;
     }
     this.hideLines(layout.lines.slice(maxLines));
@@ -71398,8 +71405,9 @@ var CardRulesView = class extends Container {
       fontSize,
       stroke: style.stroke,
       wordWrap: false,
-      fontWeight: run.bold ? "700" : "400",
-      fill: run.damage ? damageTextColor(damage, baseDamage, uiTokens.color.text) : style.fill
+      fontWeight: run.bold || run.active ? "700" : "400",
+      dropShadow: run.active ? { color: 15978363, blur: 3, alpha: 0.6, distance: 0 } : false,
+      fill: run.damage ? damageTextColor(damage, baseDamage, uiTokens.color.text) : run.active ? 16770208 : run.conditional ? 14202093 : run.keyword ? 11460568 : style.fill
     });
     label.visible = true;
     return label;
@@ -71733,7 +71741,8 @@ var CardView = class extends Container {
       this.cardWidth - textPadding * 2,
       this.cardContent.damage,
       this.cardContent.baseDamage,
-      this.cardHeight - this.descriptionLabel.y - 6
+      this.cardHeight - this.descriptionLabel.y - 6,
+      this.cardContent.ruleClauses
     );
     this.statePresentationKey = "";
     this.applyStatePresentation(palette);
@@ -71925,6 +71934,7 @@ function toCardViewContent(options) {
     inspection: options.inspection ?? null,
     name: options.name,
     description: options.description,
+    ruleClauses: options.ruleClauses,
     damage: options.damage,
     baseDamage: options.baseDamage,
     type: options.type,
@@ -71933,7 +71943,7 @@ function toCardViewContent(options) {
   };
 }
 function areCardContentsEqual(left, right) {
-  return left.inspection === right.inspection && left.conditionalEffectActive === right.conditionalEffectActive && left.cost === right.cost && left.energyCost === right.energyCost && left.manaCost === right.manaCost && left.unavailableReason === right.unavailableReason && left.name === right.name && left.description === right.description && left.damage === right.damage && left.baseDamage === right.baseDamage && left.type === right.type && left.rarity === right.rarity && left.artTexture === right.artTexture;
+  return left.ruleClauses === right.ruleClauses && left.inspection === right.inspection && left.conditionalEffectActive === right.conditionalEffectActive && left.cost === right.cost && left.energyCost === right.energyCost && left.manaCost === right.manaCost && left.unavailableReason === right.unavailableReason && left.name === right.name && left.description === right.description && left.damage === right.damage && left.baseDamage === right.baseDamage && left.type === right.type && left.rarity === right.rarity && left.artTexture === right.artTexture;
 }
 function getVisibleResourceCost(cost) {
   return cost !== void 0 && Number.isFinite(cost) && cost > 0 ? cost : void 0;
@@ -72433,10 +72443,13 @@ function isRitualPresentationState(value) {
   return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.image);
 }
 function isCardPresentationState(value) {
-  return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.description) && isString(value.image) && isString(value.cardType) && isString(value.rarity) && isString(value.character) && isCardTargetMode(value.targetMode) && isFiniteNumber(value.energyCost) && isFiniteNumber(value.manaCost) && typeof value.isDraggable === "boolean" && typeof value.isInteractionLocked === "boolean" && typeof value.isQueued === "boolean" && (value.unavailableReason === void 0 || value.unavailableReason === null || isString(value.unavailableReason)) && (value.isConditionalEffectActive === void 0 || typeof value.isConditionalEffectActive === "boolean") && (value.enchantmentDescriptions === void 0 || value.enchantmentDescriptions === null || isArrayOf(value.enchantmentDescriptions, isString)) && isOptionalNumber(value.baseDamage) && isOptionalNumber(value.damage) && (value.targetDamage === void 0 || value.targetDamage === null || isRecord(value.targetDamage) && Object.values(value.targetDamage).every(isFiniteNumber));
+  return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.description) && isString(value.image) && isString(value.cardType) && isString(value.rarity) && isString(value.character) && isCardTargetMode(value.targetMode) && isFiniteNumber(value.energyCost) && isFiniteNumber(value.manaCost) && typeof value.isDraggable === "boolean" && typeof value.isInteractionLocked === "boolean" && typeof value.isQueued === "boolean" && (value.unavailableReason === void 0 || value.unavailableReason === null || isString(value.unavailableReason)) && (value.isConditionalEffectActive === void 0 || typeof value.isConditionalEffectActive === "boolean") && (value.ruleClauses === void 0 || value.ruleClauses === null || isArrayOf(value.ruleClauses, isRuleClause)) && (value.enchantmentDescriptions === void 0 || value.enchantmentDescriptions === null || isArrayOf(value.enchantmentDescriptions, isString)) && isOptionalNumber(value.baseDamage) && isOptionalNumber(value.damage) && (value.targetDamage === void 0 || value.targetDamage === null || isRecord(value.targetDamage) && Object.values(value.targetDamage).every(isFiniteNumber));
 }
 function isOptionalNumber(value) {
   return value === void 0 || value === null || isFiniteNumber(value);
+}
+function isRuleClause(value) {
+  return isRecord(value) && isString(value.id) && isString(value.text) && typeof value.isConditional === "boolean" && typeof value.requiresTarget === "boolean" && typeof value.primaryDamage === "boolean" && (value.active === null || typeof value.active === "boolean") && (value.targetActive === null || value.targetActive === void 0 || isRecord(value.targetActive) && Object.values(value.targetActive).every((active) => active === null || typeof active === "boolean"));
 }
 function isItemPresentationState(value) {
   return isRecord(value) && isString(value.id) && isString(value.name) && isString(value.description) && isString(value.image) && isFiniteNumber(value.uses) && isCardTargetMode(value.targetMode) && typeof value.isDraggable === "boolean";
@@ -73098,6 +73111,8 @@ function createCircleParticleTexture() {
 // src/particle-glyph.ts
 init_lib();
 var outlines = {
+  cross: [-9, -28, 9, -28, 9, -9, 28, -9, 28, 9, 9, 9, 9, 28, -9, 28, -9, 9, -28, 9, -28, -9, -9, -9],
+  shield: [0, -30, 24, -20, 20, 8, 10, 22, 0, 30, -10, 22, -20, 8, -24, -20],
   streak: [-32, 0, 22, -5, 32, 0, -22, 5],
   shard: [0, -32, 15, 6, 0, 28, -12, 8],
   ember: [0, -32, 10, -8, 20, 8, 9, 28, -10, 24, -18, 6, -7, -10],
@@ -77326,10 +77341,13 @@ var EncounterScene = class {
     detail.style.fontWeight = defenses.style.fontWeight = "600";
     defenses.style.fill = uiTokens.color.text;
     layer.addChild(container);
+    const aimMarker = new Graphics();
+    aimMarker.eventMode = "none";
+    aimMarker.visible = false;
     const statusIcons = new StatusEffectsView((text, pinned) => this.inspectEntity(tile, text, statusIcons.y, pinned), () => this.dismissInspection(), this.reducedMotion);
     statusIcons.label = "combat-statuses";
-    container.addChild(statusIcons, impactHighlight, blockIcon, blockValue);
-    const tile = { container, background, accent, targetHighlight, impactHighlight, artwork, title, description, detail, effects, statusIcons, healthBar, postureBar, defenses, blockIcon, blockValue };
+    container.addChild(statusIcons, impactHighlight, blockIcon, blockValue, aimMarker);
+    const tile = { container, background, accent, targetHighlight, impactHighlight, artwork, title, description, detail, effects, statusIcons, healthBar, postureBar, defenses, blockIcon, blockValue, aimMarker };
     tiles.set(id, tile);
     return tile;
   }
@@ -77634,7 +77652,7 @@ var EncounterScene = class {
         description: formatCardDescription(entry.description),
         type: entry.cardType,
         rarity: toCardViewRarity(entry.rarity),
-        conditionalEffectActive: entry.isConditionalEffectActive === true
+        conditionalEffectActive: !entry.ruleClauses?.length && entry.isConditionalEffectActive === true
       } : itemCardContent(entry.name, entry.description, entry.uses + (entry.uses === 1 ? " use" : " uses")),
       width: handCardVisualSize.width / handCardViewScale,
       height: handCardVisualSize.height / handCardViewScale
@@ -77642,7 +77660,7 @@ var EncounterScene = class {
     cardView.position.set(-handCardVisualSize.width / 2, -handCardVisualSize.height / 2);
     cardView.scale.set(handCardViewScale);
     tile.container.removeAllListeners();
-    tile.container.removeChild(tile.background, tile.accent, tile.targetHighlight, tile.impactHighlight, tile.artwork, tile.title, tile.description, tile.detail, tile.healthBar, tile.postureBar, tile.effects, tile.defenses, tile.statusIcons, tile.blockIcon, tile.blockValue);
+    tile.container.removeChild(tile.background, tile.accent, tile.targetHighlight, tile.impactHighlight, tile.artwork, tile.title, tile.description, tile.detail, tile.healthBar, tile.postureBar, tile.effects, tile.defenses, tile.statusIcons, tile.blockIcon, tile.blockValue, tile.aimMarker);
     tile.impactHighlight.destroy({ children: true });
     tile.statusIcons.destroy({ children: true });
     tile.targetHighlight.destroy({ children: true });
@@ -77675,11 +77693,22 @@ var EncounterScene = class {
       name: entry.name,
       description: withTargetDamage(entry.description, this.getPreviewDamage(entry)) + (unavailableReason ? `
 ${unavailableReason}` : ""),
+      ruleClauses: entry.ruleClauses?.map((clause) => {
+        const targetId = this.aimedEntityId ?? this.focusedEntityId;
+        const target = targetId ? this.entities.get(targetId) : void 0;
+        const legalTarget = target && this.getTargetingEntry()?.id === entry.id && this.isValidTarget(entry.targetMode, target);
+        return {
+          ...clause,
+          text: clause.primaryDamage ? withTargetDamage(clause.text, this.getPreviewDamage(entry)) : clause.text,
+          active: clause.requiresTarget ? legalTarget ? clause.targetActive?.[target.id] ?? null : null : clause.active
+        };
+      }).concat(unavailableReason ? [{ id: "availability", text: `
+${unavailableReason}`, isConditional: false, requiresTarget: false, primaryDamage: false, active: null, targetActive: null }] : []),
       damage: this.getPreviewDamage(entry),
       baseDamage: entry.baseDamage ?? void 0,
       type: entry.cardType,
       rarity: toCardViewRarity(entry.rarity),
-      conditionalEffectActive: entry.isConditionalEffectActive === true,
+      conditionalEffectActive: !entry.ruleClauses?.length && entry.isConditionalEffectActive === true,
       ...tile.cardArtwork === void 0 ? {} : { artTexture: tile.cardArtwork }
     });
     cardView.setPlayability(isQueued || entry.isDraggable ? "playable" : "unplayable");
@@ -77941,7 +77970,12 @@ ${unavailableReason}` : ""),
     const amount = this.reducedMotion ? 1 : 1 - Math.exp(-Math.max(0, deltaMs) / 45);
     this.aimEnd = { x: interpolate(this.aimEnd.x, this.aimDestination.x, amount), y: interpolate(this.aimEnd.y, this.aimDestination.y, amount) };
     if (Math.hypot(this.aimEnd.x - this.aimDestination.x, this.aimEnd.y - this.aimDestination.y) < 0.5) this.aimEnd = this.aimDestination;
-    this.drawDragAimArrow(this.activeDrag, this.aimPointer, this.findDropTarget(this.aimPointer, this.activeDrag.entry));
+    const target = this.findDropTarget(this.aimPointer, this.activeDrag.entry);
+    if (this.aimedEntityId !== target?.id) {
+      this.aimedEntityId = target?.id;
+      this.refreshSelectionHighlights();
+    }
+    this.drawDragAimArrow(this.activeDrag, this.aimPointer, target);
   }
   hideDragAimArrow() {
     this.aimEnd = void 0;
@@ -78371,7 +78405,7 @@ ${unavailableReason}` : ""),
     return start;
   }
   isValidTarget(targetMode, entity) {
-    return targetMode === "player" && entity.isPlayer || targetMode === "enemy" && !entity.isPlayer && entity.isTargetable || targetMode === "playerOrEnemy" && (entity.isPlayer || entity.isTargetable);
+    return targetMode === "player" && entity.isPlayer || targetMode === "enemy" && !entity.isPlayer && entity.isTargetable && entity.health > 0 || targetMode === "playerOrEnemy" && (entity.isPlayer || entity.isTargetable && entity.health > 0);
   }
   refreshSelectionHighlights() {
     for (const [id, tile] of this.handTiles) {
@@ -78418,8 +78452,9 @@ ${unavailableReason}` : ""),
     const targetingEntry = this.getTargetingEntry();
     const isTargeting = targetingEntry !== void 0 && targetingEntry.targetMode !== "none";
     const isValidTarget = this.latestSnapshot?.phase === "WaitingForInput" && !this.inputReleased && entity !== void 0 && targetingEntry !== void 0 && !this.intentPending && this.isValidTarget(targetingEntry.targetMode, entity);
+    const isAimed = isValidTarget && entity?.id === (this.aimedEntityId ?? this.focusedEntityId);
     const artwork = tile.artwork;
-    const presentationKey = `${isTargeting}:${isValidTarget}:${artwork.visible}:${tile.artworkImage}:${artwork.x}:${artwork.y}:${artwork.width}:${artwork.height}`;
+    const presentationKey = `${isAimed}:${isTargeting}:${isValidTarget}:${artwork.visible}:${tile.artworkImage}:${artwork.x}:${artwork.y}:${artwork.width}:${artwork.height}`;
     if (tile.targetPresentationKey === presentationKey) {
       return;
     }
@@ -78428,8 +78463,13 @@ ${unavailableReason}` : ""),
     tile.accent.clear();
     tile.accent.alpha = 0;
     tile.targetHighlight.visible = false;
-    if (isTargeting && isValidTarget) {
-      tile.targetHighlight.show(tile.artwork, 15759462, 2, 0.7);
+    tile.aimMarker.clear();
+    tile.aimMarker.visible = isAimed;
+    if (isTargeting && isValidTarget) tile.targetHighlight.show(tile.artwork, isAimed ? 16770467 : 15759462, isAimed ? 4 : 1, isAimed ? 1 : 0.35);
+    if (isAimed) {
+      const y2 = artwork.y - (artwork.visible ? artwork.height / 2 - 36 : 4);
+      tile.aimMarker.moveTo(-10, y2 - 12).lineTo(0, y2 - 22).lineTo(10, y2 - 12).lineTo(0, y2 - 2).lineTo(-10, y2 - 12).fill({ color: 529183 }).stroke({ color: 16770467, width: 3 });
+      tile.aimMarker.moveTo(-20, y2 - 12).lineTo(-12, y2 - 12).moveTo(12, y2 - 12).lineTo(20, y2 - 12).stroke({ color: 16770467, width: 3 });
     }
   }
   /** Announces actual authoritative ownership transitions without capturing input. */
@@ -80182,11 +80222,11 @@ var RewardScene = class {
   /** Preserves the rows of remaining rewards as individual drops are collected. */
   layoutChoiceRows(area2) {
     const listSlotCount = Math.max(1, this.nextChoiceSlot);
-    const choiceHeight = Math.max(44, Math.min(88, (area2.height - (listSlotCount - 1) * 8) / listSlotCount));
+    const choiceHeight = Math.max(44, Math.min(64, (area2.height - (listSlotCount - 1) * 8) / listSlotCount));
     this.snapshot?.choices.forEach((choice) => {
       const view = this.choiceViews.get(choice.id);
       if (!view) return;
-      view.resize(area2.width, choiceHeight);
+      view.resize(area2.width, choiceHeight, this.viewport.height > 456);
       const slot = this.choiceSlots.get(choice.id) ?? 0;
       view.position.set(area2.x, area2.y + slot * (choiceHeight + 8));
     });
@@ -80312,10 +80352,15 @@ var RewardScene = class {
       this.tooltip.hide();
       return;
     }
+    const hiddenDescription = view instanceof RewardChoiceView && !view.isDescriptionVisible ? rewardRowDescription(choice) : "";
+    const explanation = [hiddenDescription, rewardInspectionText(choice)].filter(Boolean).join("\n\n");
+    if (!explanation) {
+      this.tooltip.hide();
+      return;
+    }
     const x2 = view.x + (this.optionScroll.visible && view.parent === this.optionScroll.content ? this.optionScroll.x : 0);
     const y2 = view.y + (this.optionScroll.visible && view.parent === this.optionScroll.content ? this.optionScroll.y - this.optionScroll.scrollOffset : 0);
-    this.tooltip.show(`${choice.name}
-${choice.description}${choice.enchantmentDescriptions?.length ? "\n\n" + choice.enchantmentDescriptions.join("\n") : ""}`, { x: x2, y: y2, width: view.width, height: view.height }, this.viewport);
+    this.tooltip.show(explanation, { x: x2, y: y2, width: view.width, height: view.height }, this.viewport);
   }
   returnToRewards() {
     if (this.pendingAction || (this.selectedReward?.options?.length ?? 0) === 0) {
@@ -80364,7 +80409,7 @@ ${choice.description}${choice.enchantmentDescriptions?.length ? "\n\n" + choice.
     this.pendingAction = true;
     this.actionAwaitingResponse = true;
     this.submittedAction = action;
-    this.feedback.text = "Resolving\u2026";
+    this.feedback.text = "";
     this.updateInteractivity();
     this.onAccessibleStateChanged();
     let result;
@@ -80376,7 +80421,7 @@ ${choice.description}${choice.enchantmentDescriptions?.length ? "\n\n" + choice.
     this.actionAwaitingResponse = false;
     if (this.displayObject.destroyed) return;
     if (result.accepted) {
-      this.feedback.text = action.name === "skipReward" ? "Rewards skipped." : "Reward collected.";
+      this.feedback.text = "";
       if (action.name === "collectReward" && action.sourceId !== null && !this.collectedChoiceIds.has(action.sourceId)) {
         await this.resolveCollection(action.sourceId);
       }
@@ -80508,7 +80553,12 @@ var RewardChoiceView = class extends Container {
   description = new Text({ text: "", style: new TextStyle(choiceDescriptionStyle) });
   choiceWidth = 1;
   choiceHeight = 1;
+  showDescription = true;
   selected = false;
+  /** Indicates whether the effect text is currently readable in the row rather than needing hover fallback. */
+  get isDescriptionVisible() {
+    return this.description.visible;
+  }
   setChoice(choice) {
     this.choice = choice;
     this.redraw();
@@ -80535,9 +80585,10 @@ var RewardChoiceView = class extends Container {
     this.scale.set(1 + Math.sin(Math.min(1, normalized / 0.35) * Math.PI) * 0.12 - travel * 0.55);
     this.eventMode = "none";
   }
-  resize(width, height) {
+  resize(width, height, showDescription = true) {
     this.choiceWidth = Math.max(1, width);
     this.choiceHeight = Math.max(1, height);
+    this.showDescription = showDescription;
     this.redraw();
   }
   redraw() {
@@ -80545,22 +80596,22 @@ var RewardChoiceView = class extends Container {
     this.frame.clear().roundRect(0, 0, this.choiceWidth, this.choiceHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill }).stroke({ color: this.selected ? uiColors.buttonSelected : accent, width: this.selected ? 4 : uiTokens.frame.borderWidth });
     drawRewardIcon(this.rewardIcon, this.choice.kind, accent, this.choiceHeight);
     this.title.text = this.choice.name;
-    this.type.text = `${this.choice.kind} \xB7 ${this.choice.rarity}`;
-    this.description.text = this.choice.description;
+    this.type.text = "";
+    this.description.text = rewardRowDescription(this.choice);
     const compact = this.choiceHeight < 76;
     const contentX = Math.min(this.choiceWidth - 22, Math.max(72, this.choiceHeight + 18));
     this.title.anchor.set(0, 0);
     this.type.anchor.set(0, 0);
     this.description.anchor.set(0, 0);
-    this.title.position.set(contentX, compact ? 7 : 12);
+    this.title.position.set(contentX, this.description.text ? 8 : Math.max(8, (this.choiceHeight - 24) / 2));
     this.type.position.set(contentX, compact ? 29 : 39);
-    this.description.position.set(contentX, compact ? 0 : 61);
-    this.type.visible = this.choiceHeight >= 48;
-    this.description.visible = !compact;
+    this.description.position.set(contentX, 34);
+    this.type.visible = false;
+    this.description.visible = this.showDescription && !this.selected && this.choiceHeight >= 60 && Boolean(this.description.text);
     this.title.style.wordWrapWidth = Math.max(1, this.choiceWidth - contentX - 16);
     this.description.style.wordWrapWidth = Math.max(1, this.choiceWidth - contentX - 16);
     fitTextToBox(this.title, this.title.style.wordWrapWidth, compact ? 22 : 25, 18, 14);
-    if (!compact) fitTextToBox(this.description, this.description.style.wordWrapWidth, this.choiceHeight - 69, 14, 12);
+    if (!compact) fitTextToBox(this.description, this.description.style.wordWrapWidth, this.choiceHeight - 38, 13, 11);
   }
 };
 function drawRewardIcon(graphics, kind, accent, height) {
@@ -80682,6 +80733,13 @@ var inventoryStyle = { ...uiTokens.typography.body, fontSize: 12, fill: 12109785
 var choiceTitleStyle = { ...uiTokens.typography.panelTitle, align: "center", wordWrap: true, fontSize: 18 };
 var choiceTypeStyle = { ...uiTokens.typography.body, align: "center", fill: 12109785 };
 var choiceDescriptionStyle = { ...uiTokens.typography.body, align: "center", wordWrap: true, fontSize: 13 };
+function rewardRowDescription(choice) {
+  return ["card", "item", "relic"].includes(choice.kind) && choice.description.trim() !== choice.name.trim() ? choice.description : "";
+}
+function rewardInspectionText(choice) {
+  const entries = [...choice.inspection?.keywords ?? [], ...choice.enchantmentDescriptions ?? [], ...(choice.inspection?.references ?? []).map((reference) => `${reference.name}: ${reference.description}`)];
+  return [...new Set(entries)].join("\n\n");
+}
 function normalizeViewport2(viewport) {
   return {
     width: Number.isFinite(viewport.width) ? Math.max(1, viewport.width) : 1,
@@ -81225,8 +81283,8 @@ async function createEventRenderer(canvas, sink) {
     effectName = name;
     effectElapsedMs = 0;
   };
-  const announce = (message) => {
-    feedback.text = message;
+  const announce = (message, visible = true) => {
+    feedback.text = visible ? message : "";
     accessibility.update(message);
   };
   const hideTooltip = () => {
@@ -81314,13 +81372,13 @@ async function createEventRenderer(canvas, sink) {
     if (nestedChoiceOpen) {
       nestedChoiceOpen = false;
       selectedNestedItemIds.clear();
-      announce("Returned to the event choice.");
+      announce("Returned to the event choice.", false);
       canvasFocus.focus();
       layout();
       return;
     }
     selectedOptionId = void 0;
-    announce("Choice cancelled.");
+    announce("Choice cancelled.", false);
     layout();
   };
   const keydown = (event) => {
@@ -81851,8 +81909,8 @@ async function createRestRenderer(canvas, sink) {
     effectName = name;
     effectElapsedMs = 0;
   };
-  const announce = (message) => {
-    feedback.text = message;
+  const announce = (message, visible = true) => {
+    feedback.text = visible ? message : "";
     accessibility.update(message);
   };
   const resize = () => {
@@ -81868,7 +81926,7 @@ async function createRestRenderer(canvas, sink) {
     try {
       const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: runSceneProtocolVersion, sceneId: "rest", name: request.name, sequence, sourceId: null, targetId: null, optionIndex: null, choiceId: request.choiceId });
       if (disposed) return;
-      announce(result.accepted ? `${action.name} accepted.` : "That action is no longer available.");
+      announce(result.accepted ? `${action.name} accepted.` : "That action is no longer available.", !result.accepted);
       playEffect(result.accepted ? getActionEffect(action.id) : "rejected");
       if (!result.accepted) {
         acceptedActionAwaitingReconcile = false;
@@ -81898,7 +81956,7 @@ async function createRestRenderer(canvas, sink) {
   const cancelSelection = () => {
     if (pending) return;
     selectedActionId = void 0;
-    announce("Action cancelled.");
+    announce("Action cancelled.", false);
     layout();
   };
   const keydown = (event) => {
@@ -82120,6 +82178,9 @@ var noOpRestAccessibilityOverlay = {
   }
 };
 
+// src/navigation-style.ts
+var navigationButtonColor = 2707044;
+
 // src/pixi-shop.ts
 init_lib();
 async function createShopRenderer(canvas, sink) {
@@ -82169,8 +82230,8 @@ async function createShopRenderer(canvas, sink) {
   const reducedMotion = prefersReducedMotion3();
   const scrollMotion = new ScrollMotion(!reducedMotion);
   const selectableMerchandise = () => state?.merchandise.filter((merchandise) => !merchandise.isSold) ?? [];
-  const announce = (message) => {
-    feedback.text = message;
+  const announce = (message, visible = true) => {
+    feedback.text = visible ? message : "";
     accessibility.update(message);
   };
   const resize = () => {
@@ -82197,7 +82258,10 @@ async function createShopRenderer(canvas, sink) {
         choiceId: null
       });
       if (disposed) return;
-      announce(result.accepted ? getAcceptedMessage(name) : name === "purchase" ? "That purchase is no longer available." : "That action is no longer available.");
+      if (result.accepted) {
+        feedback.text = "";
+        accessibility.update(getAcceptedMessage(name));
+      } else announce(name === "purchase" ? "That purchase is no longer available." : "That action is no longer available.");
       if (!result.accepted || !awaitReconcile) {
         pending = false;
         acceptedActionAwaitingReconcile = false;
@@ -82230,7 +82294,7 @@ async function createShopRenderer(canvas, sink) {
     if (pending) return;
     selectedMerchandiseId = void 0;
     showSelectedTooltip = false;
-    announce("Merchandise selection cancelled.");
+    announce("Merchandise selection cancelled.", false);
     layout();
   };
   const leave = () => {
@@ -82508,7 +82572,7 @@ ${getMerchandiseSummary(entry)}`, {
     if (showSelectedTooltip && selected) showMerchandiseTooltip(selected);
   }
   function addControl(label, hint, enabled, x2, y2, width, onPress) {
-    const controlState = { id: label, kind: "control", name: label, description: hint, image: "", price: 0, isOnSale: false, isSold: false, isAffordable: enabled, disabledReason: null };
+    const controlState = { id: label, kind: label === "Leave shop" ? "navigation" : "control", name: label, description: hint, image: "", price: 0, isOnSale: false, isSold: false, isAffordable: enabled, disabledReason: null };
     const control = new ShopMerchandiseCard(controlState);
     control.update(controlState, false, enabled, 0, void 0, onPress);
     control.resize(width, 42);
@@ -82550,7 +82614,7 @@ ${getMerchandiseSummary(entry)}`, {
           currencyTransition = { from: previousCurrency, to: candidate.currency };
           currencyEffectElapsedMs = 1;
         }
-        announce(getPurchaseResolutionMessage(resolution, candidate.currency, previousCurrency));
+        announce(getPurchaseResolutionMessage(resolution, candidate.currency, previousCurrency), false);
       } else {
         feedback.text = "";
         accessibility.update(`${candidate.title}. Gold: ${candidate.currency}. ${candidate.merchandise.length} merchandise choices available.`);
@@ -82594,13 +82658,15 @@ var ShopMerchandiseCard = class extends Container {
   priceLabel = new Text({ text: "", style: new TextStyle(cardBodyStyle) });
   hasArtwork;
   isControl;
+  isNavigation;
   selected = false;
   resolutionIntensity = 0;
   resolutionKind;
   constructor(merchandise) {
     super();
     this.isCard = Boolean(merchandise.isCard);
-    this.isControl = merchandise.kind === "control";
+    this.isNavigation = merchandise.kind === "navigation";
+    this.isControl = merchandise.kind === "control" || merchandise.kind === "navigation";
     this.hasArtwork = Boolean(merchandise.image);
     this.itemArt.setImage(merchandise.image);
     if (merchandise.isCard) {
@@ -82632,7 +82698,7 @@ var ShopMerchandiseCard = class extends Container {
   update(merchandise, selected, interactive, resolutionIntensity, resolutionKind, onPress, onHover, onExit) {
     this.selected = selected;
     this.card?.setContent({ ...this.card.content, energyCost: merchandise.cardEnergyCost ?? 0, manaCost: merchandise.cardManaCost ?? 0 });
-    this.priceLabel.text = merchandise.kind === "control" ? "" : merchandise.isSold ? "SOLD" : (merchandise.isOnSale ? "SALE \xB7 " : "") + merchandise.price + " gold";
+    this.priceLabel.text = this.isControl ? "" : merchandise.isSold ? "SOLD" : (merchandise.isOnSale ? "SALE \xB7 " : "") + merchandise.price + " gold";
     this.priceLabel.style.fill = merchandise.isAffordable ? 15259564 : 14972757;
     this.resolutionIntensity = resolutionIntensity;
     this.resolutionKind = resolutionKind;
@@ -82660,7 +82726,7 @@ var ShopMerchandiseCard = class extends Container {
   resize(width, height) {
     if (this.isControl) {
       const primary = this.heading.text.startsWith("Buy");
-      drawButtonSurface(this.frame, width, height, primary ? 10241074 : uiTokens.color.buttonFill);
+      drawButtonSurface(this.frame, width, height, this.isNavigation ? navigationButtonColor : primary ? 10241074 : uiTokens.color.buttonFill);
       Object.assign(this.heading.style, uiTokens.typography.button, { wordWrap: false });
       fitTextToBox(this.heading, width - 24, height - 12, 16, 12);
       this.heading.anchor.set(0.5);
@@ -82874,7 +82940,8 @@ async function createTreasureRenderer(canvas, sink) {
     try {
       const result = await sink.invokeMethodAsync("HandleActionFromRendererAsync", { protocolVersion: runSceneProtocolVersion, sceneId: "treasure", name, sequence, sourceId: null, targetId: null, optionIndex: null, choiceId: null });
       if (disposed) return;
-      feedback.text = result.accepted ? name === "collectTreasure" ? "Opening the cache\u2026" : "Returning to the map\u2026" : "That action is no longer available.";
+      feedback.text = result.accepted ? "" : "That action is no longer available.";
+      if (result.accepted) accessibility.update(name === "collectTreasure" ? "Opening the cache." : "Returning to the map.");
       if (!result.accepted) pending = false;
     } catch {
       if (disposed) return;
@@ -86328,9 +86395,9 @@ function historyCategoryIcon(title) {
 // src/pixi-card-choice.ts
 init_lib();
 function planCardChoiceLayout(width, height, count2) {
-  const detailHeight = height < 420 ? 0 : 32;
-  const controlsY = height - 64;
-  const listTop = height < 420 ? 72 : 96;
+  const detailHeight = 0;
+  const controlsY = height - 76;
+  const listTop = 104;
   const viewportHeight = Math.max(1, controlsY - detailHeight - 14 - listTop);
   const grid = planCollectionCardGrid(width - 64, count2);
   const cardWidth = Math.min(grid.width, viewportHeight * 180 / 252);
@@ -86382,18 +86449,33 @@ async function createCardChoiceRenderer(canvas, sink) {
   let lastScrollPointerY = 0;
   let scrollOffset = 0;
   let disposed = false;
+  let pending = false;
   const scrollMotion = new ScrollMotion(!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
   let gestureStart;
   let suppressedTap = false;
   const submit = async (action) => {
-    await sink.invokeMethodAsync("HandleActionFromRendererAsync", action);
+    if (pending || disposed) return;
+    pending = true;
+    primaryConfirm.setEnabled(false);
+    dangerConfirm.setEnabled(false);
+    cancel.setEnabled(false);
+    try {
+      if (await sink.invokeMethodAsync("HandleActionFromRendererAsync", action)) return;
+    } catch {
+    }
+    if (disposed) return;
+    pending = false;
+    cancel.setEnabled(true);
+    primaryConfirm.setEnabled(selectedCardId !== void 0);
+    dangerConfirm.setEnabled(selectedCardId !== void 0);
   };
   const activeConfirm = () => isDangerAccent(state?.accent) ? dangerConfirm : primaryConfirm;
   const select = (card, index) => {
+    if (pending) return;
     scrollMotion.stop();
     selectedCardId = card.id;
     focusedCardIndex = index;
-    selection.text = `${card.name} \xB7 ${card.detail}`;
+    canvas.setAttribute("aria-label", `${state?.title ?? "Choose a card"}. Selected: ${card.name}. ${state?.buttonText ?? "Confirm"}.`);
     cardLayer.children.forEach((child) => {
       if (child instanceof CardChoiceButton) child.setSelected(child.cardId === card.id);
     });
@@ -86411,6 +86493,11 @@ async function createCardChoiceRenderer(canvas, sink) {
     panel.position.set(12, 12);
     title.text = state?.title ?? "Choose a card";
     styleDialogTitle(title, width);
+    const narrow = width < 600;
+    title.position.set(32, 24);
+    title.style.wordWrap = true;
+    title.style.wordWrapWidth = Math.max(1, width - (narrow ? 64 : 200));
+    title.style.fontSize = narrow ? 20 : 24;
     const entries = cardLayer.children.filter((child) => child instanceof CardChoiceButton);
     const plan = planCardChoiceLayout(width, height, entries.length);
     const { columns, cardWidth, cardHeight, rowHeight: rowHeight2, listTop, viewportHeight, controlsY, detailHeight } = plan;
@@ -86422,18 +86509,18 @@ async function createCardChoiceRenderer(canvas, sink) {
       button2.position.set(plan.left + index % columns * (cardWidth + 12), y2);
       button2.visible = y2 + cardHeight >= listTop && y2 <= listTop + viewportHeight;
     });
-    selection.visible = detailHeight > 0;
+    selection.visible = false;
     selection.style.wordWrapWidth = Math.max(1, width - 64);
     selection.position.set(32, controlsY - detailHeight);
     const confirm = activeConfirm();
     confirm.label = state?.buttonText ?? "Confirm";
     confirm.resize(132, 44);
-    confirm.position.set(width - 152, controlsY);
+    confirm.position.set(width - 164, controlsY);
     primaryConfirm.visible = confirm === primaryConfirm;
     dangerConfirm.visible = confirm === dangerConfirm;
     cancel.visible = state?.allowCancel === true;
     cancel.resize(104, 44);
-    cancel.position.set(width - 124, 12);
+    cancel.position.set(narrow ? 32 : width - 136, narrow ? controlsY : 24);
     const inspected = state?.cards.find((card) => card.id === selectedCardId);
     const button = entries.find((entry) => entry.cardId === selectedCardId);
     if (!inspected?.inspection && inspected?.enchantmentDescriptions?.length && button)
@@ -86557,7 +86644,10 @@ async function createCardChoiceRenderer(canvas, sink) {
     reconcile(candidate) {
       if (disposed || !isCardChoiceState(candidate)) return false;
       scrollMotion.stop();
+      pending = false;
+      cancel.setEnabled(true);
       state = candidate;
+      canvas.setAttribute("aria-label", candidate.title);
       selectedCardId = void 0;
       focusedCardIndex = void 0;
       scrollOffset = 0;
