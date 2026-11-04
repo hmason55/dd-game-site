@@ -72111,8 +72111,35 @@ function toContent(content) {
   };
 }
 
+// src/quest-inspection.ts
+function questInspectionLines(quest) {
+  return [
+    { text: quest.title, heading: true },
+    ...quest.summary ? [{ text: quest.summary, heading: false }] : [],
+    { text: quest.completed ? "Conditions \u2014 completed" : "Conditions", heading: true },
+    ...quest.conditions.map((condition) => ({ text: `${condition.complete ? "\u2713 Complete" : "\u25CB Incomplete"}: ${condition.description} \u2014 ${condition.current}/${condition.required}`, heading: false })),
+    ...quest.rewards.length ? [
+      { text: quest.completed ? "Rewards \u2014 earned" : "Rewards \u2014 on completion", heading: true },
+      ...quest.rewards.map((text) => ({ text, heading: false }))
+    ] : []
+  ];
+}
+function questInspectionText(quest, includeTitle = true) {
+  return questInspectionLines(quest).slice(includeTitle ? 0 : 1).map((line) => line.text).join("\n");
+}
+function isQuestInspection(value) {
+  if (typeof value !== "object" || value === null) return false;
+  const quest = value;
+  return typeof quest.title === "string" && typeof quest.summary === "string" && typeof quest.completed === "boolean" && Array.isArray(quest.rewards) && quest.rewards.every((text) => typeof text === "string") && Array.isArray(quest.conditions) && quest.conditions.every((condition) => {
+    if (typeof condition !== "object" || condition === null) return false;
+    const item = condition;
+    return typeof item.description === "string" && typeof item.complete === "boolean" && typeof item.current === "number" && Number.isFinite(item.current) && typeof item.required === "number" && Number.isFinite(item.required);
+  });
+}
+
 // src/inspection-tooltip.ts
 var viewports = /* @__PURE__ */ new WeakMap();
+var activeInspections = /* @__PURE__ */ new WeakMap();
 function registerInspectionViewport(stage, viewport) {
   viewports.set(stage, viewport);
 }
@@ -72150,6 +72177,28 @@ var InspectionTooltip = class extends Container {
       x2 = 0;
       y2 += rowHeight2 + 10;
     }
+    if (inspection.quest) {
+      const panel = new Container();
+      let top = 10;
+      for (const line of questInspectionLines(inspection.quest)) {
+        const label = new Text({ text: line.text, style: {
+          ...uiTokens.typography.body,
+          fontSize: line.heading ? 16 : 14,
+          fontWeight: line.heading ? "700" : "400",
+          wordWrap: true,
+          wordWrapWidth: 224,
+          breakWords: true
+        } });
+        label.position.set(10, top);
+        panel.addChild(label);
+        top += label.height + (line.heading ? 10 : 6);
+      }
+      panel.addChildAt(new Graphics().roundRect(0, 0, 244, top + 4, 6).fill(1256245).stroke({ color: 9549501, width: 1.5 }), 0);
+      panel.position.set(x2, y2);
+      this.addChild(panel);
+      this.entries.push({ view: panel, x: x2, y: y2, width: 244, height: top + 4, reference: false });
+      y2 += top + 10;
+    }
     for (const keyword of inspection.keywords) {
       const entry = new Container();
       const text = new Text({ text: keyword, style: {
@@ -72171,6 +72220,11 @@ var InspectionTooltip = class extends Container {
   }
   /** Places all entries beside their anchor, fitting the complete group into the viewport. */
   show(anchor, viewport) {
+    let stage = this;
+    while (stage.parent) stage = stage.parent;
+    const previous = activeInspections.get(stage);
+    if (previous && previous !== this && !previous.destroyed) previous.hide();
+    activeInspections.set(stage, this);
     this.scale.set(1);
     for (const entry of this.entries) entry.view.position.set(entry.x, entry.y);
     const bounds = this.getLocalBounds();
@@ -72311,7 +72365,7 @@ var CardInspectionBinding = class {
   show() {
     if (this.card.destroyed || this.card.currentMotionState === "dragging" || this.card.currentMotionState === "resolving") return;
     const inspection = this.card.content.inspection;
-    if (!inspection || !inspection.keywords.length && !inspection.references.length) return;
+    if (!inspection || !inspection.keywords.length && !inspection.references.length && !inspection.quest) return;
     let stage = this.card;
     while (stage.parent) stage = stage.parent;
     if (!viewports.has(stage)) return;
@@ -72422,7 +72476,7 @@ init_lib();
 var encounterRendererProtocolVersion = 4;
 var encounterSceneId = "encounter";
 function isEncounterPresentationSnapshot(value) {
-  if (!isRecord(value) || value.protocolVersion !== encounterRendererProtocolVersion || value.sceneId !== encounterSceneId || !isFiniteNumber(value.sequence) || !isString(value.phase) || typeof value.inventoryMode !== "boolean" || !isEntityPresentationState(value.player) || !isArrayOf(value.enemies, isEntityPresentationState) || !isArrayOf(value.hand, isCardPresentationState) || !isArrayOf(value.items, isItemPresentationState) || !isFiniteNumber(value.currency) || !isFiniteNumber(value.deckCount) || !isFiniteNumber(value.relicCount) || value.pinnedRelics !== void 0 && !isArrayOf(value.pinnedRelics, isRelicPresentationState) || value.sceneTreatmentId !== void 0 && !isString(value.sceneTreatmentId) || value.endTurnQueued !== void 0 && typeof value.endTurnQueued !== "boolean" || value.hasAvailableCardPlay !== void 0 && typeof value.hasAvailableCardPlay !== "boolean" || value.roomName !== void 0 && !isString(value.roomName)) {
+  if (!isRecord(value) || value.protocolVersion !== encounterRendererProtocolVersion || value.sceneId !== encounterSceneId || !isFiniteNumber(value.sequence) || !isString(value.phase) || typeof value.inventoryMode !== "boolean" || !isEntityPresentationState(value.player) || !isArrayOf(value.enemies, isEntityPresentationState) || !isArrayOf(value.hand, isCardPresentationState) || !isArrayOf(value.items, isItemPresentationState) || !isFiniteNumber(value.currency) || !isFiniteNumber(value.deckCount) || !isFiniteNumber(value.relicCount) || value.statusCueLimit !== void 0 && (!isFiniteNumber(value.statusCueLimit) || value.statusCueLimit < 0 || value.statusCueLimit > 4) || value.pinnedRelics !== void 0 && !isArrayOf(value.pinnedRelics, isRelicPresentationState) || value.sceneTreatmentId !== void 0 && !isString(value.sceneTreatmentId) || value.endTurnQueued !== void 0 && typeof value.endTurnQueued !== "boolean" || value.hasAvailableCardPlay !== void 0 && typeof value.hasAvailableCardPlay !== "boolean" || value.roomName !== void 0 && !isString(value.roomName)) {
     return false;
   }
   return true;
@@ -73396,7 +73450,17 @@ var ParticleEffectManager = class {
   separateTextParticle(emitter, particle) {
     if (!(particle.display instanceof Text)) return;
     const labels = [...this.emitters.values()].filter((active) => active.textAnchorKey === emitter.textAnchorKey).flatMap((active) => active.particles).filter((label) => label.display instanceof Text);
-    const spacing = 24;
+    if (particle.display.text.includes(" (") && labels.length > 0) {
+      const halfHeight = particle.display.height / 2;
+      const above = Math.min(...labels.map((label) => label.display.y - label.display.height / 2)) - halfHeight - 5;
+      const below = Math.max(...labels.map((label) => label.display.y + label.display.height / 2)) + halfHeight + 5;
+      const offset = (above >= halfHeight + 8 ? above : below) - particle.display.y;
+      particle.y += offset;
+      particle.display.y += offset;
+      return;
+    }
+    const wrappedCaption = (value) => value.text.includes(" (") && value.text.length > 20 ? value.height + 4 : 24;
+    const spacing = Math.max(24, wrappedCaption(particle.display), ...labels.map((label) => wrappedCaption(label.display)));
     const spawnY = particle.display.position.y;
     const lanes = [0, -spacing, -spacing * 2].map((offset) => ({
       offset,
@@ -73739,7 +73803,7 @@ function createTextStyle(options) {
     fontSize: font.size,
     fontStyle: font.style,
     fontWeight: font.weight,
-    wordWrap: options.resourceIcon !== void 0,
+    wordWrap: true,
     wordWrapWidth: 260,
     breakWords: true
   };
@@ -73826,6 +73890,70 @@ function toPixiBlendMode(value) {
 function prefersReducedMotion() {
   return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
+
+// src/persistent-status-cues.ts
+var cues = {
+  Chill: { glyph: "shard", color: [0.55, 0.82, 1] },
+  Stunned: { glyph: "spark", color: [1, 0.86, 0.4] },
+  Poison: { glyph: "spore", color: [0.48, 0.8, 0.35] },
+  Bleed: { glyph: "droplet", color: [0.9, 0.32, 0.3] },
+  Weak: { glyph: "wisp", color: [0.78, 0.7, 0.87] },
+  Vulnerable: { glyph: "streak", color: [0.95, 0.67, 0.35] }
+};
+var PersistentStatusCues = class {
+  constructor(particles, reducedMotion = false) {
+    this.particles = particles;
+    this.reducedMotion = reducedMotion;
+  }
+  particles;
+  reducedMotion;
+  active = /* @__PURE__ */ new Set();
+  /** Retains existing emitters across refreshes and stack changes, removing cleansed, defeated and missing recipients. */
+  reconcile(enemies, limit = 4) {
+    const expected = /* @__PURE__ */ new Set();
+    if (!this.reducedMotion) for (const enemy of enemies.filter((enemy2) => enemy2.health > 0).slice(0, 12)) {
+      let slot = 0;
+      for (const [position, name] of Object.keys(cues).entries()) {
+        const status = enemy.statuses.find((status2) => status2.name === name);
+        const cue = cues[name];
+        if (!cue || !status || status.stacks <= 0 || slot >= Math.max(0, Math.min(4, limit))) continue;
+        const id = `ongoing-status:${enemy.id}:${status.name}`;
+        expected.add(id);
+        if (!this.active.has(id)) {
+          const [r2, g2, b2] = cue.color;
+          if (this.particles.create({
+            id,
+            anchorId: `enemy:${enemy.id}`,
+            effectDefinition: "ongoing-status",
+            particleGlyph: cue.glyph,
+            offset: { x: (position % 2 === 0 ? -1 : 1) * 22, y: 10 + Math.floor(position / 2) * 16 },
+            maxParticles: 1,
+            particleCount: { min: 1, max: 1 },
+            loop: true,
+            emitRate: 650,
+            lifespan: { min: 450, max: 650 },
+            speed: { min: 0.15, max: 0.4 },
+            size: { min: 2, max: 3 },
+            endAlpha: 0,
+            glowIntensity: 0,
+            particleColor: { min: { r: r2, g: g2, b: b2, a: 0.65 }, max: { r: r2, g: g2, b: b2, a: 0.85 } },
+            qualityFactor: 1
+          })) this.active.add(id);
+        }
+        slot++;
+      }
+    }
+    for (const id of this.active) if (!expected.has(id)) {
+      this.particles.destroy(id);
+      this.active.delete(id);
+    }
+  }
+  /** Releases every emitter owned by the status presentation when the encounter leaves its runtime. */
+  dispose() {
+    for (const id of this.active) this.particles.destroy(id);
+    this.active.clear();
+  }
+};
 
 // src/design-space.ts
 var encounterDesignViewport = Object.freeze({ width: 960, height: 540 });
@@ -74913,11 +75041,9 @@ var HealthBlockMeter = class extends Container {
 };
 
 // src/item-view.ts
-function itemArtwork(name, image) {
+function itemArtwork(_name, image) {
   if (image) return image;
-  if (name === "Throwing Knife") return "/img/Items/ThrowingKnife.svg";
-  if (name === "Healing Herb") return "/img/Items/HealingHerb.svg";
-  return "/img/Items/Supplies.svg";
+  return "/img/Icons/content/supplies.svg";
 }
 function itemCardContent(name, description, uses) {
   return { name, description: description + "\n" + uses, type: "Item", rarity: "Common", energyCost: 0, manaCost: 0 };
@@ -79939,7 +80065,7 @@ var RewardScene = class {
   background = new Graphics();
   title = new Text({ text: "Rewards", style: uiTokens.typography.panelTitle });
   currency = new ResourceCounter({ label: "Gold", value: 0, icon: "\xA4" });
-  inventoryDestination = new Text({ text: "Deck \xB7 Relics \xB7 Items", style: new TextStyle(inventoryStyle) });
+  inventoryDestination = new Text({ text: "Deck \xB7 Equipment \xB7 Items", style: new TextStyle(inventoryStyle) });
   choiceLayer = new Container();
   optionLayer = new Container();
   tooltip = new ChoiceTooltip();
@@ -80196,7 +80322,7 @@ var RewardScene = class {
   /** Labels card choices distinctly from other selectable drops. */
   getRewardTitle(hasOptions) {
     if (!hasOptions) return this.snapshot?.title ?? "Rewards";
-    if (this.selectedReward?.options?.every((option) => option.kind === "relic")) return "Choose a relic";
+    if (this.selectedReward?.options?.every((option) => option.kind === "relic")) return "Choose equipment";
     return this.selectedReward?.options?.every((option) => option.kind === "card") ? "Choose a card" : "Choose a reward";
   }
   /** Shows details for individual rewards without repeating instructions over the option grid. */
@@ -80540,6 +80666,8 @@ var RewardChoiceView = class extends Container {
     super();
     this.choice = choice;
     this.addChild(this.frame, this.rewardIcon, this.title, this.type, this.description);
+    this.artwork.eventMode = "none";
+    this.addChild(this.artwork);
     this.on("pointertap", (event) => onInspect(this.choice, event));
     this.on("pointerover", (event) => onHover(this.choice, event));
     this.on("pointerout", onExit);
@@ -80551,6 +80679,8 @@ var RewardChoiceView = class extends Container {
   title = new Text({ text: "", style: new TextStyle(choiceTitleStyle) });
   type = new Text({ text: "", style: new TextStyle(choiceTypeStyle) });
   description = new Text({ text: "", style: new TextStyle(choiceDescriptionStyle) });
+  artwork = new Sprite(Texture.EMPTY);
+  requestedImage = "";
   choiceWidth = 1;
   choiceHeight = 1;
   showDescription = true;
@@ -80595,6 +80725,21 @@ var RewardChoiceView = class extends Container {
     const accent = getRarityColor(this.choice.rarity);
     this.frame.clear().roundRect(0, 0, this.choiceWidth, this.choiceHeight, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill }).stroke({ color: this.selected ? uiColors.buttonSelected : accent, width: this.selected ? 4 : uiTokens.frame.borderWidth });
     drawRewardIcon(this.rewardIcon, this.choice.kind, accent, this.choiceHeight);
+    this.artwork.visible = this.artwork.texture !== Texture.EMPTY && this.requestedImage === this.choice.image;
+    this.rewardIcon.visible = !this.artwork.visible;
+    if (this.choice.image && ["item", "relic"].includes(this.choice.kind) && this.requestedImage !== this.choice.image) {
+      this.requestedImage = this.choice.image;
+      const requested = this.requestedImage;
+      void loadJourneyTexture(requested).then((texture) => {
+        if (!texture || this.destroyed || this.requestedImage !== requested) return;
+        this.artwork.texture = texture;
+        this.redraw();
+      });
+    }
+    const artSize = Math.max(24, Math.min(48, this.choiceHeight - 12));
+    this.artwork.position.set(14, (this.choiceHeight - artSize) / 2);
+    this.artwork.width = artSize;
+    this.artwork.height = artSize;
     this.title.text = this.choice.name;
     this.type.text = "";
     this.description.text = rewardRowDescription(this.choice);
@@ -80738,6 +80883,7 @@ function rewardRowDescription(choice) {
 }
 function rewardInspectionText(choice) {
   const entries = [...choice.inspection?.keywords ?? [], ...choice.enchantmentDescriptions ?? [], ...(choice.inspection?.references ?? []).map((reference) => `${reference.name}: ${reference.description}`)];
+  if (choice.inspection?.quest) entries.unshift(questInspectionText(choice.inspection.quest));
   return [...new Set(entries)].join("\n\n");
 }
 function normalizeViewport2(viewport) {
@@ -81676,7 +81822,7 @@ ${formatSelectedItems(nested, selectedNestedItemIds.size)}`;
   }
   function getNestedRowDetails(item) {
     const lines = (item.tooltip ?? item.description).split("\n");
-    if (lines[0] === `Card \xB7 ${item.name}` || lines[0] === `Relic \xB7 ${item.name}`) lines.shift();
+    if (lines[0] === `Card \xB7 ${item.name}` || lines[0] === `Relic \xB7 ${item.name}` || lines[0] === `Equipment \xB7 ${item.name}`) lines.shift();
     if ((item.energyCost != null || item.manaCost != null) && /^\d+ Energy|^\d+ Mana/.test(lines[0] ?? "")) lines.shift();
     return lines.join("\n");
   }
@@ -82181,6 +82327,22 @@ var noOpRestAccessibilityOverlay = {
 // src/navigation-style.ts
 var navigationButtonColor = 2707044;
 
+// src/stat-icon.ts
+function drawStatIcon(g2, stat, color) {
+  const stroke2 = { color, width: 2 };
+  if (stat === "MaxHealth") {
+    g2.moveTo(0, 10).bezierCurveTo(-24, -5, -5, -18, 0, -7).bezierCurveTo(5, -18, 24, -5, 0, 10).closePath().stroke(stroke2);
+  } else if (stat === "Attack") {
+    g2.moveTo(-7, 9).lineTo(10, -11).lineTo(9, -3).lineTo(-5, 11).closePath().stroke(stroke2).moveTo(-9, 2).lineTo(1, 12).moveTo(-5, 8).lineTo(-11, 14).stroke(stroke2);
+  } else if (stat === "MaxEnergy") {
+    traceResourceShape(g2, "stamina", -13, -13, 26, 26).fill({ color: uiTokens.color.stamina });
+  } else if (["MaxMana", "ManaPerTurn", "MaxManaMinusEnergy"].includes(stat)) {
+    traceResourceShape(g2, "mana", -13, -13, 26, 26).fill({ color: uiTokens.color.mana });
+  } else {
+    g2.moveTo(0, -13).lineTo(5, -4).lineTo(13, 0).lineTo(5, 4).lineTo(0, 13).lineTo(-5, 4).lineTo(-13, 0).lineTo(-5, -4).closePath().stroke(stroke2);
+  }
+}
+
 // src/pixi-shop.ts
 init_lib();
 async function createShopRenderer(canvas, sink) {
@@ -82656,6 +82818,8 @@ var ShopMerchandiseCard = class extends Container {
   card;
   itemArt = new JourneyArtwork();
   priceLabel = new Text({ text: "", style: new TextStyle(cardBodyStyle) });
+  statSymbol = new Graphics();
+  statName = null;
   hasArtwork;
   isControl;
   isNavigation;
@@ -82697,6 +82861,8 @@ var ShopMerchandiseCard = class extends Container {
   /** Updates dynamic merchandise state without allocating another card display tree. */
   update(merchandise, selected, interactive, resolutionIntensity, resolutionKind, onPress, onHover, onExit) {
     this.selected = selected;
+    this.statName = merchandise.statIcon ?? null;
+    if (this.statName && !this.children.includes(this.statSymbol)) this.addChild(this.statSymbol);
     this.card?.setContent({ ...this.card.content, energyCost: merchandise.cardEnergyCost ?? 0, manaCost: merchandise.cardManaCost ?? 0 });
     this.priceLabel.text = this.isControl ? "" : merchandise.isSold ? "SOLD" : (merchandise.isOnSale ? "SALE \xB7 " : "") + merchandise.price + " gold";
     this.priceLabel.style.fill = merchandise.isAffordable ? 15259564 : 14972757;
@@ -82773,6 +82939,18 @@ var ShopMerchandiseCard = class extends Container {
       fitTextToBox(this.heading, width - 20, height - 86, width < 130 ? 12 : 15, 12);
       this.description.visible = false;
     }
+    this.statSymbol.visible = this.statName !== null && !this.isControl;
+    if (this.statName && !this.hasArtwork) {
+      this.statSymbol.clear();
+      drawStatIcon(this.statSymbol, this.statName, uiTokens.color.text);
+      this.statSymbol.position.set(34, Math.max(30, height / 2 - 8));
+      this.heading.position.set(62, 8);
+      this.description.position.set(62, 43);
+      this.heading.style.wordWrapWidth = Math.max(1, width - 76);
+      this.description.style.wordWrapWidth = Math.max(1, width - 76);
+      fitTextToBox(this.heading, width - 76, 34, 18, 14);
+      if (height > 52) fitTextToBox(this.description, width - 76, height - 73, 14, 12);
+    }
   }
 };
 function getLayoutMode(width, height) {
@@ -82807,14 +82985,14 @@ function createMerchandiseLayout(width, height, merchandise) {
   };
   if (compact) {
     contentHeight = place("CARDS", cards, 0, 0, gridWidth, Math.min(4, Math.max(1, cards.length)), true);
-    contentHeight = place("RELICS & ITEMS", relics, 0, contentHeight, gridWidth, Math.min(3, Math.max(1, relics.length)), false);
+    contentHeight = place("EQUIPMENT & ITEMS", relics, 0, contentHeight, gridWidth, Math.min(3, Math.max(1, relics.length)), false);
     contentHeight = place("SERVICES", services, 0, contentHeight, gridWidth, 1, false);
   } else {
     const cardArea = cards.length ? gridWidth * 0.56 : 0;
     const sideX = cards.length ? cardArea + 16 : 0;
     const sideWidth = gridWidth - sideX;
     const cardsBottom = place("CARDS", cards, 0, 0, cardArea, Math.min(4, Math.max(1, cards.length)), true);
-    const relicBottom = place("RELICS & ITEMS", relics, sideX, 0, sideWidth, Math.min(3, Math.max(1, relics.length)), false);
+    const relicBottom = place("EQUIPMENT & ITEMS", relics, sideX, 0, sideWidth, Math.min(3, Math.max(1, relics.length)), false);
     const serviceBottom = place("SERVICES", services, sideX, relicBottom, sideWidth, 1, false);
     contentHeight = Math.max(cardsBottom, serviceBottom);
   }
@@ -82839,7 +83017,8 @@ function getMerchandiseCardText(merchandise) {
   return merchandise.description;
 }
 function getMerchandiseSummary(merchandise) {
-  return `${merchandise.description}${merchandise.enchantmentDescriptions?.length ? "\n\n" + merchandise.enchantmentDescriptions.join("\n") : ""} ${merchandise.isSold ? "Sold." : merchandise.isAffordable ? `Costs ${merchandise.price} gold.` : merchandise.disabledReason ?? "Unavailable."}`;
+  const description = merchandise.inspection?.quest ? questInspectionText(merchandise.inspection.quest, false) : merchandise.description;
+  return `${description}${merchandise.enchantmentDescriptions?.length ? "\n\n" + merchandise.enchantmentDescriptions.join("\n") : ""} ${merchandise.isSold ? "Sold." : merchandise.isAffordable ? `Costs ${merchandise.price} gold.` : merchandise.disabledReason ?? "Unavailable."}`;
 }
 function getAcceptedMessage(name) {
   return name === "purchase" ? "Purchase accepted." : name === "leave" ? "Leaving the shop." : "Merchandise inspected.";
@@ -84820,20 +84999,6 @@ var ProgressionGraph = class extends Container {
     this.scrollbar.roundRect(this.graphWidth + 5, 0, 4, height, 2).fill({ color: 3425612 }).roundRect(this.graphWidth + 4, y2, 6, thumbHeight, 3).fill({ color: uiTokens.color.block });
   }
 };
-function drawStatIcon(g2, stat, color) {
-  const stroke2 = { color, width: 2 };
-  if (stat === "MaxHealth") {
-    g2.moveTo(0, 10).bezierCurveTo(-24, -5, -5, -18, 0, -7).bezierCurveTo(5, -18, 24, -5, 0, 10).closePath().stroke(stroke2);
-  } else if (stat === "Attack") {
-    g2.moveTo(-7, 9).lineTo(10, -11).lineTo(9, -3).lineTo(-5, 11).closePath().stroke(stroke2).moveTo(-9, 2).lineTo(1, 12).moveTo(-5, 8).lineTo(-11, 14).stroke(stroke2);
-  } else if (stat === "MaxEnergy") {
-    traceResourceShape(g2, "stamina", -13, -13, 26, 26).fill({ color: uiTokens.color.stamina });
-  } else if (["MaxMana", "ManaPerTurn", "MaxManaMinusEnergy"].includes(stat)) {
-    traceResourceShape(g2, "mana", -13, -13, 26, 26).fill({ color: uiTokens.color.mana });
-  } else {
-    g2.moveTo(0, -13).lineTo(5, -4).lineTo(13, 0).lineTo(5, 4).lineTo(0, 13).lineTo(-5, 4).lineTo(-13, 0).lineTo(-5, -4).closePath().stroke(stroke2);
-  }
-}
 function isProgressionNode(value) {
   if (typeof value !== "object" || value === null) return false;
   const item = value;
@@ -84993,7 +85158,7 @@ async function createCollectionRenderer(canvas, sink) {
   const rebuildDetails = () => {
     destroyChildren(details);
     const entry = selectedEntry();
-    compactDetail.text = entry ? `${entry.name} \u2014 ${entry.description}` : "";
+    compactDetail.text = entry ? entry.inspection?.quest ? questInspectionText(entry.inspection.quest) : `${entry.name} \u2014 ${entry.description}` : "";
     if (!entry) return;
     if (isCardGrid()) return;
     if (entry.kind === "card" || entry.kind === "item") {
@@ -85007,7 +85172,7 @@ async function createCollectionRenderer(canvas, sink) {
       }
     } else {
       const heading = new Text({ text: entry.name, style: { ...uiTokens.typography.panelTitle, fill: 16113563, wordWrap: true } });
-      const description = new Text({ text: entry.description, style: {
+      const description = new Text({ text: entry.inspection?.quest ? questInspectionText(entry.inspection.quest, false) : entry.description, style: {
         ...uiTokens.typography.body,
         fill: uiTokens.color.textMuted,
         fontSize: 15,
@@ -85070,7 +85235,7 @@ async function createCollectionRenderer(canvas, sink) {
         wordWrap: true
       } });
       const detail = new Text({ text: entry.detail, style: { ...uiTokens.typography.body, fill: 9425057, fontSize: 14, lineHeight: 19, wordWrap: true } });
-      const description = new Text({ text: entry.description, style: {
+      const description = new Text({ text: entry.inspection?.quest ? questInspectionText(entry.inspection.quest, false) : entry.description, style: {
         ...uiTokens.typography.body,
         fill: uiTokens.color.textMuted,
         fontSize: 14,
@@ -85247,6 +85412,10 @@ async function createCollectionRenderer(canvas, sink) {
     compactDetail.style.wordWrapWidth = width - 60;
     compactDetail.position.set(30, height - 156);
     details.visible = visibility.details && entry !== void 0;
+    if (plan.compact && entry?.inspection?.quest) {
+      details.visible = false;
+      compactDetail.visible = false;
+    }
     if (plan.compact) {
       details.children.forEach((child, index) => {
         if (child instanceof Text) {
@@ -85456,23 +85625,31 @@ async function createCollectionRenderer(canvas, sink) {
   window.addEventListener("resize", layout);
   const observer = new ResizeObserver(layout);
   observer.observe(inputCanvas);
-  return { reconcile(candidate) {
+  const revealEquipment = (id) => {
+    const index = state?.tabs[state.activeTabIndex]?.entries.findIndex((entry) => entry.id === id) ?? -1;
+    if (index < 0) return;
+    selectEntry(index);
+    inputCanvas.setAttribute("aria-label", `${state?.title}. Revealed: ${selectedEntry()?.name ?? "Equipment"}`);
+    inputCanvas.focus({ preventScroll: true });
+  };
+  const reconcile = (candidate) => {
     if (!isState(candidate)) return false;
     const changedTab = state?.activeTabIndex !== candidate.activeTabIndex || state?.title !== candidate.title;
+    const reveal = candidate.focusEntryId != null && (state?.focusEntryId !== candidate.focusEntryId || state?.revealVersion !== candidate.revealVersion);
     if (changedTab) disposeTraining();
     state = candidate;
     if (changedTab) {
       scrollMotion.stop();
       suppressedTap = false;
-      scrollOffset = 0;
-      selectedIndex = 0;
-      trainingOffset = 0;
+      scrollOffset = selectedIndex = trainingOffset = 0;
     }
     rebuild();
     layout();
+    if (reveal && candidate.focusEntryId) revealEquipment(candidate.focusEntryId);
     showEnchantmentTooltip();
     return true;
-  }, dispose() {
+  };
+  return { reconcile, dispose() {
     if (disposed) return;
     disposed = true;
     trainingTicker?.remove(tickTraining);
@@ -85521,10 +85698,10 @@ function readCollectionSafeArea(canvas) {
 function isState(value) {
   if (typeof value !== "object" || value === null) return false;
   const state = value;
-  return typeof state.title === "string" && Array.isArray(state.tabs) && Number.isInteger(state.activeTabIndex) && state.activeTabIndex >= 0 && state.activeTabIndex < state.tabs.length && state.tabs.every((tab) => typeof tab.label === "string" && isCollectionProgression(tab.progression) && Array.isArray(tab.entries) && tab.entries.every((entry) => {
+  return typeof state.title === "string" && Array.isArray(state.tabs) && Number.isInteger(state.activeTabIndex) && (state.focusEntryId === void 0 || state.focusEntryId === null || typeof state.focusEntryId === "string") && (state.revealVersion === void 0 || Number.isFinite(state.revealVersion)) && state.activeTabIndex >= 0 && state.activeTabIndex < state.tabs.length && state.tabs.every((tab) => typeof tab.label === "string" && isCollectionProgression(tab.progression) && Array.isArray(tab.entries) && tab.entries.every((entry) => {
     if (typeof entry !== "object" || entry === null) return false;
     const value2 = entry;
-    return typeof value2.name === "string" && typeof value2.description === "string" && typeof value2.detail === "string" && (value2.cardType === void 0 || value2.cardType === null || typeof value2.cardType === "string") && isOptionalResourceCost(value2.energyCost) && isOptionalResourceCost(value2.manaCost);
+    return typeof value2.name === "string" && typeof value2.description === "string" && typeof value2.detail === "string" && (value2.id === void 0 || value2.id === null || typeof value2.id === "string") && (value2.cardType === void 0 || value2.cardType === null || typeof value2.cardType === "string") && isOptionalResourceCost(value2.energyCost) && isOptionalResourceCost(value2.manaCost);
   }));
 }
 function isOptionalResourceCost(value) {
@@ -85534,7 +85711,6 @@ function toCardRarity3(value) {
   return value === "Uncommon" || value === "Rare" || value === "Special" ? value : "Common";
 }
 function compactTabLabel(label) {
-  if (label === "Equipment") return "Gear";
   if (label === "Training") return "Train";
   return label;
 }
@@ -85644,7 +85820,7 @@ function settingHelp(action) {
     "toggle:effect-sources": "Include effect names in floating resource text to identify what caused a gain.",
     "toggle:damage": "Show floating damage numbers during combat.",
     "toggle:cards": "Include card names in floating damage text when damage values are enabled.",
-    "toggle:relics": "Include relic names in floating damage text when damage values are enabled.",
+    "toggle:relics": "Include equipment names in floating damage text when damage values are enabled.",
     "toggle:items": "Include item names in floating damage text when damage values are enabled.",
     "settings:debug": "Open developer tools for character and shared Remembrance progression.",
     "settings:back": "Return to gameplay preferences.",
@@ -85758,7 +85934,7 @@ function isMenuOverlayState(value) {
   const confirmation = candidate.confirmation;
   if (typeof confirmation === "object" && confirmation !== null) {
     const item2 = confirmation;
-    return typeof item2.action === "string" && typeof item2.title === "string" && typeof item2.message === "string";
+    return typeof item2.action === "string" && typeof item2.title === "string" && typeof item2.message === "string" && (item2.navigation === void 0 || typeof item2.navigation === "boolean") && (item2.confirmLabel === void 0 || item2.confirmLabel === null || typeof item2.confirmLabel === "string");
   }
   const settings = candidate.settings;
   if (typeof settings !== "object" || settings === null) return false;
@@ -85886,7 +86062,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const index = controls.length;
     const activeSection = action === `history:section:${state?.history?.selectedSectionIndex}` || action === `history:run:${state?.history?.selectedRunId}`;
     const activeTab = action.startsWith("tab:") && state?.settings?.tabIndex === Number(action.slice(4));
-    const primaryColors = action === "save" || action.startsWith("outcome:") ? { fill: 3627602, stroke: 9488295 } : {};
+    const primaryColors = action.startsWith("confirm:") && state?.confirmation?.navigation ? { fill: navigationButtonColor, stroke: 9418699 } : action === "save" || action.startsWith("outcome:") ? { fill: 3627602, stroke: 9488295 } : {};
     const button = new GameButton({ ...primaryColors, ...settingsActionColors(action), menuIcon: icon, width: buttonWidth, height: buttonHeight2, label, enabled, selected: activeTab || activeSection || action === `particle:${state?.settings?.particleLevel}`, focused: keyboardFocusVisible && index === selectedIndex, onPress: () => {
       keyboardFocusVisible = false;
       selectedIndex = index;
@@ -86044,7 +86220,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const toggles = [
       ["Show values", "damage", settings.damageTextEnabled !== false],
       ["Card source", "cards", settings.damageTextCardSources === true],
-      ["Relic source", "relics", settings.damageTextRelicSources === true],
+      ["Equipment source", "relics", settings.damageTextRelicSources === true],
       ["Item source", "items", settings.damageTextItemSources === true]
     ];
     const columns = width >= 520 ? 2 : 1;
@@ -86124,7 +86300,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     content.addChild(new Graphics().moveTo(24, height - 86).lineTo(width - 24, height - 86).stroke({ color: uiTokens.color.panelStroke, alpha: 0.45, width: 1 }));
     const buttonWidth = Math.min(220, (width - 64) / 2);
     addButton("Cancel", "cancel", 24, height - 70, buttonWidth);
-    addButton("Confirm", `confirm:${confirmation.action}`, width - 24 - buttonWidth, height - 70, buttonWidth);
+    addButton(confirmation.confirmLabel ?? "Confirm", `confirm:${confirmation.action}`, width - 24 - buttonWidth, height - 70, buttonWidth);
     addButton("Close", "cancel", width - 128, 12, 104, 44, true, "close");
   };
   const layoutOutcome = (outcome) => {
@@ -87001,7 +87177,7 @@ init_lib();
 function isInventoryEntry(value) {
   if (typeof value !== "object" || value === null) return false;
   const entry = value;
-  return ["action", "name", "description", "badge", "image"].every((key) => typeof entry[key] === "string") && ["active", "ready", "spent"].every((key) => typeof entry[key] === "boolean");
+  return ["action", "name", "description", "badge", "image"].every((key) => typeof entry[key] === "string") && ["active", "ready", "spent"].every((key) => typeof entry[key] === "boolean") && (entry.inspection == null || typeof entry.inspection === "object" && (!("quest" in entry.inspection) || entry.inspection.quest == null || isQuestInspection(entry.inspection.quest)));
 }
 function toInventoryState(value) {
   if (typeof value !== "object" || value === null) return void 0;
@@ -87018,6 +87194,8 @@ async function createInventoryRenderer(canvas, sink, initialState) {
   const controls = new Container();
   const background = new Graphics();
   const details = new Container();
+  const sharedTooltip = new InspectionTooltip();
+  const buttonsByAction = /* @__PURE__ */ new Map();
   const frame = new Graphics();
   const description = new Text({ text: "", style: { ...uiTokens.typography.body, fontSize: 15, wordWrap: true, breakWords: true, fill: uiTokens.color.text } });
   const close = new GameButton({ label: "Close", width: 66, height: 32, onPress: () => void submit("close") });
@@ -87032,6 +87210,7 @@ async function createInventoryRenderer(canvas, sink, initialState) {
   const submit = async (action) => {
     if (disposed || pending || state?.disabled) return;
     pending = true;
+    sharedTooltip.hide();
     try {
       await sink.invokeMethodAsync("HandleActionFromRendererAsync", action);
     } catch {
@@ -87073,7 +87252,7 @@ async function createInventoryRenderer(canvas, sink, initialState) {
     details.visible = selected !== void 0;
     if (!selected) return 44;
     const panelWidth = Math.min(420, width - 12);
-    description.text = `${selected.name}
+    description.text = selected.inspection?.quest ? questInspectionText(selected.inspection.quest) : `${selected.name}
 ${selected.description}`;
     description.style.wordWrapWidth = Math.max(1, panelWidth - 24);
     description.position.set(12, 12);
@@ -87083,6 +87262,24 @@ ${selected.description}`;
     close.setEnabled(!state?.disabled);
     details.position.set(width - panelWidth - 6, 48);
     return 52 + panelHeight;
+  };
+  const inspect = (entry, button) => {
+    const host = getCollectionOverlayHost();
+    if (!host || !button) return;
+    const hostBounds = host.canvas.getBoundingClientRect();
+    const railBounds = canvas.getBoundingClientRect();
+    const bounds = button.getBounds();
+    const scaleX = host.width() / Math.max(1, hostBounds.width);
+    const scaleY = host.height() / Math.max(1, hostBounds.height);
+    sharedTooltip.setInspection(entry.inspection ?? { keywords: [`${entry.name}
+${entry.description}`], references: [] }, host.width() - 16);
+    host.layer.addChild(sharedTooltip);
+    sharedTooltip.show({
+      x: (railBounds.left + bounds.x - hostBounds.left) * scaleX,
+      y: (railBounds.top + 5 - hostBounds.top) * scaleY,
+      width: 44 * scaleX,
+      height: 34 * scaleY
+    }, { width: host.width(), height: host.height() });
   };
   const layout = () => {
     if (disposed || !state) return;
@@ -87096,6 +87293,7 @@ ${selected.description}`;
     const pages = Math.max(1, Math.ceil(equipment.length / capacity));
     page = Math.max(0, Math.min(page, pages - 1));
     for (const child of controls.removeChildren()) child.destroy({ children: true });
+    buttonsByAction.clear();
     background.clear().rect(0, 0, width, 44).fill(1321006);
     const entries = [...state.entries.filter((entry) => !entry.action.startsWith("inspect:")), ...equipment.slice(page * capacity, (page + 1) * capacity)];
     const pileIcons = ["cards", "discard", "exhaust"];
@@ -87113,6 +87311,11 @@ ${selected.description}`;
       });
       button.position.set(isEquipment ? equipmentStart + (index - 3) * 48 : 6 + index * (pileWidth + 4), 5);
       controls.addChild(button);
+      buttonsByAction.set(entry.action, button);
+      if (isEquipment) {
+        button.on("pointerover", () => inspect(entry, button));
+        button.on("pointerout", () => sharedTooltip.hide());
+      }
       button.setIconOnly(isEquipment || compact);
       if (isEquipment) decorateEquipment(button, entry, currentRevision);
       addBadge(button, entry.badge);
@@ -87139,15 +87342,20 @@ ${selected.description}`;
     const target = event.target;
     if (!(target instanceof HTMLButtonElement)) return;
     focusedAction = target.dataset.inventoryAction;
-    const index = state?.entries.filter((entry) => entry.action.startsWith("inspect:")).findIndex((entry) => entry.action === focusedAction) ?? -1;
+    const index = state?.entries.filter((entry2) => entry2.action.startsWith("inspect:")).findIndex((entry2) => entry2.action === focusedAction) ?? -1;
     if (index >= 0) {
       const width = Math.max(1, canvas.parentElement?.clientWidth || 640);
       const capacity = Math.max(1, Math.floor((width - 6 - 3 * ((width < 500 ? 50 : 88) + 4) - 70) / 48));
       page = Math.floor(index / capacity);
     }
     layout();
+    const entry = state?.entries.find((entry2) => entry2.action === focusedAction);
+    const button = focusedAction ? buttonsByAction.get(focusedAction) : void 0;
+    if (entry && button instanceof GameButton) inspect(entry, button);
   };
   canvas.parentElement?.addEventListener("focusin", focus);
+  const blur = () => sharedTooltip.hide();
+  canvas.parentElement?.addEventListener("focusout", blur);
   const observer = new ResizeObserver(layout);
   observer.observe(canvas.parentElement ?? canvas);
   const reconcile = (value) => {
@@ -87155,6 +87363,7 @@ ${selected.description}`;
     const next = toInventoryState(value);
     if (!next) return false;
     state = next;
+    if (state.disabled) sharedTooltip.hide();
     layout();
     return true;
   };
@@ -87165,7 +87374,9 @@ ${selected.description}`;
       if (disposed) return;
       disposed = true;
       observer.disconnect();
+      if (!sharedTooltip.destroyed) sharedTooltip.destroy({ children: true });
       canvas.parentElement?.removeEventListener("focusin", focus);
+      canvas.parentElement?.removeEventListener("focusout", blur);
       restore();
       application.destroy({ removeView: false }, { children: true });
     }
@@ -87377,8 +87588,10 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
     textMotionScale: () => viewport.height / encounterDesignViewport.height,
     resolveAnchor: (id) => scene.getEffectAnchor(id)
   });
+  const statusCues = new PersistentStatusCues(particleEffects, prefersReducedMotion5());
   const runtimeScene = new EncounterRuntimeScene(scene, () => {
     animationDirector.cancelAll();
+    statusCues.dispose();
     particleEffects.clear();
     scene.refreshAnimationLocks();
   }, () => viewport);
@@ -87550,6 +87763,7 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
       }
       accessibilityOverlay.update(snapshot);
       await runtime.show(runtimeScene, snapshot);
+      statusCues.reconcile(snapshot.enemies, snapshot.statusCueLimit ?? 4);
       hasActiveScene = true;
       flushPendingAnimations();
       return true;
