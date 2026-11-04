@@ -71453,6 +71453,7 @@ function drawSigil(g2, x2, y2, s2, color, ritual) {
 }
 
 // src/resource-shape.ts
+var resourceOutline = { stamina: 3302473, mana: 3232890 };
 function traceResourceShape(graphics, kind, x2, y2, width, height) {
   if (kind === "stamina") {
     return graphics.moveTo(x2 + width / 2, y2).lineTo(x2 + width, y2 + height / 2).lineTo(x2 + width / 2, y2 + height).lineTo(x2, y2 + height / 2).lineTo(x2 + width / 2, y2);
@@ -71755,10 +71756,10 @@ var CardView = class extends Container {
       this.costPlate.roundRect(artBounds.x + 5, artBounds.y + 5, header.badgeWidth, header.badgeHeight, this.handPresentation ? header.badgeHeight / 2 : 7).fill({ color: uiTokens.color.panelShadow, alpha: 0.94 }).stroke({ color: palette.accent, width: 2 });
     }
     if (header.hasEnergyCost) {
-      traceResourceShape(this.energyCostPlate, "stamina", artBounds.x + 5, artBounds.y + 5, header.energyBadgeWidth, header.badgeHeight).fill({ color: uiTokens.color.stamina, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
+      traceResourceShape(this.energyCostPlate, "stamina", artBounds.x + 5, artBounds.y + 5, header.energyBadgeWidth, header.badgeHeight).fill({ color: uiTokens.color.stamina, alpha: 0.96 }).stroke({ color: resourceOutline.stamina, width: 1 });
     }
     if (header.hasManaCost) {
-      traceResourceShape(this.manaCostPlate, "mana", this.handPresentation || this.rewardPresentation ? artBounds.x + artBounds.width - header.manaBadgeWidth - 5 : artBounds.x + 9 + header.energyBadgeWidth, artBounds.y + 5, header.manaBadgeWidth, header.badgeHeight).fill({ color: uiTokens.color.mana, alpha: 0.96 }).stroke({ color: palette.frame, width: 1 });
+      traceResourceShape(this.manaCostPlate, "mana", this.handPresentation || this.rewardPresentation ? artBounds.x + artBounds.width - header.manaBadgeWidth - 5 : artBounds.x + 9 + header.energyBadgeWidth, artBounds.y + 5, header.manaBadgeWidth, header.badgeHeight).fill({ color: uiTokens.color.mana, alpha: 0.96 }).stroke({ color: resourceOutline.mana, width: 1 });
     }
   }
   updateArtwork(artBounds) {
@@ -72411,7 +72412,7 @@ init_lib();
 var encounterRendererProtocolVersion = 4;
 var encounterSceneId = "encounter";
 function isEncounterPresentationSnapshot(value) {
-  if (!isRecord(value) || value.protocolVersion !== encounterRendererProtocolVersion || value.sceneId !== encounterSceneId || !isFiniteNumber(value.sequence) || !isString(value.phase) || typeof value.inventoryMode !== "boolean" || !isEntityPresentationState(value.player) || !isArrayOf(value.enemies, isEntityPresentationState) || !isArrayOf(value.hand, isCardPresentationState) || !isArrayOf(value.items, isItemPresentationState) || !isFiniteNumber(value.currency) || !isFiniteNumber(value.deckCount) || !isFiniteNumber(value.relicCount) || value.pinnedRelics !== void 0 && !isArrayOf(value.pinnedRelics, isRelicPresentationState) || value.sceneTreatmentId !== void 0 && !isString(value.sceneTreatmentId) || value.endTurnQueued !== void 0 && typeof value.endTurnQueued !== "boolean" || value.roomName !== void 0 && !isString(value.roomName)) {
+  if (!isRecord(value) || value.protocolVersion !== encounterRendererProtocolVersion || value.sceneId !== encounterSceneId || !isFiniteNumber(value.sequence) || !isString(value.phase) || typeof value.inventoryMode !== "boolean" || !isEntityPresentationState(value.player) || !isArrayOf(value.enemies, isEntityPresentationState) || !isArrayOf(value.hand, isCardPresentationState) || !isArrayOf(value.items, isItemPresentationState) || !isFiniteNumber(value.currency) || !isFiniteNumber(value.deckCount) || !isFiniteNumber(value.relicCount) || value.pinnedRelics !== void 0 && !isArrayOf(value.pinnedRelics, isRelicPresentationState) || value.sceneTreatmentId !== void 0 && !isString(value.sceneTreatmentId) || value.endTurnQueued !== void 0 && typeof value.endTurnQueued !== "boolean" || value.hasAvailableCardPlay !== void 0 && typeof value.hasAvailableCardPlay !== "boolean" || value.roomName !== void 0 && !isString(value.roomName)) {
     return false;
   }
   return true;
@@ -72900,7 +72901,7 @@ function createResourceIcon(kind, color) {
       break;
     case "stamina":
     case "mana":
-      traceResourceShape(icon, kind, 0, 0, 20, 20).fill({ color }).stroke({ color: kind === "mana" ? 3232890 : 8414498, width: 1.5 });
+      traceResourceShape(icon, kind, 0, 0, 20, 20).fill({ color }).stroke({ color: resourceOutline[kind], width: 1.5 });
       break;
   }
   icon.eventMode = "none";
@@ -74726,6 +74727,76 @@ var noOpAccessibilityOverlay = {
   }
 };
 
+// src/value-feedback.ts
+var ValueFeedback = class {
+  constructor(reducedMotion = false) {
+    this.reducedMotion = reducedMotion;
+    const restore = (command) => {
+      const display = this.active.get(command.id);
+      if (display && !display.destroyed) {
+        display.scale.set(1);
+        display.alpha = 1;
+      }
+      this.active.delete(command.id);
+    };
+    this.director = new AnimationDirector({
+      supports: (command) => command.name === "value-pop",
+      execute: (command, progress) => {
+        const display = this.active.get(command.id);
+        if (!display || display.destroyed) return;
+        display.scale.set(this.reducedMotion ? 1 : 1 + Math.sin(progress * Math.PI) * 0.18);
+        display.alpha = this.reducedMotion ? 1 - Math.sin(progress * Math.PI) * 0.3 : 1;
+      },
+      cancel: restore,
+      complete: restore
+    });
+  }
+  reducedMotion;
+  values = /* @__PURE__ */ new WeakMap();
+  ids = /* @__PURE__ */ new WeakMap();
+  active = /* @__PURE__ */ new Map();
+  nextId = 0;
+  director;
+  /** Records first values silently and replaces an in-flight pop on each real change. */
+  watch(display, value) {
+    const key = String(value);
+    const previous = this.values.get(display);
+    this.values.set(display, key);
+    if (previous === void 0 || previous === key) return;
+    let id = this.ids.get(display);
+    if (!id) {
+      id = `value:${this.nextId++}`;
+      this.ids.set(display, id);
+    }
+    this.director.cancel(id);
+    this.active.set(id, display);
+    void this.director.schedule({ id, name: "value-pop", durationMs: this.reducedMotion ? 160 : 240 }, () => true);
+  }
+  /** Restores leaf transforms before measurement; the next ticker frame reapplies live emphasis. */
+  prepareLayout() {
+    for (const display of this.active.values()) {
+      if (!display.destroyed) {
+        display.scale.set(1);
+        display.alpha = 1;
+      }
+    }
+  }
+  /** Advances from the owning scene ticker and releases removed displays. */
+  tick(deltaMs) {
+    for (const [id, display] of this.active) if (display.destroyed) this.director.cancel(id);
+    this.director.tick(deltaMs);
+  }
+  /** Starts a new authoritative run without treating its first values as changes. */
+  reset() {
+    this.clear();
+    this.values = /* @__PURE__ */ new WeakMap();
+  }
+  /** Releases transient transforms on scene suspension or teardown. */
+  clear() {
+    this.director.cancelAll();
+  }
+};
+
 // src/health-block-meter.ts
 init_lib();
 var healthBlockMeterColors = {
@@ -75761,11 +75832,13 @@ function getMotionIntensity(value, reducedMotion) {
 // src/run-hud.ts
 init_lib();
 var RunHud = class extends Container {
-  constructor(requestRelicCollection, requestDeckCollection, showRail = true) {
+  constructor(requestRelicCollection, requestDeckCollection, showRail = true, reducedMotion = false) {
     super();
     this.requestRelicCollection = requestRelicCollection;
     this.requestDeckCollection = requestDeckCollection;
     this.showRail = showRail;
+    this.feedback = new ValueFeedback(reducedMotion);
+    this.on("destroyed", () => this.feedback.clear());
     this.sceneTitle.resolution = Math.max(2, typeof window === "undefined" ? 2 : window.devicePixelRatio || 1);
     this.addChild(this.health, this.healthBar, this.currency, this.deck, this.relics, this.stamina, this.mana, this.sceneTitle, this.frame, this.experience);
     this.relics.on("pointertap", () => {
@@ -75810,6 +75883,8 @@ var RunHud = class extends Container {
   sceneTitle = new Text({ text: "", style: { ...getUiTextStyle("Caption"), letterSpacing: 3 } });
   frame = new Graphics();
   collectionFrames = /* @__PURE__ */ new Map();
+  runId;
+  feedback;
   relicCollectionAvailable = false;
   /** Makes resource artwork inspectable by hover and tap while retaining compact numeric pairs. */
   bindResourceInspection(inspect, dismiss) {
@@ -75835,6 +75910,11 @@ var RunHud = class extends Container {
   }
   /** Reconciles resource values and the current location caption. */
   reconcile(state, viewport) {
+    if (state.runId !== this.runId) {
+      this.feedback.reset();
+      this.runId = state.runId;
+    }
+    this.feedback.prepareLayout();
     this.sceneTitle.text = state.title ?? "";
     this.health.setValue(`${state.health}/${state.maximumHealth}`);
     this.healthBar.setProgress(state.health, state.maximumHealth);
@@ -75857,11 +75937,24 @@ var RunHud = class extends Container {
     this.relics.cursor = this.relicCollectionAvailable ? "pointer" : "default";
     this.deck.eventMode = "static";
     this.deck.cursor = "pointer";
+    for (const counter of [this.health, this.stamina, this.mana, this.currency, this.experience, this.deck, this.relics]) {
+      const text = counter.children.filter((child) => child instanceof Text).at(-1);
+      if (text) this.feedback.watch(text, counter.value);
+    }
     this.layout(viewport);
     this.layoutInspectionAreas();
     if (!this.showRail) {
       for (const display of [this.health, this.healthBar, this.currency, this.experience, this.deck, this.relics, this.frame]) display.visible = false;
     }
+  }
+  /** Advances numeric emphasis from the renderer ticker without changing authoritative values. */
+  tick(deltaMs) {
+    this.feedback.tick(deltaMs);
+  }
+  /** Returns the current icon center for feedback crossing scene canvases. */
+  getResourceAnchor(kind) {
+    const counter = kind === "currency" ? this.currency : kind === "experience" ? this.experience : this.deck;
+    return { x: counter.x + 10 * counter.scale.x, y: counter.y + 12 * counter.scale.y };
   }
   /** Includes each icon, label and numeric value in a single padded inspection target. */
   layoutInspectionAreas() {
@@ -76206,10 +76299,12 @@ var statusEffectSymbols = {
   Ritual: "\u2726"
 };
 var StatusEffectsView = class extends Container {
-  constructor(inspect, dismiss) {
+  constructor(inspect, dismiss, reducedMotion = false) {
     super();
     this.inspect = inspect;
     this.dismiss = dismiss;
+    this.feedback = new ValueFeedback(reducedMotion);
+    this.on("destroyed", () => this.feedback.clear());
     this.addChild(this.overflow, this.tooltip);
   }
   inspect;
@@ -76217,6 +76312,7 @@ var StatusEffectsView = class extends Container {
   icons = [];
   overflow = new Text({ text: "", style: { ...uiTokens.typography.caption, fontSize: 12 } });
   tooltip = new Tooltip({ text: "", width: 220, height: 64, placement: "above" });
+  feedback;
   stateKey = "";
   pinned = false;
   /** Reconciles compact visible effects, retaining inspectable names for every hidden stack. */
@@ -76224,6 +76320,7 @@ var StatusEffectsView = class extends Container {
     const statuses = [...entity.statuses, ...entity.rituals.map((ritual) => ({ name: `Ritual: ${ritual.name}`, stacks: 1, description: "" }))];
     const key = JSON.stringify(statuses);
     if (key === this.stateKey) return;
+    this.feedback.prepareLayout();
     this.stateKey = key;
     this.pinned = false;
     this.tooltip.hide();
@@ -76236,6 +76333,7 @@ var StatusEffectsView = class extends Container {
         this.icons.push(icon);
         this.addChild(icon);
       }
+      this.feedback.watch(icon.content, `${content.name}:${content.stacks}`);
       icon.setValue(content);
       icon.position.set(index * 28 - visible.length * 14, 0);
       icon.visible = true;
@@ -76271,6 +76369,10 @@ var StatusEffectsView = class extends Container {
       this.showTooltip(statuses.slice(visible.length).map((status) => `${status.name}: ${status.stacks}${status.description ? "\n" + status.description : ""}`).join(" \xB7 "), true);
     });
     this.addChild(this.tooltip);
+  }
+  /** Advances stack emphasis using the encounter ticker. */
+  tick(deltaMs) {
+    this.feedback.tick(deltaMs);
   }
   /** Positions the effect explanation above its row in the scene's coordinate system. */
   showTooltip(text, pinned = false) {
@@ -76389,7 +76491,8 @@ var EncounterScene = class {
     this.announceInteraction = announceInteraction;
     this.reducedMotion = reducedMotion;
     this.animationSpeedPolicy = animationSpeedPolicy;
-    this.runHud = new RunHud(() => this.requestRelicCollection(), () => this.requestDeckCollection(), false);
+    this.valueFeedback = new ValueFeedback(reducedMotion);
+    this.runHud = new RunHud(() => this.requestRelicCollection(), () => this.requestDeckCollection(), false, reducedMotion);
     this.root.eventMode = "static";
     this.root.on("globalpointermove", (event) => this.moveDrag(event));
     this.root.on("pointerup", (event) => this.releaseDrag(event));
@@ -76397,6 +76500,11 @@ var EncounterScene = class {
     this.root.on("pointercancel", (event) => this.cancelDrag(event));
     this.root.on("pointertap", () => this.dismissInspection(true));
     this.backgroundLayer.addChild(this.background, this.backdrop);
+    this.endTurnHighlight.eventMode = "none";
+    this.endTurn.content.addChildAt(this.endTurnHighlight, 0);
+    this.phaseCue.eventMode = "none";
+    this.phaseCue.anchor.set(0.5);
+    this.phaseCue.visible = false;
     this.effectsLayer.addChild(this.dragAimArrow, this.attackTrail);
     this.intentStatusLabel.anchor.set(0.5, 0.5);
     this.overlayLayer.addChild(
@@ -76408,7 +76516,8 @@ var EncounterScene = class {
       this.previousHandPage,
       this.nextHandPage,
       this.endTurn,
-      this.inspectionTooltip
+      this.inspectionTooltip,
+      this.phaseCue
     );
     this.runHud.bindResourceInspection((text, anchor, pinned) => {
       this.inspectionPinned = pinned;
@@ -76436,7 +76545,7 @@ var EncounterScene = class {
     width: 144,
     height: 44,
     label: "END TURN",
-    fill: 10241074,
+    fill: uiTokens.color.buttonFill,
     stroke: 14974298,
     onPress: () => this.requestEndTurn()
   });
@@ -76462,6 +76571,13 @@ var EncounterScene = class {
   committedCardMotion = /* @__PURE__ */ new Map();
   playedCardMotions = /* @__PURE__ */ new Map();
   entryInteractionStates = /* @__PURE__ */ new Map();
+  endTurnHighlight = new Graphics();
+  phaseCue = new Text({ text: "", style: { ...uiTokens.typography.body, fontSize: 18, fill: 16772548, stroke: { color: 530204, width: 4 } } });
+  phaseCueRemainingMs = 0;
+  valueFeedback;
+  aimPointer;
+  aimEnd;
+  aimDestination;
   currentSequence = -1;
   selectedEntryId;
   hoveredEntryId;
@@ -76695,6 +76811,8 @@ var EncounterScene = class {
       this.resetTransientLayoutState();
       this.alignPagesToFocusedObjects(snapshot, viewport);
     }
+    this.valueFeedback.prepareLayout();
+    if (snapshot.phase !== this.latestSnapshot?.phase) this.showPhaseCue(snapshot.phase);
     this.viewport = { width: viewport.width, height: viewport.height };
     this.dismissInspection(true);
     this.latestSnapshot = snapshot;
@@ -76725,6 +76843,8 @@ var EncounterScene = class {
     this.endTurn.resize(endTurnBounds.width, endTurnBounds.height);
     this.endTurn.position.set(endTurnBounds.x, endTurnBounds.y);
     this.endTurn.visible = true;
+    this.endTurnHighlight.clear().roundRect(0, 0, endTurnBounds.width, endTurnBounds.height, 3).fill(10241074);
+    this.phaseCue.position.set(viewport.width / 2, isShortEncounter(viewport) ? 20 : Math.min(endTurnBounds.y - 100, Math.max(180, viewport.height * 0.44)));
     if (shouldReleasePendingIntent) {
       this.releasePendingIntent();
     }
@@ -76758,6 +76878,7 @@ var EncounterScene = class {
    */
   dispose() {
     this.releaseInput();
+    this.valueFeedback.clear();
     this.latestSnapshot = void 0;
     this.releasedDragPositions.clear();
     this.root.destroy({ children: true });
@@ -77073,6 +77194,9 @@ var EncounterScene = class {
       event.stopPropagation();
       this.inspectEntity(tile, telegraph, tile.description.y, true);
     });
+    this.valueFeedback.watch(tile.detail, entity.health);
+    this.valueFeedback.watch(tile.blockValue, entity.block);
+    this.valueFeedback.watch(tile.defenses, entity.posture);
     tile.detail.text = `${entity.health} / ${entity.maxHealth}`;
     const showPosture = !entity.isPlayer && entity.maxPosture > 0;
     tile.defenses.text = showPosture ? `${entity.posture} / ${entity.maxPosture}` : "";
@@ -77202,7 +77326,7 @@ var EncounterScene = class {
     detail.style.fontWeight = defenses.style.fontWeight = "600";
     defenses.style.fill = uiTokens.color.text;
     layer.addChild(container);
-    const statusIcons = new StatusEffectsView((text, pinned) => this.inspectEntity(tile, text, statusIcons.y, pinned), () => this.dismissInspection());
+    const statusIcons = new StatusEffectsView((text, pinned) => this.inspectEntity(tile, text, statusIcons.y, pinned), () => this.dismissInspection(), this.reducedMotion);
     statusIcons.label = "combat-statuses";
     container.addChild(statusIcons, impactHighlight, blockIcon, blockValue);
     const tile = { container, background, accent, targetHighlight, impactHighlight, artwork, title, description, detail, effects, statusIcons, healthBar, postureBar, defenses, blockIcon, blockValue };
@@ -77375,6 +77499,9 @@ var EncounterScene = class {
       return;
     }
     this.inputReleased = true;
+    this.valueFeedback.clear();
+    this.phaseCueRemainingMs = 0;
+    this.phaseCue.visible = false;
     this.root.eventMode = "none";
     this.settleTransientDragOwnership();
     this.committedCardMotion.clear();
@@ -77430,9 +77557,16 @@ var EncounterScene = class {
    * @param deltaMs - Elapsed time supplied by the renderer ticker.
    */
   tick(deltaMs) {
+    this.valueFeedback.tick(deltaMs);
+    this.runHud.tick(deltaMs);
+    this.phaseCueRemainingMs = Math.max(0, this.phaseCueRemainingMs - Math.max(0, deltaMs));
+    this.phaseCue.visible = this.phaseCueRemainingMs > 0;
+    this.phaseCue.alpha = Math.min(1, this.phaseCueRemainingMs / 200);
+    this.tickAimArrow(deltaMs);
     for (const tile of this.entityTiles.values()) {
       tile.healthBar.tick(deltaMs);
       tile.postureBar.tick(deltaMs);
+      tile.statusIcons.tick(deltaMs);
     }
     this.tickCommittedCards(deltaMs);
     this.pruneRetiredTiles();
@@ -77777,12 +77911,18 @@ ${unavailableReason}` : ""),
   drawDragAimArrow(drag, pointerPosition, target) {
     const isValidDrop = this.isValidDrop(drag.entry, target);
     const targetTile = target ? this.entityTiles.get(`${target.isPlayer ? "player" : "enemy"}:${target.id}`) : void 0;
-    const end = drag.entry.targetMode !== "none" && isValidDrop && targetTile ? { x: targetTile.container.x, y: targetTile.container.y } : pointerPosition;
+    this.aimPointer = pointerPosition;
+    const destination = drag.entry.targetMode !== "none" && isValidDrop && targetTile ? { x: targetTile.container.x, y: targetTile.container.y } : pointerPosition;
+    this.aimDestination = destination;
+    if (!this.aimEnd || this.reducedMotion) this.aimEnd = destination;
+    const end = this.aimEnd;
     const start = {
       x: drag.tile.container.x,
       y: drag.tile.container.y - (isCardPresentationState2(drag.entry) ? 74 : 64) * drag.tile.container.scale.x
     };
-    const direction = getDirection(start.x, start.y, end.x, end.y);
+    const bend = Math.min(90, Math.abs(end.y - start.y) * 0.3 + 24);
+    const control = { x: (start.x + end.x) / 2, y: Math.min(start.y, end.y) - bend };
+    const direction = getDirection(control.x, control.y, end.x, end.y);
     const distance = Math.hypot(end.x - start.x, end.y - start.y);
     this.dragAimArrow.clear();
     this.dragAimArrow.visible = distance >= 8;
@@ -77793,10 +77933,20 @@ ${unavailableReason}` : ""),
     const perpendicular = { x: -direction.y, y: direction.x };
     const headLength = 15;
     const headWidth = 8;
-    this.dragAimArrow.moveTo(start.x, start.y).lineTo(end.x, end.y).stroke({ color, width: 3, alpha: 0.9 }).moveTo(end.x, end.y).lineTo(end.x - direction.x * headLength + perpendicular.x * headWidth, end.y - direction.y * headLength + perpendicular.y * headWidth).moveTo(end.x, end.y).lineTo(end.x - direction.x * headLength - perpendicular.x * headWidth, end.y - direction.y * headLength - perpendicular.y * headWidth).stroke({ color, width: 3, alpha: 0.9 });
+    this.dragAimArrow.moveTo(start.x, start.y).bezierCurveTo(start.x, start.y - bend, control.x, control.y, end.x, end.y).stroke({ color: 529183, width: 8, alpha: 0.95 }).moveTo(start.x, start.y).bezierCurveTo(start.x, start.y - bend, control.x, control.y, end.x, end.y).stroke({ color, width: 4, alpha: 1 }).roundRect(start.x - 4, start.y - 4, 8, 8, 4).fill({ color }).moveTo(end.x, end.y).lineTo(end.x - direction.x * headLength + perpendicular.x * headWidth, end.y - direction.y * headLength + perpendicular.y * headWidth).lineTo(end.x - direction.x * headLength - perpendicular.x * headWidth, end.y - direction.y * headLength - perpendicular.y * headWidth).lineTo(end.x, end.y).fill({ color }).stroke({ color: 529183, width: 1.5, alpha: 1 });
   }
-  /** Hides transient targeting feedback as soon as drag ownership ends. */
+  /** Smooths visual snapping while input continues to use the current authoritative target immediately. */
+  tickAimArrow(deltaMs) {
+    if (!this.activeDrag || !this.aimPointer || !this.aimEnd || !this.aimDestination) return;
+    const amount = this.reducedMotion ? 1 : 1 - Math.exp(-Math.max(0, deltaMs) / 45);
+    this.aimEnd = { x: interpolate(this.aimEnd.x, this.aimDestination.x, amount), y: interpolate(this.aimEnd.y, this.aimDestination.y, amount) };
+    if (Math.hypot(this.aimEnd.x - this.aimDestination.x, this.aimEnd.y - this.aimDestination.y) < 0.5) this.aimEnd = this.aimDestination;
+    this.drawDragAimArrow(this.activeDrag, this.aimPointer, this.findDropTarget(this.aimPointer, this.activeDrag.entry));
+  }
   hideDragAimArrow() {
+    this.aimEnd = void 0;
+    this.aimDestination = void 0;
+    this.aimPointer = void 0;
     this.dragAimArrow.clear();
     this.dragAimArrow.visible = false;
   }
@@ -78282,7 +78432,18 @@ ${unavailableReason}` : ""),
       tile.targetHighlight.show(tile.artwork, 15759462, 2, 0.7);
     }
   }
+  /** Announces actual authoritative ownership transitions without capturing input. */
+  showPhaseCue(phase) {
+    const text = phase === "WaitingForInput" ? "Your turn" : phase === "EnemyTurn" ? "Enemy turn" : void 0;
+    this.phaseCueRemainingMs = text ? 1200 : 0;
+    if (!text) return;
+    this.phaseCue.text = text;
+    this.phaseCue.visible = true;
+    this.phaseCue.alpha = 1;
+    this.announceInteraction?.(text);
+  }
   refreshInteractionState() {
+    this.endTurnHighlight.visible = this.latestSnapshot?.hasAvailableCardPlay === false && this.queuedEntryIds.size === 0 && this.latestSnapshot?.phase === "WaitingForInput" && !this.latestSnapshot.endTurnQueued && !this.intentPending;
     this.endTurn.label = this.latestSnapshot?.phase === "Victory" ? "VICTORY" : this.endingTurnPending || this.latestSnapshot?.endTurnQueued ? "TURN QUEUED" : this.latestSnapshot?.phase !== "WaitingForInput" ? "ENEMY TURN" : "END TURN";
     this.endTurn.setEnabled(!this.inputReleased && !this.intentPending && !this.activeDrag && !this.latestSnapshot?.endTurnQueued && this.latestSnapshot?.phase === "WaitingForInput");
     for (const [tileId, tile] of this.handTiles) {
@@ -78299,6 +78460,10 @@ ${unavailableReason}` : ""),
       }
       tile.container.eventMode = isInteractive || isHoverable ? "static" : "none";
       tile.container.cursor = isInteractive ? "pointer" : "default";
+      if (tile.cardView) {
+        tile.cardView.cursor = tile.container.cursor;
+        tile.cardView.eventMode = isHoverable ? "dynamic" : "none";
+      }
     }
     for (const [tileId, tile] of this.entityTiles) {
       const entityId = tileId.substring(tileId.indexOf(":") + 1);
@@ -79582,6 +79747,81 @@ function getParticleBudgets(coarsePointer) {
   return coarsePointer ? { maxParticles: 240, maxParticlesPerEmitter: 60 } : { maxParticles: 600, maxParticlesPerEmitter: 120 };
 }
 
+// src/hud-flight.ts
+var HudFlight = class {
+  constructor(reducedMotion = false) {
+    this.reducedMotion = reducedMotion;
+  }
+  reducedMotion;
+  elements = /* @__PURE__ */ new Map();
+  director = new AnimationDirector({
+    supports: (command) => command.name === "hud-flight",
+    execute: (command, progress) => {
+      const element = this.elements.get(command.id);
+      const path2 = this.paths.get(command.id);
+      if (!element || !path2) return;
+      const end = path2.destination();
+      const travel = this.reducedMotion ? 1 : 1 - Math.pow(1 - progress, 3);
+      const x2 = path2.start.x + (end.x - path2.start.x) * travel;
+      const y2 = path2.start.y + (end.y - path2.start.y) * travel;
+      element.style.transform = `translate(${x2}px, ${y2}px) translate(-50%, -50%) scale(${1 - travel * 0.35})`;
+      element.style.opacity = String(Math.min(1, (1 - progress) * 4));
+    },
+    cancel: (command) => this.remove(command.id),
+    complete: (command) => this.remove(command.id)
+  });
+  paths = /* @__PURE__ */ new Map();
+  gains = /* @__PURE__ */ new Map();
+  /** Replaces obsolete feedback for the same resource without altering authoritative totals. */
+  async play(id, label, start, destination, image) {
+    this.director.cancel(id);
+    const element = document.createElement("div");
+    element.setAttribute("aria-hidden", "true");
+    element.style.cssText = "position:fixed;left:0;top:0;pointer-events:none;z-index:10000;color:#ffedc4;background:#10242b;border:1px solid #c5ad72;border-radius:6px;padding:8px 12px;font:bold 18px Arial;box-shadow:0 2px 12px #000a;max-width:140px;text-align:center";
+    if (image && /^(\.\/|\/)?img\/[a-zA-Z0-9/_ .-]+$/.test(image) && !image.includes("..")) {
+      const art = document.createElement("img");
+      art.src = image;
+      art.style.cssText = "display:block;width:88px;height:110px;object-fit:cover;margin:auto auto 6px";
+      element.appendChild(art);
+    }
+    element.appendChild(document.createTextNode(label));
+    document.body.appendChild(element);
+    this.elements.set(id, element);
+    this.paths.set(id, { start, destination });
+    const completion = this.director.schedule({ id, name: "hud-flight", durationMs: this.reducedMotion ? 200 : 620 }, () => true);
+    this.director.tick(0);
+    await completion;
+  }
+  /** Aggregates rapid gains of one resource while keeping the last authoritative total independent. */
+  async playGain(id, amount, unit, start, destination) {
+    const total = amount + (this.gains.get(id)?.amount ?? 0);
+    const token = {};
+    this.gains.set(id, { amount: total, token });
+    await this.play(id, `+${total} ${unit}`, start, destination);
+    if (this.gains.get(id)?.token === token) this.gains.delete(id);
+  }
+  /** Advances visual feedback from the owning Pixi ticker. */
+  tick(deltaMs) {
+    this.director.tick(deltaMs);
+  }
+  /** Settles every promise and removes temporary elements on interruption. */
+  clear() {
+    this.director.cancelAll();
+    this.gains.clear();
+  }
+  remove(id) {
+    this.elements.get(id)?.remove();
+    this.elements.delete(id);
+    this.paths.delete(id);
+  }
+};
+function getRunHudDestination(kind) {
+  const canvas = document.querySelector('canvas[aria-label="Run resources"]');
+  const bounds = canvas?.getBoundingClientRect();
+  const anchor = canvas?.dataset[kind + "Anchor"]?.split(",").map(Number);
+  return { x: (bounds?.left ?? 0) + (anchor?.[0] ?? window.innerWidth / 2), y: (bounds?.top ?? window.innerHeight - 24) + (anchor?.[1] ?? 22) };
+}
+
 // src/pixi-reward.ts
 init_lib();
 
@@ -79798,13 +80038,13 @@ var RewardScene = class {
     else this.activateReward(this.selectedReward);
   }
   /** Selects a reward for inspection without making a gameplay decision. */
-  inspectReward(id) {
+  inspectReward(id, selectFirst = true) {
     const reward = this.snapshot?.choices.find((choice) => choice.id === id);
     if (reward === void 0 || !reward.isAvailable || this.pendingAction) {
       return;
     }
     this.selectedReward = reward;
-    this.selectedOption = reward.options?.find((option) => option.isAvailable);
+    this.selectedOption = selectFirst ? reward.options?.find((option) => option.isAvailable) : void 0;
     this.feedback.text = "";
     this.refreshInspection();
     this.layout();
@@ -79855,7 +80095,7 @@ var RewardScene = class {
     const selected = this.selectedReward === void 0 ? void 0 : choices.find((choice) => choice.id === this.selectedReward?.id);
     this.selectedReward = selected ?? (firstSnapshot && choices.length === 1 && (choices[0]?.options?.length ?? 0) > 0 ? choices[0] : void 0);
     const selectedChoice = this.selectedReward;
-    this.selectedOption = selectedChoice?.options?.find((option) => option.id === this.selectedOption?.id && option.isAvailable) ?? selectedChoice?.options?.find((option) => option.isAvailable);
+    this.selectedOption = selectedChoice?.options?.find((option) => option.id === this.selectedOption?.id && option.isAvailable) ?? (this.confirmationRequired ? selectedChoice?.options?.find((option) => option.isAvailable) : void 0);
     this.refreshInspection();
   }
   reconcileOptions() {
@@ -80045,7 +80285,7 @@ var RewardScene = class {
     this.confirmationRequired = event?.pointerType !== "mouse";
     this.tooltip.hide();
     if ((reward.options?.length ?? 0) > 0) {
-      this.inspectReward(reward.id);
+      this.inspectReward(reward.id, this.confirmationRequired);
       return;
     }
     this.selectedReward = reward;
@@ -80064,12 +80304,14 @@ var RewardScene = class {
   /** Shows details on mouse hover without selecting or collecting the reward. */
   hoverChoice(choice, view, event) {
     if (!view || event?.pointerType !== "mouse" || this.pendingAction) return;
+    this.confirmationRequired = false;
+    this.takeButton.visible = false;
     if (choice.kind === "card" && view instanceof RewardOptionView) {
+      this.selectedOption = void 0;
+      this.optionViews.forEach((option) => option.setSelected(false));
       this.tooltip.hide();
       return;
     }
-    this.confirmationRequired = false;
-    this.takeButton.visible = false;
     const x2 = view.x + (this.optionScroll.visible && view.parent === this.optionScroll.content ? this.optionScroll.x : 0);
     const y2 = view.y + (this.optionScroll.visible && view.parent === this.optionScroll.content ? this.optionScroll.y - this.optionScroll.scrollOffset : 0);
     this.tooltip.show(`${choice.name}
@@ -80135,7 +80377,7 @@ ${choice.description}${choice.enchantmentDescriptions?.length ? "\n\n" + choice.
     if (this.displayObject.destroyed) return;
     if (result.accepted) {
       this.feedback.text = action.name === "skipReward" ? "Rewards skipped." : "Reward collected.";
-      if (action.name === "collectReward" && action.sourceId !== null) {
+      if (action.name === "collectReward" && action.sourceId !== null && !this.collectedChoiceIds.has(action.sourceId)) {
         await this.resolveCollection(action.sourceId);
       }
       if (this.displayObject.destroyed) return;
@@ -80149,6 +80391,20 @@ ${choice.description}${choice.enchantmentDescriptions?.length ? "\n\n" + choice.
     this.feedback.text = "That reward is no longer available.";
     this.updateInteractivity();
     this.onAccessibleStateChanged();
+  }
+  /** Captures the chosen option before checkpointed reward removal destroys its scene view. */
+  getCollectionVisual(choiceId, optionId) {
+    const reward = this.snapshot?.choices.find((choice2) => choice2.id === choiceId);
+    const choice = optionId ? reward?.options?.find((option) => option.id === optionId) : reward;
+    const view = optionId ? this.optionViews.get(optionId) : this.choiceViews.get(choiceId);
+    if (!choice || choice.kind !== "card" || !view) return void 0;
+    return { name: choice.name, image: choice.image, x: view.x + view.width / 2, y: view.y + view.height / 2 };
+  }
+  /** Hides the picker after C# checkpoints the selected reward. */
+  hideCollectedPicker() {
+    if (this.selectedReward) this.collectedChoiceIds.add(this.selectedReward.id);
+    this.tooltip.hide();
+    this.displayObject.visible = false;
   }
   async resolveCollection(choiceId) {
     const choice = this.choiceViews.get(choiceId);
@@ -80644,7 +80900,9 @@ async function createRewardRenderer(canvas, actionSink) {
     application.renderer.resize(viewport.width, viewport.height, Math.max(1, window.devicePixelRatio || 1));
     scene.resize(viewport);
   };
+  const flight = new HudFlight(prefersReducedMotion2());
   const tick = () => {
+    flight.tick(application.ticker.deltaMS);
     scrollInput.advance(application.ticker.deltaMS);
     scene.advance(application.ticker.deltaMS);
   };
@@ -80667,9 +80925,19 @@ async function createRewardRenderer(canvas, actionSink) {
         return false;
       }
       const accepted = scene.reconcile(snapshot, getCanvasViewport(canvas));
+      if (accepted) scene.displayObject.visible = true;
       return accepted;
     },
+    async presentCollection(choiceId, optionId) {
+      if (disposed) return;
+      const visual = scene.getCollectionVisual(choiceId, optionId);
+      if (!visual) return;
+      const bounds = canvas.getBoundingClientRect();
+      scene.hideCollectedPicker();
+      await flight.play("reward-card", visual.name, { x: bounds.left + visual.x, y: bounds.top + visual.y }, () => getRunHudDestination("deck"), visual.image);
+    },
     dispose() {
+      flight.clear();
       if (disposed) {
         return;
       }
@@ -86831,7 +87099,13 @@ async function createRunHudRenderer(canvas, sink, initialState) {
       pending = false;
     }
   };
-  const hud = new RunHud(() => void submit("relics"), () => void submit("deck"));
+  const hud = new RunHud(() => void submit("relics"), () => void submit("deck"), true, window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
+  const flight = new HudFlight(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
+  const tick = () => {
+    hud.tick(application.ticker.deltaMS);
+    flight.tick(application.ticker.deltaMS);
+  };
+  application.ticker.add(tick);
   application.stage.addChild(hud);
   const tooltip = document.createElement("div");
   tooltip.className = "run-resource-tooltip";
@@ -86850,6 +87124,10 @@ async function createRunHudRenderer(canvas, sink, initialState) {
     application.renderer.resize(width, 44);
     hud.visible = state !== void 0;
     if (state) hud.reconcile(state, { width, height: 44 });
+    for (const kind of ["currency", "experience", "deck"]) {
+      const anchor = hud.getResourceAnchor(kind);
+      canvas.dataset[kind + "Anchor"] = `${anchor.x},${anchor.y}`;
+    }
   };
   const render = () => {
     layout();
@@ -86863,14 +87141,31 @@ async function createRunHudRenderer(canvas, sink, initialState) {
     reconcile(value) {
       const parsed = toRunResourceState(value);
       if (value != null && !parsed) return false;
+      const previous = state;
       state = parsed;
+      if (!parsed || previous?.runId !== parsed.runId) flight.clear();
       tooltip.hidden = true;
       render();
+      if (previous && parsed && previous.runId === parsed.runId) {
+        for (const kind of ["currency", "experience"]) {
+          const gain = (parsed[kind] ?? 0) - (previous[kind] ?? 0);
+          if (gain <= 0) continue;
+          const source8 = (document.querySelector(".pixi-reward-surface canvas") ?? document.querySelector('canvas[aria-label="Encounter renderer"], canvas[aria-label="Treasure room actions"]'))?.getBoundingClientRect();
+          const start = { x: source8 ? source8.left + source8.width / 2 : window.innerWidth / 2, y: (source8 ? source8.top + source8.height / 2 : window.innerHeight / 2) - (kind === "experience" ? 48 : 0) };
+          void flight.playGain(kind, gain, kind === "currency" ? "Gold" : "XP", start, () => {
+            const bounds = canvas.getBoundingClientRect();
+            const anchor = hud.getResourceAnchor(kind);
+            return { x: bounds.left + anchor.x, y: bounds.top + anchor.y };
+          });
+        }
+      }
       return true;
     },
     dispose() {
       if (disposed) return;
       disposed = true;
+      flight.clear();
+      application.ticker.remove(tick);
       resizeObserver.disconnect();
       tooltip.remove();
       restore();
@@ -86890,7 +87185,8 @@ function toRunResourceState(value) {
   if (typeof experience !== "number" || !Number.isFinite(experience)) return void 0;
   const relicCount = read("relicCount", "RelicCount");
   if (typeof health !== "number" || typeof maximumHealth !== "number" || typeof currency !== "number" || typeof deckCount !== "number" || typeof relicCount !== "number" || ![health, maximumHealth, currency, deckCount, relicCount].every(Number.isFinite)) return void 0;
-  return { health, maximumHealth, currency, experience, deckCount, relicCount, phase: "Exploring" };
+  const playerId = read("playerId", "PlayerId");
+  return { runId: typeof playerId === "string" ? playerId : void 0, health, maximumHealth, currency, experience, deckCount, relicCount, phase: "Exploring" };
 }
 
 // src/pixi-encounter.ts
