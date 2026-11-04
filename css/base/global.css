@@ -21,6 +21,27 @@
 *, *::before, *::after { box-sizing: border-box; }
 button, input { font: inherit; }
 
+/* Native fallback dialogs mirror the shared Pixi Close control. */
+button.game-dialog-close,
+[role="dialog"] button.game-dialog-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 104px;
+    min-height: 44px;
+    padding: 0 10px;
+    border: 1px solid #71858a;
+    border-radius: 3px;
+    background: #23363c;
+    color: #f2eee4;
+    font: 600 16px "Alegreya", Georgia, serif;
+    letter-spacing: 1.1px;
+    cursor: pointer;
+}
+button.game-dialog-close::before { content: "×"; font: 22px Arial, sans-serif; }
+button.game-dialog-close:focus-visible { outline: 2px solid #f2eee4; outline-offset: 2px; }
+
 /* Global styles used across the application */
 html, body, #app {
     margin: 0;

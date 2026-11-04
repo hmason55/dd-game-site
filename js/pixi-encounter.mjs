@@ -71296,6 +71296,8 @@ var keywords = {
   full: "Full",
   perfect: "Perfect"
 };
+var enchantmentTextColor = 16752357;
+var enchantmentNames = /* @__PURE__ */ new Set(["keen", "guarded", "efficient", "insightful", "curing", "guarding", "striking", "toxic"]);
 function cardDescriptionRuns(description, clauses) {
   if (clauses?.length) return clauses.flatMap((clause) => cardDescriptionRuns(clause.text).map((run) => ({
     ...run,
@@ -71306,8 +71308,10 @@ function cardDescriptionRuns(description, clauses) {
   })));
   const normalized = description.replace(/\{newline\}|<br\s*\/?>/gi, "\n").replace(/\{([a-z0-9]+)\}/gi, (_token, key) => keywords[key.toLowerCase()] ?? key);
   const fragments = normalized.split(/(\*\*|<\/?(?:b|strong)>)/gi);
+  const enchantmentLines = new Set(normalized.split("\n").flatMap((line, index) => enchantmentNames.has(line.replace(/\*\*|<\/?(?:b|strong)>/gi, "").trim().toLowerCase()) ? [index] : []));
   const runs = [];
   let emphasized = false;
+  let lineIndex = 0;
   for (const fragment8 of fragments) {
     if (/^(?:\*\*|<\/?(?:b|strong)>)$/i.test(fragment8)) {
       emphasized = fragment8.startsWith("</") ? false : fragment8.startsWith("<") ? true : !emphasized;
@@ -71316,7 +71320,14 @@ function cardDescriptionRuns(description, clauses) {
     for (const match of fragment8.matchAll(/\n|[^\S\n]+|[^\s]+/g)) {
       const text = match[0];
       const word = text.replace(/^[^a-z]+|[^a-z]+$/gi, "").toLowerCase();
-      runs.push({ text, bold: emphasized || word in keywords, keyword: word in keywords, damage: false });
+      runs.push({
+        text,
+        bold: emphasized || word in keywords,
+        keyword: word in keywords,
+        enchantment: enchantmentLines.has(lineIndex) && enchantmentNames.has(word),
+        damage: false
+      });
+      if (text === "\n") lineIndex++;
     }
   }
   let primaryDamageFound = false;
@@ -71405,9 +71416,8 @@ var CardRulesView = class extends Container {
       fontSize,
       stroke: style.stroke,
       wordWrap: false,
-      fontWeight: run.bold || run.active ? "700" : "400",
-      dropShadow: run.active ? { color: 15978363, blur: 3, alpha: 0.6, distance: 0 } : false,
-      fill: run.damage ? damageTextColor(damage, baseDamage, uiTokens.color.text) : run.active ? 16770208 : run.conditional ? 14202093 : run.keyword ? 11460568 : style.fill
+      fontWeight: run.bold || run.active || run.enchantment ? "700" : "400",
+      fill: run.enchantment ? enchantmentTextColor : run.damage ? damageTextColor(damage, baseDamage, uiTokens.color.text) : style.fill
     });
     label.visible = true;
     return label;
@@ -72201,8 +72211,10 @@ var InspectionTooltip = class extends Container {
     }
     for (const keyword of inspection.keywords) {
       const entry = new Container();
+      const enchantment = /^(?:Keen|Guarded enchantment|Efficient|Insightful|Curing|Guarding|Striking|Toxic):/.test(keyword);
       const text = new Text({ text: keyword, style: {
         ...uiTokens.typography.body,
+        ...enchantment ? { fill: enchantmentTextColor, fontWeight: "700" } : {},
         fontSize: 15,
         lineHeight: 20,
         wordWrap: true,
@@ -72232,7 +72244,8 @@ var InspectionTooltip = class extends Container {
       this.hide();
       return;
     }
-    const scale = Math.min(1, Math.max(1, viewport.width - 16) / bounds.width, Math.max(1, viewport.height - 16) / bounds.height);
+    const minimumY = Math.max(8, viewport.topInset ?? 8);
+    const scale = Math.min(1, Math.max(1, viewport.width - 16) / bounds.width, Math.max(1, viewport.height - minimumY - 8) / bounds.height);
     this.scale.set(scale);
     const width = bounds.width * scale;
     const height = bounds.height * scale;
@@ -72243,10 +72256,10 @@ var InspectionTooltip = class extends Container {
     const x2 = rightFits ? right : leftFits ? left : anchor.x;
     const below = anchor.y + anchor.height + 10;
     const fallbackY = below + height <= viewport.height - 8 ? below : anchor.y - height - 10;
-    if (!rightFits && !leftFits && below + height > viewport.height - 8 && anchor.y - height - 10 < 8 && this.showSplit(anchor, viewport)) return;
+    if (viewport.topInset === void 0 && !rightFits && !leftFits && below + height > viewport.height - 8 && anchor.y - height - 10 < 8 && this.showSplit(anchor, viewport)) return;
     this.position.set(
       Math.max(8, Math.min(viewport.width - width - 8, x2)),
-      Math.max(8, Math.min(viewport.height - height - 8, rightFits || leftFits ? anchor.y : fallbackY))
+      Math.max(minimumY, Math.min(viewport.height - height - 8, rightFits || leftFits ? anchor.y : fallbackY))
     );
     this.visible = true;
   }
@@ -78593,9 +78606,16 @@ ${unavailableReason}`, isConditional: false, requiresTarget: false, primaryDamag
     tile.aimMarker.visible = isAimed;
     if (isTargeting && isValidTarget) tile.targetHighlight.show(tile.artwork, isAimed ? 16770467 : 15759462, isAimed ? 4 : 1, isAimed ? 1 : 0.35);
     if (isAimed) {
-      const y2 = artwork.y - (artwork.visible ? artwork.height / 2 - 36 : 4);
-      tile.aimMarker.moveTo(-10, y2 - 12).lineTo(0, y2 - 22).lineTo(10, y2 - 12).lineTo(0, y2 - 2).lineTo(-10, y2 - 12).fill({ color: 529183 }).stroke({ color: 16770467, width: 3 });
-      tile.aimMarker.moveTo(-20, y2 - 12).lineTo(-12, y2 - 12).moveTo(12, y2 - 12).lineTo(20, y2 - 12).stroke({ color: 16770467, width: 3 });
+      const halfWidth = Math.max(24, artwork.width / 2) + 10;
+      const halfHeight = Math.max(30, artwork.height / 2) + 10;
+      const left = artwork.x - halfWidth;
+      const right = artwork.x + halfWidth;
+      const top = artwork.y - halfHeight;
+      const bottom = artwork.y + halfHeight;
+      for (const [x2, y2, dx, dy] of [[left, top, 1, 1], [right, top, -1, 1], [left, bottom, 1, -1], [right, bottom, -1, -1]]) {
+        tile.aimMarker.moveTo(x2, y2 + dy * 14).lineTo(x2, y2).lineTo(x2 + dx * 14, y2);
+      }
+      tile.aimMarker.stroke({ color: 16770467, width: 3 });
     }
   }
   /** Announces actual authoritative ownership transitions without capturing input. */
@@ -79992,6 +80012,14 @@ function getRunHudDestination(kind) {
 init_lib();
 
 // src/dialog-style.ts
+var dialogCloseButton = {
+  label: "Close",
+  menuIcon: "close",
+  width: 104,
+  height: 44,
+  fill: uiTokens.color.buttonFill,
+  stroke: uiTokens.color.panelStroke
+};
 function styleDialogTitle(title, width) {
   Object.assign(title.style, uiTokens.typography.panelTitle, { fill: 16113563 });
   title.anchor.set(0, 0);
@@ -83760,7 +83788,7 @@ async function createMapRenderer(canvas, sink) {
     const selected = selectedNode() ?? nodes.find((node) => node.isCurrent);
     clearJourneyLayer(controls);
     if (state?.isPreview === true) {
-      addControl("Close", "Close map preview", !pending && !travelTransition, width - 124, 12, 104, close);
+      addControl("Close", "Close map preview", !pending && !travelTransition, width - 128, 12, 104, close);
     }
     contextPanel.visible = metrics.contextVisible;
     contextTitle.visible = metrics.contextVisible;
@@ -83791,7 +83819,7 @@ async function createMapRenderer(canvas, sink) {
     panY = Math.min(0, Math.max(metrics.minimumPanY, panY));
   }
   function addControl(label, hint, enabled, x2, y2, width, onPress) {
-    const control = new MapControl(label, hint, enabled, width, onPress);
+    const control = label === "Close" ? new GameButton({ ...dialogCloseButton, enabled, onPress }) : new MapControl(label, hint, enabled, width, onPress);
     control.position.set(x2, y2);
     controls.addChild(control);
   }
@@ -85105,7 +85133,7 @@ async function createCollectionRenderer(canvas, sink) {
   const empty = new Text({ text: "", style: { ...uiTokens.typography.body, fill: 12109785 } });
   const compactDetail = new Text({ text: "", style: { ...uiTokens.typography.body, fill: 14214126, wordWrap: true } });
   title.resolution = empty.resolution = compactDetail.resolution = 2;
-  const close = new GameButton({ width: 1, height: 1, label: "Close", onPress: () => {
+  const close = new GameButton({ ...dialogCloseButton, onPress: () => {
     void sink.invokeMethodAsync("HandleActionFromRendererAsync", "close");
   } });
   const content = new Container();
@@ -86063,7 +86091,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     const activeSection = action === `history:section:${state?.history?.selectedSectionIndex}` || action === `history:run:${state?.history?.selectedRunId}`;
     const activeTab = action.startsWith("tab:") && state?.settings?.tabIndex === Number(action.slice(4));
     const primaryColors = action.startsWith("confirm:") && state?.confirmation?.navigation ? { fill: navigationButtonColor, stroke: 9418699 } : action === "save" || action.startsWith("outcome:") ? { fill: 3627602, stroke: 9488295 } : {};
-    const button = new GameButton({ ...primaryColors, ...settingsActionColors(action), menuIcon: icon, width: buttonWidth, height: buttonHeight2, label, enabled, selected: activeTab || activeSection || action === `particle:${state?.settings?.particleLevel}`, focused: keyboardFocusVisible && index === selectedIndex, onPress: () => {
+    const button = new GameButton({ ...primaryColors, ...settingsActionColors(action), menuIcon: icon, width: buttonWidth, height: buttonHeight2, label, ...label === "Close" ? dialogCloseButton : {}, enabled, selected: activeTab || activeSection || action === `particle:${state?.settings?.particleLevel}`, focused: keyboardFocusVisible && index === selectedIndex, onPress: () => {
       keyboardFocusVisible = false;
       selectedIndex = index;
       void submit(action);
@@ -86962,7 +86990,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
   const createButton = (action, label, enabled, width, height, x2, y2) => {
     let button = retainedButtons.get(action);
     if (!button) {
-      const created = new GameButton({ appearance: "toolbar", menuIcon: controlIcon(action, label), width, height, label, onPress: () => void submit(action) });
+      const created = new GameButton({ ...action === "closeMenu" ? {} : { appearance: "toolbar" }, menuIcon: controlIcon(action, label), width, height, label, ...action === "closeMenu" ? dialogCloseButton : {}, onPress: () => void submit(action) });
       created.removeAllListeners("pointertap");
       created.on("pointertap", (event) => {
         if (event?.pointerType !== "touch" || !scrollInput.suppressesTap(event.pointerId)) created.press();
@@ -87040,7 +87068,7 @@ async function createRunControlsRenderer(canvas, sink, initialState) {
     const panelHeight = Math.min(availableHeight, 90 + contentHeight);
     const panelY = Math.max(8, (barY - panelHeight) / 2);
     panel.roundRect(panelX, panelY, panelWidth, panelHeight, uiTokens.frame.panelCornerRadius).fill(uiColors.panelFill).stroke({ color: uiColors.panelStroke, width: 2 });
-    createButton("closeMenu", "Close", true, 104, 44, panelX + panelWidth - 124, panelY + 12);
+    createButton("closeMenu", "Close", true, 104, 44, panelX + panelWidth - 128, panelY + 12);
     overflow.position.set(panelX + 12, panelY + 64);
     overflow.resize(panelWidth - 24, Math.max(1, panelHeight - 90));
     overflow.setContentHeight(contentHeight);
@@ -87198,7 +87226,7 @@ async function createInventoryRenderer(canvas, sink, initialState) {
   const buttonsByAction = /* @__PURE__ */ new Map();
   const frame = new Graphics();
   const description = new Text({ text: "", style: { ...uiTokens.typography.body, fontSize: 15, wordWrap: true, breakWords: true, fill: uiTokens.color.text } });
-  const close = new GameButton({ label: "Close", width: 66, height: 32, onPress: () => void submit("close") });
+  const close = new GameButton({ ...dialogCloseButton, onPress: () => void submit("close") });
   details.addChild(frame, description, close);
   application.stage.addChild(background, controls, details);
   let state;
@@ -87229,7 +87257,7 @@ async function createInventoryRenderer(canvas, sink, initialState) {
       art.width = 26;
       art.height = 26;
       art.eventMode = "none";
-      button.addChildAt(art, 1);
+      button.content.addChildAt(art, 0);
     }).catch(() => void 0);
   };
   const addBadge = (button, text) => {
@@ -87258,7 +87286,7 @@ ${selected.description}`;
     description.position.set(12, 12);
     const panelHeight = description.height + 64;
     frame.clear().roundRect(0, 0, panelWidth, panelHeight, 6).fill(1058092).stroke({ color: 15252579, width: 1 });
-    close.position.set(panelWidth - 78, panelHeight - 44);
+    close.position.set(panelWidth - 116, panelHeight - 56);
     close.setEnabled(!state?.disabled);
     details.position.set(width - panelWidth - 6, 48);
     return 52 + panelHeight;
@@ -87274,19 +87302,21 @@ ${selected.description}`;
     sharedTooltip.setInspection(entry.inspection ?? { keywords: [`${entry.name}
 ${entry.description}`], references: [] }, host.width() - 16);
     host.layer.addChild(sharedTooltip);
-    sharedTooltip.show({
-      x: (railBounds.left + bounds.x - hostBounds.left) * scaleX,
-      y: (railBounds.top + 5 - hostBounds.top) * scaleY,
-      width: 44 * scaleX,
-      height: 34 * scaleY
-    }, { width: host.width(), height: host.height() });
+    sharedTooltip.show(
+      {
+        x: (railBounds.left + bounds.x - hostBounds.left) * scaleX,
+        y: (railBounds.top + 5 - hostBounds.top) * scaleY,
+        width: 44 * scaleX,
+        height: 34 * scaleY
+      },
+      { width: host.width(), height: host.height(), topInset: Math.max(8, (railBounds.bottom - hostBounds.top) * scaleY + 8) }
+    );
   };
   const layout = () => {
     if (disposed || !state) return;
     const currentRevision = ++revision;
     const width = Math.max(1, canvas.parentElement?.clientWidth || 640);
-    const compact = width < 500;
-    const pileWidth = compact ? 50 : 88;
+    const pileWidth = 44;
     const equipmentStart = 6 + 3 * (pileWidth + 4);
     const equipment = state.entries.filter((entry) => entry.action.startsWith("inspect:"));
     const capacity = Math.max(1, Math.floor((width - equipmentStart - 70) / 48));
@@ -87300,7 +87330,7 @@ ${entry.description}`], references: [] }, host.width() - 16);
     entries.forEach((entry, index) => {
       const isEquipment = entry.action.startsWith("inspect:");
       const button = new GameButton({
-        label: isEquipment || compact ? "" : entry.name,
+        label: "",
         menuIcon: isEquipment ? "equipment" : pileIcons[index],
         width: isEquipment ? 44 : pileWidth,
         height: 34,
@@ -87312,11 +87342,9 @@ ${entry.description}`], references: [] }, host.width() - 16);
       button.position.set(isEquipment ? equipmentStart + (index - 3) * 48 : 6 + index * (pileWidth + 4), 5);
       controls.addChild(button);
       buttonsByAction.set(entry.action, button);
-      if (isEquipment) {
-        button.on("pointerover", () => inspect(entry, button));
-        button.on("pointerout", () => sharedTooltip.hide());
-      }
-      button.setIconOnly(isEquipment || compact);
+      button.on("pointerover", () => inspect(entry, button));
+      button.on("pointerout", () => sharedTooltip.hide());
+      button.setIconOnly(true);
       if (isEquipment) decorateEquipment(button, entry, currentRevision);
       addBadge(button, entry.badge);
     });
@@ -87345,7 +87373,7 @@ ${entry.description}`], references: [] }, host.width() - 16);
     const index = state?.entries.filter((entry2) => entry2.action.startsWith("inspect:")).findIndex((entry2) => entry2.action === focusedAction) ?? -1;
     if (index >= 0) {
       const width = Math.max(1, canvas.parentElement?.clientWidth || 640);
-      const capacity = Math.max(1, Math.floor((width - 6 - 3 * ((width < 500 ? 50 : 88) + 4) - 70) / 48));
+      const capacity = Math.max(1, Math.floor((width - 6 - 3 * 48 - 70) / 48));
       page = Math.floor(index / capacity);
     }
     layout();
