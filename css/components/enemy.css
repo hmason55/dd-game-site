@@ -74,24 +74,11 @@
     justify-content: center;
 }
 
-.entity-image,
-.enemy-tile .mud-image {
-    max-width: 100%;
-    max-height: clamp(44px, 9vh, 92px);
-    width: auto;
-    margin: 0 auto;
-    object-fit: contain;
-}
-
 .entity-telegraph-row {
     min-height: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
-}
-
-.entity-telegraph-row .mud-icon-root {
-    filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 3px rgba(0, 0, 0, 0.8));
 }
 
 .entity-tile--enemy {
@@ -102,33 +89,6 @@
     border-color: rgba(129, 203, 255, 0.45);
 }
 
-.encounter-screen:has(.hand .card-target-enemy:hover) .entity-tile--enemy,
-.encounter-screen:has(.inventory .card-target-enemy:hover) .entity-tile--enemy,
-.encounter-screen:has(.hand .card-target-both:hover) .entity-tile--enemy,
-.encounter-screen:has(.inventory .card-target-both:hover) .entity-tile--enemy,
-.encounter-screen:has(.hand .card-target-player:hover) .entity-tile--player,
-.encounter-screen:has(.inventory .card-target-player:hover) .entity-tile--player,
-.encounter-screen:has(.hand .card-target-both:hover) .entity-tile--player,
-.encounter-screen:has(.inventory .card-target-both:hover) .entity-tile--player,
-.entity-tile.mud-border-info {
-    --entity-available-color: var(--mud-palette-info);
-    border-color: color-mix(in srgb, var(--entity-available-color) 64%, white 36%);
-    box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--entity-available-color) 42%, white),
-        0 0 0 1px color-mix(in srgb, var(--entity-available-color) 38%, transparent),
-        0 0 9px color-mix(in srgb, var(--entity-available-color) 30%, transparent);
-}
-
-.entity-tile.mud-drop-zone-can-drop {
-    --entity-active-color: var(--mud-palette-success);
-    border-color: color-mix(in srgb, var(--entity-active-color) 88%, white 12%);
-    box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--entity-active-color) 75%, white),
-        0 0 0 2px color-mix(in srgb, var(--entity-active-color) 78%, transparent),
-        0 0 18px color-mix(in srgb, var(--entity-active-color) 58%, transparent);
-    background: linear-gradient(160deg, rgba(10, 10, 16, 0.72), color-mix(in srgb, var(--entity-active-color) 16%, rgba(24, 26, 34, 0.44)));
-}
-
 .dead {
     opacity: 0 !important;
 }
@@ -137,11 +97,6 @@
     .enemy-container {
         gap: 0.35rem;
         min-height: clamp(105px, 18vh, 150px);
-    }
-
-    .entity-image,
-    .enemy-tile .mud-image {
-        max-height: clamp(34px, 8vh, 64px);
     }
 
     .entity-name {
@@ -163,20 +118,10 @@
         padding: 0.15rem;
         border-radius: 0.45rem;
     }
-
-    .entity-image,
-    .enemy-tile .mud-image {
-        max-height: clamp(30px, 7.5vh, 52px);
-    }
 }
 
 @media (orientation: landscape) and (pointer: coarse) {
     .enemy-container {
         min-height: 110px;
-    }
-
-    .entity-image,
-    .enemy-tile .mud-image {
-        max-height: 44px;
     }
 }

@@ -18,7 +18,7 @@ function isTiltSuppressed(card) {
         return true;
     }
 
-    if (isElementWithinSelector(card, '.mud-drop-dragging')) {
+    if (isElementWithinSelector(card, '[aria-grabbed="true"]')) {
         return true;
     }
 

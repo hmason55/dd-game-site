@@ -2,12 +2,5 @@
 
 /* Reduce title bar and tab header height on short landscape screens */
 @media (orientation: landscape) and (max-height: 500px) {
-    .backpack-dialog .mud-tabs-toolbar {
-        min-height: 32px;
-    }
-
-    .backpack-dialog .mud-tab {
-        min-height: 32px;
-    }
 }
 

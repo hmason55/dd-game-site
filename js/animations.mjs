@@ -218,11 +218,6 @@ export function setVisibility(id, visible)  {
     el.style.visibility = visibility;
     el.style.opacity = opacity;
     el.style.pointerEvents = visible ? '' : 'none';
-    el.querySelectorAll('.mud-badge, .mud-badge-root, .mud-badge-wrapper').forEach(b => {
-        b.style.visibility = visibility;
-        b.style.opacity = opacity;
-        b.style.pointerEvents = visible ? '' : 'none';
-    });
 }
 
 // Clone an element and animate it to the bottom right corner

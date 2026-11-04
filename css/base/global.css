@@ -1,3 +1,26 @@
+:root {
+    color-scheme: dark;
+    --game-color-primary: #3b6ccb;
+    --game-color-secondary: #48c3d6;
+    --game-color-tertiary: #d4af65;
+    --game-color-background: #1a1a1a;
+    --game-color-surface: #2b2b2b;
+    --game-color-text-primary: #c2b49a;
+    --game-color-text-secondary: #6fb9b4;
+    --game-color-success: #4caf50;
+    --game-color-info: #5ba8ff;
+    --game-color-warning: #e6b750;
+    --game-color-error: #d34b4b;
+    --game-color-lines-default: #71858a;
+    --game-color-action-default: #c2b49a;
+    --game-border-radius: 8px;
+    font-family: "Alegreya", serif;
+    background: var(--game-color-background);
+    color: var(--game-color-text-primary);
+}
+*, *::before, *::after { box-sizing: border-box; }
+button, input { font: inherit; }
+
 /* Global styles used across the application */
 html, body, #app {
     margin: 0;
@@ -39,16 +62,6 @@ html, body, #app {
 }
 
 @media (max-width: 700px) {
-    .game-menu-bar .mud-toolbar {
-        gap: 0.125rem;
-        padding-inline: 0.25rem;
-    }
-
-    .game-menu-bar .mud-icon-button {
-        height: 2.75rem;
-        min-width: 2.75rem;
-        width: 2.75rem;
-    }
 
     .game-menu-bar .game-end-turn {
         min-height: 2.5rem;
@@ -75,15 +88,6 @@ html, body, #app {
 }
 
 @media (orientation: landscape) and (max-height: 540px) {
-    .game-menu-bar .mud-toolbar {
-        min-height: 2.75rem;
-    }
-
-    .game-menu-bar .mud-icon-button {
-        height: 2.5rem;
-        min-width: 2.5rem;
-        width: 2.5rem;
-    }
 
     .game-menu-bar .game-end-turn {
         font-size: 0.75rem;
@@ -104,14 +108,6 @@ html, body, #app {
     width: 100%;
 }
 
-.character-select-options .mud-toggle-item {
-    justify-content: center;
-    margin: 0;
-    min-height: 3rem;
-    min-width: 0;
-    padding-inline: 0.5rem;
-}
-
 @media (max-width: 600px) {
     .character-select-options {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -119,18 +115,15 @@ html, body, #app {
 }
 
 @media (orientation: landscape) and (max-height: 540px) {
-    .character-select-options .mud-toggle-item {
-        min-height: 2.5rem;
-    }
 }
 
 .pixi-encounter-surface canvas:focus-visible {
-    outline: 3px solid var(--mud-palette-secondary);
+    outline: 3px solid var(--game-color-secondary);
     outline-offset: -3px;
 }
 
 .pixi-reward-surface canvas:focus-visible {
-    outline: 3px solid var(--mud-palette-secondary);
+    outline: 3px solid var(--game-color-secondary);
     outline-offset: -3px;
 }
 
@@ -170,11 +163,6 @@ html, body, #app {
     margin: 16px 8px;
 }
 
-.mud-badge-text-secondary .mud-badge-icon {
-/*    background-color: transparent !important;
-    color: var(--mud-palette-secondary) !important;*/
-}
-
 .hand {
     display: flex;
     flex-wrap: wrap;
@@ -185,11 +173,6 @@ html, body, #app {
     padding: 32px 0px;
     margin-top: auto;
     touch-action: none;
-}
-
-/* Allow dragging to scroll when the hand is shown inside dialogs or reward screens */
-.mud-dialog-content .hand {
-    touch-action: auto;
 }
 
 .inventory {
@@ -363,12 +346,8 @@ html, body, #app {
 }
 
 .shop-item-card:focus-visible {
-    outline: 2px solid var(--mud-palette-info);
+    outline: 2px solid var(--game-color-info);
     outline-offset: 2px;
-}
-
-.shop-item-card .mud-stack {
-    flex: 1;
 }
 
 .card-tooltip-content {
@@ -395,16 +374,6 @@ html, body, #app {
     display: inline-flex;
     justify-content: center;
     align-items: center;
-    --mud-badge-size: 1.75rem;
-}
-
-.shop-sale-badge .mud-badge-content {
-    min-width: auto;
-    padding: 0.25rem 0.5rem;
-}
-
-.shop-sale-badge .mud-chip {
-    width: auto;
 }
 
 .shop-sale-badge-label {
@@ -511,29 +480,6 @@ button[role="checkbox"] .card {
     transition: none;
 }
 
-.hand .mud-drop-item,
-.inventory .mud-drop-item {
-    z-index: 20;
-    transition: box-shadow var(--card-transition-duration, 150ms) cubic-bezier(0.4, 0, 0.2, 1),
-                margin var(--card-transition-duration, 150ms) cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.hand .mud-drop-item:hover,
-.hand .mud-drop-item:focus,
-.inventory .mud-drop-item:hover,
-.inventory .mud-drop-item:focus {
-    z-index: 100;
-/*    margin-right: 16px !important;
-    margin-left: 16px !important;*/
-}
-
-.card .mud-card-content {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    border-radius: 4px;
-}
-
 .card-description-container {
     display: flex;
     flex-grow: 1;
@@ -575,85 +521,23 @@ button[role="checkbox"] .card {
 }
 
 .card-description-change--increase {
-    color: var(--mud-palette-success) !important;
+    color: var(--game-color-success) !important;
 }
 
 .card-description-change--decrease {
-    color: var(--mud-palette-error) !important;
-}
-
-.mud-card.card-character-oathbound,
-.mud-card.card-character-oathbound .mud-card-content {
-    background-color: #A48755;
-}
-
-.mud-card.card-character-hollowblade,
-.mud-card.card-character-hollowblade .mud-card-content {
-    background-color: #7D56A7;
-}
-
-.mud-card.card-character-dredgecaller,
-.mud-card.card-character-dredgecaller .mud-card-content {
-    background-color: #4A718C;
-}
-
-.mud-card.card-character-gravetender,
-.mud-card.card-character-gravetender .mud-card-content {
-    background-color: #965353;
-}
-
-.highlight,
-button[role="checkbox"][aria-checked="true"] .card,
-button[role="checkbox"][aria-checked="true"] .mud-image {
-    box-shadow: none !important;
-    filter: drop-shadow(0px 0px 2px var(--card-highlight-color, var(--mud-palette-secondary)))
-            drop-shadow(0px 0px 2px var(--card-highlight-color, var(--mud-palette-secondary)));
+    color: var(--game-color-error) !important;
 }
 
 .highlight-conditional {
-    --card-highlight-color: var(--mud-palette-success);
-}
-
-
-
-/* --- Fix for dragged cards going behind --- */
-.mud-drop-item.mud-drop-dragging {
-    position: fixed !important;
-    z-index: 10000 !important;
-    pointer-events: none;
-    transform: translate(-50%, -50%);
-    top: 0;
-    left: 0;
-}
-
-.mud-button,
-.card .mud-card-content,
-.card-wrapper .mud-typography {
-    text-shadow: 0 0 1px black, 0 0 1px black, 0 0 2px black, 0 0 2px black;
-    backface-visibility: hidden;
-    transform: translateZ(0);
-}
-
-.mud-progress-linear-content > .mud-typography {
-    text-shadow: 0 0 2px black, 0 0 2px black, 0 0 2px black, 0 0 2px black;
-}
-
-.mud-badge {
-    text-shadow: 0 0 2px black, 0 0 2px black, 0 0 2px black, 0 0 2px black;
+    --card-highlight-color: var(--game-color-success);
 }
 
 .cost-increased {
-    color: var(--mud-palette-error) !important;
+    color: var(--game-color-error) !important;
 }
 
 .cost-decreased {
-    color: var(--mud-palette-success) !important;
-}
-
-.card .mud-icon-root,
-.resource-bar-wrapper,
-.health-bar-wrapper {
-    filter: drop-shadow(0 0 1px black) drop-shadow(0 0 1px black);
+    color: var(--game-color-success) !important;
 }
 
 .health-bar-wrapper {
@@ -701,22 +585,11 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     overflow: hidden;
 }
 
-.no-ripple.mud-ripple::after {
-    display: none !important;
-    animation: none !important;
-}
-
 
 
 :root {
     /* Card names */
-    --mud-typography-body2-weight: 900 !important;
-    --mud-typography-body2-size: 1.0rem !important;
-    --mud-typography-body2-lineheight: 1.33 !important;
     /* Card descriptions */
-    --mud-typography-caption-weight: 900 !important;
-    --mud-typography-caption-size: 0.6rem !important;
-    --mud-typography-caption-lineheight: 1.16 !important;
     /* Duration for card transitions and clone animations */
     --card-transition-duration: 400ms;
     --clone-animation-duration: 0.35s;
@@ -768,64 +641,6 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     transition: opacity 0.4s ease-in;
 }
 
-.mud-tabs-tabbar-wrapper,
-.mud-snackbar {
-    --notch: calc(var(--mud-typography-button-lineheight) * 0.5em);
-    height: var(--mud-typography-button-lineheight);
-    clip-path: polygon( var(--notch) 0, calc(100% - var(--notch)) 0, 100% 50%, calc(100% - var(--notch)) 100%, var(--notch) 100%, 0 50% );
-    margin-top: 4px;
-}
-
-.mud-button:not(.mud-toggle-item) {
-    min-height: 2.75rem;
-    height: auto;
-    margin-top: 4px;
-    border-radius: 3px;
-    clip-path: none;
-    font-family: "Alegreya", Georgia, serif;
-    letter-spacing: 0.07em;
-    font-weight: 600;
-    border: 1px solid #536d72;
-    background: #10252c;
-    color: #f2eee4;
-    box-shadow: inset 0 1px rgb(242 238 228 / 14%);
-}
-
-.mud-button-filled-primary,
-.mud-button-filled-error {
-    background: #9c4432 !important;
-    border-color: #e47d5a !important;
-}
-
-.mud-snackbar {
-    justify-content: space-between;
-    --snackbar-height: calc(var(--mud-typography-button-lineheight) * 1.25em);
-    --notch: calc(var(--snackbar-height) * 0.5);
-    height: var(--snackbar-height);
-    min-height: var(--snackbar-height);
-    padding: 0 12px;
-}
-
-.mud-snackbar .mud-snackbar-content {
-    height: 100%;
-    min-height: var(--snackbar-height);
-    clip-path: polygon( var(--notch) 0, calc(100% - var(--notch)) 0, 100% 50%, calc(100% - var(--notch)) 100%, var(--notch) 100%, 0 50% );
-}
-
-.mud-icon-button:not(.mud-icon-button-size-small) {
-    border-radius: 3px;
-    clip-path: none !important;
-}
-
-.mud-button-label {
-    padding-right: 8px;
-    padding-left: 8px;
-}
-
-.mud-snackbar-location-bottom-center {
-    bottom: 52px;
-}
-
 .saving-spinner {
     position: fixed;
     bottom: calc(80px + env(safe-area-inset-bottom));
@@ -856,36 +671,17 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
 @keyframes saving-spinner-animation { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner-orbit { animation: none; } }
 
-/* Limit dialog tab widths so they stay visible without scrolling */
-
-
-.dialog-tabs .mud-tab {
-    min-width: max(10vw, 64px) !important;
-}
-
-.dialog-tabs-container .mud-tabs-panels {
-    display: none;
-}
-
 /* Keep tabs visible while allowing dialog content to scroll */
 .dialog-tabs-container {
     position: sticky;
     top: 0;
     z-index: 200;
-    background-color: var(--mud-palette-surface);
-}
-
-.mud-dialog-content {
-    overflow-y: auto;
+    background-color: var(--game-color-surface);
 }
 
 .reward-dialog-list {
     max-height: calc(95vh - 128px);
     overflow-y: auto;
-}
-
-.reward-select-dialog .mud-dialog-content {
-    overflow-y: visible;
 }
 
 .reward-select-dialog .reward-select-toggle-group {
@@ -906,17 +702,6 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
 }
 
-.reward-select-dialog .reward-select-toggle-item:not(.mud-toggle-item-selected) {
-    opacity: 0.82;
-}
-
-.reward-select-dialog .reward-select-toggle-item.mud-toggle-item-selected {
-    opacity: 1;
-    transform: translateY(-2px);
-    border-color: var(--mud-palette-warning) !important;
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--mud-palette-warning) 75%, transparent), 0 0 16px color-mix(in srgb, var(--mud-palette-warning) 55%, transparent) !important;
-}
-
 .reward-select-dialog .reward-select-hand {
     overflow: visible;
     min-height: 0;
@@ -928,16 +713,7 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     height: calc(clamp(120px, 16vw, 172px) * 1.6);
 }
 
-.reward-select-dialog .reward-select-hand .mud-drop-item:hover .card,
-.reward-select-dialog .reward-select-hand .mud-drop-item:focus-within .card,
-.reward-select-dialog .reward-select-toggle-item[aria-checked="true"] .card {
-    --card-scale: 1.08;
-}
-
 @media (max-width: 900px) and (pointer: coarse) {
-    .reward-select-dialog .mud-dialog-content {
-        padding-bottom: 4px;
-    }
 
     .reward-select-dialog .reward-select-toggle-group {
         max-height: 64dvh !important;
@@ -955,12 +731,6 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     .reward-select-dialog .reward-select-hand .card {
         width: clamp(88px, 24vw, 120px);
         height: calc(clamp(88px, 24vw, 120px) * 1.6);
-    }
-
-    .reward-select-dialog .reward-select-hand .mud-drop-item:hover .card,
-    .reward-select-dialog .reward-select-hand .mud-drop-item:focus-within .card,
-    .reward-select-dialog .reward-select-toggle-item[aria-checked="true"] .card {
-        --card-scale: 1.02;
     }
 }
 
@@ -994,29 +764,8 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     }
 }
 
-.mud-badge.triangle {
-    clip-path: polygon(7.5% 25%, 50% 100%, 92.5% 25%);
-}
-
-.mud-badge.diamond {
-    clip-path: polygon(50% 5%, 95% 50%, 50% 95%, 5% 50%)
-}
-
-.mud-tab-badge {
-    margin-left: 4px;
-    margin-bottom: -24px;
-}
-
 .scalable-text {
     font-size: clamp(0.5rem, 2vw, 1rem);
-}
-
-.health-bar,
-.mud-progress-linear-bar {
-    display: flex;
-    --notch: 12px;
-    height: 12px;
-    clip-path: polygon( var(--notch) 0, calc(100% - var(--notch)) 0, 100% 50%, calc(100% - var(--notch)) 100%, var(--notch) 100%, 0 50% );
 }
 
 .diamond-progress-bar {
@@ -1121,11 +870,6 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
     filter: brightness(125%);
 }
 
-/* Align snackbar text to the center for bottom-center snackbars */
-.mud-snackbar-content-message {
-    text-align: center;
-}
-
 /* --- Card redesign: resilient layered card layout --- */
 .hand {
     column-gap: clamp(0.2rem, 0.8vw, 0.6rem);
@@ -1149,14 +893,6 @@ button[role="checkbox"][aria-checked="true"] .mud-image {
 button[role="checkbox"] .card {
     --card-scale: 1.16;
     z-index: 40;
-}
-
-.card.card-surface,
-.card.card-surface .mud-card-content {
-    position: relative;
-    border-radius: 10px;
-    overflow: hidden;
-    background-color: #1f1b24;
 }
 
 .card-content {
@@ -1272,7 +1008,7 @@ button[role="checkbox"] .card {
     justify-content: center;
     font-size: clamp(0.55rem, 0.95vw, 0.78rem);
     font-weight: 700;
-    color: var(--mud-palette-text-primary);
+    color: var(--game-color-text-primary);
     background-color: rgba(0, 0, 0, 0.64);
     border: 1px solid rgba(255, 255, 255, 0.5);
     text-shadow: 0 0 2px #000;
@@ -1369,10 +1105,6 @@ button[role="checkbox"] .card {
         padding-inline: 0.25rem;
     }
 
-    .hand .mud-drop-item {
-        flex: 0 0 auto;
-    }
-
     .hand .card {
         width: clamp(74px, 24vw, 100px);
     }
@@ -1399,7 +1131,7 @@ button[role="checkbox"] .card {
 }
 
 .item-uses-cost {
-    background: color-mix(in srgb, var(--mud-palette-warning) 80%, #000 20%);
+    background: color-mix(in srgb, var(--game-color-warning) 80%, #000 20%);
     border-color: rgba(255, 255, 255, 0.55);
     border-radius: 50%;
 }
@@ -1422,41 +1154,15 @@ button[role="checkbox"] .card {
         overflow: visible;
     }
 
-    .encounter-screen .player-hand-container .hand:has(> .mud-drop-item:nth-child(n+10)) {
-        --encounter-hand-overlap: clamp(12px, 1.7vw, 22px);
-    }
-
-    .encounter-screen .player-hand-container .hand .mud-drop-item {
-        position: relative;
-        flex: 0 0 auto;
-        margin-left: calc(var(--encounter-hand-overlap) * -1);
-        z-index: 20;
-    }
-
-    .encounter-screen .player-hand-container .hand .mud-drop-item:first-child {
-        margin-left: 0;
-    }
-
-    .encounter-screen .player-hand-container .hand .mud-drop-item:hover,
-    .encounter-screen .player-hand-container .hand .mud-drop-item:focus-within {
-        z-index: 140;
-    }
-
     .encounter-screen .player-hand-container .hand .card {
         width: clamp(64px, 8.8vw, 116px);
     }
 }
 
 @media (orientation: landscape) and (max-width: 1200px) {
-    .encounter-screen .player-hand-container .hand:has(> .mud-drop-item:nth-child(n+8)) {
-        --encounter-hand-overlap: clamp(12px, 2.6vw, 24px);
-    }
 }
 
 @media (orientation: landscape) and (max-width: 900px) {
-    .encounter-screen .player-hand-container .hand:has(> .mud-drop-item:nth-child(n+6)) {
-        --encounter-hand-overlap: clamp(14px, 4vw, 26px);
-    }
 
     .encounter-screen .player-hand-container .hand .card {
         width: clamp(58px, 14vw, 88px);
@@ -1468,7 +1174,7 @@ button[role="checkbox"] .card {
     isolation: isolate;
     --chain-highlight-progress: 1;
     --chain-highlight-elapsed: calc((1 - var(--chain-highlight-progress)) * 1turn);
-    --chain-highlight-color: var(--mud-palette-success);
+    --chain-highlight-color: var(--game-color-success);
 }
 
 
@@ -1477,7 +1183,7 @@ button[role="checkbox"] .card {
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    border: 2px solid color-mix(in srgb, var(--mud-palette-success) 30%, black 70%);
+    border: 2px solid color-mix(in srgb, var(--game-color-success) 30%, black 70%);
     z-index: 3;
     pointer-events: none;
 }
@@ -1493,7 +1199,7 @@ button[role="checkbox"] .card {
         transparent 0turn var(--chain-highlight-elapsed),
         var(--chain-highlight-color) var(--chain-highlight-elapsed) 1turn
     );
-    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mud-palette-success) 65%, transparent));
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--game-color-success) 65%, transparent));
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;

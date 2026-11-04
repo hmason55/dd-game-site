@@ -1,7 +1,7 @@
 /* Skill progression tree layout */
 
 .progress-node {
-    background-color: var(--mud-palette-surface);
+    background-color: var(--game-color-surface);
     z-index: 1;
     position: relative;
     padding: 4px;
@@ -28,7 +28,7 @@
 }
 
 .skill-btn {
-    --skill-node-color: var(--mud-palette-secondary);
+    --skill-node-color: var(--game-color-secondary);
     position: relative;
     display: flex;
     align-items: center;
@@ -57,30 +57,30 @@
 }
 
 .skill-btn.unlocked {
-    --skill-node-color: var(--mud-palette-success);
+    --skill-node-color: var(--game-color-success);
 }
 
 .skill-btn.unlocked::before {
-    background: color-mix(in srgb, var(--mud-palette-success) 35%, transparent);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mud-palette-success) 65%, transparent);
+    background: color-mix(in srgb, var(--game-color-success) 35%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--game-color-success) 65%, transparent);
 }
 
 .skill-btn.health {
-    --skill-node-color: var(--mud-palette-error);
+    --skill-node-color: var(--game-color-error);
 }
 
 .skill-btn.attack {
-    --skill-node-color: var(--mud-palette-warning);
+    --skill-node-color: var(--game-color-warning);
 }
 
 .skill-btn.mana {
-    --skill-node-color: var(--mud-palette-primary);
+    --skill-node-color: var(--game-color-primary);
 }
 
 .skill-btn.energy {
-    --skill-node-color: var(--mud-palette-success);
+    --skill-node-color: var(--game-color-success);
 }
 
 .skill-btn.utility {
-    --skill-node-color: var(--mud-palette-secondary);
+    --skill-node-color: var(--game-color-secondary);
 }

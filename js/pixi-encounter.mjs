@@ -72859,7 +72859,7 @@ function isDialogTarget(value) {
   return typeof value === "object" && value !== null && "closest" in value && typeof value.closest === "function";
 }
 function findDialogOwner(value) {
-  return isDialogTarget(value) ? value.closest("[role='dialog'], .mud-dialog") : null;
+  return isDialogTarget(value) ? value.closest("[role='dialog']") : null;
 }
 
 // src/particle-effect-manager.ts
@@ -83797,6 +83797,125 @@ function toMainMenuState(value) {
 var feedbackStyle6 = new TextStyle({ ...uiTokens.typography.body, align: "center", fill: 16113563, fontSize: 14 });
 var watermarkStyle = new TextStyle({ ...uiTokens.typography.body, align: "right", fill: 6717587, fontSize: 11 });
 
+// src/seed-input.ts
+init_lib();
+function isRunSeed(value) {
+  return /^\d{1,20}$/.test(value) && BigInt(value) <= 18446744073709551615n;
+}
+var SeedInput = class extends Container {
+  constructor(host, commit) {
+    super();
+    this.commit = commit;
+    this.input = host.ownerDocument.createElement("input");
+    this.input.type = "text";
+    this.input.inputMode = "numeric";
+    this.input.pattern = "[0-9]{1,20}";
+    this.input.autocomplete = "off";
+    this.input.setAttribute("aria-label", "Run seed");
+    this.input.style.cssText = "position:absolute;left:0;top:0;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);user-select:text";
+    host.appendChild(this.input);
+    this.addChild(this.frame, this.caption, this.errorText);
+    this.caption.anchor.set(0.5);
+    this.errorText.position.set(0, 43);
+    this.eventMode = "static";
+    this.cursor = "text";
+    this.on("pointertap", () => {
+      if (!this.enabled) return;
+      this.input.focus({ preventScroll: true });
+      this.input.select();
+    });
+    this.input.addEventListener("focus", () => this.draw());
+    this.input.addEventListener("input", () => this.draw());
+    this.input.addEventListener("blur", () => {
+      void this.flush();
+    });
+    this.input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== "Escape") return;
+      event.preventDefault();
+      if (event.key === "Escape") this.input.value = this.committed;
+      this.input.blur();
+    });
+  }
+  commit;
+  frame = new Graphics();
+  caption = new Text({ text: "", style: { ...uiTokens.typography.body, fontSize: 14, fill: uiColors.bodyText } });
+  errorText = new Text({ text: "", style: { ...uiTokens.typography.body, fontSize: 11, fill: 14844014 } });
+  input;
+  committed = "0";
+  pending;
+  deferredSeed;
+  enabled = true;
+  disposed = false;
+  fieldWidth = 1;
+  /** Reflects authoritative seeds without replacing text during an active edit or pending save. */
+  reconcile(value) {
+    if (this.pending) {
+      this.deferredSeed = value;
+      return;
+    }
+    if (this.input.ownerDocument.activeElement === this.input) return;
+    this.committed = value;
+    this.input.value = value;
+    this.draw();
+  }
+  /** Disables native and rendered editing while the run starts. */
+  setEnabled(enabled) {
+    this.enabled = enabled;
+    this.input.disabled = !enabled;
+    this.draw();
+  }
+  /** Fits the rendered editor to the character-selection panel. */
+  resize(width) {
+    this.fieldWidth = Math.max(1, width);
+    this.draw();
+  }
+  /** Commits valid text before run creation; invalid text leaves the previous seed untouched. */
+  async flush() {
+    if (this.disposed) return false;
+    if (this.pending) await this.pending;
+    const value = this.input.value;
+    if (!isRunSeed(value)) {
+      this.draw();
+      return false;
+    }
+    if (value === this.committed) {
+      this.draw();
+      return true;
+    }
+    this.pending = this.commit(value).catch(() => false);
+    const accepted = await this.pending;
+    this.pending = void 0;
+    if (this.disposed) return false;
+    if (accepted) this.committed = value;
+    if (this.deferredSeed !== void 0) {
+      this.committed = this.deferredSeed;
+      if (this.input.ownerDocument.activeElement !== this.input) this.input.value = this.deferredSeed;
+      this.deferredSeed = void 0;
+    }
+    this.input.setAttribute("aria-invalid", String(!accepted));
+    this.draw(!accepted);
+    return accepted;
+  }
+  /** Removes the native editing surface when its owning renderer is disposed. */
+  dispose() {
+    this.disposed = true;
+    this.input.remove();
+  }
+  draw(rejected = false) {
+    const focused = this.input.ownerDocument.activeElement === this.input;
+    const invalid = rejected || !isRunSeed(this.input.value);
+    this.input.setAttribute("aria-invalid", String(invalid));
+    this.errorText.text = invalid ? "Enter 0\u201318446744073709551615." : "";
+    this.frame.clear().roundRect(0, 0, this.fieldWidth, 40, 4).fill({ color: uiColors.panelFill }).stroke({ color: invalid ? 14844014 : focused ? 15920868 : uiColors.panelStroke, width: focused ? 2 : 1 });
+    const displayedValue = this.input.value.length > 20 ? `${this.input.value.slice(0, 20)}\u2026` : this.input.value;
+    this.caption.text = `Seed: ${displayedValue}${focused ? " \u258F" : ""}`;
+    this.caption.style.fontSize = Math.min(14, (this.fieldWidth - 16) / Math.max(1, this.caption.text.length) * 1.65);
+    this.caption.position.set(this.fieldWidth / 2, 20);
+    this.alpha = this.enabled ? 1 : 0.55;
+    this.input.setAttribute("aria-description", invalid ? "Enter a whole number from 0 to 18446744073709551615." : "Enter a run seed. Press Enter to apply or Escape to cancel.");
+  }
+};
+
 // src/pixi-character-select.ts
 init_lib();
 
@@ -83828,16 +83947,15 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
   const background = new Graphics();
   const panel = new Graphics();
   const heading = new Text({ text: "Choose a character", style: headingStyle });
-  const seedLabel = new Text({ text: "", style: bodyStyle2 });
+  const seedHolder = new Container();
   const sharedProgress = new Text({ text: "", style: bodyStyle2 });
   const characterProgress = new Text({ text: "", style: bodyStyle2 });
   const milestoneNotice = new Text({ text: "Milestone rewards are planned for a later release.", style: bodyStyle2 });
   const buttons = new Container();
   const controls = new Container();
-  root.addChild(background, panel, heading, buttons, seedLabel, controls, sharedProgress, characterProgress, milestoneNotice);
+  root.addChild(background, panel, heading, buttons, seedHolder, controls, sharedProgress, characterProgress, milestoneNotice);
   application.stage.addChild(root);
   heading.anchor.set(0.5, 0);
-  seedLabel.anchor.set(0.5, 0);
   [sharedProgress, characterProgress, milestoneNotice].forEach((text) => text.anchor.set(0.5, 0));
   let state;
   let selection = 0;
@@ -83863,6 +83981,8 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
     semanticControls.appendChild(semanticCharacters);
     semanticControls.appendChild(semanticStatus);
   }
+  const seedInput = semanticControls ? new SeedInput(semanticControls, (value) => send(`setSeed:${value}`)) : void 0;
+  if (seedInput) seedHolder.addChild(seedInput);
   const semanticButtons = ["New seed", "Paste", "Embark"].map((label, index) => {
     const button = canvas.ownerDocument?.createElement("button");
     if (!button || !semanticControls) return void 0;
@@ -83881,8 +84001,11 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
     return button;
   });
   if (semanticControls) {
-    semanticControls.style.cssText = "position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap";
+    semanticControls.style.cssText = "position:absolute;left:0;top:0;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap";
     semanticControls.setAttribute("role", "group");
+    semanticControls.addEventListener("keydown", (event) => {
+      if (event.key === "Tab") event.stopPropagation();
+    });
     canvas.after(semanticControls);
   }
   let actionQueue = Promise.resolve();
@@ -83893,6 +84016,7 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
     return result;
   };
   const updateButtons = () => {
+    seedInput?.setEnabled(!startingRun);
     characterButtons.forEach((button, index) => {
       button.setEnabled(!startingRun);
       button.setSelected(index === selection);
@@ -83934,7 +84058,7 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
     updateButtons();
     let accepted = false;
     try {
-      if (await send(`select:${character}`)) accepted = await send("embark");
+      if ((!seedInput || await seedInput.flush()) && await send(`select:${character}`)) accepted = await send("embark");
     } catch {
     } finally {
       startingRun = accepted;
@@ -83985,7 +84109,7 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
     });
     controls.removeChildren();
     const reroll = new GameButton({ label: "New seed", width: 1, height: 1, onPress: () => {
-      void dispatch("rerollSeed").catch(() => void 0);
+      void send("rerollSeed").catch(() => void 0);
     } });
     const paste = new GameButton({ label: "Paste", width: 1, height: 1, onPress: () => {
       void dispatch("pasteSeed").catch(() => void 0);
@@ -84035,24 +84159,29 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
       text.position.set(width / 2, progressY);
       progressY += text.height + (compact ? 4 : 8);
     });
-    seedLabel.text = `Seed: ${state?.seed ?? "0"}`;
-    semanticControls?.setAttribute("aria-label", seedLabel.text);
+    seedInput?.reconcile(state?.seed ?? "0");
+    semanticControls?.setAttribute("aria-label", `Seed: ${state?.seed ?? "0"}`);
     const controlWidth = (panelWidth - 72) / 3;
     const controlHeight = Math.max(28, Math.min(46, panelHeight * 0.12));
-    const controlY = Math.max(progressY + 24, y2 + panelHeight - controlHeight - Math.max(12, panelHeight * 0.06));
+    const controlY = Math.max(progressY + 76, y2 + panelHeight - controlHeight - Math.max(12, panelHeight * 0.06));
     const panelBottom = Math.max(y2 + panelHeight, controlY + controlHeight + 12);
     const contentHeight = Math.max(height, panelBottom + y2);
     canvas.style.height = `${contentHeight}px`;
     application.renderer.resize(width, contentHeight);
     drawMenuBackdrop(background, width, contentHeight, "hall");
     panel.clear().roundRect(x2, y2, panelWidth, panelBottom - y2, uiTokens.frame.panelCornerRadius).fill({ color: uiColors.panelFill, alpha: 0.9 }).stroke({ color: uiColors.panelStroke, width: uiTokens.frame.borderWidth });
-    seedLabel.position.set(width / 2, controlY - 24);
+    seedInput?.resize(panelWidth - 56);
+    seedInput?.position.set(x2 + 28, controlY - 66);
     seedButtons.forEach((button, index) => {
       button.resize(controlWidth, controlHeight);
       button.position.set(x2 + 28 + index * (controlWidth + 8), controlY);
     });
   };
   const keydown = (event) => {
+    if (event.key === "Tab") {
+      event.stopPropagation();
+      return;
+    }
     if (!state || startingRun || state.characters.length === 0) return;
     if (event.key === "ArrowUp" || event.key === "ArrowDown") {
       selectCharacter((selection + (event.key === "ArrowUp" ? -1 : 1) + state.characters.length) % state.characters.length);
@@ -84085,6 +84214,7 @@ async function createCharacterSelectRenderer(canvas, sink, initialState) {
       resizeObserver?.disconnect();
       window.removeEventListener("resize", layout);
       canvas.removeEventListener("keydown", keydown);
+      seedInput?.dispose();
       semanticControls?.remove();
       canvas.style.height = originalHeight;
       if (canvas.parentElement) canvas.parentElement.style.overflowY = originalOverflow ?? "";
@@ -86508,6 +86638,182 @@ function getRunMenuActions(state) {
   return state.actions.filter((action) => action.id !== "history" && action.id !== "endTurn" && action.id !== "inventory" && !(backpack && collectionActions.has(action.id)));
 }
 
+// src/pixi-inventory.ts
+init_lib();
+function isInventoryEntry(value) {
+  if (typeof value !== "object" || value === null) return false;
+  const entry = value;
+  return ["action", "name", "description", "badge", "image"].every((key) => typeof entry[key] === "string") && ["active", "ready", "spent"].every((key) => typeof entry[key] === "boolean");
+}
+function toInventoryState(value) {
+  if (typeof value !== "object" || value === null) return void 0;
+  const fields = value;
+  if (typeof fields.disabled !== "boolean" || !Array.isArray(fields.entries)) return void 0;
+  if (fields.selectedAction != null && typeof fields.selectedAction !== "string") return void 0;
+  if (!fields.entries.every(isInventoryEntry)) return void 0;
+  return { disabled: fields.disabled, entries: fields.entries, selectedAction: fields.selectedAction ?? null };
+}
+async function createInventoryRenderer(canvas, sink, initialState) {
+  const application = new Application();
+  await application.init({ canvas, antialias: true, autoDensity: true, backgroundAlpha: 0, preference: "canvas" });
+  const restore = installCanvasPresentationRecovery(application, canvas);
+  const controls = new Container();
+  const background = new Graphics();
+  const details = new Container();
+  const frame = new Graphics();
+  const description = new Text({ text: "", style: { ...uiTokens.typography.body, fontSize: 15, wordWrap: true, breakWords: true, fill: uiTokens.color.text } });
+  const close = new GameButton({ label: "Close", width: 66, height: 32, onPress: () => void submit("close") });
+  details.addChild(frame, description, close);
+  application.stage.addChild(background, controls, details);
+  let state;
+  let disposed = false;
+  let pending = false;
+  let focusedAction;
+  let page = 0;
+  let revision = 0;
+  const submit = async (action) => {
+    if (disposed || pending || state?.disabled) return;
+    pending = true;
+    try {
+      await sink.invokeMethodAsync("HandleActionFromRendererAsync", action);
+    } catch {
+    } finally {
+      pending = false;
+    }
+  };
+  const addEquipmentArt = (button, entry, currentRevision) => {
+    if (!entry.image) return;
+    void Assets.load(entry.image).then((texture) => {
+      if (disposed || revision !== currentRevision || button.destroyed) return;
+      button.setMenuIcon(void 0);
+      const art = new Sprite(texture);
+      art.anchor.set(0.5);
+      art.position.set(22, 15);
+      art.width = 26;
+      art.height = 26;
+      art.eventMode = "none";
+      button.addChildAt(art, 1);
+    }).catch(() => void 0);
+  };
+  const addBadge = (button, text) => {
+    if (!text) return;
+    const badge = new Text({ text, style: { ...uiTokens.typography.body, fontSize: 11, fill: uiTokens.color.text } });
+    badge.anchor.set(1, 1);
+    badge.position.set(button.panelSize.width - 1, 33);
+    badge.eventMode = "none";
+    const backing = new Graphics().roundRect(button.panelSize.width - badge.width - 4, 21, badge.width + 4, 13, 2).fill(530204);
+    backing.eventMode = "none";
+    button.addChild(backing);
+    button.addChild(badge);
+  };
+  const decorateEquipment = (button, entry, currentRevision) => {
+    if (entry.spent) button.alpha = 0.5;
+    if (entry.ready) button.addChild(new Graphics().roundRect(0, 0, 44, 34, 4).stroke({ color: 6935747, width: 1 }));
+    addEquipmentArt(button, entry, currentRevision);
+  };
+  const drawDetails = (selected, width) => {
+    details.visible = selected !== void 0;
+    if (!selected) return 44;
+    const panelWidth = Math.min(420, width - 12);
+    description.text = `${selected.name}
+${selected.description}`;
+    description.style.wordWrapWidth = Math.max(1, panelWidth - 24);
+    description.position.set(12, 12);
+    const panelHeight = description.height + 64;
+    frame.clear().roundRect(0, 0, panelWidth, panelHeight, 6).fill(1058092).stroke({ color: 15252579, width: 1 });
+    close.position.set(panelWidth - 78, panelHeight - 44);
+    close.setEnabled(!state?.disabled);
+    details.position.set(width - panelWidth - 6, 48);
+    return 52 + panelHeight;
+  };
+  const layout = () => {
+    if (disposed || !state) return;
+    const currentRevision = ++revision;
+    const width = Math.max(1, canvas.parentElement?.clientWidth || 640);
+    const compact = width < 500;
+    const pileWidth = compact ? 50 : 88;
+    const equipmentStart = 6 + 3 * (pileWidth + 4);
+    const equipment = state.entries.filter((entry) => entry.action.startsWith("inspect:"));
+    const capacity = Math.max(1, Math.floor((width - equipmentStart - 70) / 48));
+    const pages = Math.max(1, Math.ceil(equipment.length / capacity));
+    page = Math.max(0, Math.min(page, pages - 1));
+    for (const child of controls.removeChildren()) child.destroy({ children: true });
+    background.clear().rect(0, 0, width, 44).fill(1321006);
+    const entries = [...state.entries.filter((entry) => !entry.action.startsWith("inspect:")), ...equipment.slice(page * capacity, (page + 1) * capacity)];
+    const pileIcons = ["cards", "discard", "exhaust"];
+    entries.forEach((entry, index) => {
+      const isEquipment = entry.action.startsWith("inspect:");
+      const button = new GameButton({
+        label: isEquipment || compact ? "" : entry.name,
+        menuIcon: isEquipment ? "equipment" : pileIcons[index],
+        width: isEquipment ? 44 : pileWidth,
+        height: 34,
+        enabled: !state?.disabled,
+        selected: entry.active || entry.action === state?.selectedAction,
+        focused: entry.action === focusedAction,
+        onPress: () => void submit(entry.action)
+      });
+      button.position.set(isEquipment ? equipmentStart + (index - 3) * 48 : 6 + index * (pileWidth + 4), 5);
+      controls.addChild(button);
+      button.setIconOnly(isEquipment || compact);
+      if (isEquipment) decorateEquipment(button, entry, currentRevision);
+      addBadge(button, entry.badge);
+    });
+    if (pages > 1) {
+      const next = new GameButton({
+        label: `${page + 1}/${pages} \u203A`,
+        width: 62,
+        height: 34,
+        enabled: !state.disabled,
+        onPress: () => {
+          page = (page + 1) % pages;
+          layout();
+        }
+      });
+      next.position.set(width - 66, 5);
+      controls.addChild(next);
+    }
+    const height = drawDetails(state.entries.find((entry) => entry.action === state?.selectedAction), width);
+    canvas.style.height = `${height}px`;
+    application.renderer.resize(width, height);
+  };
+  const focus = (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLButtonElement)) return;
+    focusedAction = target.dataset.inventoryAction;
+    const index = state?.entries.filter((entry) => entry.action.startsWith("inspect:")).findIndex((entry) => entry.action === focusedAction) ?? -1;
+    if (index >= 0) {
+      const width = Math.max(1, canvas.parentElement?.clientWidth || 640);
+      const capacity = Math.max(1, Math.floor((width - 6 - 3 * ((width < 500 ? 50 : 88) + 4) - 70) / 48));
+      page = Math.floor(index / capacity);
+    }
+    layout();
+  };
+  canvas.parentElement?.addEventListener("focusin", focus);
+  const observer = new ResizeObserver(layout);
+  observer.observe(canvas.parentElement ?? canvas);
+  const reconcile = (value) => {
+    if (disposed) return false;
+    const next = toInventoryState(value);
+    if (!next) return false;
+    state = next;
+    layout();
+    return true;
+  };
+  reconcile(initialState);
+  return {
+    reconcile,
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      observer.disconnect();
+      canvas.parentElement?.removeEventListener("focusin", focus);
+      restore();
+      application.destroy({ removeView: false }, { children: true });
+    }
+  };
+}
+
 // src/pixi-run-hud.ts
 init_lib();
 async function createRunHudRenderer(canvas, sink, initialState) {
@@ -87286,6 +87592,7 @@ export {
   createCollectionRenderer,
   createEncounterRenderer,
   createEventRenderer,
+  createInventoryRenderer,
   createLeaveRenderer,
   createMainMenuRenderer,
   createMapRenderer,
