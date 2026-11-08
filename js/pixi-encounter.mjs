@@ -73545,18 +73545,19 @@ var ParticleEffectManager = class {
     const endColor = options.endParticleColor ? randomColor(options.endParticleColor) : color;
     const velocity = randomVector(options.externalVelocity);
     const acceleration = randomVector(options.externalAcceleration);
+    const visualScale = options.renderMode === "text" ? 1 : 1.45;
     const particle = {
       display,
       mode: options.renderMode,
       poolKey: getParticlePoolKey(options),
-      x: position.x,
-      y: position.y,
+      x: position.x * visualScale,
+      y: position.y * visualScale,
       velocityX: velocity.x,
       velocityY: velocity.y,
       accelerationX: acceleration.x,
       accelerationY: acceleration.y,
-      speed: randomInRange(options.speed),
-      size: randomInRange(options.size),
+      speed: randomInRange(options.speed) * visualScale,
+      size: randomInRange(options.size) * visualScale,
       directionX: direction.x,
       directionY: direction.y,
       friction: randomInRange(options.friction),
@@ -76662,6 +76663,7 @@ var supportedAnimationNames = /* @__PURE__ */ new Set([
   "exit",
   "card-play-to-target",
   "card-play-to-corner",
+  "item-use",
   "draw-to-hand",
   "hand-to-discard",
   "exhaust",
@@ -76676,6 +76678,7 @@ var supportedAnimationNames = /* @__PURE__ */ new Set([
   "fade-out"
 ]);
 var handCardViewScale = handCardVisualSize.width / 180;
+var itemUseAnnouncement = "Using item\u2026";
 var focusedHandScale = 1.38;
 var constrainedHandInspectionScale = 1.28;
 var focusedHandLift = 34;
@@ -76835,6 +76838,14 @@ var EncounterScene = class {
     ["exit", (_source, _target, tile, start, progress) => this.exit(tile, start, progress)],
     ["card-play-to-target", (_source, _target, tile, start, progress) => this.movePlayedCardAside(tile, start, progress)],
     ["card-play-to-corner", (_source, _target, tile, start, progress) => this.movePlayedCardAside(tile, start, progress)],
+    ["item-use", (_source, target, tile, start, progress) => {
+      const lift = this.reducedMotion || progress >= 1 ? 0 : Math.sin(progress * Math.PI);
+      const targetX = target?.container.x ?? start.x;
+      const targetY = target ? target.container.y + target.artwork.y * target.container.scale.x : start.y - 96;
+      tile.container.position.set(interpolate(start.x, targetX, lift * 0.65), interpolate(start.y, targetY, lift * 0.65));
+      tile.container.scale.set(start.scale * (1 + lift * 0.25));
+      tile.container.alpha = start.alpha * (1 - lift * 0.2);
+    }],
     ["draw-to-hand", (_source, _target, tile, start, progress) => {
       const anchors = this.getCardAnimationAnchors();
       const easedProgress = easeMotion(progress, "outCubic");
@@ -76892,7 +76903,7 @@ var EncounterScene = class {
     return this.entryInteractionStates.get(`card:${entryId}`) ?? this.entryInteractionStates.get(`item:${entryId}`) ?? "idle";
   }
   /**
-   * Gets the visible explanation for a scene-wide pending action, when input is locked.
+   * Gets the announcement for the pending action that owns the scene-wide input lock.
    */
   getInputLockMessage() {
     return this.pendingIntentMessage;
@@ -76921,6 +76932,10 @@ var EncounterScene = class {
       cancel: (command) => this.cancelAnimationCommand(command),
       complete: (command) => {
         this.animationStarts.delete(command.id);
+        if (command.name === "item-use" && command.sourceId) {
+          const dragReturn = this.dragReturns.get(command.sourceId);
+          if (dragReturn) dragReturn.start = captureTransform(dragReturn.tile.container);
+        }
         if (command.name === "attack-return" && command.sourceId) {
           const tile = this.getSceneTile(command.sourceId);
           if (tile) this.attackOrigins.delete(tile);
@@ -77789,6 +77804,7 @@ var EncounterScene = class {
         this.dragReturns.delete(tileId);
         continue;
       }
+      if (this.isAnimationLocked(tileId)) continue;
       dragReturn.elapsedMs += Math.max(0, deltaMs);
       const progress = getMotionProgress(dragReturn.elapsedMs, getMotionDuration("interactive", this.reducedMotion));
       const easedProgress = easeMotion(progress, "outCubic");
@@ -78129,9 +78145,8 @@ ${unavailableReason}`, isConditional: false, requiresTarget: false, primaryDamag
   /** Draws an aim arrow from the held card toward the valid target or current pointer position. */
   drawDragAimArrow(drag, pointerPosition, target) {
     const isValidDrop = this.isValidDrop(drag.entry, target);
-    const targetTile = target ? this.entityTiles.get(`${target.isPlayer ? "player" : "enemy"}:${target.id}`) : void 0;
     this.aimPointer = pointerPosition;
-    const destination = drag.entry.targetMode !== "none" && isValidDrop && targetTile ? { x: targetTile.container.x, y: targetTile.container.y } : pointerPosition;
+    const destination = drag.entry.targetMode !== "none" && isValidDrop && target ? this.getEffectAnchor(`${target.isPlayer ? "player" : "enemy"}:${target.id}`) ?? pointerPosition : pointerPosition;
     this.aimDestination = destination;
     if (!this.aimEnd || this.reducedMotion) this.aimEnd = destination;
     const end = this.aimEnd;
@@ -78362,7 +78377,8 @@ ${unavailableReason}`, isConditional: false, requiresTarget: false, primaryDamag
       this.removePlayedCardPreview(animatedTile);
     }
     if (command.sourceId) {
-      this.clearDragMotion(command.sourceId);
+      if (command.name === "item-use") this.handLayoutTransitions.delete(command.sourceId);
+      else this.clearDragMotion(command.sourceId);
     }
     this.animationCommandHandlers.get(command.name)?.(source8, target, animatedTile, start, progress);
   }
@@ -78397,6 +78413,10 @@ ${unavailableReason}`, isConditional: false, requiresTarget: false, primaryDamag
       tile.impactHighlight.visible = false;
     }
     if (tile && command.name === "hit-flash") tile.impactHighlight.visible = false;
+    if (command.name === "item-use" && command.sourceId) {
+      const dragReturn = this.dragReturns.get(command.sourceId);
+      if (dragReturn) dragReturn.start = captureTransform(dragReturn.tile.container);
+    }
     if (command.name === "attack" || command.name === "attack-strike" || command.name === "attack-return") {
       if (tile) this.attackOrigins.delete(tile);
       this.attackTrail.clear();
@@ -79146,7 +79166,7 @@ ${unavailableReason}`, isConditional: false, requiresTarget: false, primaryDamag
     this.announceInteraction?.("Action unavailable.");
   }
   updateFeedbackVisibility() {
-    const visible = this.intentPending && !this.endingTurnPending || this.rejectionFeedbackRemainingMs > 0;
+    const visible = this.intentPending && !this.endingTurnPending && this.pendingIntentMessage !== itemUseAnnouncement || this.rejectionFeedbackRemainingMs > 0;
     this.intentStatusBackground.visible = visible;
     this.intentStatusLabel.visible = visible;
     if (this.viewport) {
@@ -79315,7 +79335,7 @@ function getPendingIntentMessage(kind) {
     case "previewRelics":
       return "Opening equipment\u2026";
     case "useItem":
-      return "Using item\u2026";
+      return itemUseAnnouncement;
     default:
       return "Processing encounter action\u2026";
   }
