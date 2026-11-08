@@ -72147,6 +72147,54 @@ function isQuestInspection(value) {
   });
 }
 
+// src/tooltip-copy.ts
+init_lib();
+var TooltipCopy = class extends Container {
+  heading;
+  body;
+  /** Gets the complete description independently of its visual heading/body layout. */
+  text = "";
+  constructor(accent) {
+    super();
+    this.eventMode = "none";
+    this.heading = new Text({ text: "", style: {
+      ...uiTokens.typography.panelTitle,
+      fill: accent ?? uiTokens.color.text,
+      fontSize: 18,
+      fontWeight: "700",
+      lineHeight: 23,
+      wordWrap: true,
+      breakWords: true
+    } });
+    this.body = new Text({ text: "", style: {
+      ...uiTokens.typography.body,
+      fill: accent ?? uiTokens.color.textMuted,
+      fontSize: 15,
+      lineHeight: 21,
+      wordWrap: true,
+      breakWords: true
+    } });
+    this.heading.resolution = this.body.resolution = 2;
+    this.addChild(this.heading, this.body);
+  }
+  /** Measures the whole explanation, splitting an explicit title or keyword label from its rules. */
+  setText(text, width, maximumHeight = Infinity) {
+    this.text = text;
+    const newline = text.indexOf("\n");
+    const colon = text.indexOf(":");
+    const split = newline >= 0 ? newline : colon > 0 && colon < 64 ? colon : -1;
+    this.heading.text = split >= 0 ? text.slice(0, split).trim() : "";
+    this.heading.visible = split >= 0;
+    this.body.text = split >= 0 ? text.slice(split + 1).trim() : text.trim();
+    this.heading.position.set(0, 0);
+    fitTextToBox(this.heading, width, maximumHeight, 18, 16);
+    const top = this.heading.visible ? this.heading.height + (this.body.text ? 10 : 0) : 0;
+    this.body.position.set(0, top);
+    fitTextToBox(this.body, width, Math.max(1, maximumHeight - top), 15, 14);
+    return top + (this.body.text ? this.body.height : 0);
+  }
+};
+
 // src/inspection-tooltip.ts
 var viewports = /* @__PURE__ */ new WeakMap();
 var activeInspections = /* @__PURE__ */ new WeakMap();
@@ -72212,22 +72260,14 @@ var InspectionTooltip = class extends Container {
     for (const keyword of inspection.keywords) {
       const entry = new Container();
       const enchantment = /^(?:Keen|Guarded enchantment|Efficient|Insightful|Curing|Guarding|Striking|Toxic):/.test(keyword);
-      const text = new Text({ text: keyword, style: {
-        ...uiTokens.typography.body,
-        ...enchantment ? { fill: enchantmentTextColor, fontWeight: "700" } : {},
-        fontSize: 15,
-        lineHeight: 20,
-        wordWrap: true,
-        wordWrapWidth: 224,
-        breakWords: true
-      } });
-      text.position.set(10, 8);
-      const height = Math.max(44, text.height + 16);
+      const text = new TooltipCopy(enchantment ? enchantmentTextColor : void 0);
+      const height = Math.max(48, text.setText(keyword, 220) + 24);
+      text.position.set(12, 12);
       entry.addChild(new Graphics().roundRect(0, 0, 244, height, 6).fill({ color: 1256245, alpha: 0.98 }).stroke({ color: 9549501, width: 1.5 }), text);
       entry.position.set(x2, y2);
       this.addChild(entry);
       this.entries.push({ view: entry, x: x2, y: y2, width: 244, height, reference: false });
-      y2 += height + 6;
+      y2 += height + 10;
     }
   }
   /** Places all entries beside their anchor, fitting the complete group into the viewport. */
@@ -73261,7 +73301,7 @@ var ParticleEffectManager = class {
       return true;
     }
     const anchor = options.anchorId ? this.resolveAnchor?.(options.anchorId) : void 0;
-    if (options.anchorId && !anchor) {
+    if (options.anchorId && !anchor && options.effectDefinition !== "ongoing-status") {
       return false;
     }
     const textAnchorKey = options.renderMode === "text" ? (options.anchorId ?? "scene").replace(/^(feedback:block:|player:|enemy:)/, "") : void 0;
@@ -73274,8 +73314,10 @@ var ParticleEffectManager = class {
       lastAnchor: anchor
     };
     this.emitters.set(options.id, emitter);
-    this.emit(emitter, anchor);
-    emitter.hasEmitted = true;
+    if (!options.anchorId || anchor) {
+      this.emit(emitter, anchor);
+      emitter.hasEmitted = true;
+    }
     return true;
   }
   /**
@@ -73375,12 +73417,21 @@ var ParticleEffectManager = class {
   updateEmitter(emitter, deltaMs) {
     const anchor = emitter.options.anchorId ? this.resolveAnchor?.(emitter.options.anchorId) : void 0;
     if (emitter.options.anchorId && !anchor && emitter.options.renderMode !== "text") {
-      this.destroy(emitter.options.id);
+      if (emitter.options.effectDefinition === "ongoing-status") {
+        while (emitter.particles.length > 0) this.removeParticle(emitter, emitter.particles.length - 1);
+        emitter.lastAnchor = void 0;
+      } else {
+        this.destroy(emitter.options.id);
+      }
       return;
     }
+    const anchorAppeared = anchor && !emitter.lastAnchor;
     emitter.lastAnchor = anchor ?? emitter.lastAnchor;
     this.advanceParticles(emitter, deltaMs);
-    if (!emitter.options.anchorId || anchor) {
+    if (anchorAppeared && emitter.options.effectDefinition === "ongoing-status") {
+      emitter.elapsedSinceEmissionMs = 0;
+      this.emit(emitter, anchor);
+    } else if (!emitter.options.anchorId || anchor) {
       this.advanceEmission(emitter, deltaMs);
     }
   }
@@ -73922,31 +73973,31 @@ var PersistentStatusCues = class {
   reducedMotion;
   active = /* @__PURE__ */ new Set();
   /** Retains existing emitters across refreshes and stack changes, removing cleansed, defeated and missing recipients. */
-  reconcile(enemies, limit = 4) {
+  reconcile(entities, limit = 4) {
     const expected = /* @__PURE__ */ new Set();
-    if (!this.reducedMotion) for (const enemy of enemies.filter((enemy2) => enemy2.health > 0).slice(0, 12)) {
+    if (!this.reducedMotion) for (const entity of entities.filter((entity2) => entity2.health > 0).slice(0, 12)) {
       let slot = 0;
       for (const [position, name] of Object.keys(cues).entries()) {
-        const status = enemy.statuses.find((status2) => status2.name === name);
+        const status = entity.statuses.find((status2) => status2.name === name);
         const cue = cues[name];
         if (!cue || !status || status.stacks <= 0 || slot >= Math.max(0, Math.min(4, limit))) continue;
-        const id = `ongoing-status:${enemy.id}:${status.name}`;
+        const id = `ongoing-status:${entity.id}:${status.name}`;
         expected.add(id);
         if (!this.active.has(id)) {
           const [r2, g2, b2] = cue.color;
           if (this.particles.create({
             id,
-            anchorId: `enemy:${enemy.id}`,
+            anchorId: `${entity.isPlayer ? "player" : "enemy"}:${entity.id}`,
             effectDefinition: "ongoing-status",
             particleGlyph: cue.glyph,
-            offset: { x: (position % 2 === 0 ? -1 : 1) * 22, y: 10 + Math.floor(position / 2) * 16 },
+            offset: { x: (position % 2 === 0 ? -1 : 1) * 14, y: -12 + Math.floor(position / 2) * 10 },
             maxParticles: 1,
             particleCount: { min: 1, max: 1 },
             loop: true,
             emitRate: 650,
             lifespan: { min: 450, max: 650 },
             speed: { min: 0.15, max: 0.4 },
-            size: { min: 2, max: 3 },
+            size: { min: 4, max: 6 },
             endAlpha: 0,
             glowIntensity: 0,
             particleColor: { min: { r: r2, g: g2, b: b2, a: 0.65 }, max: { r: r2, g: g2, b: b2, a: 0.85 } },
@@ -76551,7 +76602,7 @@ var StatusEffectsView = class extends Container {
 init_lib();
 var ChoiceTooltip = class extends Container {
   frame = new Graphics();
-  body = new Text({ text: "", style: new TextStyle({ ...uiTokens.typography.body, fontSize: 16, wordWrap: true }) });
+  body = new TooltipCopy();
   constructor() {
     super();
     this.addChild(this.frame, this.body);
@@ -76563,11 +76614,10 @@ var ChoiceTooltip = class extends Container {
   show(text, anchor, viewport) {
     const width = Math.max(1, Math.min(300, viewport.width - 24));
     const maximumHeight = Math.max(1, viewport.height - 24);
-    this.body.text = text;
-    fitTextToBox(this.body, width - 24, maximumHeight - 24, 16, 14);
-    const height = Math.min(maximumHeight, Math.max(64, this.body.height + 24));
+    const contentHeight = this.body.setText(text, width - 32, maximumHeight - 32);
+    const height = Math.min(maximumHeight, Math.max(64, contentHeight + 32));
     this.frame.clear().roundRect(0, 0, width, height, 6).fill({ color: 1256245, alpha: 0.98 }).stroke({ color: 9549501, width: 1.5 });
-    this.body.position.set(12, 12);
+    this.body.position.set(16, 16);
     const above = anchor.y - height - 8;
     const y2 = above >= 12 ? above : anchor.y + anchor.height + 8;
     this.position.set(Math.max(12, Math.min(viewport.width - width - 12, anchor.x + (anchor.width - width) / 2)), Math.max(12, Math.min(viewport.height - height - 12, y2)));
@@ -76726,7 +76776,7 @@ var EncounterScene = class {
   playedCardMotions = /* @__PURE__ */ new Map();
   entryInteractionStates = /* @__PURE__ */ new Map();
   endTurnHighlight = new Graphics();
-  phaseCue = new Text({ text: "", style: { ...uiTokens.typography.body, fontSize: 18, fill: 16772548, stroke: { color: 530204, width: 4 } } });
+  phaseCue = new Text({ text: "", style: { ...uiTokens.typography.intent, fontSize: 32, fill: 16772548, stroke: { color: 530204, width: 6 } } });
   phaseCueRemainingMs = 0;
   valueFeedback;
   aimPointer;
@@ -76998,7 +77048,8 @@ var EncounterScene = class {
     this.endTurn.position.set(endTurnBounds.x, endTurnBounds.y);
     this.endTurn.visible = true;
     this.endTurnHighlight.clear().roundRect(0, 0, endTurnBounds.width, endTurnBounds.height, 3).fill(10241074);
-    this.phaseCue.position.set(viewport.width / 2, isShortEncounter(viewport) ? 20 : Math.min(endTurnBounds.y - 100, Math.max(180, viewport.height * 0.44)));
+    this.phaseCue.style.fontSize = isShortEncounter(viewport) ? 24 : 32;
+    this.phaseCue.position.set(viewport.width / 2, isShortEncounter(viewport) ? 24 : Math.min(endTurnBounds.y - 100, Math.max(180, viewport.height * 0.44)));
     if (shouldReleasePendingIntent) {
       this.releasePendingIntent();
     }
@@ -78088,10 +78139,8 @@ ${unavailableReason}`, isConditional: false, requiresTarget: false, primaryDamag
       x: drag.tile.container.x,
       y: drag.tile.container.y - (isCardPresentationState2(drag.entry) ? 74 : 64) * drag.tile.container.scale.x
     };
-    const bend = Math.min(90, Math.abs(end.y - start.y) * 0.3 + 24);
-    const control = { x: (start.x + end.x) / 2, y: Math.min(start.y, end.y) - bend };
-    const direction = getDirection(control.x, control.y, end.x, end.y);
     const distance = Math.hypot(end.x - start.x, end.y - start.y);
+    const direction = getDirection(start.x, start.y, end.x, end.y);
     this.dragAimArrow.clear();
     this.dragAimArrow.visible = distance >= 8;
     if (!this.dragAimArrow.visible) {
@@ -78099,9 +78148,16 @@ ${unavailableReason}`, isConditional: false, requiresTarget: false, primaryDamag
     }
     const color = isValidDrop ? uiTokens.color.valid : uiTokens.color.invalid;
     const perpendicular = { x: -direction.y, y: direction.x };
-    const headLength = 15;
+    const headLength = Math.min(15, distance * 0.35);
     const headWidth = 8;
-    this.dragAimArrow.moveTo(start.x, start.y).bezierCurveTo(start.x, start.y - bend, control.x, control.y, end.x, end.y).stroke({ color: 529183, width: 8, alpha: 0.95 }).moveTo(start.x, start.y).bezierCurveTo(start.x, start.y - bend, control.x, control.y, end.x, end.y).stroke({ color, width: 4, alpha: 1 }).roundRect(start.x - 4, start.y - 4, 8, 8, 4).fill({ color }).moveTo(end.x, end.y).lineTo(end.x - direction.x * headLength + perpendicular.x * headWidth, end.y - direction.y * headLength + perpendicular.y * headWidth).lineTo(end.x - direction.x * headLength - perpendicular.x * headWidth, end.y - direction.y * headLength - perpendicular.y * headWidth).lineTo(end.x, end.y).fill({ color }).stroke({ color: 529183, width: 1.5, alpha: 1 });
+    const shaftEnd = { x: end.x - direction.x * headLength, y: end.y - direction.y * headLength };
+    const bend = Math.min(60, distance * 0.15);
+    const controlStart = {
+      x: start.x + direction.x * distance * 0.33 + perpendicular.x * bend,
+      y: start.y + direction.y * distance * 0.33 + perpendicular.y * bend
+    };
+    const controlEnd = { x: shaftEnd.x - direction.x * distance * 0.22, y: shaftEnd.y - direction.y * distance * 0.22 };
+    this.dragAimArrow.moveTo(start.x, start.y).bezierCurveTo(controlStart.x, controlStart.y, controlEnd.x, controlEnd.y, shaftEnd.x, shaftEnd.y).stroke({ color: 529183, width: 8, alpha: 0.95 }).moveTo(start.x, start.y).bezierCurveTo(controlStart.x, controlStart.y, controlEnd.x, controlEnd.y, shaftEnd.x, shaftEnd.y).stroke({ color, width: 4, alpha: 1 }).roundRect(start.x - 4, start.y - 4, 8, 8, 4).fill({ color }).moveTo(end.x, end.y).lineTo(end.x - direction.x * headLength + perpendicular.x * headWidth, end.y - direction.y * headLength + perpendicular.y * headWidth).lineTo(end.x - direction.x * headLength - perpendicular.x * headWidth, end.y - direction.y * headLength - perpendicular.y * headWidth).lineTo(end.x, end.y).fill({ color }).stroke({ color: 529183, width: 1.5, alpha: 1 });
   }
   /** Smooths visual snapping while input continues to use the current authoritative target immediately. */
   tickAimArrow(deltaMs) {
@@ -78621,7 +78677,7 @@ ${unavailableReason}`, isConditional: false, requiresTarget: false, primaryDamag
   /** Announces actual authoritative ownership transitions without capturing input. */
   showPhaseCue(phase) {
     const text = phase === "WaitingForInput" ? "Your turn" : phase === "EnemyTurn" ? "Enemy turn" : void 0;
-    this.phaseCueRemainingMs = text ? 1200 : 0;
+    this.phaseCueRemainingMs = text ? 1600 : 0;
     if (!text) return;
     this.phaseCue.text = text;
     this.phaseCue.visible = true;
@@ -82352,6 +82408,43 @@ var noOpRestAccessibilityOverlay = {
   }
 };
 
+// src/shop-price-tag.ts
+init_lib();
+var ShopPriceTag = class extends Container {
+  backing = new Graphics();
+  price = new Text({ text: "", style: { ...uiTokens.typography.button, fontWeight: "700", fill: 3746849 } });
+  sale = new Text({ text: "SALE", style: { ...uiTokens.typography.body, fontSize: 10, fontWeight: "700", letterSpacing: 2, fill: 7151899 } });
+  onSale = false;
+  sold = false;
+  constructor() {
+    super();
+    this.eventMode = "none";
+    this.interactiveChildren = false;
+    this.label = "shop-price-tag";
+    this.price.resolution = this.sale.resolution = 2;
+    this.price.anchor.set(0.5);
+    this.sale.anchor.set(0.5);
+    this.addChild(this.backing, this.sale, this.price);
+  }
+  /** Updates price and sale styling from authoritative merchandise state. */
+  setPrice(price, onSale, sold) {
+    this.onSale = onSale;
+    this.sold = sold;
+    this.price.text = sold ? "SOLD" : `${price} gold`;
+  }
+  /** Fits the tag within its merchandise tile while leaving its suspension cord visible. */
+  resize(maximumWidth) {
+    const width = Math.max(1, Math.min(124, maximumWidth));
+    const height = 34;
+    const sale = this.onSale && !this.sold;
+    this.backing.clear().moveTo(12, 16).lineTo(10, -8).stroke({ color: 12100996, width: 2 }).poly([0, height / 2, 12, 0, width, 0, width, height, 12, height]).fill(this.sold ? 10791587 : sale ? 16755596 : 15390631).stroke({ color: sale ? 16768945 : 12293464, width: sale ? 2 : 1 }).circle(13, height / 2, 3).fill(1321006);
+    this.sale.visible = sale;
+    this.sale.position.set((width + 14) / 2, 8);
+    fitTextToBox(this.price, Math.max(1, width - 28), sale ? 18 : 26, sale ? 15 : 17, 11);
+    this.price.position.set((width + 14) / 2, sale ? 23 : 17);
+  }
+};
+
 // src/navigation-style.ts
 var navigationButtonColor = 2707044;
 
@@ -82845,7 +82938,7 @@ var ShopMerchandiseCard = class extends Container {
   description = new Text({ text: "", style: new TextStyle(cardBodyStyle) });
   card;
   itemArt = new JourneyArtwork();
-  priceLabel = new Text({ text: "", style: new TextStyle(cardBodyStyle) });
+  priceTag = new ShopPriceTag();
   statSymbol = new Graphics();
   statName = null;
   hasArtwork;
@@ -82856,6 +82949,7 @@ var ShopMerchandiseCard = class extends Container {
   resolutionKind;
   constructor(merchandise) {
     super();
+    this.label = `shop-merchandise:${merchandise.id}`;
     this.isCard = Boolean(merchandise.isCard);
     this.isNavigation = merchandise.kind === "navigation";
     this.isControl = merchandise.kind === "control" || merchandise.kind === "navigation";
@@ -82884,7 +82978,7 @@ var ShopMerchandiseCard = class extends Container {
     } else {
       this.addChild(this.frame, this.heading, this.description, this.itemArt);
     }
-    this.addChild(this.priceLabel);
+    this.addChild(this.priceTag);
   }
   /** Updates dynamic merchandise state without allocating another card display tree. */
   update(merchandise, selected, interactive, resolutionIntensity, resolutionKind, onPress, onHover, onExit) {
@@ -82892,8 +82986,7 @@ var ShopMerchandiseCard = class extends Container {
     this.statName = merchandise.statIcon ?? null;
     if (this.statName && !this.children.includes(this.statSymbol)) this.addChild(this.statSymbol);
     this.card?.setContent({ ...this.card.content, energyCost: merchandise.cardEnergyCost ?? 0, manaCost: merchandise.cardManaCost ?? 0 });
-    this.priceLabel.text = this.isControl ? "" : merchandise.isSold ? "SOLD" : (merchandise.isOnSale ? "SALE \xB7 " : "") + merchandise.price + " gold";
-    this.priceLabel.style.fill = merchandise.isAffordable ? 15259564 : 14972757;
+    this.priceTag.setPrice(merchandise.price, merchandise.isOnSale, merchandise.isSold);
     this.resolutionIntensity = resolutionIntensity;
     this.resolutionKind = resolutionKind;
     if (!this.card) {
@@ -82908,6 +83001,7 @@ var ShopMerchandiseCard = class extends Container {
     this.scale.set(1 + resolutionIntensity * (resolutionKind === "Service" ? 0.035 : 0.065));
     this.frame.tint = resolutionIntensity > 0 ? resolutionKind === "Service" ? 10212584 : 16113563 : selected ? 16113563 : 16777215;
     this.card?.setInteractionState({ enabled: !merchandise.isSold, focused: false, selected });
+    if (this.card) this.card.cursor = this.cursor;
     if (this.card && resolutionIntensity > 0 && !this.children.includes(this.resolutionOverlay)) this.addChild(this.resolutionOverlay);
     if (this.card && resolutionIntensity === 0 && this.children.includes(this.resolutionOverlay)) this.removeChild(this.resolutionOverlay);
     this.removeAllListeners("pointertap");
@@ -82927,17 +83021,17 @@ var ShopMerchandiseCard = class extends Container {
       this.heading.position.set(width / 2, height / 2);
       this.description.visible = false;
       this.itemArt.visible = false;
-      this.priceLabel.visible = false;
+      this.priceTag.visible = false;
       return;
     }
-    this.priceLabel.style.fontSize = width < 110 ? 12 : 15;
-    this.priceLabel.anchor.set(0.5, 0);
-    this.priceLabel.position.set(width / 2, height - 24);
+    this.priceTag.resize(Math.max(1, width - 16));
+    this.priceTag.position.set(width - Math.min(124, width - 16) - 8, height - 36);
     if (this.card) {
-      this.card.resize({ width, height: Math.max(1, height - 30) });
+      this.card.resize({ width, height: Math.max(1, height - 40) });
       this.card.scale.set(1);
       this.card.position.set(0, 0);
       this.card.setInteractionState({ enabled: this.eventMode === "static", focused: false, selected: this.selected });
+      this.card.cursor = this.cursor ?? "default";
       if (this.resolutionIntensity > 0) {
         this.resolutionOverlay.clear().roundRect(0, 0, width, height, 10).fill({
           color: this.resolutionKind === "Service" ? 10212584 : 16113563,
@@ -82955,7 +83049,7 @@ var ShopMerchandiseCard = class extends Container {
     this.description.visible = height > 52;
     this.description.position.set(14, 43);
     fitTextToBox(this.heading, width - 28, height > 52 ? 34 : 26, width < 140 ? 15 : 18, 14);
-    if (height > 52) fitTextToBox(this.description, width - 28, height - 73, 14, 12);
+    if (height > 52) fitTextToBox(this.description, width - 28, height - 94, 14, 12);
     this.itemArt.visible = this.hasArtwork;
     if (this.hasArtwork) {
       this.itemArt.resize(Math.min(56, width - 20), 48);
@@ -82964,7 +83058,7 @@ var ShopMerchandiseCard = class extends Container {
       this.heading.style.align = "center";
       this.heading.anchor.set(0.5, 0);
       this.heading.position.set(width / 2, 56);
-      fitTextToBox(this.heading, width - 20, height - 86, width < 130 ? 12 : 15, 12);
+      fitTextToBox(this.heading, width - 20, Math.max(16, height - 100), width < 130 ? 12 : 15, 12);
       this.description.visible = false;
     }
     this.statSymbol.visible = this.statName !== null && !this.isControl;
@@ -82977,7 +83071,7 @@ var ShopMerchandiseCard = class extends Container {
       this.heading.style.wordWrapWidth = Math.max(1, width - 76);
       this.description.style.wordWrapWidth = Math.max(1, width - 76);
       fitTextToBox(this.heading, width - 76, 34, 18, 14);
-      if (height > 52) fitTextToBox(this.description, width - 76, height - 73, 14, 12);
+      if (height > 52) fitTextToBox(this.description, width - 76, height - 94, 14, 12);
     }
   }
 };
@@ -83007,7 +83101,7 @@ function createMerchandiseLayout(width, height, merchandise) {
     sections.push({ label, x: x2, y: y2 });
     const usableColumns = Math.min(columns, Math.max(1, Math.floor((areaWidth + gap) / ((card ? 160 : 100) + gap))));
     const itemWidth = (areaWidth - (usableColumns - 1) * gap) / usableColumns;
-    const itemHeight = card ? itemWidth * 1.4 + 30 : 112;
+    const itemHeight = card ? itemWidth * 1.4 + 40 : 112;
     entries.forEach((entry, index) => placements.set(entry.id, { x: x2 + index % usableColumns * (itemWidth + gap), y: y2 + 28 + Math.floor(index / usableColumns) * (itemHeight + gap), width: itemWidth, height: itemHeight }));
     return y2 + 28 + Math.ceil(entries.length / usableColumns) * (itemHeight + gap);
   };
@@ -83046,7 +83140,8 @@ function getMerchandiseCardText(merchandise) {
 }
 function getMerchandiseSummary(merchandise) {
   const description = merchandise.inspection?.quest ? questInspectionText(merchandise.inspection.quest, false) : merchandise.description;
-  return `${description}${merchandise.enchantmentDescriptions?.length ? "\n\n" + merchandise.enchantmentDescriptions.join("\n") : ""} ${merchandise.isSold ? "Sold." : merchandise.isAffordable ? `Costs ${merchandise.price} gold.` : merchandise.disabledReason ?? "Unavailable."}`;
+  const availability = merchandise.isSold ? "Sold." : merchandise.disabledReason?.toLowerCase().includes("gold") ? "" : merchandise.disabledReason ?? `Costs ${merchandise.price} gold.`;
+  return [description, ...merchandise.enchantmentDescriptions ?? [], availability].filter(Boolean).join("\n\n");
 }
 function getAcceptedMessage(name) {
   return name === "purchase" ? "Purchase accepted." : name === "leave" ? "Leaving the shop." : "Merchandise inspected.";
@@ -85850,6 +85945,7 @@ function settingHelp(action) {
     "toggle:cards": "Include card names in floating damage text when damage values are enabled.",
     "toggle:relics": "Include equipment names in floating damage text when damage values are enabled.",
     "toggle:items": "Include item names in floating damage text when damage values are enabled.",
+    "toggle:enemies": "Include enemy and attack names in floating damage text when damage values are enabled.",
     "settings:debug": "Open developer tools for character and shared Remembrance progression.",
     "settings:back": "Return to gameplay preferences.",
     "debug:xp:25": "Add 25 Remembrance points to the current character for debugging.",
@@ -85967,7 +86063,7 @@ function isMenuOverlayState(value) {
   const settings = candidate.settings;
   if (typeof settings !== "object" || settings === null) return false;
   const item = settings;
-  return Number.isInteger(item.tabIndex) && Number.isFinite(item.masterVolume) && Number.isFinite(item.sfxVolume) && Number.isFinite(item.musicVolume) && Number.isFinite(item.ambientVolume) && Number.isFinite(item.speed) && [item.damageTextEnabled, item.damageTextCardSources, item.damageTextRelicSources, item.damageTextItemSources].every((value2) => value2 === void 0 || typeof value2 === "boolean") && typeof item.cardTiltEnabled === "boolean" && typeof item.particleLevel === "string" && (item.showResourceGainText === void 0 || typeof item.showResourceGainText === "boolean") && (item.showEffectSources === void 0 || typeof item.showEffectSources === "boolean") && typeof item.debugProgressionEnabled === "boolean" && Number.isInteger(item.metaExperience) && Number.isInteger(item.unlockedMetaRewards) && (item.sharedRemembrancePoints === void 0 || Number.isInteger(item.sharedRemembrancePoints));
+  return Number.isInteger(item.tabIndex) && Number.isFinite(item.masterVolume) && Number.isFinite(item.sfxVolume) && Number.isFinite(item.musicVolume) && Number.isFinite(item.ambientVolume) && Number.isFinite(item.speed) && [item.damageTextEnabled, item.damageTextCardSources, item.damageTextRelicSources, item.damageTextItemSources, item.damageTextEnemySources].every((value2) => value2 === void 0 || typeof value2 === "boolean") && typeof item.cardTiltEnabled === "boolean" && typeof item.particleLevel === "string" && (item.showResourceGainText === void 0 || typeof item.showResourceGainText === "boolean") && (item.showEffectSources === void 0 || typeof item.showEffectSources === "boolean") && typeof item.debugProgressionEnabled === "boolean" && Number.isInteger(item.metaExperience) && Number.isInteger(item.unlockedMetaRewards) && (item.sharedRemembrancePoints === void 0 || Number.isInteger(item.sharedRemembrancePoints));
 }
 function isHistoryEntry(value) {
   if (typeof value !== "object" || value === null) return false;
@@ -86037,7 +86133,7 @@ async function createMenuOverlayRenderer(canvas, sink) {
     if (action === "settings:debug" || action === "settings:back") {
       debugSettingsOpen = action === "settings:debug";
       settingsBody?.setScrollOffset(0);
-      selectedIndex = 3;
+      selectedIndex = 2;
       layout();
       return;
     }
@@ -86204,21 +86300,20 @@ async function createMenuOverlayRenderer(canvas, sink) {
     settingsTop = top;
     settingsBottom = footerY - 16;
     styleDialogTitle(addText("Settings", 24, 12), width);
-    const tabWidth = (width - 64) / 3;
+    const tabWidth = (width - 56) / 2;
     addButton("Audio", "tab:0", 24, 60, tabWidth, 38, true, "audio");
     addButton("Gameplay", "tab:1", 32 + tabWidth, 60, tabWidth, 38, true, "settings");
-    addButton(width < 520 ? "Damage" : "Damage text", "tab:2", 40 + tabWidth * 2, 60, tabWidth, 38, true, "training");
-    const section = settings.tabIndex === 0 ? "VOLUME MIXER" : settings.tabIndex === 2 ? "FLOATING DAMAGE TEXT" : debugSettingsOpen ? "DEBUG PROGRESSION" : "PACE & EFFECTS";
+    const section = settings.tabIndex === 0 ? "VOLUME MIXER" : debugSettingsOpen ? "DEBUG PROGRESSION" : "PACE & EFFECTS";
     addText(section, 24, top - 25, 12, width - 48).style.fill = uiTokens.color.panelOrnament;
     const bodyStart = content.children.length;
     if (settings.tabIndex === 0) layoutAudioSettings(settings, top, rowHeight2);
-    else if (settings.tabIndex === 2) layoutDamageSettings(settings, top, short);
     else if (debugSettingsOpen && settings.debugProgressionEnabled) layoutDebugSettings(settings, top, rowHeight2);
     else layoutGameplaySettings(settings, top, rowHeight2, short);
     const bodyChildren = content.children.slice(bodyStart);
     const bodyHeight = Math.max(1, ...bodyChildren.map((child) => child.y + child.getLocalBounds().y + child.height - top));
     const body = new ScrollContainer({ width, height: Math.max(32, settingsBottom - top), contentHeight: bodyHeight, fadeEdges: true });
     body.position.set(0, top);
+    body.eventMode = "static";
     body.on("pointertapcapture", (event) => {
       if (settingsInput?.suppressesTap(event.pointerId)) event.stopPropagation();
     });
@@ -86244,17 +86339,21 @@ async function createMenuOverlayRenderer(canvas, sink) {
     ];
     sliders.forEach((slider, index) => addSlider(slider, top + index * rowHeight2, Math.min(46, rowHeight2 - 4)));
   };
-  const layoutDamageSettings = (settings, top, short) => {
+  const layoutFeedbackSettings = (settings, top, short) => {
     const toggles = [
       ["Show values", "damage", settings.damageTextEnabled !== false],
       ["Card source", "cards", settings.damageTextCardSources === true],
       ["Equipment source", "relics", settings.damageTextRelicSources === true],
-      ["Item source", "items", settings.damageTextItemSources === true]
+      ["Item source", "items", settings.damageTextItemSources === true],
+      ["Enemy attack source", "enemies", settings.damageTextEnemySources !== false],
+      ["Resource gains", "resource-gains", settings.showResourceGainText !== false],
+      ["Effect names", "effect-sources", settings.showEffectSources !== false]
     ];
     const columns = width >= 520 ? 2 : 1;
     const toggleHeight = short ? 38 : 50;
     const toggleWidth = (width - 48 - (columns - 1) * 8) / columns;
     toggles.forEach(([label, key, enabled], index) => addSwitch(label, `toggle:${key}`, enabled, 24 + index % columns * (toggleWidth + 8), top + Math.floor(index / columns) * (toggleHeight + 4), toggleWidth, toggleHeight));
+    return top + Math.ceil(toggles.length / columns) * (toggleHeight + 4);
   };
   const layoutGameplaySettings = (settings, top, rowHeight2, short) => {
     const controlHeight = Math.min(40, rowHeight2 - 4);
@@ -86271,32 +86370,14 @@ async function createMenuOverlayRenderer(canvas, sink) {
       particleWidth,
       controlHeight
     ));
-    const narrow = width < 620 && !short;
-    const feedbackWidth = narrow ? width - 48 : (width - 56) / 2;
     const feedbackY = top + rowHeight2 + 22 + Math.ceil(levels.length / qualityColumns) * (controlHeight + 8) + 16;
-    addSwitch(
-      "Resource gains",
-      "toggle:resource-gains",
-      settings.showResourceGainText !== false,
-      24,
-      feedbackY,
-      feedbackWidth,
-      controlHeight
-    );
-    addSwitch(
-      "Effect names",
-      "toggle:effect-sources",
-      settings.showEffectSources !== false,
-      narrow ? 24 : 32 + feedbackWidth,
-      feedbackY + (narrow ? rowHeight2 : 0),
-      feedbackWidth,
-      controlHeight
-    );
+    addText("Floating combat text", 24, feedbackY, 16);
+    const feedbackBottom = layoutFeedbackSettings(settings, feedbackY + 26, short);
     if (settings.debugProgressionEnabled) addButton(
       "Debug tools",
       "settings:debug",
       24,
-      feedbackY + rowHeight2 * (narrow ? 2 : 1),
+      feedbackBottom + 12,
       Math.min(240, width - 48),
       controlHeight,
       true,
@@ -87234,6 +87315,7 @@ async function createInventoryRenderer(canvas, sink, initialState) {
   let pending = false;
   let focusedAction;
   let page = 0;
+  let equipmentExpanded = false;
   let revision = 0;
   const submit = async (action) => {
     if (disposed || pending || state?.disabled) return;
@@ -87276,9 +87358,9 @@ async function createInventoryRenderer(canvas, sink, initialState) {
     if (entry.ready) button.addChild(new Graphics().roundRect(0, 0, 44, 34, 4).stroke({ color: 6935747, width: 1 }));
     addEquipmentArt(button, entry, currentRevision);
   };
-  const drawDetails = (selected, width) => {
+  const drawDetails = (selected, width, top) => {
     details.visible = selected !== void 0;
-    if (!selected) return 44;
+    if (!selected) return top;
     const panelWidth = Math.min(420, width - 12);
     description.text = selected.inspection?.quest ? questInspectionText(selected.inspection.quest) : `${selected.name}
 ${selected.description}`;
@@ -87288,8 +87370,8 @@ ${selected.description}`;
     frame.clear().roundRect(0, 0, panelWidth, panelHeight, 6).fill(1058092).stroke({ color: 15252579, width: 1 });
     close.position.set(panelWidth - 116, panelHeight - 56);
     close.setEnabled(!state?.disabled);
-    details.position.set(width - panelWidth - 6, 48);
-    return 52 + panelHeight;
+    details.position.set(width - panelWidth - 6, top + 4);
+    return top + 8 + panelHeight;
   };
   const inspect = (entry, button) => {
     const host = getCollectionOverlayHost();
@@ -87305,27 +87387,40 @@ ${entry.description}`], references: [] }, host.width() - 16);
     sharedTooltip.show(
       {
         x: (railBounds.left + bounds.x - hostBounds.left) * scaleX,
-        y: (railBounds.top + 5 - hostBounds.top) * scaleY,
+        y: (railBounds.top + bounds.y - hostBounds.top) * scaleY,
         width: 44 * scaleX,
         height: 34 * scaleY
       },
       { width: host.width(), height: host.height(), topInset: Math.max(8, (railBounds.bottom - hostBounds.top) * scaleY + 8) }
     );
   };
+  const equipmentStart = 164;
+  const equipmentLayout = (width, count2) => {
+    const inlineCapacity = Math.max(0, Math.floor((width - equipmentStart - 6) / 48));
+    const overflow = count2 > inlineCapacity;
+    const columns = Math.max(1, Math.floor((width - 12) / 48));
+    const rows = Math.max(1, Math.min(4, Math.floor((window.innerHeight - 128) / 40)));
+    return { overflow, columns, capacity: overflow ? columns * rows : Math.max(1, inlineCapacity) };
+  };
   const layout = () => {
     if (disposed || !state) return;
     const currentRevision = ++revision;
     const width = Math.max(1, canvas.parentElement?.clientWidth || 640);
     const pileWidth = 44;
-    const equipmentStart = 6 + 3 * (pileWidth + 4);
     const equipment = state.entries.filter((entry) => entry.action.startsWith("inspect:"));
-    const capacity = Math.max(1, Math.floor((width - equipmentStart - 70) / 48));
+    const { overflow, columns, capacity } = equipmentLayout(width, equipment.length);
+    const expanded = overflow && equipmentExpanded && !state.disabled;
     const pages = Math.max(1, Math.ceil(equipment.length / capacity));
     page = Math.max(0, Math.min(page, pages - 1));
+    const visibleEquipment = !overflow || expanded ? equipment.slice(page * capacity, (page + 1) * capacity) : [];
     for (const child of controls.removeChildren()) child.destroy({ children: true });
     buttonsByAction.clear();
-    background.clear().rect(0, 0, width, 44).fill(1321006);
-    const entries = [...state.entries.filter((entry) => !entry.action.startsWith("inspect:")), ...equipment.slice(page * capacity, (page + 1) * capacity)];
+    const gridRows = expanded ? Math.ceil(visibleEquipment.length / columns) : 0;
+    const gridBottom = 44 + gridRows * 40;
+    const railHeight = gridBottom + (expanded && pages > 1 ? 40 : 0);
+    background.clear().rect(0, 0, width, railHeight).fill(1321006);
+    if (equipment.length > 0) background.rect(151, 8, 1, 28).fill(6322046);
+    const entries = [...state.entries.filter((entry) => !entry.action.startsWith("inspect:")), ...visibleEquipment];
     const pileIcons = ["cards", "discard", "exhaust"];
     entries.forEach((entry, index) => {
       const isEquipment = entry.action.startsWith("inspect:");
@@ -87339,7 +87434,9 @@ ${entry.description}`], references: [] }, host.width() - 16);
         focused: entry.action === focusedAction,
         onPress: () => void submit(entry.action)
       });
-      button.position.set(isEquipment ? equipmentStart + (index - 3) * 48 : 6 + index * (pileWidth + 4), 5);
+      const equipmentIndex = index - 3;
+      if (isEquipment && expanded) button.position.set(6 + equipmentIndex % columns * 48, 46 + Math.floor(equipmentIndex / columns) * 40);
+      else button.position.set(isEquipment ? equipmentStart + equipmentIndex * 48 : 6 + index * (pileWidth + 4), 5);
       controls.addChild(button);
       buttonsByAction.set(entry.action, button);
       button.on("pointerover", () => inspect(entry, button));
@@ -87348,7 +87445,24 @@ ${entry.description}`], references: [] }, host.width() - 16);
       if (isEquipment) decorateEquipment(button, entry, currentRevision);
       addBadge(button, entry.badge);
     });
-    if (pages > 1) {
+    if (overflow) {
+      const toggle = new GameButton({
+        label: expanded ? "Close gear" : `Gear (${equipment.length})`,
+        menuIcon: "equipment",
+        width: Math.max(44, Math.min(140, width - equipmentStart - 6)),
+        height: 34,
+        enabled: !state.disabled,
+        onPress: () => {
+          equipmentExpanded = !expanded;
+          sharedTooltip.hide();
+          if (expanded && state?.selectedAction) void submit("close");
+          layout();
+        }
+      });
+      toggle.position.set(equipmentStart, 5);
+      controls.addChild(toggle);
+    }
+    if (expanded && pages > 1) {
       const next = new GameButton({
         label: `${page + 1}/${pages} \u203A`,
         width: 62,
@@ -87356,13 +87470,15 @@ ${entry.description}`], references: [] }, host.width() - 16);
         enabled: !state.disabled,
         onPress: () => {
           page = (page + 1) % pages;
+          sharedTooltip.hide();
           layout();
         }
       });
-      next.position.set(width - 66, 5);
+      next.position.set(width - 68, gridBottom + 2);
       controls.addChild(next);
     }
-    const height = drawDetails(state.entries.find((entry) => entry.action === state?.selectedAction), width);
+    const selected = !overflow || expanded ? state.entries.find((entry) => entry.action === state?.selectedAction) : void 0;
+    const height = drawDetails(selected, width, railHeight);
     canvas.style.height = `${height}px`;
     application.renderer.resize(width, height);
   };
@@ -87370,10 +87486,12 @@ ${entry.description}`], references: [] }, host.width() - 16);
     const target = event.target;
     if (!(target instanceof HTMLButtonElement)) return;
     focusedAction = target.dataset.inventoryAction;
-    const index = state?.entries.filter((entry2) => entry2.action.startsWith("inspect:")).findIndex((entry2) => entry2.action === focusedAction) ?? -1;
+    const equipment = state?.entries.filter((entry2) => entry2.action.startsWith("inspect:")) ?? [];
+    const index = equipment.findIndex((entry2) => entry2.action === focusedAction);
     if (index >= 0) {
       const width = Math.max(1, canvas.parentElement?.clientWidth || 640);
-      const capacity = Math.max(1, Math.floor((width - 6 - 3 * 48 - 70) / 48));
+      const { overflow, capacity } = equipmentLayout(width, equipment.length);
+      equipmentExpanded = overflow;
       page = Math.floor(index / capacity);
     }
     layout();
@@ -87391,7 +87509,10 @@ ${entry.description}`], references: [] }, host.width() - 16);
     const next = toInventoryState(value);
     if (!next) return false;
     state = next;
-    if (state.disabled) sharedTooltip.hide();
+    if (state.disabled) {
+      equipmentExpanded = false;
+      sharedTooltip.hide();
+    }
     layout();
     return true;
   };
@@ -87524,10 +87645,11 @@ function activateModalFocus(dialog) {
   const focusTarget = dialog.querySelector("canvas, button, [tabindex]") ?? dialog;
   focusTarget.tabIndex = focusTarget.tabIndex < 0 ? 0 : focusTarget.tabIndex;
   focusTarget.focus({ preventScroll: true });
-  const focusable = () => [...dialog.querySelectorAll("button:not(:disabled), canvas, [tabindex]:not([tabindex='-1'])")];
+  const activeDialog = () => document.querySelector(".pixi-card-choice-overlay:not([hidden])") ?? dialog;
+  const focusable = (owner) => [...owner.querySelectorAll("button:not(:disabled), canvas, [tabindex]:not([tabindex='-1'])")].filter((element) => element.getClientRects().length > 0 && getComputedStyle(element).visibility !== "hidden");
   const keydown = (event) => {
     if (event.key !== "Tab") return;
-    const items = focusable();
+    const items = focusable(activeDialog());
     const index = items.indexOf(document.activeElement);
     const next = event.shiftKey ? index <= 0 ? items.length - 1 : index - 1 : index < 0 || index === items.length - 1 ? 0 : index + 1;
     items[next]?.focus({ preventScroll: true });
@@ -87535,7 +87657,9 @@ function activateModalFocus(dialog) {
     event.stopImmediatePropagation();
   };
   const focusin = (event) => {
-    if (event.target instanceof Node && !dialog.contains(event.target)) focusTarget.focus({ preventScroll: true });
+    const owner = activeDialog();
+    if (event.target instanceof Node && !owner.contains(event.target))
+      (focusable(owner)[0] ?? (owner === dialog ? focusTarget : void 0))?.focus({ preventScroll: true });
   };
   document.addEventListener("keydown", keydown, true);
   document.addEventListener("focusin", focusin, true);
@@ -87791,7 +87915,8 @@ async function createEncounterRenderer(canvas, intentSink, initialization) {
       }
       accessibilityOverlay.update(snapshot);
       await runtime.show(runtimeScene, snapshot);
-      statusCues.reconcile(snapshot.enemies, snapshot.statusCueLimit ?? 4);
+      if (disposed || appliedSequence !== snapshot.sequence) return true;
+      statusCues.reconcile([snapshot.player, ...snapshot.enemies], snapshot.statusCueLimit ?? 4);
       hasActiveScene = true;
       flushPendingAnimations();
       return true;

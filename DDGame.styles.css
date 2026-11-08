@@ -5,7 +5,7 @@
 .pixi-card-choice-accessibility[b-kqbmtuwmtl] { height: 1px; overflow: hidden; position: absolute; width: 1px; }
 .pixi-card-choice-overlay.renderer-unavailable .pixi-card-choice-accessibility[b-kqbmtuwmtl] { height: auto; left: 1rem; overflow: visible; top: 1rem; width: calc(100% - 2rem); }
 .pixi-card-choice-overlay.renderer-unavailable canvas[b-kqbmtuwmtl] { display: none; }
-.pixi-card-choice-overlay:not(.renderer-ready) canvas[b-kqbmtuwmtl] { visibility: hidden; }
+.pixi-card-choice-overlay:not(.renderer-ready) canvas[b-kqbmtuwmtl] { opacity: 0; pointer-events: none; }
 .choice-loading[b-kqbmtuwmtl] { position: absolute; max-width: min(30rem, 90vw); padding: 1.5rem; border: 1px solid #91b6bd; border-radius: .5rem; background: #10252c; color: #f5df9b; }
 .pixi-card-choice-overlay.renderer-unavailable .pixi-card-choice-accessibility[b-kqbmtuwmtl] { max-height: calc(100vh - 2rem); overflow: auto; padding: 1rem; background: #10252c; border: 1px solid #91b6bd; border-radius: .5rem; }
 /* /Components/Dialogs/PixiRewardSurface.razor.rz.scp.css */
