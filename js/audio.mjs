@@ -80,13 +80,15 @@ function presentationCueIntensity(configuredIntensity) {
 export const audioPlayer = {
     sounds: {},
     tracks: {},
+    trackDefinitions: {},
+    pendingTrackLoads: new Map(),
     pendingLayerTransitions: {
         music: null,
         ambient: null
     },
     layerState: {
-        music: { current: null },
-        ambient: { current: null }
+        music: { current: null, revision: 0, transition: Promise.resolve() },
+        ambient: { current: null, revision: 0, transition: Promise.resolve() }
     },
     mix: {
         master: 0.75,
@@ -126,6 +128,26 @@ export const audioPlayer = {
         }
     },
 
+    registerTrack(name, src, layer, volume, loop) {
+        this.trackDefinitions[name] = { src, layer, volume, loop };
+        if (this.pendingLayerTransitions[layer]?.trackName === name) {
+            this.requestTrack(name);
+        }
+        return true;
+    },
+
+    requestTrack(name) {
+        if (this.pendingTrackLoads.has(name)) {
+            return;
+        }
+
+        const { src, layer, volume, loop } = this.trackDefinitions[name];
+        const load = this.loadTrack(name, src, layer, volume, loop).finally(() => {
+            this.pendingTrackLoads.delete(name);
+        });
+        this.pendingTrackLoads.set(name, load);
+    },
+
     async loadTrack(name, src, layer, volume = 0.5, loop = true) {
         try {
             const audio = new Audio(src);
@@ -142,13 +164,12 @@ export const audioPlayer = {
                 this.handleTrackEnded(name);
             });
             this.applyTrackVolume(name);
-            this.tryProcessPendingLayerTransition(layer, name);
-
             audio.onerror = () => {
                 console.error("Failed to load track:", name, src);
                 delete this.tracks[name];
             };
 
+            await this.tryProcessPendingLayerTransition(layer, name);
             return true;
         } catch (e) {
             console.error("Failed to load track:", name, src, e);
@@ -223,34 +244,31 @@ export const audioPlayer = {
             return;
         }
 
-        const currentName = state.current;
-        if (!trackName) {
-            if (currentName) {
-                await this.fadeOutTrack(currentName, fadeMs);
-                state.current = null;
+        const revision = ++state.revision;
+        this.pendingLayerTransitions[layer] = null;
+
+        const next = this.tracks[trackName];
+        if (trackName && (!next || next.layer !== layer)) {
+            this.pendingLayerTransitions[layer] = { trackName, randomStart, fadeMs };
+            if (this.trackDefinitions[trackName]?.layer === layer) {
+                this.requestTrack(trackName);
             }
             return;
         }
 
-        const next = this.tracks[trackName];
-        if (!next || next.layer !== layer) {
-            this.pendingLayerTransitions[layer] = { trackName, randomStart, fadeMs };
-            console.warn("Track not yet loaded for layer, queuing transition:", layer, trackName);
-            return;
-        }
-
-        this.pendingLayerTransitions[layer] = null;
-
-        if (currentName === trackName) {
-            return;
-        }
-
-        if (currentName) {
-            await this.fadeOutTrack(currentName, fadeMs);
-        }
-
-        const didStart = await this.fadeInTrack(trackName, randomStart, fadeMs);
-        state.current = didStart ? trackName : null;
+        const transition = state.transition.then(async () => {
+            if (revision !== state.revision || state.current === trackName) return;
+            if (state.current) {
+                await this.fadeOutTrack(state.current, fadeMs);
+                state.current = null;
+            }
+            if (trackName && revision === state.revision) {
+                const didStart = await this.fadeInTrack(trackName, randomStart, fadeMs);
+                state.current = didStart ? trackName : null;
+            }
+        });
+        state.transition = transition.catch(() => {});
+        await transition;
     },
 
     async fadeOutTrack(trackName, fadeMs) {
@@ -313,7 +331,7 @@ export const audioPlayer = {
         }
 
         this.pendingLayerTransitions[layer] = null;
-        this.transitionToLayerTrack(layer, pending.trackName, pending.randomStart, pending.fadeMs);
+        return this.transitionToLayerTrack(layer, pending.trackName, pending.randomStart, pending.fadeMs);
     },
 
     setRandomStart(audio) {
