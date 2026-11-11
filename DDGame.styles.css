@@ -81,6 +81,7 @@
     display: block;
     height: 100%;
     outline: none;
+    touch-action: pan-y !important;
     width: 100%;
 }
 
