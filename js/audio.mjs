@@ -61,8 +61,8 @@ const presentationCueSounds = Object.freeze({
     Reward: ["loot"],
     Travel: ["UI Page Flipping 01", "UI Page Flipping 02"],
     Rest: ["UI Page Flipping 01", "UI Page Flipping 02"],
-    Hit: ["hit", "hurt"],
-    Block: ["block"],
+    Hit: ["Dirt Land", "Dirt Chain Land"],
+    Block: ["Sword Blocked 1", "Sword Blocked 2"],
     Status: ["typewriter"],
     Transition: ["UI Page Flipping 01", "UI Page Flipping 02"]
 });
@@ -96,7 +96,7 @@ export const audioPlayer = {
         music: 1,
         ambient: 1
     },
-    pitchVariance: 0.15,
+    pitchVariance: 0.06,
     presentationCueIntensity: 1,
 
     async loadSound(name, src, volume = 0.5) {
@@ -111,7 +111,7 @@ export const audioPlayer = {
 
             const pool = createAudioPool(src, 3);
             pool.pool[0] = probe;
-            this.sounds[name] = { src, pool, baseVolume: volume };
+            this.sounds[name] = { src, pool, baseVolume: volume, intensities: new WeakMap() };
             this.applySfxVolume(name);
 
             for (const audio of pool.pool) {
@@ -159,7 +159,7 @@ export const audioPlayer = {
                 return false;
             }
 
-            this.tracks[name] = { audio, baseVolume: volume, layer, loop, shouldLoop: false };
+            this.tracks[name] = { audio, baseVolume: volume, layer, loop, shouldLoop: false, fadeGain: 0 };
             audio.addEventListener("ended", () => {
                 this.handleTrackEnded(name);
             });
@@ -187,7 +187,8 @@ export const audioPlayer = {
         const audio = sound.pool.next();
         audio.pause();
         audio.currentTime = 0;
-        audio.volume = sound.baseVolume * this.mix.master * this.mix.sfx * this.clamp(intensity);
+        sound.intensities.set(audio, this.clamp(intensity));
+        audio.volume = this.getSfxVolume(sound, audio);
         const variance = (Math.random() * 2 - 1) * this.pitchVariance;
         audio.playbackRate = 1 + variance;
         audio.play().catch(err => console.error("Audio playback failed:", err));
@@ -279,7 +280,7 @@ export const audioPlayer = {
 
         track.shouldLoop = false;
         const { audio } = track;
-        await this.fadeAudio(audio, audio.volume, 0, fadeMs);
+        await this.fadeTrack(track, 0, fadeMs);
         audio.pause();
         audio.currentTime = 0;
     },
@@ -296,8 +297,8 @@ export const audioPlayer = {
             this.setRandomStart(audio);
         }
 
-        const targetVolume = this.getTrackTargetVolume(track);
-        audio.volume = 0;
+        track.fadeGain = 0;
+        audio.volume = this.getTrackVolume(track);
         try {
             await audio.play();
         } catch (err) {
@@ -305,7 +306,7 @@ export const audioPlayer = {
             return false;
         }
 
-        await this.fadeAudio(audio, 0, targetVolume, fadeMs);
+        await this.fadeTrack(track, 1, fadeMs);
         return true;
     },
 
@@ -347,19 +348,18 @@ export const audioPlayer = {
         }, { once: true });
     },
 
-    fadeAudio(audio, from, to, durationMs) {
+    fadeTrack(track, to, durationMs) {
         const duration = Math.max(1, durationMs || 1);
         const stepMs = 40;
         const steps = Math.max(1, Math.round(duration / stepMs));
-        const delta = (to - from) / steps;
+        const from = track.fadeGain;
 
         return new Promise(resolve => {
-            let current = from;
             let count = 0;
             const timer = setInterval(() => {
                 count += 1;
-                current += delta;
-                audio.volume = count >= steps ? to : current;
+                track.fadeGain = from + (to - from) * (count / steps);
+                track.audio.volume = this.getTrackVolume(track);
                 if (count >= steps) {
                     clearInterval(timer);
                     resolve();
@@ -374,10 +374,13 @@ export const audioPlayer = {
             return;
         }
 
-        const volume = sound.baseVolume * this.mix.master * this.mix.sfx;
         for (const audio of sound.pool.pool) {
-            audio.volume = volume;
+            audio.volume = this.getSfxVolume(sound, audio);
         }
+    },
+
+    getSfxVolume(sound, audio) {
+        return sound.baseVolume * this.mix.master * this.mix.sfx * (sound.intensities.get(audio) ?? 1);
     },
 
     applyTrackVolume(name) {
@@ -386,15 +389,12 @@ export const audioPlayer = {
             return;
         }
 
-        const target = this.getTrackTargetVolume(track);
-        if (!track.audio.paused) {
-            track.audio.volume = target;
-        }
+        track.audio.volume = this.getTrackVolume(track);
     },
 
-    getTrackTargetVolume(track) {
+    getTrackVolume(track) {
         const layerVolume = track.layer === "music" ? this.mix.music : this.mix.ambient;
-        return track.baseVolume * this.mix.master * layerVolume;
+        return track.baseVolume * this.mix.master * layerVolume * track.fadeGain;
     },
 
     clamp(value) {
