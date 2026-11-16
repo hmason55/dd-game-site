@@ -32,11 +32,6 @@ header p { margin: 0; color: #94a3b8; }
 .document-menu-body { position: absolute; z-index: 4; top: calc(100% + 6px); left: 0; width: min(300px, calc(100vw - 48px)); padding: 12px; display: grid; gap: 8px; border: 1px solid #364152; border-radius: 8px; background: #19222e; box-shadow: 0 8px 20px #0006; }
 .document-menu-body select { min-width: 0; }
 .document-menu-body button, .document-menu-body .file-button { text-align: left; }
-@media (max-width: 520px) {
-    .document-toolbar { position: relative; }
-    .document-menu { position: static; }
-    .document-menu-body { width: 100%; }
-}
 label { display: flex; flex-direction: column; font-size: 13px; font-weight: 600; gap: 8px; }
 input, select, textarea, button, .file-button { font: inherit; border: 1px solid #364152; border-radius: 7px; background: #101721; color: #e2e8f0; padding: 11px 12px; }
 input, select { width: 100%; }
@@ -117,7 +112,7 @@ h4 { font-size: 13px; color: #c7d7e5; margin: 16px 0 12px; }
 .section-count { margin-inline-start: 4px; color: #a7b6c8; font-size: 12px; font-weight: 400; }
 .enemy-pool > label { margin-bottom: 10px; }
 .event-choices { container: event-choices / inline-size; }
-.event-choice-workspace { display: grid; gap: 16px; align-items: start; }
+.event-choice-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
 .event-choice-navigator { max-height: min(25rem, 55vh); overflow: auto; padding: 12px; border: 1px solid #364152; border-radius: 9px; background: #131d29; scrollbar-gutter: stable; }
 .event-choice-detail { min-width: 0; }
 .event-choice-detail > .choice-editor { margin: 0; }
@@ -157,6 +152,36 @@ select { text-overflow: ellipsis; min-width: 0; }
 .help-content:not([hidden]) { display: block; flex-basis: 100%; width: 100%; min-width: 0; padding: 10px 12px; margin: 4px 0; background: #0c1721; color: #e3edf4; border-left: 3px solid #568d7b; border-radius: 4px; font-size: 12px; line-height: 1.6; text-align: left; white-space: normal; overflow-wrap: anywhere; }
 .help-toggle:focus-visible { outline: 2px solid #8ddfc6; outline-offset: 3px; }
 @media (max-width: 1050px) { .effects { grid-template-columns: repeat(2, minmax(0, 1fr)); } .workspace { grid-template-columns: minmax(0, 1fr) 310px; } }
-@media (max-width: 760px) { main { padding: 20px; } header { align-items: start; flex-direction: column; } .workspace { grid-template-columns: 1fr; } aside { position: static; } .panel { padding: 20px; } }
-@media (max-width: 430px) { .fields, .effects { grid-template-columns: 1fr; } }
-@media (max-width: 600px) { .reward-entry { grid-template-columns: minmax(0, 1fr) auto; } .reward-entry label:first-child { grid-column: 1 / -1; } .choice-editor { padding: 12px; } }
+@media (max-width: 760px) {
+    main { padding: 20px; }
+    header { align-items: start; flex-direction: column; }
+    .workspace { grid-template-columns: minmax(0, 1fr); }
+    aside { position: static; }
+    .panel { padding: 20px; }
+}
+@media (max-width: 600px) {
+    .reward-entry { grid-template-columns: minmax(0, 1fr) auto; }
+    .reward-entry label:first-child { grid-column: 1 / -1; }
+}
+@media (max-width: 520px) {
+    html { scroll-padding-top: 64px; }
+    main { padding: 16px; }
+    .document-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        padding-block: 6px;
+        background: #101620;
+    }
+    .document-menu { position: static; }
+    .document-menu-body { top: 100%; width: 100%; }
+    :is(button, .file-button, .document-menu > summary, .editor-disclosure > summary) { min-height: 44px; }
+    :is(input:not([type="checkbox"]), select, textarea) { min-height: 44px; font-size: 16px; }
+    .help-toggle { flex-basis: 32px; width: 32px; min-height: 32px; }
+    .panel, .list-entry, .choice-editor, .disclosure-body, .editor-fieldset { padding: 12px; }
+    .choice-editor .entry-heading { flex-wrap: wrap; }
+    .preview-card, .entry-heading, .field-title { overflow-wrap: anywhere; }
+}
+@media (max-width: 430px) {
+    .fields, .effects, .reward-entry { grid-template-columns: minmax(0, 1fr); }
+}

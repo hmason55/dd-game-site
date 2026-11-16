@@ -9,6 +9,13 @@
     <!-- Hosted at the root of dd-game.hmason55.dev -->
     <base href="/" />
 
+    <script>
+        // GitHub Pages can serve the game shell as the site's fallback.
+        if (/^\/editor\/?$/i.test(location.pathname)) {
+            location.replace("/editor/index.html" + location.search + location.hash);
+        }
+    </script>
+
     <link rel="icon" type="image/png" href="favicon.png" />
     <meta name="theme-color" content="#0b1622">
     <link rel="stylesheet" href="css/base/typography.css" />
