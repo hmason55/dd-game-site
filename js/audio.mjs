@@ -56,13 +56,13 @@ const presentationCueSounds = Object.freeze({
     Focus: ["UI Select Click 01", "UI Select Click 02", "UI Select Click 03", "UI Select Click 04", "UI Select Click 05"],
     Select: ["UI Select Click 01", "UI Select Click 02", "UI Select Click 03", "UI Select Click 04", "UI Select Click 05"],
     Confirm: ["UI Select Click 01", "UI Select Click 02", "UI Select Click 03", "UI Select Click 04", "UI Select Click 05"],
-    Reject: ["click"],
-    Purchase: ["loot"],
+    Reject: ["UI Reject"],
+    Purchase: ["UI Purchase 01", "UI Purchase 02"],
     Reward: ["loot"],
     Travel: ["UI Page Flipping 01", "UI Page Flipping 02"],
     Rest: ["UI Page Flipping 01", "UI Page Flipping 02"],
     Hit: ["Dirt Land", "Dirt Chain Land"],
-    Block: ["Sword Blocked 1", "Sword Blocked 2"],
+    Block: ["Shield Metal Deflect", "Shield Wood Deflect"],
     Status: ["typewriter"],
     Transition: ["UI Page Flipping 01", "UI Page Flipping 02"]
 });
