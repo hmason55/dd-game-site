@@ -68,6 +68,11 @@
     line-height: 1.6;
 }
 
+.loading-container.script-blocked a {
+    color: #ffedc4;
+    padding: 0.5rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .loading-bar { transition: none; }
 }

@@ -52,160 +52,38 @@
     </div>
 
     <script>
-        (function () {
-            const WARNING_TEXT = "This page couldn't load because required scripts were blocked.";
-            const INSTRUCTIONS_TEXT = "Privacy tools such as Brave Shields or other script blockers can stop the app from loading. Please allow scripts for this site or temporarily disable the blocker, then reload.";
-            const RECOVERY_STORAGE_FLAG = "__ddgRecoveryAttempted";
+        (() => {
+            let started = false;
+            const showStartupError = (error) => {
+                const loading = document.getElementById("loading-container");
+                if (started || !loading || loading.classList.contains("script-blocked")) return;
 
-            async function clearStartupBlockingState() {
-                try {
-                    localStorage.clear();
-                } catch (error) {
-                    console.warn("Unable to clear localStorage during startup recovery.", error);
-                }
+                console.warn("DDGame startup did not complete.", error);
+                loading.classList.add("script-blocked");
+                loading.setAttribute("aria-busy", "false");
+                document.getElementById("loading-message").textContent = "The game couldn't finish loading.";
 
-                try {
-                    sessionStorage.clear();
-                } catch (error) {
-                    console.warn("Unable to clear sessionStorage during startup recovery.", error);
-                }
-
-                if (window.caches && typeof window.caches.keys === "function") {
-                    try {
-                        const cacheKeys = await window.caches.keys();
-                        await Promise.all(cacheKeys.map((key) => window.caches.delete(key)));
-                    } catch (error) {
-                        console.warn("Unable to clear cache storage during startup recovery.", error);
-                    }
-                }
-
-                if (navigator.serviceWorker && typeof navigator.serviceWorker.getRegistrations === "function") {
-                    try {
-                        const registrations = await navigator.serviceWorker.getRegistrations();
-                        await Promise.all(registrations.map((registration) => registration.unregister()));
-                    } catch (error) {
-                        console.warn("Unable to unregister service workers during startup recovery.", error);
-                    }
-                }
-            }
-
-            async function restartWithRecovery(event) {
-                event.preventDefault();
-
-                const reloadTarget = event.currentTarget?.getAttribute("href") || ".";
-                let hasAttemptedRecovery = false;
-
-                try {
-                    hasAttemptedRecovery = localStorage.getItem(RECOVERY_STORAGE_FLAG) === "true";
-                } catch (error) {
-                    console.warn("Unable to read localStorage during startup recovery.", error);
-                    window.location.href = reloadTarget;
-                    return;
-                }
-
-                if (window.__ddgBlazorStarted || hasAttemptedRecovery) {
-                    window.location.href = reloadTarget;
-                    return;
-                }
-
-                await clearStartupBlockingState();
-
-                try {
-                    localStorage.setItem(RECOVERY_STORAGE_FLAG, "true");
-                } catch (error) {
-                    console.warn("Unable to write localStorage recovery flag.", error);
-                }
-
-                window.location.href = `${reloadTarget}${reloadTarget.includes("?") ? "&" : "?"}ddg-recover=${Date.now()}`;
-            }
-
-            function registerRecoveryRestartHandler() {
-                const reloadLink = document.querySelector("#blazor-error-ui a.reload");
-                if (!reloadLink) {
-                    return;
-                }
-
-                reloadLink.addEventListener("click", restartWithRecovery);
-            }
-
-            function showScriptBlockingWarning(reason) {
-                if (window.__ddgScriptBlockingWarned) {
-                    return;
-                }
-
-                window.__ddgScriptBlockingWarned = true;
-
-                try {
-                    console.warn("Scripts required to run DDGame were blocked.", reason);
-                } catch (error) {
-                    /* no-op */
-                }
-
-                const loadingMessage = document.getElementById("loading-message");
-                if (loadingMessage) {
-                    loadingMessage.textContent = WARNING_TEXT;
-                }
-
-                const loadingContainer = document.getElementById("loading-container");
-                if (loadingContainer) {
-                    loadingContainer.classList.add("script-blocked");
-
-                    const existingInstructions = document.getElementById("script-blocking-instructions");
-                    if (!existingInstructions) {
-                        const instructions = document.createElement("p");
-                        instructions.id = "script-blocking-instructions";
-                        instructions.className = "script-blocking-instructions";
-                        instructions.textContent = INSTRUCTIONS_TEXT;
-                        loadingContainer.appendChild(instructions);
-                    }
-                }
-
-                const blazorErrorUi = document.getElementById("blazor-error-ui");
-                if (blazorErrorUi) {
-                    blazorErrorUi.style.display = "block";
-                    blazorErrorUi.classList.add("script-blocked");
-
-                    const messageElement = blazorErrorUi.querySelector(".message");
-                    if (messageElement) {
-                        messageElement.textContent = WARNING_TEXT;
-                    }
-
-                    const reloadLink = blazorErrorUi.querySelector("a.reload");
-                    if (reloadLink) {
-                        reloadLink.textContent = "Reload";
-                    }
-
-                    const dismissButton = blazorErrorUi.querySelector(".dismiss");
-                    if (dismissButton) {
-                        dismissButton.remove();
-                    }
-                }
-            }
-
-            window.__ddgShowScriptBlockingWarning = showScriptBlockingWarning;
-
-            window.__ddgMarkBlazorStarted = function () {
-                window.__ddgBlazorStarted = true;
-
-                if (window.__ddgBlazorStartupTimer) {
-                    window.clearTimeout(window.__ddgBlazorStartupTimer);
-                    window.__ddgBlazorStartupTimer = undefined;
-                }
+                const instructions = document.createElement("p");
+                instructions.className = "script-blocking-instructions";
+                instructions.textContent = "If loading keeps failing, check your connection and allow this site's scripts.";
+                const retry = document.createElement("a");
+                retry.href = location.href;
+                retry.textContent = "Reload";
+                loading.append(instructions, retry);
             };
 
-            window.__ddgBlazorStartupTimer = window.setTimeout(function () {
-                if (!window.__ddgBlazorStarted) {
-                    showScriptBlockingWarning(new Error("Blazor did not start within the expected time window."));
-                }
-            }, 15000);
-
-            registerRecoveryRestartHandler();
+            const watchdog = window.setTimeout(() => showStartupError("Startup timed out."), 15000);
+            window.__ddgMarkBlazorStarted = () => {
+                started = true;
+                window.clearTimeout(watchdog);
+            };
+            window.__ddgShowStartupError = showStartupError;
         })();
     </script>
 
-    <script src="_framework/blazor.webassembly.js"
-            onload="window.__ddgMarkBlazorStarted && window.__ddgMarkBlazorStarted();"
-            onerror="window.__ddgShowScriptBlockingWarning && window.__ddgShowScriptBlockingWarning('The Blazor framework script failed to load.');"></script>
+    <script src="_framework/blazor.webassembly.js" autostart="false"
+            onload="Blazor.start().catch(window.__ddgShowStartupError);"
+            onerror="window.__ddgShowStartupError('The Blazor framework script failed to load.');"></script>
 
     <script type="module" src="js/main.mjs"></script>
 </body>

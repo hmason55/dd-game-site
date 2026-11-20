@@ -287,6 +287,44 @@
     height: 100%;
     -webkit-user-drag: none;
 }
+
+.pixi-first-combat-hint[b-9jzg35z109] {
+    position: absolute;
+    top: 3rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100% - 2rem);
+    margin: 0;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    background: #0b1622;
+    color: #f2ebd8;
+    font-size: 0.8125rem;
+    line-height: 1.3;
+    text-align: center;
+    pointer-events: none;
+}
+
+.pixi-combat-touch-hint[b-9jzg35z109] {
+    display: none;
+}
+
+@media (pointer: coarse) {
+    .pixi-combat-touch-hint[b-9jzg35z109] {
+        display: inline;
+    }
+
+    .pixi-combat-mouse-hint[b-9jzg35z109] {
+        display: none;
+    }
+}
+
+@media (max-height: 570px) {
+    .pixi-first-combat-hint[b-9jzg35z109] {
+        top: 4.25rem;
+    }
+}
 /* /Components/Rooms/PixiEventSurface.razor.rz.scp.css */
 .pixi-event-surface[b-999uhjpgcf] { box-sizing: border-box; height: min(calc(100dvh - 7rem), 48rem); min-height: 0; border: 1px solid #536d72; border-radius: 4px; overflow: hidden; position: relative; width: 100%; }
 .pixi-event-surface canvas[b-999uhjpgcf] { display: block; height: 100%; outline: none; touch-action: manipulation; width: 100%; }

@@ -99,7 +99,7 @@ export function unobserveFullscreenChange() {
 
 export function registerHotkeys(dotNetRef) {
     hotkeyHandler = (e) => {
-        if (e.defaultPrevented) {
+        if (e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) {
             return;
         }
 
@@ -113,9 +113,8 @@ export function registerHotkeys(dotNetRef) {
 
         if (e.code === 'Escape') {
             dotNetRef.invokeMethodAsync('OnHotkey', 'Escape');
-        } else if (e.code === 'Tab') {
-            e.preventDefault();
-            dotNetRef.invokeMethodAsync('OnHotkey', 'Tab');
+        } else if (e.code === 'KeyB') {
+            dotNetRef.invokeMethodAsync('OnHotkey', 'KeyB');
         } else if (e.code === 'KeyE') {
             dotNetRef.invokeMethodAsync('OnHotkey', 'KeyE');
         } else if (e.code === 'F11') {
