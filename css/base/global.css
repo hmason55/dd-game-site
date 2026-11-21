@@ -76,6 +76,16 @@ html, body, #app {
     padding-bottom: max(4.5rem, calc(env(safe-area-inset-bottom) + 3.75rem)) !important;
 }
 
+.game-home {
+    position: relative;
+}
+
+.game-scene-frame {
+    position: absolute;
+    z-index: 1;
+    background: #08171c center / cover;
+}
+
 /* Share cutout clearance without pushing a canvas under the bottom toolbar. */
 .game-main-content :is(.pixi-encounter-surface, .pixi-event-surface, .pixi-rest-surface, .pixi-map-surface, .pixi-shop-surface, .pixi-treasure-surface, .pixi-reward-surface):not(.renderer-unavailable) {
     max-height: calc(100dvh - var(--game-safe-area-top) - var(--game-bottom-clearance) - 1rem);
