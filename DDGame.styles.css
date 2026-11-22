@@ -23,6 +23,12 @@
     inset-block-end: calc(env(safe-area-inset-bottom) + 4.5rem);
 }
 
+.contextual-tutorial[data-tutorial-anchor][data-tutorial-positioned][b-7q875x6aap] {
+    inset: auto;
+    left: var(--tutorial-left);
+    top: var(--tutorial-top);
+}
+
 .contextual-tutorial strong[b-7q875x6aap] { color: #e9ca83; }
 .contextual-tutorial p[b-7q875x6aap] { margin: .3rem 0 .5rem; }
 .contextual-tutorial button[b-7q875x6aap] {
