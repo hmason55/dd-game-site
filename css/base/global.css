@@ -5,7 +5,7 @@
     --game-color-tertiary: #d4af65;
     --game-color-background: #1a1a1a;
     --game-color-surface: #2b2b2b;
-    --game-color-text-primary: #c2b49a;
+    --game-color-text-primary: #f2eee4;
     --game-color-text-secondary: #6fb9b4;
     --game-color-success: #4caf50;
     --game-color-info: #5ba8ff;
@@ -14,33 +14,87 @@
     --game-color-lines-default: #71858a;
     --game-color-action-default: #c2b49a;
     --game-border-radius: 8px;
-    font-family: "Alegreya", serif;
+    --game-font-body: "Atkinson Hyperlegible Next", Arial, sans-serif;
+    --game-control-fill: #243740;
+    --game-control-border: #71858a;
+    --game-control-hover: #35484b;
+    --game-control-pressed: #455449;
+    --game-control-focus: #f2eee4;
+    font-family: var(--game-font-body);
+    line-height: 1.45;
     background: var(--game-color-background);
     color: var(--game-color-text-primary);
 }
 *, *::before, *::after { box-sizing: border-box; }
-button, input { font: inherit; }
+button, input, select, textarea { font: inherit; }
+
+:where(button) {
+    min-height: 44px;
+    padding: .45rem .8rem;
+    border: 1px solid var(--game-control-border);
+    border-radius: var(--game-border-radius);
+    background: var(--game-control-fill);
+    color: var(--game-color-text-primary);
+    font-weight: 700;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+@media (hover: hover) {
+    button:where(:hover:enabled) { background: var(--game-control-hover); border-color: #c6b380; }
+}
+
+button:where(:active:enabled) { background: var(--game-control-pressed); border-color: #e9ca83; }
+button:where(:focus-visible) { outline: 2px solid var(--game-control-focus); outline-offset: 2px; }
+button:where(:disabled) { opacity: .58; cursor: default; }
+button:where([aria-pressed="true"]) { box-shadow: inset 0 -2px #e9ca83; }
 
 /* Native fallback dialogs mirror the shared Pixi Close control. */
-button.game-dialog-close,
-[role="dialog"] button.game-dialog-close {
+.game-dialog-close {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 10px;
     width: 104px;
-    min-height: 44px;
     padding: 0 10px;
-    border: 1px solid #71858a;
-    border-radius: 3px;
-    background: #23363c;
-    color: #f2eee4;
-    font: 600 16px "Alegreya", Georgia, serif;
-    letter-spacing: 1.1px;
-    cursor: pointer;
 }
-button.game-dialog-close::before { content: "×"; font: 22px Arial, sans-serif; }
-button.game-dialog-close:focus-visible { outline: 2px solid #f2eee4; outline-offset: 2px; }
+.game-dialog-close::before { content: "×"; font-size: 22px; line-height: 1; }
+
+/* Show one dialog when the keyboard enters the native controls inside a Pixi overlay. */
+[role="dialog"].pixi-menu-overlay-surface:has(.pixi-menu-overlay-accessibility:focus-within),
+[role="dialog"].pixi-collection-surface:has(.pixi-collection-accessibility:focus-within) {
+    background: #08131f;
+    pointer-events: auto;
+}
+
+.pixi-menu-overlay-surface:has(.pixi-menu-overlay-accessibility:focus-within) canvas,
+.pixi-collection-surface:has(.pixi-collection-accessibility:focus-within) canvas {
+    opacity: 0;
+    pointer-events: none;
+}
+
+[role="dialog"] :is(.pixi-menu-overlay-accessibility, .pixi-collection-accessibility):focus-within,
+.pixi-menu-overlay-surface.renderer-unavailable .pixi-menu-overlay-accessibility {
+    background: #18262e;
+    border: 1px solid var(--game-control-border);
+    border-radius: .625rem;
+    color: var(--game-color-text-primary);
+    height: auto;
+    inset: 50% auto auto 50%;
+    max-height: calc(100dvh - 2rem);
+    overflow: auto;
+    padding: clamp(1rem, 4vw, 1.5rem);
+    pointer-events: auto;
+    position: fixed;
+    transform: translate(-50%, -50%);
+    width: min(38rem, calc(100vw - 2rem));
+}
+
+:is(.pixi-menu-overlay-accessibility, .pixi-collection-accessibility) h2 {
+    color: #f5df9b;
+    font: 700 1.875rem/1.2 "Alegreya", Georgia, serif;
+    margin: 0 0 .75rem;
+}
 
 /* Global styles used across the application */
 html, body, #app {

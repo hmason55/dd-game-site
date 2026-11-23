@@ -1,14 +1,13 @@
 #blazor-error-ui {
-    background-color: #1A1A1A;
-    color: #C2B49A;
-    font-family: 'Alegreya', serif;
+    background-color: #18262e;
+    color: var(--game-color-text-primary);
     position: fixed;
     left: 50%;
     bottom: 64px;
     transform: translateX(-50%);
     padding: 12px 20px;
     border: 2px solid #D34B4B;
-    border-radius: 8px;
+    border-radius: var(--game-border-radius);
     box-shadow: 0 0 8px #000;
     z-index: 1000;
     display: none;

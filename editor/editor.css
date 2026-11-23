@@ -1,4 +1,14 @@
-:root { color-scheme: dark; font-family: "Segoe UI", sans-serif; color: #e2e8f0; background: #101620; }
+:root {
+    color-scheme: dark;
+    font: 15px/1.45 "Atkinson Hyperlegible Next", "Segoe UI", sans-serif;
+    color: #edf2f5;
+    background: #101620;
+    --control-fill: #243740;
+    --control-border: #71858a;
+    --control-hover: #35484b;
+    --control-pressed: #455449;
+    --control-focus: #f2eee4;
+}
 * { box-sizing: border-box; }
 body { margin: 0; }
 main { max-width: 1450px; margin: auto; padding: 36px; }
@@ -27,7 +37,7 @@ header p { margin: 0; color: #94a3b8; }
 .document-menu > summary { list-style: none; display: flex; gap: 12px; align-items: center; padding: 8px 14px; border: 1px solid #364152; border-radius: 7px; background: #19222e; color: #e2e8f0; font-size: 13px; font-weight: 600; }
 .document-menu > summary::-webkit-details-marker { display: none; }
 .document-menu > summary::after { content: ""; width: 6px; height: 6px; border-right: 1px solid; border-bottom: 1px solid; transform: rotate(45deg) translateY(-2px); }
-.document-menu[open] > summary, .document-menu > summary:hover { background: #283548; }
+.document-menu[open] > summary { box-shadow: inset 0 -2px #e9ca83; }
 .document-save > summary { border-color: #568d7b; }
 .document-menu-body { position: absolute; z-index: 4; top: calc(100% + 6px); left: 0; width: min(300px, calc(100vw - 48px)); padding: 12px; display: grid; gap: 8px; border: 1px solid #364152; border-radius: 8px; background: #19222e; box-shadow: 0 8px 20px #0006; }
 .document-menu-body select { min-width: 0; }
@@ -40,18 +50,33 @@ textarea { width: 100%; resize: vertical; line-height: 1.6; }
 .source-editor textarea { font-family: Consolas, monospace; tab-size: 4; }
 .built-in-content .fields input[type="checkbox"] { width: auto; align-self: flex-start; }
 .built-in-content details { margin-top: 16px; }
-textarea:focus { outline: 2px solid #7ee3c5; outline-offset: 2px; }
-input:focus, select:focus, button:focus-visible, summary:focus-visible { outline: 2px solid #7ee3c5; outline-offset: 2px; }
+:is(input, textarea, select, button, summary):focus-visible { outline: 2px solid var(--control-focus); outline-offset: 2px; }
 input[type="number"] { font-variant-numeric: tabular-nums; }
 select:disabled { opacity: 0.55; cursor: not-allowed; }
-button, .file-button { cursor: pointer; font-size: 13px; font-weight: 600; }
-button:hover { background: #283548; }
-button.primary { background: #70d6b9; color: #10211c; border-color: #70d6b9; }
-button.primary:hover { background: #9ae6d0; }
-button:disabled { opacity: .4; cursor: default; }
+:is(button, .file-button, .document-menu > summary, .editor-disclosure > summary) {
+    background: var(--control-fill);
+    border-color: var(--control-border);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    touch-action: manipulation;
+}
+button.primary { background: #31584f; border-color: #90c7a7; color: #f2eee4; }
+@media (hover: hover) {
+    :is(button:enabled, .file-button, .document-menu > summary, .editor-disclosure > summary):hover {
+        background: var(--control-hover);
+        border-color: #c6b380;
+    }
+}
+:is(button:enabled, .file-button, .document-menu > summary, .editor-disclosure > summary):active {
+    background: var(--control-pressed);
+    border-color: #e9ca83;
+}
+button:disabled { opacity: .58; cursor: default; }
 .file-button { position: relative; overflow: hidden; min-height: 41px; }
 .file-button input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.file-button:focus-within { outline: 2px solid #7ee3c5; outline-offset: 2px; }
+.file-button:focus-within { outline: 2px solid var(--control-focus); outline-offset: 2px; }
 .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 365px; gap: 24px; align-items: start; }
 .panel { background: #19222e; border: 1px solid #2c3746; border-radius: 12px; padding: 24px; margin-bottom: 18px; }
 h2 { color: #72d4ba; font-size: 12px; margin: 0 0 22px; display: flex; align-items: center; gap: 12px; }
@@ -100,7 +125,6 @@ pre { overflow: auto; max-height: 400px; background: #0f1721; padding: 14px; fon
 h4 { font-size: 13px; color: #c7d7e5; margin: 16px 0 12px; }
 .editor-disclosure { border: 1px solid #364152; border-radius: 8px; margin: 10px 0; background: #141f2b; }
 .editor-disclosure > summary { padding: 10px 12px; border-radius: 7px; color: #e2e8f0; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
-.editor-disclosure > summary:hover { background: #202d3b; }
 .editor-disclosure > summary small { display: inline; margin-inline-start: .65rem; }
 .editor-disclosure[open] > summary { border-bottom: 1px solid #364152; border-radius: 7px 7px 0 0; }
 .disclosure-body { display: grid; gap: 12px; min-width: 0; padding: 14px; }
