@@ -83,6 +83,17 @@ h2 { color: #72d4ba; font-size: 12px; margin: 0 0 22px; display: flex; align-ite
 h2 span { color: #e2e8f0; font-size: 16px; font-weight: 600; }
 .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
 .effects { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.configured-effect { display: grid; gap: 8px; align-content: start; }
+.configured-effect .remove { justify-self: start; }
+.effects:not(:empty) { margin-bottom: 16px; }
+.asset-picker { min-width: 0; display: grid; gap: 8px; }
+.asset-picker select { min-width: 0; }
+.asset-picker-filters > summary { cursor: pointer; color: #c6d4e5; font-size: 13px; }
+.asset-filters { gap: 8px; }
+.asset-picker-filters .asset-filters { margin-top: 8px; }
+.asset-usage { padding-left: 1.25rem; }
+.asset-usage li + li { margin-top: 8px; }
+.asset-usage button { overflow-wrap: anywhere; text-align: left; }
 small, .help { color: #99a8bc; font-size: 12px; line-height: 1.5; font-weight: 400; }
 .help { margin: 0 0 20px; }
 .checks { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 20px; }
@@ -90,6 +101,9 @@ small, .help { color: #99a8bc; font-size: 12px; line-height: 1.5; font-weight: 4
 .checks input { width: 16px; height: 16px; accent-color: #70d6b9; }
 aside { position: sticky; top: 20px; min-width: 0; }
 .preview-card { border: 1px solid #61715c; border-radius: 12px; padding: 18px; background: linear-gradient(155deg, #2b3941, #17262c); margin-top: 20px; }
+.workshop-card-canvas { display: none; max-width: 100%; height: auto !important; margin: 12px auto 20px; }
+.workshop-card-canvas[data-renderer-ready="true"] { display: block; }
+.workshop-card-canvas[data-renderer-ready="true"] + .preview-card { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); border: 0; }
 .preview-meta { display: flex; justify-content: space-between; color: #a7b9c4; font-size: 11px; gap: 8px; }
 .preview-symbol { text-align: center; font-size: 55px; padding: 18px; color: #93dac2; }
 h3 { font-size: 19px; margin: 6px 0 14px; overflow-wrap: anywhere; }
@@ -202,7 +216,7 @@ select { text-overflow: ellipsis; min-width: 0; }
         background: #101620;
     }
     .document-menu { position: static; }
-    .document-menu-body { top: 100%; width: 100%; }
+    .document-menu-body { top: 100%; width: 100%; max-height: min(70dvh, 30rem); overflow-y: auto; }
     :is(button, .file-button, .document-menu > summary, .editor-disclosure > summary) { min-height: 44px; }
     :is(input:not([type="checkbox"]), select, textarea) { min-height: 44px; font-size: 16px; }
     .help-toggle { flex-basis: 32px; width: 32px; min-height: 32px; }
